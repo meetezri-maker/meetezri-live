@@ -49,6 +49,18 @@ export const solaceHeroImage = cn(
   "brightness-[0.94] contrast-[1.05] saturate-[1.08]"
 );
 
+/** Wrap full-bleed hero sections — enables light-theme image + overlay fixes */
+export const solaceHeroMediaShell = "solace-hero-media relative isolate overflow-hidden";
+
+/** Text block over hero imagery in light theme (dark readable copy) */
+export const solaceHeroContent = "solace-hero-content relative z-10";
+
+/** Optional extra pastel scrim (light theme CSS) */
+export const solaceHeroLightScrim = cn(
+  "solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1]",
+  "hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block"
+);
+
 export const solaceHeroOverlayReadability = cn(
   "pointer-events-none absolute inset-0 z-[1]",
   "bg-[linear-gradient(90deg,rgba(10,11,24,0.62)_0%,rgba(10,11,24,0.28)_40%,transparent_62%)]",
@@ -83,8 +95,16 @@ export const solaceRowLink = cn(
   "hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,transparent)]"
 );
 
+/** Purple gradient CTA — preserved in light theme (not washed by hero scrims) */
+export const solaceCtaGradient = cn(
+  "solace-cta-gradient inline-flex items-center justify-center gap-2 font-semibold text-white",
+  "bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700",
+  "shadow-[0_8px_28px_-6px_rgba(109,40,217,0.42)]",
+  "transition-opacity hover:opacity-95"
+);
+
 export const solaceBtnPrimary = cn(
-  "solace-btn-primary inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-[var(--text-inverse,#ffffff)]",
+  "solace-btn-primary solace-cta-gradient inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-[var(--text-inverse,#ffffff)]",
   "bg-[var(--button-primary)]",
   "shadow-[0_8px_24px_-8px_rgba(236,72,153,0.28),0_0_20px_-6px_rgba(167,139,250,0.22)]",
   "transition-all duration-300 hover:shadow-[0_10px_28px_-6px_rgba(236,72,153,0.35),0_0_28px_-4px_rgba(167,139,250,0.28)]"

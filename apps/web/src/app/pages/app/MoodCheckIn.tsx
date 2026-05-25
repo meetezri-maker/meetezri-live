@@ -235,8 +235,10 @@ export function MoodCheckIn() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
-                  "relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
-                  "shadow-[0_48px_120px_-58px_rgba(0,0,0,0.92)] sm:rounded-[2.1rem]"
+                  "solace-hero-media relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
+                  "shadow-[0_48px_120px_-58px_rgba(0,0,0,0.92)] sm:rounded-[2.1rem]",
+                  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+                  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                 )}
               >
                 <img
@@ -246,12 +248,13 @@ export function MoodCheckIn() {
                   loading="eager"
                   decoding="async"
                 />
+                <div className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block" aria-hidden />
                 {/* Light left scrim only — keeps the lake/lotus vivid like the reference */}
                 <div
                   className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/55 via-[#0a0c14]/18 to-transparent"
                   aria-hidden
                 />
-                <div className="relative z-[2] flex min-h-[368px] flex-col justify-center px-8 py-12 sm:min-h-[400px] sm:px-12 sm:py-14 lg:min-h-[430px] lg:px-14 lg:py-14">
+                <div className="solace-hero-content relative z-[2] flex min-h-[368px] flex-col justify-center px-8 py-12 sm:min-h-[400px] sm:px-12 sm:py-14 lg:min-h-[430px] lg:px-14 lg:py-14">
                   <div className="relative z-[3] max-w-2xl">
                     <h2 className="font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50 [text-shadow:0_2px_24px_rgba(0,0,0,0.65)]">
                       Let&apos;s check in with

@@ -39,6 +39,30 @@ import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 import { cn } from "@/lib/utils";
+import {
+  modalBadge,
+  modalCloseButton,
+  modalEmphasisText,
+  modalFreeFlowCard,
+  modalFreeFlowCardSelected,
+  modalInput,
+  modalInsetPanel,
+  modalLabel,
+  modalMutedText,
+  modalOptionCard,
+  modalOptionCardDisabled,
+  modalOptionCardMeta,
+  modalOptionCardSelected,
+  modalOverlay,
+  modalPanel,
+  modalPanelBody,
+  modalPanelHeader,
+  modalPrimaryButton,
+  modalSecondaryButton,
+  modalSectionTitle,
+  modalSubtitle,
+  modalTitle,
+} from "@/lib/modalTheme";
 
 interface BackendSession {
   id: string;
@@ -898,172 +922,171 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowMinutesPicker(false)}
-              className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 backdrop-blur-sm"
+              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.94 }}
                 onClick={(e) => e.stopPropagation()}
-                className="flex w-full max-w-xl flex-col px-4"
+                className={cn(modalPanel, "max-w-xl rounded-[1.25rem]")}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="talk-duration-title"
               >
-                <Card className="overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
-                  <div className="relative border-b border-white/[0.06] bg-black/35 px-6 py-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-5 w-5 shrink-0 text-violet-300" aria-hidden />
-                        <div>
-                          <h2 className="text-lg font-semibold text-zinc-50">Choose talk duration</h2>
-                          <p className="mt-1 text-sm text-zinc-500">
-                            Pick how long you want to talk today.
-                          </p>
-                        </div>
+                <div className={modalPanelHeader}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Clock
+                        className="h-5 w-5 shrink-0 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
+                        aria-hidden
+                      />
+                      <div>
+                        <h2 id="talk-duration-title" className={modalTitle}>
+                          Choose talk duration
+                        </h2>
+                        <p className={modalSubtitle}>Pick how long you want to talk today.</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowMinutesPicker(false)}
-                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
-                        aria-label="Close"
-                      >
-                        <X className="h-5 w-5" aria-hidden />
-                      </button>
                     </div>
-                  </div>
-
-                  <div className="space-y-5 p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                      <p className="text-zinc-500">
-                        Remaining:{" "}
-                        <span className="font-semibold text-zinc-200">{minutesAvailable} min</span>
-                      </p>
-                      <span className="rounded-full border border-violet-400/35 bg-violet-500/[0.12] px-3 py-1 text-xs font-medium text-violet-100">
-                        Selected: {selectedDuration} min
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {durations.map((duration, index) => {
-                        const isDisabled = !!durationDisabled.get(duration);
-                        const isSelected = selectedDuration === duration && sessionLengthKind === "fixed";
-                        return (
-                          <motion.button
-                            key={duration}
-                            type="button"
-                            initial={{ opacity: 0, scale: 0.96 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.04 + index * 0.03 }}
-                            onClick={() => {
-                              if (isDisabled) return;
-                              applyDurationPreset(duration);
-                            }}
-                            disabled={isDisabled}
-                            aria-pressed={isSelected}
-                            className={`relative rounded-2xl border p-4 text-left transition-all ${
-                              isDisabled
-                                ? "cursor-not-allowed border-white/[0.06] opacity-40"
-                                : isSelected
-                                  ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]"
-                                  : "border-white/[0.08] bg-black/28 hover:border-violet-400/25"
-                            }`}
-                          >
-                            <div className="text-2xl font-semibold">{duration}</div>
-                            <div className="mt-1 text-xs text-zinc-500">minutes</div>
-                            {isSelected ? (
-                              <Check
-                                className="absolute right-3 top-3 h-4 w-4 text-violet-300"
-                                aria-hidden
-                              />
-                            ) : null}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-zinc-100">Custom minutes</p>
-                        <p className="text-xs text-zinc-500">1 – {minutesAvailable} min</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={minutesAvailable}
-                          step={1}
-                          inputMode="numeric"
-                          value={customMinutesInput}
-                          onChange={(e) => setCustomMinutesInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") applyCustomMinutes();
-                          }}
-                          className="h-11 w-full min-w-[120px] max-w-[12rem] rounded-xl border border-white/[0.1] bg-black/35 px-3 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
-                          placeholder="e.g. 22"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-11 border-white/[0.12] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
-                          onClick={applyCustomMinutes}
-                          disabled={!isCustomMinutesValid}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                      {customMinutesInput.trim() !== "" && !isCustomMinutesValid ? (
-                        <p className="mt-2 text-xs text-rose-400">
-                          Enter a valid value between 1 and {minutesAvailable}.
-                        </p>
-                      ) : null}
-                    </div>
-
                     <button
                       type="button"
-                      onClick={() => selectFreeFlow()}
-                      disabled={minutesAvailable <= 0}
-                      aria-pressed={isOnOwnPace}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                        isOnOwnPace
-                          ? "border-amber-400/35 bg-amber-500/[0.1] shadow-[0_0_22px_rgba(245,158,11,0.12)]"
-                          : "border-white/[0.08] bg-black/28 hover:border-amber-400/25"
-                      }`}
+                      onClick={() => setShowMinutesPicker(false)}
+                      className={cn(modalCloseButton, "rounded-full p-2")}
+                      aria-label="Close"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-2 font-semibold text-zinc-100">
-                          {isOnOwnPace ? (
-                            <Check className="h-4 w-4 text-amber-300" aria-hidden />
-                          ) : null}
-                          Free flow · use full balance
-                        </span>
-                        <span className="text-sm text-zinc-500">{minutesAvailable} min</span>
-                      </div>
+                      <X className="h-5 w-5" aria-hidden />
                     </button>
+                  </div>
+                </div>
 
-                    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                <div className={modalPanelBody}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <p className={modalMutedText}>
+                      Remaining: <span className={modalEmphasisText}>{minutesAvailable} min</span>
+                    </p>
+                    <span className={modalBadge}>Selected: {selectedDuration} min</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {durations.map((duration, index) => {
+                      const isDisabled = !!durationDisabled.get(duration);
+                      const isSelected =
+                        selectedDuration === duration && sessionLengthKind === "fixed";
+                      return (
+                        <motion.button
+                          key={duration}
+                          type="button"
+                          initial={{ opacity: 0, scale: 0.96 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.04 + index * 0.03 }}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            applyDurationPreset(duration);
+                          }}
+                          disabled={isDisabled}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            isDisabled
+                              ? modalOptionCardDisabled
+                              : isSelected
+                                ? modalOptionCardSelected
+                                : modalOptionCard
+                          )}
+                        >
+                          <div className="text-2xl font-semibold">{duration}</div>
+                          <div className={modalOptionCardMeta}>minutes</div>
+                          {isSelected ? (
+                            <Check
+                              className="absolute right-3 top-3 h-4 w-4 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
+                              aria-hidden
+                            />
+                          ) : null}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+
+                  <div className={modalInsetPanel}>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className={modalSectionTitle}>Custom minutes</p>
+                      <p className={cn(modalLabel, "text-xs")}>1 – {minutesAvailable} min</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={minutesAvailable}
+                        step={1}
+                        inputMode="numeric"
+                        value={customMinutesInput}
+                        onChange={(e) => setCustomMinutesInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") applyCustomMinutes();
+                        }}
+                        className={cn(modalInput, "h-11 min-w-[120px] max-w-[12rem] sm:w-auto")}
+                        placeholder="e.g. 22"
+                      />
                       <Button
                         type="button"
                         variant="outline"
-                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
-                        onClick={() => setShowMinutesPicker(false)}
+                        className={cn(modalSecondaryButton, "h-11 flex-none")}
+                        onClick={applyCustomMinutes}
+                        disabled={!isCustomMinutesValid}
                       >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => void handleStartSession()}
-                        disabled={
-                          isStarting ||
-                          minutesAvailable <= 0 ||
-                          selectedDuration > minutesAvailable ||
-                          selectedDuration < 1
-                        }
-                        className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
-                      >
-                        <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
-                        Let&apos;s Talk Now
+                        Apply
                       </Button>
                     </div>
+                    {customMinutesInput.trim() !== "" && !isCustomMinutesValid ? (
+                      <p className="mt-2 text-xs text-rose-500">Enter a valid value between 1 and {minutesAvailable}.</p>
+                    ) : null}
                   </div>
-                </Card>
+
+                  <button
+                    type="button"
+                    onClick={() => selectFreeFlow()}
+                    disabled={minutesAvailable <= 0}
+                    aria-pressed={isOnOwnPace}
+                    className={isOnOwnPace ? modalFreeFlowCardSelected : modalFreeFlowCard}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={cn("flex items-center gap-2 font-semibold", modalSectionTitle)}>
+                        {isOnOwnPace ? (
+                          <Check
+                            className="h-4 w-4 text-amber-300 [html[data-ezri-theme=light]_&]:text-[#b45309]"
+                            aria-hidden
+                          />
+                        ) : null}
+                        Free flow · use full balance
+                      </span>
+                      <span className={modalMutedText}>{minutesAvailable} min</span>
+                    </div>
+                  </button>
+
+                  <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(modalSecondaryButton, "flex-none")}
+                      onClick={() => setShowMinutesPicker(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => void handleStartSession()}
+                      disabled={
+                        isStarting ||
+                        minutesAvailable <= 0 ||
+                        selectedDuration > minutesAvailable ||
+                        selectedDuration < 1
+                      }
+                      className={cn(modalPrimaryButton, "h-11 px-6")}
+                    >
+                      <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                      Let&apos;s Talk Now
+                    </Button>
+                  </div>
+                </div>
               </motion.div>
             </motion.div>
           )}

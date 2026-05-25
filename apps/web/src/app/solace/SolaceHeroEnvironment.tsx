@@ -34,7 +34,7 @@ export function SolaceHeroEnvironment({
   return (
     <div
       className={cn(
-        "relative isolate overflow-hidden rounded-[28px] border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)] text-[var(--solace-ds-text)] shadow-[var(--solace-ds-shadow-cinematic)]",
+        "solace-hero-media solace-hero-environment relative isolate overflow-hidden rounded-[28px] border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)] text-[var(--solace-ds-text)] shadow-[var(--solace-ds-shadow-cinematic)]",
         className
       )}
       {...rest}
@@ -120,7 +120,7 @@ export function SolaceHeroEnvironment({
         </>
       ) : null}
 
-      <div className={cn("relative z-10 flex min-h-0 flex-col", contentClassName)}>
+      <div className={cn("solace-hero-content relative z-10 flex min-h-0 flex-col", contentClassName)}>
         {children}
         {ctaSlot ? (
           <div

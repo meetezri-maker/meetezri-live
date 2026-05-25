@@ -457,3 +457,10 @@ html[data-theme="light"] .solace-app [class*="bg-[#080512]"] {
   background: var(--bg-gradient) !important;
   color: var(--text-primary) !important;
 }
+
+/* ─── Active session: media permission gate (light pastel shell) ───────────── */
+html[data-ezri-theme="light"] .solace-app .solace-session-awaiting-media,
+html[data-theme="light"] .solace-app .solace-session-awaiting-media {
+  background: var(--bg-gradient, linear-gradient(135deg, #ffffff 0%, #fbf8ff 38%, #f3ecff 72%, #ecfdfb 100%)) !important;
+  color: var(--text-primary) !important;
+}

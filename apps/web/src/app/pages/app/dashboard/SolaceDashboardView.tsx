@@ -29,6 +29,7 @@ import {
   SolaceSupportStrip,
   type JourneyAmbiance,
 } from "@/app/solace";
+import { solaceHeroContent, solaceHeroLightScrim, solaceHeroMediaShell } from "@/app/solace/solacePageChrome";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 
 export interface SolaceQuickAction {
@@ -181,7 +182,10 @@ function RightRailContent({
 }) {
   return (
     <div className="space-y-6">
-      <SolacePanel glow="cyan" className="relative min-h-[172px] overflow-hidden p-0">
+      <SolacePanel
+        glow="cyan"
+        className={cn(solaceHeroMediaShell, "relative min-h-[172px] overflow-hidden p-0")}
+      >
         <img
           src={DASHBOARD_IMAGES.todayFocusDecor}
           alt=""
@@ -189,6 +193,7 @@ function RightRailContent({
           loading="lazy"
           decoding="async"
         />
+        <div className={solaceHeroLightScrim} aria-hidden />
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/88 via-[#0a0618]/52 to-[#0a0618]/28"
           aria-hidden
@@ -197,7 +202,7 @@ function RightRailContent({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/40 via-transparent to-transparent"
           aria-hidden
         />
-        <div className="solace-on-dark relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
+        <div className={cn(solaceHeroContent, "flex min-h-[172px] flex-col justify-center p-5 sm:p-6")}>
           <span className="font-serif text-4xl leading-none text-violet-200/35" aria-hidden>
             “
           </span>
