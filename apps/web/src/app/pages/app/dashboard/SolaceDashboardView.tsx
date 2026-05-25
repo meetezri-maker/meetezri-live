@@ -410,7 +410,7 @@ export function SolaceDashboardView({
                           </Link>
                           {lastSessionLabel && (
                             <p className="text-[13px] text-zinc-500">
-                              Last session · {lastSessionLabel}
+                              Last talking · {lastSessionLabel}
                             </p>
                           )}
                         </div>
@@ -561,7 +561,7 @@ export function SolaceDashboardView({
                     sparkSeed={2}
                   />
                   <ReflectMetric
-                    label="Sessions"
+                    label="Talking"
                     sub={sessionsCompletedDisplay}
                     sparkClass="text-violet-300/80"
                     sparkSeed={5}
@@ -586,7 +586,7 @@ export function SolaceDashboardView({
               <section aria-label="Recent moments">
                 <SolacePanel glow="none" soft className="p-5 sm:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h2 className="font-serif text-lg font-normal text-zinc-100">Recent moments</h2>
+                    <h2 className="font-serif text-lg font-normal text-zinc-100">Recent talking</h2>
                     <Link
                       to="/app/recent-activity-history"
                       className="rounded-sm text-xs font-medium text-violet-300/90 hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"

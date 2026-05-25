@@ -66,6 +66,13 @@ import {
 } from "./utils/transcript";
 import { getConnectionQualityColor } from "./utils/sessionFormat";
 import { usesBrowserStt, usesServerPcmStt } from "./utils/sttMode";
+import {
+  createPcmCaptureAudioContext,
+  downsampleFloat32To16k,
+  EZRI_PCM_SAMPLE_RATE,
+  float32ToInt16Pcm,
+  int16PcmToArrayBuffer,
+} from "./utils/pcmStream";
 import { usePipDrag } from "./hooks/usePipDrag";
 
 type ActiveSessionAudioChunk = {
@@ -362,6 +369,26 @@ export function ActiveSession() {
       }
     }
 
+    // Prime mic-capture AudioContext in the same user gesture (Firefox blocks contexts
+    // created later in useEffect — ScriptProcessor would never run / sends silence).
+    try {
+      let pcmCtx = pcmCaptureAudioContextRef.current;
+      if (!pcmCtx || pcmCtx.state === "closed") {
+        pcmCtx = await createPcmCaptureAudioContext();
+        pcmCaptureAudioContextRef.current = pcmCtx;
+      } else if (pcmCtx.state === "suspended") {
+        await pcmCtx.resume();
+      }
+      console.log(
+        "[PCM] Capture AudioContext primed on user gesture, rate:",
+        pcmCtx.sampleRate,
+        "state:",
+        pcmCtx.state,
+      );
+    } catch (pcmErr) {
+      console.warn("[PCM] Failed to prime capture AudioContext (will retry on connect):", pcmErr);
+    }
+
     try {
       if (
         typeof window !== "undefined" &&
@@ -504,10 +531,14 @@ export function ActiveSession() {
   const wsSpeakFallbackTimerRef = useRef<number | null>(null);
   const wsTtsDoneGraceTimerRef = useRef<number | null>(null);
   const wsPendingFallbackTextRef = useRef<string>("");
-  const pendingAudioAvatarPairingRef =
-    useRef<PendingAudioAvatarPairing | null>(null);
-  const initialListenNudgeSentRef = useRef(false);
   const lastBargeInAtRef = useRef(0);
+  /** Audio finished before `tts_done` — send playback_done once tts_done arrives (Ezri app.js). */
+  const pendingPlaybackDoneRef = useRef(false);
+  /** Tracks whether the server was told greeting/TTS playback finished (opens server mic). */
+  const playbackDoneAckRef = useRef(false);
+  const lastServerMicUnlockAttemptRef = useRef(0);
+  /** First successful playback_done after permissions — gates session billing heartbeat. */
+  const sessionBillingStartedRef = useRef(false);
 
   const TTS_SPEAK_FALLBACK_MS = 1000;
   const TTS_DONE_GRACE_MS = 500;
@@ -674,6 +705,9 @@ export function ActiveSession() {
   const speechCharIndexRef = useRef(0);
   const speechPulseRef = useRef(0);
   const playbackAudioContextRef = useRef<AudioContext | null>(null);
+  /** Mic capture context — must be created/resumed during the permission click (Firefox). */
+  const pcmCaptureAudioContextRef = useRef<AudioContext | null>(null);
+  const pcmChunksSentRef = useRef(0);
   const audioUnlockedRef = useRef(false);
   const ttsAnalyserRafRef = useRef<number | null>(null);
   const ttsAudioClockRafRef = useRef<number | null>(null);
@@ -760,12 +794,12 @@ export function ActiveSession() {
   const isMobileBrowser = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const browserSttActive = usesBrowserStt(ezriConfig?.defaults?.sttProvider);
   const serverPcmSttActive = usesServerPcmStt(ezriConfig?.defaults?.sttProvider);
-  /** Browser STT and RunPod caption STT (Web Speech for UI only). */
-  const localSpeechRecognitionActive = browserSttActive || serverPcmSttActive;
+  /** Web Speech API is only used when stt_provider=browser (not for server PCM). */
+  const browserSpeechRecognitionActive = browserSttActive;
 
   /** Ezri_Avatar app.js: abort browser SpeechRecognition while Ezri speaks; resume after playback_done. */
   const pauseStt = () => {
-    if (!localSpeechRecognitionActive) return;
+    if (!browserSpeechRecognitionActive) return;
     if (!recognitionRef.current || suppressSttRef.current) return;
     suppressSttRef.current = true;
     try {
@@ -780,7 +814,7 @@ export function ActiveSession() {
     delayMs = 150,
     opts?: { ignoreSpeakingGate?: boolean },
   ) => {
-    if (!localSpeechRecognitionActive) return;
+    if (!browserSpeechRecognitionActive) return;
     suppressSttRef.current = false;
     // Short delay to let speaker echo decay after normal TTS (not needed right after client barge-in).
     window.setTimeout(() => {
@@ -853,30 +887,10 @@ export function ActiveSession() {
 
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
-    const now = Date.now();
-    // 2000ms debounce: server echo interrupt can call this twice; avoids duplicate playback_done.
-    // Client-initiated interrupts pass bypassPlaybackDoneDebounce â€” otherwise the ACK is skipped,
-    // the server stays â€œbot speakingâ€, and STT/backend VAD never accepts user audio.
-    if (
-      !opts?.bypassPlaybackDoneDebounce &&
-      now - lastPlaybackDoneAtRef.current < 2000
-    ) {
-      // Still reopen local STT â€” skipping only the duplicate playback_done send.
-      resumeStt();
-      return;
-    }
-    lastPlaybackDoneAtRef.current = now;
-
-    // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
-    // Client-initiated interrupts pass a shorter value since the browser's AEC already removes speaker echo.
-    const delay = opts?.cooldownMs ?? 1500;
-    playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
-      playbackDoneCooldownTimerRef.current = null;
-      try {
-        wsClientRef.current?.sendPlaybackDone();
-      } catch { }
-      resumeStt();
-    }, delay);
+    sendPlaybackDoneAfterCooldown(
+      opts?.cooldownMs ?? 1500,
+      opts?.bypassPlaybackDoneDebounce ?? false,
+    );
   };
 
   const stopAudioAndSpeechDriver = () => {
@@ -1150,6 +1164,25 @@ export function ActiveSession() {
       console.warn("[Avatar] TTS playback analyser failed; mouth uses text timing only.", e);
     }
 
+    let playbackEndHandled = false;
+    let playbackEndFallbackTimer: number | null = null;
+
+    const finishPlayback = (reason: string) => {
+      if (playbackEndHandled || seq !== audioPlaySeqRef.current) return;
+      playbackEndHandled = true;
+      if (playbackEndFallbackTimer !== null) {
+        window.clearTimeout(playbackEndFallbackTimer);
+        playbackEndFallbackTimer = null;
+      }
+      if (reason !== "ended") {
+        console.warn(`[Audio] Completing playback via ${reason} (browser may have skipped onended)`);
+      }
+      stopAudioAndSpeechDriver();
+      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
+      speechPulseRef.current += 1;
+      opts?.onDone?.();
+    };
+
     audio.onloadedmetadata = () => {
       if (seq !== audioPlaySeqRef.current) return;
       const ms = Number.isFinite(audio.duration) ? Math.max(800, audio.duration * 1000) : 3500;
@@ -1158,16 +1191,18 @@ export function ActiveSession() {
         Number.isFinite(audio.duration) ? audio.duration : undefined
       );
       driveSpeechAnimationForText(text, ms);
+
+      // Firefox sometimes never fires `onended` for blob WAV — force queue advance + playback_done.
+      if (opts?.partOfWsStreamingTurn && Number.isFinite(audio.duration) && audio.duration > 0) {
+        playbackEndFallbackTimer = window.setTimeout(
+          () => finishPlayback("duration_fallback"),
+          Math.ceil(audio.duration * 1000) + 800,
+        );
+      }
     };
 
     audio.onended = () => {
-      if (seq !== audioPlaySeqRef.current) return;
-      stopAudioAndSpeechDriver();
-      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
-      speechPulseRef.current += 1;
-      // Do NOT call recognition.start() here.
-      // Recognition auto-restart is handled centrally by recognition.onend.
-      opts?.onDone?.();
+      finishPlayback("ended");
     };
 
     audio.onerror = () => {
@@ -1201,7 +1236,7 @@ export function ActiveSession() {
         }
       }
       opts?.onError?.();
-      opts?.onDone?.();
+      finishPlayback("error");
     };
 
     // Resume AudioContext and pre-load before play to satisfy Firefox autoplay policy.
@@ -1251,7 +1286,7 @@ export function ActiveSession() {
         }
       }
       opts?.onError?.();
-      opts?.onDone?.();
+      finishPlayback("play_failed");
     }
 
     // play() resolves before first frame; interrupt during decode/scheduling otherwise leaves audio audible.
@@ -1271,7 +1306,7 @@ export function ActiveSession() {
       } catch {
         /* noop */
       }
-      opts?.onDone?.();
+      finishPlayback("superseded");
     }
   };
 
@@ -1351,20 +1386,62 @@ export function ActiveSession() {
     ]);
   };
 
-  /** Tell the Ezri server the client is not playing TTS so backend VAD can accept mic audio (app.js parity). */
-  const notifyServerReadyForUserSpeech = useCallback(() => {
-    if (!serverPcmSttActive) return;
-    if (ezriWsAudioPipelineActive()) return;
-    const ws = wsClientRef.current;
-    if (!ws || ws.getStatus() !== "connected") return;
-    try {
-      ws.sendPlaybackDone();
-    } catch {
-      /* ignore */
+  /**
+   * Ezri Avatar `app.js` `playNextInQueue`: send `playback_done` immediately when the
+   * audio queue is empty and `tts_done` was received — do not delay or debounce.
+   */
+  const sendPlaybackDoneNow = useCallback(() => {
+    if (playbackDoneCooldownTimerRef.current !== null) {
+      window.clearTimeout(playbackDoneCooldownTimerRef.current);
+      playbackDoneCooldownTimerRef.current = null;
     }
+    lastPlaybackDoneAtRef.current = Date.now();
+    pendingPlaybackDoneRef.current = false;
+    if (serverPcmSttActive) {
+      const ws = wsClientRef.current;
+      if (ws?.getStatus() === "connected") {
+        try {
+          const ok = ws.sendPlaybackDone();
+          if (ok) {
+            playbackDoneAckRef.current = true;
+            console.log("[WS] playback_done sent — server mic unlocked");
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if (!sessionBillingStartedRef.current) {
+      sessionBillingStartedRef.current = true;
+    }
+    resumeStt(150, { ignoreSpeakingGate: true });
   }, [serverPcmSttActive]);
 
-  const sendPlaybackDoneAck = (
+  /** Tell the backend Ezri finished speaking so VAD/STT accepts user audio (is_bot_speaking lock). */
+  const tryUnlockServerMic = useCallback(
+    (reason: string) => {
+      if (!serverPcmSttActive) return;
+      if (playbackDoneAckRef.current) return;
+      const ws = wsClientRef.current;
+      if (!ws || ws.getStatus() !== "connected") return;
+      const now = Date.now();
+      if (now - lastServerMicUnlockAttemptRef.current < 800) return;
+      lastServerMicUnlockAttemptRef.current = now;
+      console.log(`[WS] Unlocking server mic (${reason})`);
+      sendPlaybackDoneNow();
+    },
+    [serverPcmSttActive, sendPlaybackDoneNow],
+  );
+
+  const sendPlaybackDoneNowRef = useRef(sendPlaybackDoneNow);
+  const tryUnlockServerMicRef = useRef(tryUnlockServerMic);
+  useEffect(() => {
+    sendPlaybackDoneNowRef.current = sendPlaybackDoneNow;
+    tryUnlockServerMicRef.current = tryUnlockServerMic;
+  }, [sendPlaybackDoneNow, tryUnlockServerMic]);
+
+  /** After interrupt / stopPlayback — 1500ms echo cooldown (reference app.js). */
+  const sendPlaybackDoneAfterCooldown = (
     cooldownMs = 1500,
     bypassDebounce = false,
   ) => {
@@ -1380,12 +1457,17 @@ export function ActiveSession() {
     }
     playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
       playbackDoneCooldownTimerRef.current = null;
-      try {
-        wsClientRef.current?.sendPlaybackDone();
-      } catch {
-        /* ignore */
+      if (serverPcmSttActive) {
+        try {
+          wsClientRef.current?.sendPlaybackDone();
+        } catch {
+          /* ignore */
+        }
       }
-      resumeStt(0, { ignoreSpeakingGate: true });
+      if (!sessionBillingStartedRef.current) {
+        sessionBillingStartedRef.current = true;
+      }
+      resumeStt(150, { ignoreSpeakingGate: true });
     }, cooldownMs);
   };
 
@@ -1399,8 +1481,13 @@ export function ActiveSession() {
     const next = wsAudioQueueRef.current.shift();
     if (!next) {
       if (wsTtsDoneReceivedRef.current) {
-        sendPlaybackDoneAck(600, true);
         wsTtsDoneReceivedRef.current = false;
+        sendPlaybackDoneNow();
+      } else {
+        pendingPlaybackDoneRef.current = true;
+        console.log(
+          "[WS] Audio queue drained before tts_done — will send playback_done when tts_done arrives",
+        );
       }
       return;
     }
@@ -1446,15 +1533,10 @@ export function ActiveSession() {
       !wsIsPlaybackActiveRef.current &&
       wsAudioQueueRef.current.length === 0
     ) {
-      sendPlaybackDoneAck(300, true);
       wsTtsDoneReceivedRef.current = false;
-    } else if (
-      !wsIsPlaybackActiveRef.current &&
-      wsAudioQueueRef.current.length === 0
-    ) {
-      window.setTimeout(() => notifyServerReadyForUserSpeech(), 400);
+      sendPlaybackDoneNow();
     }
-  }, [notifyServerReadyForUserSpeech]);
+  }, [sendPlaybackDoneNow]);
 
   useEffect(() => {
     if (!pendingMediaEntry || ezriWarmupStatus !== "ready") return;
@@ -1470,33 +1552,47 @@ export function ActiveSession() {
     lastBargeInAtRef.current = now;
     bargeInEchoGraceUntilRef.current = now + 8000;
 
-    // â”€â”€ Step 1: Suppress ALL incoming WS audio/text until the new user
-    // message is sent. This is the only reliable way to discard late audio
-    // chunks the server buffered before it processed our interrupt signal.
-    suppressIncomingAudioRef.current = true;
-
-    // â”€â”€ Step 2: Invalidate active turn bookkeeping.
-    wsActiveTurnRef.current += 1;
-    wsAudioSeenTurnRef.current = 0;
     wsAssistantBufferRef.current = "";
     wsLastFinalTextRef.current = "";
     wsPendingFallbackTextRef.current = "";
 
-    // â”€â”€ Step 3: Abort any in-flight REST (LLM + TTS) request immediately.
     if (restAbortControllerRef.current) {
       restAbortControllerRef.current.abort();
       restAbortControllerRef.current = null;
     }
 
-    // â”€â”€ Step 4: Stop local playback; interrupt server; delayed playback_done (echo cooldown).
+    const wasPlaying = ezriWsAudioPipelineActive();
+
+    /**
+     * RunPod / server PCM (reference app.js): interrupt is detected on the HF server
+     * via Silero VAD on incoming PCM. The client only stops playback and sends
+     * playback_done after 1500ms echo cooldown — no client interrupt JSON, no
+     * suppressIncomingAudio (that blocked the server's *new* response after STT).
+     */
+    if (serverPcmSttActive) {
+      dropOldResponsesRef.current += 1;
+      stopPlaybackAndCooldown({
+        sendPlaybackDone: wasPlaying,
+        cooldownMs: wasPlaying ? 1500 : 0,
+        bypassPlaybackDoneDebounce: true,
+      });
+      suppressSttRef.current = false;
+      resumeStt(0, { ignoreSpeakingGate: true });
+      return;
+    }
+
+    // Browser STT: client must drop stale WS chunks until sendChat fires.
+    suppressIncomingAudioRef.current = true;
+    wsActiveTurnRef.current += 1;
+    wsAudioSeenTurnRef.current = 0;
+
     const ws = wsClientRef.current;
     if (ws && ws.getStatus() === "connected") {
       ws.sendInterrupt(source);
     }
-    const wasPlaying = ezriWsAudioPipelineActive();
     stopPlaybackAndCooldown({
       sendPlaybackDone: wasPlaying,
-      cooldownMs: wasPlaying ? 400 : 0,
+      cooldownMs: wasPlaying ? 1500 : 0,
       bypassPlaybackDoneDebounce: true,
     });
 
@@ -1945,12 +2041,11 @@ export function ActiveSession() {
     }
   }, [permissionStorageKey, permissionStateInitialized]);
 
-  // Browser STT: full pipeline when stt=browser; with RunPod PCM, captions-only (no sendChat).
+  // Browser STT via Web Speech API (Chrome/Edge/Safari). Server PCM mode uses mic streaming only —
+  // starting SpeechRecognition alongside PCM causes mic conflicts on Firefox/Safari.
   useEffect(() => {
     if (!permissionsGranted || !stream) return;
-    if (!browserSttActive && !serverPcmSttActive) {
-      return;
-    }
+    if (!browserSttActive) return;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -1968,8 +2063,7 @@ export function ActiveSession() {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.continuous = true;
-    // RunPod: show interim captions locally; server PCM still owns the real turn.
-    recognition.interimResults = serverPcmSttActive && !browserSttActive;
+    recognition.interimResults = true;
     recognition.lang = "en-US";
 
     // Tracks whether the last error before onend was fatal (broken recognizer).
@@ -2021,13 +2115,10 @@ export function ActiveSession() {
             return;
           }
           requestBargeInInterrupt("speech_final");
-          if (!browserSttActive) {
-            return;
-          }
         }
 
         if (!isFinal) {
-          if (!serverPcmSttActive || browserSttActive) {
+          if (browserSttActive) {
             return;
           }
           if (trimmed.length < 2) return;
@@ -2080,25 +2171,6 @@ export function ActiveSession() {
           "Current Step:",
           scriptStepRef.current
         );
-        if (!browserSttActive) {
-          if (
-            ezriWsAudioPipelineActive() ||
-            performance.now() - jordanSpeechStartedAtMsRef.current < 2500
-          ) {
-            return;
-          }
-          if (shouldIgnoreEchoBargeIn(textForUtterance)) {
-            return;
-          }
-          if (suppressIncomingAudioRef.current) {
-            suppressIncomingAudioRef.current = false;
-          }
-          notifyServerReadyForUserSpeech();
-          setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
-          scrollTranscriptToBottom();
-          return;
-        }
-
         if (speechTimeoutRef.current)
           window.clearTimeout(speechTimeoutRef.current);
 
@@ -2219,9 +2291,7 @@ export function ActiveSession() {
     stream,
     sttRestartTrigger,
     browserSttActive,
-    serverPcmSttActive,
     scrollTranscriptToBottom,
-    notifyServerReadyForUserSpeech,
     ezriConfig?.apiBase,
   ]);
 
@@ -2649,7 +2719,10 @@ export function ActiveSession() {
     loadCredits();
   }, [duration]);
 
-  const [sessionId] = useState(() => apiSessionId || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [fallbackEzriSessionId] = useState(
+    () => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  );
+  const sessionId = apiSessionId ?? fallbackEzriSessionId;
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
   const ezriUserid = useMemo(() => getOrCreateEzriUserid(user?.id), [user?.id]);
@@ -2671,35 +2744,10 @@ export function ActiveSession() {
         wsPendingFallbackTextRef.current = "";
         void speakViaEzriTts(fallback);
       }
-      notifyServerReadyForUserSpeech();
     }, THINKING_STUCK_MS);
 
     return () => window.clearTimeout(t);
-  }, [isEzriThinking, isEzriSpeaking, notifyServerReadyForUserSpeech]);
-
-  /** If the server never opened VAD (no greeting audio), nudge with playback_done once (RunPod STT). */
-  useEffect(() => {
-    if (!permissionsGranted || ezriWarmupStatus !== "ready") return;
-    if (ezriWsStatus !== "connected" || !serverPcmSttActive) return;
-
-    if (initialListenNudgeSentRef.current) return;
-
-    const t = window.setTimeout(() => {
-      if (initialListenNudgeSentRef.current) return;
-      if (transcriptRef.current.length > 0) return;
-      if (ezriWsAudioPipelineActive() || isEzriThinkingRef.current) return;
-      initialListenNudgeSentRef.current = true;
-      notifyServerReadyForUserSpeech();
-    }, 6000);
-
-    return () => window.clearTimeout(t);
-  }, [
-    permissionsGranted,
-    ezriWarmupStatus,
-    ezriWsStatus,
-    serverPcmSttActive,
-    notifyServerReadyForUserSpeech,
-  ]);
+  }, [isEzriThinking, isEzriSpeaking]);
 
   useEffect(() => {
     if (ezriWsStatus === "connected" && ezriWarmupStatus === "idle") {
@@ -2792,8 +2840,10 @@ export function ActiveSession() {
           pendingUserTextRef.current = "";
         },
         onUserTranscript: (text) => {
-          if (suppressIncomingAudioRef.current) return;
-          if (dropOldResponsesRef.current > 0) return;
+          if (dropOldResponsesRef.current > 0) {
+            dropOldResponsesRef.current = 0;
+          }
+          suppressIncomingAudioRef.current = false;
           const t = text.trim();
           if (!t) return;
           latestUserTextRef.current = t;
@@ -2838,6 +2888,21 @@ export function ActiveSession() {
           wsTtsStreamingRef.current = false;
           jordanLastSpeechAtMsRef.current = performance.now();
 
+          // Ezri app.js: if greeting audio already finished (common on Firefox), unlock the server mic now.
+          if (
+            !suppressIncomingAudioRef.current &&
+            !wsIsPlaybackActiveRef.current &&
+            wsAudioQueueRef.current.length === 0 &&
+            prePermissionAudioQueueRef.current.length === 0
+          ) {
+            if (pendingPlaybackDoneRef.current || !playbackDoneAckRef.current) {
+              console.log("[WS] tts_done + idle queue — sending playback_done immediately");
+              sendPlaybackDoneNowRef.current();
+            }
+          } else if (pendingPlaybackDoneRef.current) {
+            sendPlaybackDoneNowRef.current();
+          }
+
           clearTtsDoneGraceTimer();
           const turnAtDone = wsActiveTurnRef.current;
           const heardAudioThisTurn =
@@ -2870,6 +2935,8 @@ export function ActiveSession() {
         },
         onSpeakingStart: () => {
           // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
+          playbackDoneAckRef.current = false;
+          pendingPlaybackDoneRef.current = false;
           wsTtsDoneReceivedRef.current = false;
           wsTtsStreamingRef.current = true;
           jordanSpeechStartedAtMsRef.current = performance.now();
@@ -2925,15 +2992,9 @@ export function ActiveSession() {
           }
         },
         onInterrupt: () => {
-          // If a merge is in progress, the server interrupted the old turn on its
-          // own (streaming server behaviour). Clear the drop counter so the merged
-          // response is accepted immediately.
-          if (dropOldResponsesRef.current > 0) {
-            dropOldResponsesRef.current = 0;
-          }
+          // Server Silero VAD fired handle_interrupt (reference app.js case 'interrupt').
+          suppressIncomingAudioRef.current = false;
 
-          // Ezri Avatar app.js parity: idle interrupt (nothing playing/streaming / queued locally)
-          // must not flush server STT buffers with playback_done â€” only resume listening UI.
           const wasPlayingOrStreaming =
             wsIsPlaybackActiveRef.current ||
             wsAudioQueueRef.current.length > 0 ||
@@ -2945,23 +3006,32 @@ export function ActiveSession() {
           pendingUserTextRef.current = "";
 
           if (!wasPlayingOrStreaming) {
-            resumeStt();
+            resumeStt(0, { ignoreSpeakingGate: true });
             return;
           }
 
           stopPlaybackAndCooldown({
             sendPlaybackDone: true,
+            cooldownMs: 1500,
             bypassPlaybackDoneDebounce: true,
           });
+          resumeStt(0, { ignoreSpeakingGate: true });
         },
         onWarmupStart: () => {
           ezriWarmupReadyRef.current = false;
+          wsTtsDoneReceivedRef.current = false;
           setEzriWarmupStatus("warming");
         },
         onWarmupDone: () => {
           ezriWarmupReadyRef.current = true;
           setEzriWarmupStatus("ready");
-          window.setTimeout(() => notifyServerReadyForUserSpeech(), 300);
+          // Do not send playback_done here (app.js waits until greeting audio finishes playing).
+        },
+        onPipelineStep: (status) => {
+          if (status === "thinking") {
+            setIsEzriThinking(true);
+            isEzriThinkingRef.current = true;
+          }
         },
         onAudio: (audio) => {
           // Drop audio from the old turn â€” any chunk arriving while suppressed
@@ -3036,6 +3106,32 @@ export function ActiveSession() {
           isEzriThinkingRef.current = false;
           pendingUserTextRef.current = "";
         },
+        onUnknownMessage: (raw) => {
+          if (
+            raw &&
+            typeof raw === "object" &&
+            (raw as { type?: string }).type === "debug" &&
+            typeof (raw as { rms?: number }).rms === "number"
+          ) {
+            const dbg = raw as { rms: number; is_speech?: boolean };
+            const rms = dbg.rms;
+            if (process.env.NODE_ENV === "development" && rms > 0) {
+              console.debug(
+                "[PCM] Server heard mic RMS:",
+                rms,
+                dbg.is_speech === false ? "(VAD: silence)" : "(VAD: speech)",
+              );
+            }
+            // User is clearly talking but server may still think Ezri is speaking (no playback_done).
+            if (
+              permissionsGrantedRef.current &&
+              rms >= 350 &&
+              !playbackDoneAckRef.current
+            ) {
+              tryUnlockServerMicRef.current("user_voice_rms");
+            }
+          }
+        },
       });
 
     wsClientRef.current = client;
@@ -3093,59 +3189,104 @@ export function ActiveSession() {
     if (hasSessionEnded || isSessionPaused) return;
     if (!serverPcmSttActive) return;
 
-    const SAMPLE_RATE = 16000;
-
+    let cancelled = false;
     let audioCtx: AudioContext | null = null;
     let source: MediaStreamAudioSourceNode | null = null;
     let processor: ScriptProcessorNode | null = null;
     let onVisibility: (() => void) | undefined;
 
-    try {
-      audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
-      source = audioCtx.createMediaStreamSource(stream);
-      processor = audioCtx.createScriptProcessor(EZRI_PCM_BUFFER_SIZE, 1, 1);
-
-      processor.onaudioprocess = (e: AudioProcessingEvent) => {
-        // Only hard-gate on mute/pause/ending â€” NOT on isEzriSpeakingRef.
-        // The backend's own is_bot_speaking flag suppresses echo while Ezri
-        // is speaking. Gating here too causes the first words after Ezri
-        // stops to be swallowed (the ref clears 1-2 chunks late).
-        if (
-          isMutedRef.current ||
-          isSessionPausedRef.current ||
-          isSessionEndingRef.current ||
-          !ezriWarmupReadyRef.current
-        )
+    const startPcmStreaming = async () => {
+      try {
+        audioCtx = pcmCaptureAudioContextRef.current;
+        if (!audioCtx || audioCtx.state === "closed") {
+          audioCtx = await createPcmCaptureAudioContext();
+          pcmCaptureAudioContextRef.current = audioCtx;
+        } else if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+        if (cancelled) {
           return;
-        const ws = wsClientRef.current;
-        if (!ws || ws.getStatus() !== "connected") return;
-
-        const floats = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(floats.length);
-        for (let i = 0; i < floats.length; i++) {
-          pcm[i] = Math.max(-1, Math.min(1, floats[i])) * 0x7fff;
         }
-        ws.sendPcm(pcm.buffer);
-      };
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-      setIsListening(true);
-      console.log("[PCM] Streaming started at", SAMPLE_RATE, "Hz, buffer", EZRI_PCM_BUFFER_SIZE);
-
-      onVisibility = () => {
-        if (document.visibilityState === "visible" && audioCtx?.state === "suspended") {
-          void audioCtx.resume().catch(() => {
-            /* non-fatal */
-          });
+        const captureRate = audioCtx.sampleRate;
+        if (captureRate !== EZRI_PCM_SAMPLE_RATE) {
+          console.warn(
+            `[PCM] Capture rate ${captureRate}Hz — downsampling to ${EZRI_PCM_SAMPLE_RATE}Hz for server STT`,
+          );
         }
-      };
-      document.addEventListener("visibilitychange", onVisibility);
-    } catch (e) {
-      console.error("[PCM] Failed to start audio streaming:", e);
-    }
+
+        source = audioCtx.createMediaStreamSource(stream);
+        processor = audioCtx.createScriptProcessor(EZRI_PCM_BUFFER_SIZE, 1, 1);
+        const silentSink = audioCtx.createGain();
+        silentSink.gain.value = 0;
+
+        processor.onaudioprocess = (e: AudioProcessingEvent) => {
+          if (audioCtx?.state === "suspended") {
+            void audioCtx.resume().catch(() => {
+              /* non-fatal */
+            });
+          }
+          // Only hard-gate on mute/pause/ending — server ignores audio during warmup.
+          if (
+            isMutedRef.current ||
+            isSessionPausedRef.current ||
+            isSessionEndingRef.current
+          )
+            return;
+          const ws = wsClientRef.current;
+          if (!ws || ws.getStatus() !== "connected") return;
+
+          const channel = e.inputBuffer.getChannelData(0);
+          const floats =
+            captureRate !== EZRI_PCM_SAMPLE_RATE
+              ? downsampleFloat32To16k(channel, captureRate)
+              : channel;
+          const pcm = float32ToInt16Pcm(floats);
+          if (pcm.length > 0) {
+            ws.sendPcm(int16PcmToArrayBuffer(pcm));
+            pcmChunksSentRef.current += 1;
+            if (pcmChunksSentRef.current === 1) {
+              console.log("[PCM] First mic chunk sent to server");
+            }
+          }
+        };
+
+        source.connect(processor);
+        processor.connect(silentSink);
+        silentSink.connect(audioCtx.destination);
+        setIsListening(true);
+        pcmChunksSentRef.current = 0;
+        console.log(
+          "[PCM] Streaming started at",
+          captureRate,
+          "Hz (server expects",
+          EZRI_PCM_SAMPLE_RATE,
+          "Hz), buffer",
+          EZRI_PCM_BUFFER_SIZE,
+          "state:",
+          audioCtx.state,
+        );
+
+        onVisibility = () => {
+          if (document.visibilityState === "visible" && audioCtx?.state === "suspended") {
+            void audioCtx.resume().catch(() => {
+              /* non-fatal */
+            });
+          }
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+      } catch (e) {
+        console.error("[PCM] Failed to start audio streaming:", e);
+        toast.error(
+          "Could not start microphone streaming in this browser. Try Chrome or allow microphone access.",
+        );
+      }
+    };
+
+    void startPcmStreaming();
 
     return () => {
+      cancelled = true;
       if (onVisibility) {
         document.removeEventListener("visibilitychange", onVisibility);
       }
@@ -3160,6 +3301,26 @@ export function ActiveSession() {
   }, [
     permissionsGranted,
     stream,
+    ezriWsStatus,
+    hasSessionEnded,
+    isSessionPaused,
+    serverPcmSttActive,
+  ]);
+
+  // Safety: if greeting playback_done never fires (Firefox), unlock server mic within a few seconds.
+  useEffect(() => {
+    if (!permissionsGranted || ezriWsStatus !== "connected" || !serverPcmSttActive) return;
+    if (hasSessionEnded || isSessionPaused) return;
+
+    const t = window.setTimeout(() => {
+      if (!playbackDoneAckRef.current) {
+        tryUnlockServerMicRef.current("safety_timer");
+      }
+    }, 6000);
+
+    return () => window.clearTimeout(t);
+  }, [
+    permissionsGranted,
     ezriWsStatus,
     hasSessionEnded,
     isSessionPaused,
@@ -3188,6 +3349,7 @@ export function ActiveSession() {
   useEffect(() => {
     if (isSessionPaused || hasSessionEnded) return;
     if (!permissionsGranted) return;
+    if (!sessionBillingStartedRef.current) return;
 
     const timer = setInterval(() => {
       // Keep accurate time in a ref (no React render).
@@ -3205,6 +3367,7 @@ export function ActiveSession() {
     if (!apiSessionId) return;
     if (isSessionPaused || hasSessionEnded) return;
     if (!permissionsGranted) return;
+    if (!sessionBillingStartedRef.current) return;
 
     let cancelled = false;
     let lastSent = 0;

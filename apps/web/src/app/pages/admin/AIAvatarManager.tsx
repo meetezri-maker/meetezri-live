@@ -1529,7 +1529,7 @@ export function AIAvatarManager() {
                       <thead className="bg-gray-50 sticky top-0">
                         <tr>
                           <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Session</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Talking</th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Talk it out</th>
                         </tr>
                       </thead>

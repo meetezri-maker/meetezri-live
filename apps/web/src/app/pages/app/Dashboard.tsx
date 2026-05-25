@@ -177,6 +177,11 @@ export function Dashboard() {
     return "📝";
   };
 
+  const normalizeSessionActivityText = (text: string, type: string) => {
+    if (type !== "session") return text;
+    return text.replace(/\bsession\b/gi, "talking");
+  };
+
   const activityFeed = (() => {
     const rows = Array.isArray(activityRaw)
       ? (activityRaw as Array<{
@@ -197,7 +202,7 @@ export function Dashboard() {
       return {
         id: row.id,
         type: row.type,
-        text: row.text,
+        text: normalizeSessionActivityText(row.text, row.type),
         time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
         emoji:
           row.type === "mood" && row.mood ? getMoodEmoji(row.mood) : emojiForActivityType(row.type),
@@ -430,7 +435,7 @@ export function Dashboard() {
 
   const sessionsCompletedDisplay = useMemo(() => {
     const n = safeStat(profile?.stats?.completed_sessions);
-    return n === 1 ? "1 session so far" : `${n} sessions so far`;
+    return n === 1 ? "1 talking so far" : `${n} talkings so far`;
   }, [profile?.stats?.completed_sessions]);
 
   const moodSparkPhrase = useMemo(() => {
