@@ -68,6 +68,25 @@ import { getConnectionQualityColor } from "./utils/sessionFormat";
 import { usesBrowserStt, usesServerPcmStt } from "./utils/sttMode";
 import { usePipDrag } from "./hooks/usePipDrag";
 
+type ActiveSessionAudioChunk = {
+  subtitle: string;
+  audio: unknown;
+  avatarData: EzriAvatarData | null;
+};
+
+type PendingAudioAvatarPairing = {
+  chunk: ActiveSessionAudioChunk;
+  sentenceKey: string;
+  startedAtMs: number;
+  timeoutId: number;
+};
+
+const GREETING_AVATAR_PAIRING_WAIT_MS = 100;
+
+function normalizeAvatarPairingSentence(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -485,6 +504,8 @@ export function ActiveSession() {
   const wsSpeakFallbackTimerRef = useRef<number | null>(null);
   const wsTtsDoneGraceTimerRef = useRef<number | null>(null);
   const wsPendingFallbackTextRef = useRef<string>("");
+  const pendingAudioAvatarPairingRef =
+    useRef<PendingAudioAvatarPairing | null>(null);
   const initialListenNudgeSentRef = useRef(false);
   const lastBargeInAtRef = useRef(0);
 
@@ -512,7 +533,8 @@ export function ActiveSession() {
     isEzriSpeakingRef.current ||
     wsTtsStreamingRef.current ||
     wsIsPlaybackActiveRef.current ||
-    wsAudioQueueRef.current.length > 0;
+    wsAudioQueueRef.current.length > 0 ||
+    pendingAudioAvatarPairingRef.current !== null;
 
   useEffect(() => {
     permissionsGrantedRef.current = permissionsGranted;
@@ -689,6 +711,48 @@ export function ActiveSession() {
   // next one. Incremented each time a merge fires so that only the LATEST merged
   // message's response is played. Decremented on each tts_done / server interrupt.
   const dropOldResponsesRef = useRef(0);
+
+  const queueEzriAudioChunk = (chunk: ActiveSessionAudioChunk) => {
+    if (!permissionsGrantedRef.current) {
+      prePermissionAudioQueueRef.current.push(chunk);
+      return;
+    }
+
+    clearSpeakFallbackTimer();
+    wsAudioQueueRef.current.push(chunk);
+    flushWsAudioQueueRef.current();
+    setIsEzriThinking(false);
+    isEzriThinkingRef.current = false;
+    pendingUserTextRef.current = "";
+  };
+
+  const clearPendingAudioAvatarPairing = (
+    reason: string,
+    opts?: { queueFallback?: boolean },
+  ) => {
+    const pending = pendingAudioAvatarPairingRef.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timeoutId);
+    pendingAudioAvatarPairingRef.current = null;
+    const waitDurationMs = Math.round(performance.now() - pending.startedAtMs);
+
+    if (process.env.NODE_ENV === "development") {
+      console.debug("[Greeting Sync Pairing]", {
+        reason,
+        audioArrivedBeforeAvatarData: true,
+        pendingWaitStarted: true,
+        avatarDataMatched: false,
+        waitDurationMs,
+        fallbackTimeoutUsed: opts?.queueFallback === true,
+        avatarDataAttachedToChunk: false,
+        sentence: pending.chunk.subtitle,
+      });
+    }
+
+    if (opts?.queueFallback) {
+      queueEzriAudioChunk(pending.chunk);
+    }
+  };
 
   // True for iOS / Android where keeping recognition alive during TTS playback
   // triggers hardware audio-capture errors that permanently break the recognizer.
@@ -1721,6 +1785,8 @@ export function ActiveSession() {
         }
         // Allow new audio from server now that a real new message is being sent.
         suppressIncomingAudioRef.current = false;
+        clearPendingAudioAvatarPairing("new_user_turn");
+        avatarPendingDataRef.current = null;
         wsActiveTurnRef.current += 1;
         wsAudioSeenTurnRef.current = 0;
         wsAssistantBufferRef.current = "";
@@ -2795,7 +2861,8 @@ export function ActiveSession() {
               wsTtsDoneReceivedRef.current &&
               !wsIsPlaybackActiveRef.current &&
               wsAudioQueueRef.current.length === 0 &&
-              prePermissionAudioQueueRef.current.length === 0
+              prePermissionAudioQueueRef.current.length === 0 &&
+              pendingAudioAvatarPairingRef.current === null
             ) {
               playNextWsQueue();
             }
@@ -2817,6 +2884,42 @@ export function ActiveSession() {
           avatarPendingDataRef.current = data;
           latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
           sentimentCompoundRef.current = extractJordanSentimentCompound(data.sentiment);
+          const pendingPairing = pendingAudioAvatarPairingRef.current;
+          if (pendingPairing) {
+            const avatarSentenceKey = normalizeAvatarPairingSentence(
+              data.sentence ?? "",
+            );
+            const matched =
+              Boolean(avatarSentenceKey) &&
+              avatarSentenceKey === pendingPairing.sentenceKey;
+
+            if (matched) {
+              window.clearTimeout(pendingPairing.timeoutId);
+              pendingAudioAvatarPairingRef.current = null;
+              const waitDurationMs = Math.round(
+                performance.now() - pendingPairing.startedAtMs,
+              );
+              const matchedChunk = {
+                ...pendingPairing.chunk,
+                avatarData: data,
+              };
+              avatarPendingDataRef.current = null;
+
+              if (process.env.NODE_ENV === "development") {
+                console.debug("[Greeting Sync Pairing]", {
+                  audioArrivedBeforeAvatarData: true,
+                  pendingWaitStarted: true,
+                  avatarDataMatched: true,
+                  waitDurationMs,
+                  fallbackTimeoutUsed: false,
+                  avatarDataAttachedToChunk: true,
+                  sentence: data.sentence ?? pendingPairing.chunk.subtitle,
+                });
+              }
+
+              queueEzriAudioChunk(matchedChunk);
+            }
+          }
           if (process.env.NODE_ENV === "development") {
             console.debug("[Ezri] avatar_data:", data.sentence, data.sentiment, data.phonemes);
           }
@@ -2885,17 +2988,42 @@ export function ActiveSession() {
           };
           avatarPendingDataRef.current = null;
 
-          if (!permissionsGrantedRef.current) {
-            prePermissionAudioQueueRef.current.push(chunk);
+          if (!chunk.avatarData) {
+            clearSpeakFallbackTimer();
+            clearPendingAudioAvatarPairing("superseded_audio", {
+              queueFallback: true,
+            });
+            const sentenceKey = normalizeAvatarPairingSentence(subtitle);
+            const startedAtMs = performance.now();
+            const timeoutId = window.setTimeout(() => {
+              clearPendingAudioAvatarPairing("pairing_timeout", {
+                queueFallback: true,
+              });
+            }, GREETING_AVATAR_PAIRING_WAIT_MS);
+
+            pendingAudioAvatarPairingRef.current = {
+              chunk,
+              sentenceKey,
+              startedAtMs,
+              timeoutId,
+            };
+
+            if (process.env.NODE_ENV === "development") {
+              console.debug("[Greeting Sync Pairing]", {
+                audioArrivedBeforeAvatarData: true,
+                pendingWaitStarted: true,
+                avatarDataMatched: false,
+                waitDurationMs: 0,
+                fallbackTimeoutUsed: false,
+                avatarDataAttachedToChunk: false,
+                sentence: subtitle,
+                waitTimeoutMs: GREETING_AVATAR_PAIRING_WAIT_MS,
+              });
+            }
             return;
           }
 
-          clearSpeakFallbackTimer();
-          wsAudioQueueRef.current.push(chunk);
-          flushWsAudioQueueRef.current();
-          setIsEzriThinking(false);
-          isEzriThinkingRef.current = false;
-          pendingUserTextRef.current = "";
+          queueEzriAudioChunk(chunk);
         },
         onError: (err, ctx) => {
           console.error("Solace WS error:", err, ctx);
@@ -2923,6 +3051,7 @@ export function ActiveSession() {
     });
 
     return () => {
+      clearPendingAudioAvatarPairing("ws_cleanup");
       if (wsSpeakFallbackTimerRef.current) {
         window.clearTimeout(wsSpeakFallbackTimerRef.current);
         wsSpeakFallbackTimerRef.current = null;
