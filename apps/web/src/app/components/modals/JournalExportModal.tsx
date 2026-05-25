@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
-import { X, Download, FileText, FileJson, Calendar, CheckCircle2, Loader2 } from "lucide-react";
+import { X, Download, FileText, FileJson, CheckCircle2, Loader2 } from "lucide-react";
+import { SolaceDatePicker } from "@/app/solace";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -225,27 +226,24 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="mb-1.5 block text-xs text-zinc-500">From</label>
-                          <div className="relative">
-                            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                            <input
-                              type="date"
-                              value={dateFrom}
-                              onChange={(e) => setDateFrom(e.target.value)}
-                              className="min-h-11 w-full rounded-xl border border-white/[0.08] bg-[#0B0B15]/80 py-2.5 pl-10 pr-3 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] [color-scheme:dark] focus:border-violet-500/40 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-                            />
-                          </div>
+                          <SolaceDatePicker
+                            value={dateFrom}
+                            onChange={setDateFrom}
+                            placeholder="Start date"
+                            toDate={dateTo ? new Date(`${dateTo}T12:00:00`) : new Date()}
+                            triggerClassName="min-h-11 w-full rounded-xl border border-white/[0.08] bg-[#0B0B15]/80 py-2.5 px-3 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-violet-500/40 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                          />
                         </div>
                         <div>
                           <label className="mb-1.5 block text-xs text-zinc-500">To</label>
-                          <div className="relative">
-                            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                            <input
-                              type="date"
-                              value={dateTo}
-                              onChange={(e) => setDateTo(e.target.value)}
-                              className="min-h-11 w-full rounded-xl border border-white/[0.08] bg-[#0B0B15]/80 py-2.5 pl-10 pr-3 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] [color-scheme:dark] focus:border-violet-500/40 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-                            />
-                          </div>
+                          <SolaceDatePicker
+                            value={dateTo}
+                            onChange={setDateTo}
+                            placeholder="End date"
+                            fromDate={dateFrom ? new Date(`${dateFrom}T12:00:00`) : undefined}
+                            toDate={new Date()}
+                            triggerClassName="min-h-11 w-full rounded-xl border border-white/[0.08] bg-[#0B0B15]/80 py-2.5 px-3 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-violet-500/40 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                          />
                         </div>
                       </div>
                       <p className="mt-2.5 text-xs leading-relaxed text-zinc-500">

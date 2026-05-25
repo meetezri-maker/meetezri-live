@@ -54,6 +54,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   SolaceAmbientBackground,
+  SolaceDatePicker,
   SolaceGlassCard,
   SolaceGlowButton,
   SolaceProgressRing,
@@ -1705,12 +1706,13 @@ export function SleepTracker() {
                       <Calendar className="size-4 text-violet-300" aria-hidden />
                       Date
                     </label>
-                    <input
-                      type="date"
+                    <SolaceDatePicker
                       value={sleepFormData.date}
                       disabled={isSaving}
-                      onChange={(e) => setSleepFormData({ ...sleepFormData, date: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 focus:ring-2 disabled:opacity-60"
+                      onChange={(date) => setSleepFormData({ ...sleepFormData, date })}
+                      placeholder="Select date"
+                      toDate={new Date()}
+                      triggerClassName="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 focus:ring-2 disabled:opacity-60"
                     />
                   </div>
 

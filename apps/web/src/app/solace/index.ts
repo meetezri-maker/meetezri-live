@@ -45,3 +45,7 @@ export type {
 } from "./SolaceSelect";
 export { SolaceDateOfBirthPicker } from "./SolaceDateOfBirthPicker";
 export type { SolaceDateOfBirthPickerProps } from "./SolaceDateOfBirthPicker";
+export { SolaceDatePicker } from "./SolaceDatePicker";
+export type { SolaceDatePickerProps } from "./SolaceDatePicker";
+export { SolaceCalendarInput } from "./SolaceCalendarInput";
+export type { SolaceCalendarInputProps } from "./SolaceCalendarInput";

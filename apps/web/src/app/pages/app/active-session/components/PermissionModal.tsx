@@ -59,7 +59,7 @@ function PermissionModalComponent({
                 Camera & Microphone Access
               </h3>
               <p className="text-gray-300 leading-relaxed">
-                To have a video session with {companionName}, we need
+                To have a video talking with {companionName}, we need
                 permission to access your camera and microphone.
               </p>
             </div>
