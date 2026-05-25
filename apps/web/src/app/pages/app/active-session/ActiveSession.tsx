@@ -485,8 +485,9 @@ export function ActiveSession() {
   const wsSpeakFallbackTimerRef = useRef<number | null>(null);
   const wsTtsDoneGraceTimerRef = useRef<number | null>(null);
   const wsPendingFallbackTextRef = useRef<string>("");
-  const initialListenNudgeSentRef = useRef(false);
   const lastBargeInAtRef = useRef(0);
+  /** First successful playback_done after permissions — gates session billing heartbeat. */
+  const sessionBillingStartedRef = useRef(false);
 
   const TTS_SPEAK_FALLBACK_MS = 1000;
   const TTS_DONE_GRACE_MS = 500;
@@ -789,30 +790,10 @@ export function ActiveSession() {
 
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
-    const now = Date.now();
-    // 2000ms debounce: server echo interrupt can call this twice; avoids duplicate playback_done.
-    // Client-initiated interrupts pass bypassPlaybackDoneDebounce â€” otherwise the ACK is skipped,
-    // the server stays â€œbot speakingâ€, and STT/backend VAD never accepts user audio.
-    if (
-      !opts?.bypassPlaybackDoneDebounce &&
-      now - lastPlaybackDoneAtRef.current < 2000
-    ) {
-      // Still reopen local STT â€” skipping only the duplicate playback_done send.
-      resumeStt();
-      return;
-    }
-    lastPlaybackDoneAtRef.current = now;
-
-    // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
-    // Client-initiated interrupts pass a shorter value since the browser's AEC already removes speaker echo.
-    const delay = opts?.cooldownMs ?? 1500;
-    playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
-      playbackDoneCooldownTimerRef.current = null;
-      try {
-        wsClientRef.current?.sendPlaybackDone();
-      } catch { }
-      resumeStt();
-    }, delay);
+    sendPlaybackDoneAfterCooldown(
+      opts?.cooldownMs ?? 1500,
+      opts?.bypassPlaybackDoneDebounce ?? false,
+    );
   };
 
   const stopAudioAndSpeechDriver = () => {
@@ -1287,20 +1268,34 @@ export function ActiveSession() {
     ]);
   };
 
-  /** Tell the Ezri server the client is not playing TTS so backend VAD can accept mic audio (app.js parity). */
-  const notifyServerReadyForUserSpeech = useCallback(() => {
-    if (!serverPcmSttActive) return;
-    if (ezriWsAudioPipelineActive()) return;
-    const ws = wsClientRef.current;
-    if (!ws || ws.getStatus() !== "connected") return;
-    try {
-      ws.sendPlaybackDone();
-    } catch {
-      /* ignore */
+  /**
+   * Ezri Avatar `app.js` `playNextInQueue`: send `playback_done` immediately when the
+   * audio queue is empty and `tts_done` was received — do not delay or debounce.
+   */
+  const sendPlaybackDoneNow = useCallback(() => {
+    if (playbackDoneCooldownTimerRef.current !== null) {
+      window.clearTimeout(playbackDoneCooldownTimerRef.current);
+      playbackDoneCooldownTimerRef.current = null;
     }
+    lastPlaybackDoneAtRef.current = Date.now();
+    if (serverPcmSttActive) {
+      const ws = wsClientRef.current;
+      if (ws?.getStatus() === "connected") {
+        try {
+          ws.sendPlaybackDone();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if (!sessionBillingStartedRef.current) {
+      sessionBillingStartedRef.current = true;
+    }
+    resumeStt(150, { ignoreSpeakingGate: true });
   }, [serverPcmSttActive]);
 
-  const sendPlaybackDoneAck = (
+  /** After interrupt / stopPlayback — 1500ms echo cooldown (reference app.js). */
+  const sendPlaybackDoneAfterCooldown = (
     cooldownMs = 1500,
     bypassDebounce = false,
   ) => {
@@ -1316,12 +1311,17 @@ export function ActiveSession() {
     }
     playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
       playbackDoneCooldownTimerRef.current = null;
-      try {
-        wsClientRef.current?.sendPlaybackDone();
-      } catch {
-        /* ignore */
+      if (serverPcmSttActive) {
+        try {
+          wsClientRef.current?.sendPlaybackDone();
+        } catch {
+          /* ignore */
+        }
       }
-      resumeStt(0, { ignoreSpeakingGate: true });
+      if (!sessionBillingStartedRef.current) {
+        sessionBillingStartedRef.current = true;
+      }
+      resumeStt(150, { ignoreSpeakingGate: true });
     }, cooldownMs);
   };
 
@@ -1335,8 +1335,8 @@ export function ActiveSession() {
     const next = wsAudioQueueRef.current.shift();
     if (!next) {
       if (wsTtsDoneReceivedRef.current) {
-        sendPlaybackDoneAck(600, true);
         wsTtsDoneReceivedRef.current = false;
+        sendPlaybackDoneNow();
       }
       return;
     }
@@ -1382,15 +1382,10 @@ export function ActiveSession() {
       !wsIsPlaybackActiveRef.current &&
       wsAudioQueueRef.current.length === 0
     ) {
-      sendPlaybackDoneAck(300, true);
       wsTtsDoneReceivedRef.current = false;
-    } else if (
-      !wsIsPlaybackActiveRef.current &&
-      wsAudioQueueRef.current.length === 0
-    ) {
-      window.setTimeout(() => notifyServerReadyForUserSpeech(), 400);
+      sendPlaybackDoneNow();
     }
-  }, [notifyServerReadyForUserSpeech]);
+  }, [sendPlaybackDoneNow]);
 
   useEffect(() => {
     if (!pendingMediaEntry || ezriWarmupStatus !== "ready") return;
@@ -2027,7 +2022,6 @@ export function ActiveSession() {
           if (suppressIncomingAudioRef.current) {
             suppressIncomingAudioRef.current = false;
           }
-          notifyServerReadyForUserSpeech();
           setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
           scrollTranscriptToBottom();
           return;
@@ -2155,7 +2149,6 @@ export function ActiveSession() {
     browserSttActive,
     serverPcmSttActive,
     scrollTranscriptToBottom,
-    notifyServerReadyForUserSpeech,
     ezriConfig?.apiBase,
   ]);
 
@@ -2583,7 +2576,10 @@ export function ActiveSession() {
     loadCredits();
   }, [duration]);
 
-  const [sessionId] = useState(() => apiSessionId || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [fallbackEzriSessionId] = useState(
+    () => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  );
+  const sessionId = apiSessionId ?? fallbackEzriSessionId;
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
   const ezriUserid = useMemo(() => getOrCreateEzriUserid(user?.id), [user?.id]);
@@ -2605,35 +2601,10 @@ export function ActiveSession() {
         wsPendingFallbackTextRef.current = "";
         void speakViaEzriTts(fallback);
       }
-      notifyServerReadyForUserSpeech();
     }, THINKING_STUCK_MS);
 
     return () => window.clearTimeout(t);
-  }, [isEzriThinking, isEzriSpeaking, notifyServerReadyForUserSpeech]);
-
-  /** If the server never opened VAD (no greeting audio), nudge with playback_done once (RunPod STT). */
-  useEffect(() => {
-    if (!permissionsGranted || ezriWarmupStatus !== "ready") return;
-    if (ezriWsStatus !== "connected" || !serverPcmSttActive) return;
-
-    if (initialListenNudgeSentRef.current) return;
-
-    const t = window.setTimeout(() => {
-      if (initialListenNudgeSentRef.current) return;
-      if (transcriptRef.current.length > 0) return;
-      if (ezriWsAudioPipelineActive() || isEzriThinkingRef.current) return;
-      initialListenNudgeSentRef.current = true;
-      notifyServerReadyForUserSpeech();
-    }, 6000);
-
-    return () => window.clearTimeout(t);
-  }, [
-    permissionsGranted,
-    ezriWarmupStatus,
-    ezriWsStatus,
-    serverPcmSttActive,
-    notifyServerReadyForUserSpeech,
-  ]);
+  }, [isEzriThinking, isEzriSpeaking]);
 
   useEffect(() => {
     if (ezriWsStatus === "connected" && ezriWarmupStatus === "idle") {
@@ -2853,12 +2824,19 @@ export function ActiveSession() {
         },
         onWarmupStart: () => {
           ezriWarmupReadyRef.current = false;
+          wsTtsDoneReceivedRef.current = false;
           setEzriWarmupStatus("warming");
         },
         onWarmupDone: () => {
           ezriWarmupReadyRef.current = true;
           setEzriWarmupStatus("ready");
-          window.setTimeout(() => notifyServerReadyForUserSpeech(), 300);
+          // Do not send playback_done here (app.js waits until greeting audio finishes playing).
+        },
+        onPipelineStep: (status) => {
+          if (status === "thinking") {
+            setIsEzriThinking(true);
+            isEzriThinkingRef.current = true;
+          }
         },
         onAudio: (audio) => {
           // Drop audio from the old turn â€” any chunk arriving while suppressed
@@ -3059,6 +3037,7 @@ export function ActiveSession() {
   useEffect(() => {
     if (isSessionPaused || hasSessionEnded) return;
     if (!permissionsGranted) return;
+    if (!sessionBillingStartedRef.current) return;
 
     const timer = setInterval(() => {
       // Keep accurate time in a ref (no React render).
@@ -3076,6 +3055,7 @@ export function ActiveSession() {
     if (!apiSessionId) return;
     if (isSessionPaused || hasSessionEnded) return;
     if (!permissionsGranted) return;
+    if (!sessionBillingStartedRef.current) return;
 
     let cancelled = false;
     let lastSent = 0;

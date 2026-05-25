@@ -42,6 +42,8 @@ export type EzriRealtimeClientHandlers = {
   /** Fired when the backend commits to speaking (step: speaking) — BEFORE first audio byte.
    *  Use to pause browser STT as early as possible to prevent mis-detection of echo. */
   onSpeakingStart?: () => void;
+  /** `step` with status `thinking` or `hearing` (reference app.js pipeline dots). */
+  onPipelineStep?: (status: "thinking" | "hearing", message?: string) => void;
   /** Backend-computed phonemes + sentiment for each TTS sentence. Useful for lip sync / expressions. */
   onAvatarData?: (data: EzriAvatarData) => void;
   onError?: (error: unknown, context?: any) => void;
@@ -233,10 +235,18 @@ export class EzriRealtimeClient {
         return;
       }
 
-      // step: speaking → backend committed to speaking, pause STT before first byte arrives.
-      if (errType === "step" && typeof msg.status === "string" && msg.status === "speaking") {
-        this.handlers.onSpeakingStart?.();
-        return;
+      if (errType === "step" && typeof msg.status === "string") {
+        const stepStatus = msg.status;
+        if (stepStatus === "speaking") {
+          this.handlers.onSpeakingStart?.();
+          return;
+        }
+        if (stepStatus === "thinking" || stepStatus === "hearing") {
+          const stepMessage =
+            typeof msg.message === "string" ? msg.message : undefined;
+          this.handlers.onPipelineStep?.(stepStatus, stepMessage);
+          return;
+        }
       }
 
       // avatar_data → per-sentence phonemes + sentiment for lip sync / expressions.

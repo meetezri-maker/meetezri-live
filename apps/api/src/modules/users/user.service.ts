@@ -1446,14 +1446,14 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
         const typeLabel = normalizeSessionTypeLabel(session.type);
         if (session.status === 'completed') {
           const durationLabel = formatRecentActivitySessionDuration(session);
-          return `Completed ${typeLabel} session${durationLabel ? ` (${durationLabel})` : ''}`;
+          return `Completed ${typeLabel} talking${durationLabel ? ` (${durationLabel})` : ''}`;
         }
         if (session.status === 'scheduled') {
           return typeLabel === 'scheduled'
-            ? 'Scheduled session'
-            : `Scheduled ${typeLabel} session`;
+            ? 'Scheduled talking'
+            : `Scheduled ${typeLabel} talking`;
         }
-        return `Session ${session.status}`;
+        return `Talking ${session.status}`;
       })(),
       created_at: session.created_at.toISOString(),
       status: session.status,

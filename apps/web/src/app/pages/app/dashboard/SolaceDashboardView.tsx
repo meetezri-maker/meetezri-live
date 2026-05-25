@@ -561,7 +561,7 @@ export function SolaceDashboardView({
                     sparkSeed={2}
                   />
                   <ReflectMetric
-                    label="Sessions"
+                    label="Talking"
                     sub={sessionsCompletedDisplay}
                     sparkClass="text-violet-300/80"
                     sparkSeed={5}
