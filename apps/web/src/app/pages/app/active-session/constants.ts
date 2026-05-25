@@ -1,6 +1,7 @@
 export const CRISIS_KEYWORD_MODAL_ENABLED = false;
 
-export const EZRI_PCM_BUFFER_SIZE = 2048;
+/** ScriptProcessor buffer size — 4096 matches Ezri reference app (stable across browsers). */
+export const EZRI_PCM_BUFFER_SIZE = 4096;
 
 export const glassPanel =
   "rounded-2xl border border-white/10 bg-[#0A0F1E]/45 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.25)]";
