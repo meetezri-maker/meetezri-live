@@ -430,7 +430,7 @@ export function Dashboard() {
 
   const sessionsCompletedDisplay = useMemo(() => {
     const n = safeStat(profile?.stats?.completed_sessions);
-    return n === 1 ? "1 session so far" : `${n} sessions so far`;
+    return n === 1 ? "1 talking so far" : `${n} talkings so far`;
   }, [profile?.stats?.completed_sessions]);
 
   const moodSparkPhrase = useMemo(() => {
