@@ -64,7 +64,7 @@ function SessionRightRailComponent({
   return (
     <aside
       aria-label="Talking controls and stats"
-      className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.45)_rgba(255,255,255,0.06)]`}
+      className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain pb-28 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
     >
       <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 md:gap-3">
         <motion.button

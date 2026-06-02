@@ -3233,7 +3233,6 @@ export function ActiveSession() {
   useEffect(() => {
     if (isSessionPaused || hasSessionEnded) return;
     if (!permissionsGranted) return;
-    if (!sessionBillingStartedRef.current) return;
 
     const timer = setInterval(() => {
       // Keep accurate time in a ref (no React render).
