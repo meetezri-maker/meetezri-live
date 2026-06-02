@@ -303,7 +303,7 @@ export function TalkItOutLobbyLayout({
                           setShowMinutesPicker(true);
                         }}
                         disabled={isStarting || minutesAvailable <= 0}
-                        className="solace-cta-gradient group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full px-8 py-3.5 text-[15px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="solace-cta-gradient group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full border border-violet-400/35 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 px-8 py-3.5 text-[15px] font-medium text-white shadow-[0_14px_40px_-12px_rgba(109,40,217,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300/65 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-600 hover:shadow-[0_20px_50px_-14px_rgba(139,92,246,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {isStarting ? (
                           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -418,7 +418,7 @@ export function TalkItOutLobbyLayout({
                   type="button"
                   disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
                   className={cn(
-                    "solace-cta-gradient min-h-[48px] w-full rounded-[1rem] text-[14px] sm:w-auto",
+                    "solace-cta-gradient min-h-[48px] w-full rounded-[1rem] border border-violet-400/35 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-[14px] text-white shadow-[0_14px_36px_-12px_rgba(109,40,217,0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300/65 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-600 hover:shadow-[0_20px_48px_-14px_rgba(139,92,246,0.65)] sm:w-auto",
                     "hover:from-violet-500 hover:to-indigo-600"
                   )}
                   onClick={() => {
