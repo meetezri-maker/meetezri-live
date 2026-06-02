@@ -27,19 +27,42 @@ function readCustomLogoUrl(): string {
 
 export type BrandLogoVariant = "onDark" | "onLight";
 
+type DocumentTheme = "light" | "dark";
+
+function readDocumentTheme(): DocumentTheme {
+  if (typeof document === "undefined") return "dark";
+  const root = document.documentElement;
+  if (
+    root.getAttribute("data-ezri-theme") === "light" ||
+    root.getAttribute("data-theme") === "light"
+  ) {
+    return "light";
+  }
+  return "dark";
+}
+
 interface BrandLogoProps {
   heightClass?: string;
   className?: string;
   /** `onDark` = light wordmark on dark backgrounds; `onLight` = dark wordmark on light backgrounds */
   variant?: BrandLogoVariant;
+  /**
+   * When true, logo follows `html[data-ezri-theme]` / `data-theme`:
+   * light → `/logos/logo white.png`, dark → `/logos/logo black.png`.
+   */
+  themeAware?: boolean;
 }
 
 export function BrandLogo({
   heightClass = "h-24",
   className = "",
   variant = "onLight",
+  themeAware = false,
 }: BrandLogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
+  const [documentTheme, setDocumentTheme] = useState<DocumentTheme>(() =>
+    themeAware ? readDocumentTheme() : "dark"
+  );
 
   useEffect(() => {
     setCustomLogoUrl(readCustomLogoUrl());
@@ -54,8 +77,34 @@ export function BrandLogo({
     };
   }, []);
 
+  useEffect(() => {
+    if (!themeAware || typeof document === "undefined") return;
+
+    const sync = () => setDocumentTheme(readDocumentTheme());
+    sync();
+
+    const root = document.documentElement;
+    const observer = new MutationObserver(sync);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-ezri-theme", "data-theme"],
+    });
+    window.addEventListener("ezri-appearance-change", sync);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("ezri-appearance-change", sync);
+    };
+  }, [themeAware]);
+
+  const resolvedVariant: BrandLogoVariant = themeAware
+    ? documentTheme === "light"
+      ? "onLight"
+      : "onDark"
+    : variant;
+
   const defaultSrc =
-    variant === "onDark" ? BRAND_LOGO_ON_DARK_BG : BRAND_LOGO_ON_LIGHT_BG;
+    resolvedVariant === "onDark" ? BRAND_LOGO_ON_DARK_BG : BRAND_LOGO_ON_LIGHT_BG;
   const logoSrc = customLogoUrl || defaultSrc;
 
   return (

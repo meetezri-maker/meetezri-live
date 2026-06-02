@@ -70,9 +70,9 @@ html[data-theme="light"] {
 
   --hero-overlay-readability: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.86) 0%,
-    rgba(246, 240, 255, 0.58) 55%,
-    rgba(10, 15, 30, 0.28) 100%
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(246, 240, 255, 0.28) 55%,
+    rgba(10, 15, 30, 0.12) 100%
   );
 
   /* shadcn / app aliases */
@@ -143,22 +143,50 @@ html[data-theme="light"] .solace-app [class*="text-emerald-300"] {
   color: #047857 !important;
 }
 
+html[data-ezri-theme="light"] .solace-app [class*="text-violet-100"],
 html[data-ezri-theme="light"] .solace-app [class*="text-violet-200"],
 html[data-ezri-theme="light"] .solace-app [class*="text-violet-300"],
+html[data-theme="light"] .solace-app [class*="text-violet-100"],
 html[data-theme="light"] .solace-app [class*="text-violet-200"],
 html[data-theme="light"] .solace-app [class*="text-violet-300"] {
   color: #6d28d9 !important;
 }
 
-/* Primary / gradient CTAs keep white label */
+/* Primary / gradient CTAs keep white label + purple fill */
 html[data-ezri-theme="light"] .solace-app .solace-btn-primary,
+html[data-ezri-theme="light"] .solace-app .solace-cta-gradient,
 html[data-ezri-theme="light"] .solace-app [class*="bg-[var(--button-primary)]"],
 html[data-ezri-theme="light"] .solace-app button[class*="from-pink"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-fuchsia"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-violet"],
 html[data-ezri-theme="light"] .solace-app button[class*="from-emerald-5"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-red-"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-rose-"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-green-"],
+html[data-ezri-theme="light"] .solace-app .solace-btn-destructive,
 html[data-ezri-theme="light"] .solace-app a[class*="from-violet-6"],
 html[data-theme="light"] .solace-app .solace-btn-primary,
-html[data-theme="light"] .solace-app [class*="bg-[var(--button-primary)]"] {
-  color: var(--button-primary-text) !important;
+html[data-theme="light"] .solace-app .solace-cta-gradient,
+html[data-theme="light"] .solace-app [class*="bg-[var(--button-primary)]"],
+html[data-theme="light"] .solace-app button[class*="from-pink"],
+html[data-theme="light"] .solace-app button[class*="from-fuchsia"],
+html[data-theme="light"] .solace-app button[class*="from-violet"],
+html[data-theme="light"] .solace-app button[class*="from-emerald-5"],
+html[data-theme="light"] .solace-app button[class*="from-red-"],
+html[data-theme="light"] .solace-app button[class*="from-rose-"],
+html[data-theme="light"] .solace-app button[class*="from-green-"],
+html[data-theme="light"] .solace-app .solace-btn-destructive,
+html[data-theme="light"] .solace-app a[class*="from-violet-6"] {
+  color: var(--button-primary-text, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cta-gradient,
+html[data-ezri-theme="light"] .solace-app button[class*="bg-gradient-to-r"][class*="from-violet"],
+html[data-ezri-theme="light"] .solace-app button[class*="bg-gradient-to-r"][class*="from-fuchsia"],
+html[data-theme="light"] .solace-app .solace-cta-gradient,
+html[data-theme="light"] .solace-app button[class*="bg-gradient-to-r"][class*="from-violet"],
+html[data-theme="light"] .solace-app button[class*="bg-gradient-to-r"][class*="from-fuchsia"] {
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
 }
 
 /* Cards & panels: soft pastel surfaces (not flat white on white text) */
@@ -254,8 +282,24 @@ html[data-theme="light"] .solace-app [class*="placeholder:text-[rgba(255,255,255
 /* Hero image overlays — light readable scrim */
 html[data-ezri-theme="light"] .solace-app [class*="from-[#070812]"],
 html[data-ezri-theme="light"] .solace-app [class*="from-[#0a0b18]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#0a0618]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#0a0612]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#0a0c14]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#120818]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#060711]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#06040c]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-[#050816]"],
+html[data-ezri-theme="light"] .solace-app [class*="from-black"],
 html[data-theme="light"] .solace-app [class*="from-[#070812]"],
-html[data-theme="light"] .solace-app [class*="from-[#0a0b18]"] {
+html[data-theme="light"] .solace-app [class*="from-[#0a0b18]"],
+html[data-theme="light"] .solace-app [class*="from-[#0a0618]"],
+html[data-theme="light"] .solace-app [class*="from-[#0a0612]"],
+html[data-theme="light"] .solace-app [class*="from-[#0a0c14]"],
+html[data-theme="light"] .solace-app [class*="from-[#120818]"],
+html[data-theme="light"] .solace-app [class*="from-[#060711]"],
+html[data-theme="light"] .solace-app [class*="from-[#06040c]"],
+html[data-theme="light"] .solace-app [class*="from-[#050816]"],
+html[data-theme="light"] .solace-app [class*="from-black"] {
   background-image: var(--hero-overlay-readability) !important;
 }
 
@@ -263,7 +307,7 @@ html[data-ezri-theme="light"] .solace-app [class*="rgba(46,26,88"],
 html[data-ezri-theme="light"] .solace-app [class*="rgba(30,20,60"],
 html[data-theme="light"] .solace-app [class*="rgba(46,26,88"],
 html[data-theme="light"] .solace-app [class*="rgba(30,20,60"] {
-  opacity: 0.35 !important;
+  opacity: 0.4 !important;
 }
 
 html[data-ezri-theme="light"] .solace-app [class*="rgba(4,5,14"],

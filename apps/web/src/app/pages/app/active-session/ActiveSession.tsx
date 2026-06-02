@@ -226,6 +226,7 @@ export function ActiveSession() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamCleanupRef = useRef<MediaStream | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const ezriWarmupReadyRef = useRef(false);
   const pendingMediaEntryRef = useRef(false);
@@ -318,8 +319,12 @@ export function ActiveSession() {
       ...(videoStream ? videoStream.getVideoTracks() : []),
     ];
     const combinedStream = new MediaStream(tracks);
+    const hasLiveVideoTrack = combinedStream
+      .getVideoTracks()
+      .some((track) => track.readyState === "live");
 
     setStream(combinedStream);
+    setIsCameraOff(!hasLiveVideoTrack);
     if (videoRef.current) videoRef.current.srcObject = combinedStream;
     pendingMediaEntryRef.current = true;
     setPendingMediaEntry(true);
@@ -1941,6 +1946,10 @@ export function ActiveSession() {
   }, [stream]);
 
   useEffect(() => {
+    streamCleanupRef.current = stream;
+  }, [stream]);
+
+  useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
@@ -2542,12 +2551,14 @@ export function ActiveSession() {
 
   // â”€â”€ Media stream cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Media access is initiated only via requestMediaAccess() on user action.
-  // This effect solely handles stopping tracks when the stream is torn down.
+  // Stop tracks only when unmounting; stopping on stream updates can kill
+  // reused tracks and blank the local preview in dev StrictMode.
   useEffect(() => {
     return () => {
-      if (stream) stream.getTracks().forEach((track) => track.stop());
+      const currentStream = streamCleanupRef.current;
+      if (currentStream) currentStream.getTracks().forEach((track) => track.stop());
     };
-  }, [stream]);
+  }, []);
 
   // Safety state
   const [showSafetyBoundary, setShowSafetyBoundary] = useState(false);
@@ -3741,7 +3752,7 @@ export function ActiveSession() {
       isSoundOff={isSoundOff}
       onToggleSoundOff={handleToggleSoundOff}
       onShowEndConfirm={handleShowEndConfirm}
-      pipOpen={Boolean(permissionsGranted && stream)}
+      pipOpen={Boolean(stream)}
       pipPos={pipPos}
       videoRef={videoRef}
       onPipPointerDown={handlePipPointerDown}

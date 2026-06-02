@@ -43,6 +43,25 @@ import {
   solaceSelectTriggerForm,
   solaceSelectTriggerPagination,
 } from "@/app/solace";
+import { solaceImageCard, solaceSurfaceLight } from "@/app/solace/solacePageChrome";
+
+/** Stat strip under habit hero — dark text on light bar in light theme */
+const habitHeroStatLabel = cn(
+  "text-[9px] font-semibold uppercase tracking-[0.2em]",
+  "text-zinc-500",
+  "[html[data-ezri-theme=light]_&]:!text-[#667085]",
+  "[html[data-theme=light]_&]:!text-[#667085]"
+);
+const habitHeroStatValue = cn(
+  "mt-2 font-serif text-[1.2rem] font-normal tabular-nums tracking-tight text-zinc-50 sm:text-[1.3rem]",
+  "[html[data-ezri-theme=light]_&]:!text-[#101828]",
+  "[html[data-theme=light]_&]:!text-[#101828]"
+);
+const habitHeroStatSub = cn(
+  "mt-1 text-[11px] leading-snug text-zinc-500",
+  "[html[data-ezri-theme=light]_&]:!text-[#667085]",
+  "[html[data-theme=light]_&]:!text-[#667085]"
+);
 import { HABIT_TRACKER_IMAGES } from "@/lib/solace/habitTrackerImages";
 import { TalkItOutBottomDock } from "./talk-it-out/TalkItOutBottomDock";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
@@ -381,7 +400,11 @@ function HabitRailCard({ habit, onToggleToday, onDotPress, onEdit, onDelete, isD
               </p>
               <div className="relative mt-6" aria-label="Weekly rhythm">
                 <div
-                  className="pointer-events-none absolute top-[28px] right-[28px] left-[28px] z-0 h-[2px] rounded-full bg-white/[0.12] sm:top-[30px] sm:right-[30px] sm:left-[30px]"
+                  className={cn(
+                    "pointer-events-none absolute top-[28px] right-[28px] left-[28px] z-0 h-[2px] rounded-full bg-white/[0.12] sm:top-[30px] sm:right-[30px] sm:left-[30px]",
+                    "[html[data-ezri-theme=light]_&]:bg-violet-300/30",
+                    "[html[data-theme=light]_&]:bg-violet-300/30"
+                  )}
                   aria-hidden
                 />
                 <div className="relative flex items-end justify-between">
@@ -400,11 +423,15 @@ function HabitRailCard({ habit, onToggleToday, onDotPress, onEdit, onDelete, isD
                         aria-label={`${format(ringDate, "EEEE MMM d")}; ${completed ? "completed" : "not logged"}`}
                         className={cn(
                           "relative flex h-[56px] w-[56px] items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-[border-color,background-color,box-shadow,filter] duration-300 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-violet-400/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080d] sm:h-[60px] sm:w-[60px]",
+                          "[html[data-ezri-theme=light]_&]:focus-visible:ring-offset-[#f8f4ff]",
+                          "[html[data-theme=light]_&]:focus-visible:ring-offset-[#f8f4ff]",
                           isFuture && "cursor-not-allowed opacity-33",
                           !isFuture &&
                             !completed &&
-                            "border-[1.5px] border-white/[0.14] bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.11),transparent_48%)] shadow-[inset_0_-6px_20px_rgba(0,0,0,0.35)] hover:border-violet-400/45 hover:bg-white/[0.04] hover:shadow-[0_16px_44px_-18px_rgba(76,29,149,0.42),inset_0_0_0_1px_rgba(167,139,250,0.08)] hover:brightness-[1.06] active:border-violet-400/55",
-                          !isFuture && completed && "border-[1.5px] border-white/[0.16]"
+                            "border-[1.5px] border-white/[0.14] bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.11),transparent_48%)] shadow-[inset_0_-6px_20px_rgba(0,0,0,0.35)] hover:border-violet-400/45 hover:bg-white/[0.04] hover:shadow-[0_16px_44px_-18px_rgba(76,29,149,0.42),inset_0_0_0_1px_rgba(167,139,250,0.08)] hover:brightness-[1.06] active:border-violet-400/55 [html[data-ezri-theme=light]_&]:border-violet-300/45 [html[data-theme=light]_&]:border-violet-300/45 [html[data-ezri-theme=light]_&]:bg-[radial-gradient(circle_at_32%_18%,rgba(167,139,250,0.22),rgba(255,255,255,0.7)_58%,transparent_100%)] [html[data-theme=light]_&]:bg-[radial-gradient(circle_at_32%_18%,rgba(167,139,250,0.22),rgba(255,255,255,0.7)_58%,transparent_100%)] [html[data-ezri-theme=light]_&]:shadow-[inset_0_-4px_14px_rgba(124,58,237,0.08),0_2px_10px_rgba(124,58,237,0.12)] [html[data-theme=light]_&]:shadow-[inset_0_-4px_14px_rgba(124,58,237,0.08),0_2px_10px_rgba(124,58,237,0.12)]",
+                          !isFuture &&
+                            completed &&
+                            "border-[1.5px] border-white/[0.16] [html[data-ezri-theme=light]_&]:border-violet-400/50 [html[data-theme=light]_&]:border-violet-400/50 [html[data-ezri-theme=light]_&]:bg-[radial-gradient(circle_at_45%_40%,rgba(167,139,250,0.28),rgba(255,255,255,0.8)_66%,transparent_100%)] [html[data-theme=light]_&]:bg-[radial-gradient(circle_at_45%_40%,rgba(167,139,250,0.28),rgba(255,255,255,0.8)_66%,transparent_100%)]"
                         )}
                         style={
                           !isFuture && completed
@@ -416,13 +443,20 @@ function HabitRailCard({ habit, onToggleToday, onDotPress, onEdit, onDelete, isD
                         }
                       >
                         {!isFuture && !completed ? (
-                          <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-violet-200/35 to-transparent ring-[4px] ring-violet-500/12" aria-hidden />
+                          <span
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full bg-gradient-to-br from-violet-200/35 to-transparent ring-[4px] ring-violet-500/12",
+                              "[html[data-ezri-theme=light]_&]:bg-violet-500/55 [html[data-theme=light]_&]:bg-violet-500/55",
+                              "[html[data-ezri-theme=light]_&]:ring-violet-400/30 [html[data-theme=light]_&]:ring-violet-400/30"
+                            )}
+                            aria-hidden
+                          />
                         ) : null}
                         {completed ? (
                           <Check className="relative z-[2] h-[21px] w-[21px] text-zinc-50 drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]" aria-hidden strokeWidth={2.4} />
                         ) : null}
                       </motion.button>
-                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-zinc-500 [html[data-ezri-theme=light]_&]:text-[#667085] [html[data-theme=light]_&]:text-[#667085]">
                         {WEEKDAY_RING_LABELS[i]}
                       </span>
                     </div>
@@ -468,7 +502,7 @@ function RightRailBlocks({ weeklyBarData, habitsCompletedWeek, habitsPotentialWe
 
       <div className="relative divide-y divide-white/[0.017] rounded-[calc(1.45rem-1px)] bg-black/[0.12] backdrop-blur-lg">
         {/* Reflection */}
-        <section className="relative overflow-hidden px-6 py-7 sm:px-7">
+        <section className={cn(solaceImageCard, "relative overflow-hidden px-6 py-7 sm:px-7")}>
           <img
             src={HABIT_TRACKER_IMAGES.candleAccent}
             alt=""
@@ -1027,7 +1061,7 @@ export function HabitTracker() {
                 transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
               >
                 <SolacePanel glow="violet" className="overflow-hidden rounded-[2rem] p-0 shadow-[0_56px_140px_-58px_rgba(0,0,0,0.92)] ring-1 ring-inset ring-white/[0.09] sm:rounded-[2.1rem]">
-                  <div className="relative min-h-[280px] md:min-h-[300px]">
+                  <div className={cn(solaceImageCard, "relative min-h-[280px] md:min-h-[300px] overflow-hidden")}>
                     <img
                       src={HABIT_TRACKER_IMAGES.hero}
                       alt=""
@@ -1074,53 +1108,84 @@ export function HabitTracker() {
                         <HeroProgressRing completed={completedTodayCount} total={totalHabits} />
                       </div>
                     </div>
+                  </div>
 
-                    {/* Integrated stat strip — one surface */}
-                    <div className="relative z-20 border-t border-white/[0.06] bg-[#020308]/82 px-1 backdrop-blur-xl">
-                      <div className="grid grid-cols-2 divide-y divide-white/[0.05] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                  {/* Stat strip — outside image card so light theme keeps dark copy */}
+                  <div
+                    className={cn(
+                      solaceSurfaceLight,
+                      "border-t px-1",
+                      "border-white/[0.06] bg-[#020308]/82",
+                      "[html[data-ezri-theme=light]_&]:!border-[#e7ddfb]",
+                      "[html[data-ezri-theme=light]_&]:!bg-[rgba(255,255,255,0.96)]",
+                      "[html[data-theme=light]_&]:!border-[#e7ddfb]",
+                      "[html[data-theme=light]_&]:!bg-[rgba(255,255,255,0.96)]"
+                    )}
+                  >
+                      <div
+                        className={cn(
+                          "grid grid-cols-2 divide-y sm:grid-cols-4 sm:divide-x sm:divide-y-0",
+                          "divide-white/[0.05]",
+                          "[html[data-ezri-theme=light]_&]:divide-[#e7ddfb]",
+                          "[html[data-theme=light]_&]:divide-[#e7ddfb]"
+                        )}
+                      >
                         {[
                           {
                             label: "Day streak",
                             value: String(longestStreak),
                             sub: "days showing up",
                             Icon: Flame,
-                            iconClass: "text-orange-400/90",
+                            iconClass: cn(
+                              "text-orange-400/90",
+                              "[html[data-ezri-theme=light]_&]:!text-orange-600",
+                              "[html[data-theme=light]_&]:!text-orange-600"
+                            ),
                           },
                           {
                             label: "Consistency",
                             value: `${completionRate}%`,
                             sub: "today",
                             Icon: TrendingUp,
-                            iconClass: "text-violet-300/90",
+                            iconClass: cn(
+                              "text-violet-300/90",
+                              "[html[data-ezri-theme=light]_&]:!text-violet-600",
+                              "[html[data-theme=light]_&]:!text-violet-600"
+                            ),
                           },
                           {
                             label: "Active habits",
                             value: String(totalHabits),
                             sub: "in gentle orbit",
                             Icon: Sprout,
-                            iconClass: "text-emerald-400/85",
+                            iconClass: cn(
+                              "text-emerald-400/85",
+                              "[html[data-ezri-theme=light]_&]:!text-emerald-600",
+                              "[html[data-theme=light]_&]:!text-emerald-600"
+                            ),
                           },
                           {
                             label: "Weekly progress",
                             value: weeklyProgressLabel,
                             sub: "peak day breadth",
                             Icon: CircleDot,
-                            iconClass: "text-cyan-300/88",
+                            iconClass: cn(
+                              "text-cyan-300/88",
+                              "[html[data-ezri-theme=light]_&]:!text-cyan-600",
+                              "[html[data-theme=light]_&]:!text-cyan-600"
+                            ),
                           },
                         ].map(({ label, value, sub, Icon: SI, iconClass }) => (
                           <div key={label} className="flex flex-col justify-center px-4 py-4 sm:min-h-[88px] sm:px-5 sm:py-5">
                             <div className="flex items-center gap-2">
                               <SI className={cn("h-4 w-4 shrink-0", iconClass)} aria-hidden />
-                              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{label}</span>
+                              <span className={habitHeroStatLabel}>{label}</span>
                             </div>
-                            <p className="mt-2 font-serif text-[1.2rem] font-normal tabular-nums tracking-tight text-zinc-50 sm:text-[1.3rem]">
-                              {value}
-                            </p>
-                            <p className="mt-1 text-[11px] leading-snug text-zinc-500">{sub}</p>
+                            <p className={habitHeroStatValue}>{value}</p>
+                            <p className={habitHeroStatSub}>{sub}</p>
                           </div>
                         ))}
                       </div>
-                    </div>
                   </div>
                 </SolacePanel>
               </motion.section>

@@ -239,7 +239,7 @@ export function AppLayout() {
               }}
               className="flex items-center justify-center"
             >
-              <BrandLogo heightClass={compact ? "h-8" : "h-9"} variant="onDark" />
+              <BrandLogo heightClass={compact ? "h-8" : "h-9"} themeAware />
             </motion.div>
           </Link>
 

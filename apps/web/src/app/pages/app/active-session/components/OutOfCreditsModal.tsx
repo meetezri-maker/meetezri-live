@@ -7,6 +7,20 @@ import {
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { cn } from "@/lib/utils";
+import {
+  modalAlertIconWrap,
+  modalAlertPanel,
+  modalEmphasisText,
+  modalInsetPanel,
+  modalMutedText,
+  modalOverlay,
+  modalPrimaryButton,
+  modalSecondaryButton,
+  modalSectionTitle,
+  modalSubtitle,
+  modalTitle,
+} from "@/lib/modalTheme";
 import { formatSessionTime } from "../utils/sessionFormat";
 
 export interface OutOfCreditsModalProps {
@@ -16,6 +30,25 @@ export interface OutOfCreditsModalProps {
   onUpgradePlan: () => void;
   onReturnToDashboard: () => void;
 }
+
+const creditsHeroIcon = cn(
+  modalAlertIconWrap,
+  "h-20 w-20 bg-gradient-to-br from-red-500 to-rose-600",
+  "[html[data-ezri-theme=light]_&]:from-[#f87171] [html[data-ezri-theme=light]_&]:to-[#fb7185]",
+  "[html[data-theme=light]_&]:from-[#f87171] [html[data-theme=light]_&]:to-[#fb7185]"
+);
+
+const creditsActionButton = cn(
+  "group flex w-full items-center justify-between rounded-xl p-4 font-semibold text-white transition-all",
+  "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700",
+  "[html[data-ezri-theme=light]_&]:from-[#059669] [html[data-ezri-theme=light]_&]:to-[#10b981]",
+  "[html[data-theme=light]_&]:from-[#059669] [html[data-theme=light]_&]:to-[#10b981]"
+);
+
+const upgradeActionButton = cn(
+  modalPrimaryButton,
+  "group flex w-full items-center justify-between rounded-xl p-4 text-base"
+);
 
 function OutOfCreditsModalComponent({
   open,
@@ -31,88 +64,122 @@ function OutOfCreditsModalComponent({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
+          className={modalOverlay}
+          role="presentation"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-slate-900 to-purple-900 rounded-3xl p-8 max-w-lg w-full border-2 border-red-500/30 shadow-2xl"
+            className={cn(modalAlertPanel, "max-w-lg p-8")}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="out-of-credits-title"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-center mb-6">
+            <div className="mb-6 text-center">
               <motion.div
                 animate={{ scale: [1, 1.1, 1], rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 0.5, repeat: 3 }}
-                className="w-20 h-20 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center mx-auto mb-4"
+                className={creditsHeroIcon}
               >
-                <Clock className="w-10 h-10 text-white" />
+                <Clock className="h-10 w-10 text-white" aria-hidden />
               </motion.div>
-              <h3 className="text-3xl font-bold text-white mb-2">
+              <h3 id="out-of-credits-title" className={cn(modalTitle, "mb-2 text-3xl")}>
                 Talking Paused
               </h3>
-              <p className="text-gray-300 text-lg">
-                You've used all your included minutes for this month.
+              <p className={cn(modalSubtitle, "text-lg")}>
+                You&apos;ve used all your included minutes for this month.
               </p>
             </div>
 
-            <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-6 mb-6 border border-white/10">
-              <div className="text-center mb-4">
-                <p className="text-gray-300 mb-2">Your Talk time:</p>
-                <p className="text-4xl font-bold text-white font-mono">
+            <div className={cn(modalInsetPanel, "mb-6 p-6")}>
+              <div className="mb-4 text-center">
+                <p className={cn(modalMutedText, "mb-2")}>Your Talk time:</p>
+                <p className={cn(modalEmphasisText, "font-mono text-4xl")}>
                   {formatSessionTime(sessionTime)}
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-2 text-amber-400">
-                <AlertCircle className="w-5 h-5" />
-                <span className="text-sm font-medium">
-                  0 minutes remaining
-                </span>
+              <div
+                className={cn(
+                  "flex items-center justify-center gap-2 text-amber-400",
+                  "[html[data-ezri-theme=light]_&]:text-[#b45309]",
+                  "[html[data-theme=light]_&]:text-[#b45309]"
+                )}
+              >
+                <AlertCircle className="h-5 w-5" aria-hidden />
+                <span className="text-sm font-medium">0 minutes remaining</span>
               </div>
             </div>
 
-            <div className="space-y-3 mb-6">
-              <h4 className="text-white font-semibold text-center mb-3">
+            <div className="mb-6 space-y-3">
+              <h4 className={cn(modalSectionTitle, "mb-3 text-center")}>
                 Continue Your Wellness Journey:
               </h4>
-              <button
-                onClick={onBuyMoreMinutes}
-                className="w-full p-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-semibold flex items-center justify-between group transition-all"
-              >
+              <button type="button" onClick={onBuyMoreMinutes} className={creditsActionButton}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Zap className="w-5 h-5" />
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
+                      "[html[data-ezri-theme=light]_&]:bg-white/25",
+                      "[html[data-theme=light]_&]:bg-white/25"
+                    )}
+                  >
+                    <Zap className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="text-left">
                     <p className="font-bold">Buy More Minutes</p>
-                    <p className="text-xs text-green-100">
+                    <p
+                      className={cn(
+                        "text-xs text-green-100",
+                        "[html[data-ezri-theme=light]_&]:text-emerald-50",
+                        "[html[data-theme=light]_&]:text-emerald-50"
+                      )}
+                    >
                       Pay-as-you-go available
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight
+                  className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                  aria-hidden
+                />
               </button>
 
-              <button
-                onClick={onUpgradePlan}
-                className="w-full p-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl text-white font-semibold flex items-center justify-between group transition-all"
-              >
+              <button type="button" onClick={onUpgradePlan} className={upgradeActionButton}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Crown className="w-5 h-5" />
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
+                      "[html[data-ezri-theme=light]_&]:bg-white/25",
+                      "[html[data-theme=light]_&]:bg-white/25"
+                    )}
+                  >
+                    <Crown className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="text-left">
                     <p className="font-bold">Upgrade Your Plan</p>
-                    <p className="text-xs text-purple-100">
+                    <p
+                      className={cn(
+                        "text-xs text-purple-100",
+                        "[html[data-ezri-theme=light]_&]:text-fuchsia-50",
+                        "[html[data-theme=light]_&]:text-fuchsia-50"
+                      )}
+                    >
                       Get more minutes & better rates
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight
+                  className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                  aria-hidden
+                />
               </button>
             </div>
 
             <button
+              type="button"
               onClick={onReturnToDashboard}
-              className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+              className={cn(modalSecondaryButton, "w-full py-3")}
             >
               End Talking & Return to Dashboard
             </button>

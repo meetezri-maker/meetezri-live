@@ -30,6 +30,11 @@ import {
 } from "@/lib/solace/talkItOutImages";
 import type { ReactNode } from "react";
 import { TalkItOutBottomDock } from "./TalkItOutBottomDock";
+import {
+  solaceHeroContent,
+  solaceHeroLightScrim,
+  solaceHeroMediaShell,
+} from "@/app/solace/solacePageChrome";
 
 interface ChecklistItem {
   label: string;
@@ -91,7 +96,9 @@ interface TalkItOutLobbyLayoutProps {
 
 function mattePanelClass(extra?: string) {
   return cn(
-    "rounded-[1.2rem] border border-white/[0.065] bg-black/22 shadow-[0_24px_72px_-52px_rgba(0,0,0,0.88),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl",
+    "light-theme-card light-theme-card-hover rounded-[1.2rem] border border-white/[0.065] bg-black/22 shadow-[0_24px_72px_-52px_rgba(0,0,0,0.88),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl",
+    "[html[data-ezri-theme=light]_&]:border-[color:var(--border)] [html[data-ezri-theme=light]_&]:bg-[var(--card)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+    "[html[data-theme=light]_&]:border-[color:var(--border)] [html[data-theme=light]_&]:bg-[var(--card)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
     extra
   );
 }
@@ -198,7 +205,7 @@ export function TalkItOutLobbyLayout({
       <motion.div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
         <div className="relative z-[1] mx-auto max-w-[1680px] px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8 lg:pt-10">
           <header className="mb-8 border-b border-white/[0.05] pb-8">
-            <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-zinc-50 sm:text-[2rem]">
+            <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-[var(--solace-text)] sm:text-[2rem]">
               Talk It Out
             </h1>
             <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--solace-muted)]">
@@ -231,8 +238,11 @@ export function TalkItOutLobbyLayout({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
-                  "relative overflow-hidden rounded-[1.75rem] border border-white/[0.07]",
-                  "shadow-[0_56px_120px_-58px_rgba(0,0,0,0.92),0_0_0_1px_rgba(139,92,246,0.1)]"
+                  solaceHeroMediaShell,
+                  "rounded-[1.75rem] border border-white/[0.07]",
+                  "shadow-[0_56px_120px_-58px_rgba(0,0,0,0.92),0_0_0_1px_rgba(139,92,246,0.1)]",
+                  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+                  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                 )}
               >
                 <img
@@ -242,7 +252,13 @@ export function TalkItOutLobbyLayout({
                   loading="eager"
                   decoding="async"
                 />
-                <div className="relative z-[2] flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12">
+                <div className={solaceHeroLightScrim} aria-hidden />
+                <div
+                  className={cn(
+                    solaceHeroContent,
+                    "flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12"
+                  )}
+                >
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#120818]/25 via-[#0a0612]/45 to-[#06040c]/78" />
                   <div
                     className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_42%,rgba(255,180,80,0.12)_0%,transparent_62%)]"
@@ -273,12 +289,12 @@ export function TalkItOutLobbyLayout({
                       <Sparkles className="h-3.5 w-3.5 text-violet-300" aria-hidden />
                       {companionPill}
                     </p>
-                    <h2 className="font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-zinc-50 sm:text-[1.95rem]">
+                    <h2 className="font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-[var(--solace-text)] sm:text-[1.95rem]">
                       {heroMessageLine1}
                       <br />
                       {heroMessageLine2}
                     </h2>
-                    <p className="mt-5 max-w-md text-[14.5px] leading-[1.65] text-zinc-400/95">{heroSupporting}</p>
+                    <p className="mt-5 max-w-md text-[14.5px] leading-[1.65] text-[var(--solace-muted)]">{heroSupporting}</p>
                     <div className="mt-9 flex w-full max-w-sm flex-col items-center gap-4">
                       <button
                         type="button"
@@ -287,7 +303,7 @@ export function TalkItOutLobbyLayout({
                           setShowMinutesPicker(true);
                         }}
                         disabled={isStarting || minutesAvailable <= 0}
-                        className="group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 px-8 py-3.5 text-[15px] font-medium text-white shadow-[0_0_52px_rgba(109,40,217,0.42)] transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="solace-cta-gradient group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full px-8 py-3.5 text-[15px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {isStarting ? (
                           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -307,7 +323,7 @@ export function TalkItOutLobbyLayout({
               </motion.section>
 
               <section aria-label="How to start">
-                <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">How would you like to start?</h3>
+                <h3 className="text-[17px] font-medium tracking-tight text-[var(--solace-text)]">How would you like to start?</h3>
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {startCards.map(({ title, body, imageSrc, onClick }) => (
                     <button
@@ -320,7 +336,7 @@ export function TalkItOutLobbyLayout({
                         )
                       )}
                     >
-                      <span className="relative block aspect-[16/10] w-full overflow-hidden">
+                      <span className="solace-media-card relative block aspect-[16/10] w-full overflow-hidden">
                         <img
                           src={imageSrc}
                           alt=""
@@ -331,7 +347,7 @@ export function TalkItOutLobbyLayout({
                         <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/10" />
                       </span>
                       <span className="block px-4 py-4">
-                        <p className="font-medium text-zinc-100">{title}</p>
+                        <p className="font-medium text-[var(--solace-text)]">{title}</p>
                         <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
                       </span>
                     </button>
@@ -340,7 +356,7 @@ export function TalkItOutLobbyLayout({
               </section>
 
               <section aria-label="Preparation guidance">
-                <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Before we begin</h3>
+                <h3 className="text-[17px] font-medium tracking-tight text-[var(--solace-text)]">Before we begin</h3>
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {checklistItems.map((item, idx) => {
                     const IconClass = checklistIcons[idx % checklistIcons.length];
@@ -402,7 +418,7 @@ export function TalkItOutLobbyLayout({
                   type="button"
                   disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
                   className={cn(
-                    "min-h-[48px] w-full rounded-[1rem] bg-gradient-to-r from-violet-600/92 to-indigo-700/92 text-[14px] text-white shadow-[0_24px_64px_-32px_rgba(76,29,149,0.55)] sm:w-auto",
+                    "solace-cta-gradient min-h-[48px] w-full rounded-[1rem] text-[14px] sm:w-auto",
                     "hover:from-violet-500 hover:to-indigo-600"
                   )}
                   onClick={() => {
@@ -501,8 +517,8 @@ export function TalkItOutLobbyLayout({
                         className={cn(
                           "flex min-h-[68px] min-w-[44px] flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-[9.5px] font-medium uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/38",
                           active
-                            ? "border-violet-400/42 bg-violet-500/[0.12] text-violet-100 shadow-[0_0_28px_rgba(139,92,246,0.25)]"
-                            : "border-white/[0.06] bg-black/25 text-zinc-500 hover:border-white/[0.1]"
+                            ? "solace-rail-toggle--active border-violet-400/42 bg-violet-500/[0.12] text-violet-100 shadow-[0_0_28px_rgba(139,92,246,0.25)]"
+                            : "border-[color:var(--border)] bg-[var(--card-muted,#f8f3ff)] text-[var(--text-muted)] hover:border-[color:var(--border-strong)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25 [html[data-ezri-theme=dark]_&]:text-zinc-500"
                         )}
                       >
                         <Icon className="h-5 w-5 opacity-95" aria-hidden strokeWidth={1.5} />
@@ -538,7 +554,7 @@ export function TalkItOutLobbyLayout({
                     />
                   </div>
                   <span className="min-w-0 flex-1">
-                    <p className="text-[13.5px] font-medium leading-tight text-zinc-100">{companionDisplayName}</p>
+                    <p className="text-[13.5px] font-medium leading-tight text-[var(--solace-text)]">{companionDisplayName}</p>
                     <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--solace-muted)]">
                       {companionTraitsLine}
                     </p>

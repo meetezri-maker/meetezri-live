@@ -10,7 +10,7 @@ export function SolaceHeroAtmosphere({ className, backgroundSrc }: SolaceHeroAtm
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]",
+        "solace-hero-atmosphere pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]",
         className
       )}
     >

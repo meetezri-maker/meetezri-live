@@ -1,4 +1,5 @@
 import { memo, type MutableRefObject, type RefObject } from "react";
+import { cn } from "@/lib/utils";
 import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
@@ -254,11 +255,20 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     onReturnToDashboard,
   } = props;
 
+  const awaitingMediaPermission = showPermissionRequest && !permissionsGranted;
+
   return (
     <div
       ref={sessionContainerRef}
-      className={sessionViewportClass}
-      style={{ backgroundColor: sessionBackdropLayers.rootBg }}
+      className={cn(
+        sessionViewportClass,
+        awaitingMediaPermission && "solace-session-awaiting-media"
+      )}
+      style={
+        awaitingMediaPermission
+          ? undefined
+          : { backgroundColor: sessionBackdropLayers.rootBg }
+      }
     >
       <SessionEndingOverlay open={isEndingSession} />
 
