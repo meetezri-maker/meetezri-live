@@ -62,8 +62,14 @@ import {
   settingsPageFogMid,
   settingsPageVignette,
   settingsCard,
-  settingsHeroSection,
+  settingsHeroShell,
   settingsHeroImage,
+  settingsHeroLightScrim,
+  settingsHeroContent,
+  settingsHeroBackLink,
+  settingsHeroTitle,
+  settingsHeroSubtitle,
+  settingsHeroQuickLabel,
   settingsHeroOverlayReadability,
   settingsHeroOverlayBottom,
   settingsHeroOverlayAccent,
@@ -72,6 +78,8 @@ import {
   settingsIconChip,
   settingsBtnPrimary,
   settingsQuickCard,
+  settingsQuickCardLabel,
+  settingsQuickCardStatus,
   settingsCompactToolCard,
 } from "@/app/pages/app/settings-hub/settingsUi";
 
@@ -405,40 +413,41 @@ export function SettingsHub() {
             transition={{ delay: 0.05 }}
           >
             {/* Hero */}
-            <section className={settingsHeroSection}>
+            <section className={settingsHeroShell}>
               <img
                 src={SETTINGS_HERO_IMG}
-                alt=""
-                className={settingsHeroImage}
+                alt="Calm moonlit lake with soft twilight light"
+                className={cn(settingsHeroImage, "object-[center_38%]")}
                 width={1600}
                 height={900}
+                loading="eager"
+                decoding="async"
               />
+              <div className={settingsHeroLightScrim} aria-hidden />
               <div className={settingsHeroOverlayReadability} aria-hidden />
               <div className={settingsHeroOverlayAccent} aria-hidden />
               <div className={settingsHeroOverlayBottom} aria-hidden />
 
-              <div className="relative z-10 px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
-                <Link
-                  to="/app/dashboard"
-                  className="inline-flex min-h-[44px] items-center gap-2 text-sm text-[rgba(255,255,255,0.62)] transition-colors hover:text-white"
-                >
+              <div
+                className={cn(
+                  settingsHeroContent,
+                  "px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6"
+                )}
+              >
+                <Link to="/app/dashboard" className={settingsHeroBackLink}>
                   <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
                   Back to Dashboard
                 </Link>
 
                 <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                   <div className="max-w-lg">
-                    <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Settings</h1>
-                    <p className="mt-2 text-sm text-[rgba(255,255,255,0.65)] sm:text-base">
-                      Customize your Solace experience
-                    </p>
+                    <h1 className={settingsHeroTitle}>Settings</h1>
+                    <p className={settingsHeroSubtitle}>Customize your Solace experience</p>
                   </div>
                 </div>
 
                 <div className="mt-8">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(255,255,255,0.5)]">
-                    Quick settings
-                  </p>
+                  <p className={settingsHeroQuickLabel}>Quick settings</p>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                     {quickSettings.map((setting) => {
                       const Icon = setting.icon;
@@ -454,13 +463,8 @@ export function SettingsHub() {
                           <div className={settingsIconChip(setting.tone)}>
                             <Icon className="h-4 w-4" aria-hidden />
                           </div>
-                          <span className="text-xs font-medium text-[rgba(255,255,255,0.88)]">{setting.label}</span>
-                          <span
-                            className={cn(
-                              "text-[11px] font-semibold",
-                              setting.enabled ? "text-violet-200" : "text-[rgba(255,255,255,0.4)]"
-                            )}
-                          >
+                          <span className={settingsQuickCardLabel}>{setting.label}</span>
+                          <span className={settingsQuickCardStatus(setting.enabled)}>
                             {quickStatus(setting)}
                           </span>
                         </button>

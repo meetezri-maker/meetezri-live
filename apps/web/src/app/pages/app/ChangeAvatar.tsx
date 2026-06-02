@@ -37,11 +37,22 @@ import {
   changeAvatarCompanionCardCurrent,
   changeAvatarCompanionCardSelected,
   changeAvatarGlassCard,
+  changeAvatarCompanionBody,
+  changeAvatarCompanionDivider,
+  changeAvatarCompanionLabel,
+  changeAvatarCompanionMuted,
+  changeAvatarCompanionName,
   changeAvatarHeroCard,
+  changeAvatarHeroDesc,
+  changeAvatarHeroEyebrow,
   changeAvatarHeroImage,
-  changeAvatarHeroOverlayLeft,
-  changeAvatarHeroOverlayPurple,
-  changeAvatarHeroOverlayWarmth,
+  changeAvatarHeroLightScrim,
+  changeAvatarHeroMeta,
+  changeAvatarHeroName,
+  changeAvatarHeroOverlayAccent,
+  changeAvatarHeroOverlayBottom,
+  changeAvatarHeroOverlayReadability,
+  changeAvatarHeroStats,
   changeAvatarHistoryCard,
   changeAvatarIconChip,
   changeAvatarManageBtn,
@@ -276,7 +287,10 @@ function AvatarPortrait({ imageUrl, name, sizeClass = "h-20 w-20", ringClass }: 
         ringClass
       )}
     >
-      <User className="h-1/2 w-1/2 text-white/40" aria-hidden />
+      <User
+        className="h-1/2 w-1/2 text-white/40 [html[data-ezri-theme=light]_&]:text-violet-500/50 [html[data-theme=light]_&]:text-violet-500/50"
+        aria-hidden
+      />
     </motion.div>
   );
 }
@@ -458,20 +472,27 @@ export function ChangeAvatar() {
             {/* Current avatar hero */}
             {currentAvatar ? (
               <section className={changeAvatarHeroCard}>
-                <img src={CHANGE_AVATAR_HERO_IMG} alt="" className={changeAvatarHeroImage} />
-                <motion.div className={changeAvatarHeroOverlayLeft} aria-hidden />
-                <motion.div className={changeAvatarHeroOverlayPurple} aria-hidden />
-                <motion.div className={changeAvatarHeroOverlayWarmth} aria-hidden />
+                <img
+                  src={CHANGE_AVATAR_HERO_IMG}
+                  alt=""
+                  className={changeAvatarHeroImage}
+                  width={1600}
+                  height={900}
+                  loading="eager"
+                  decoding="async"
+                />
+                <div className={changeAvatarHeroLightScrim} aria-hidden />
+                <div className={changeAvatarHeroOverlayReadability} aria-hidden />
+                <div className={changeAvatarHeroOverlayAccent} aria-hidden />
+                <div className={changeAvatarHeroOverlayBottom} aria-hidden />
 
-                <div className="relative flex min-h-[220px] flex-col justify-between gap-5 p-5 sm:min-h-[235px] sm:flex-row sm:items-center sm:p-6 lg:min-h-[250px]">
+                <div className="relative z-10 flex min-h-[220px] flex-col justify-between gap-5 p-5 sm:min-h-[235px] sm:flex-row sm:items-center sm:p-6 lg:min-h-[250px]">
                   <div className="min-w-0 flex-1 space-y-4">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/25 ring-1 ring-violet-400/35">
-                        <Check className="h-3.5 w-3.5 text-violet-200" strokeWidth={3} aria-hidden />
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/25 ring-1 ring-violet-400/35 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:bg-violet-100">
+                        <Check className="h-3.5 w-3.5 text-violet-200 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700" strokeWidth={3} aria-hidden />
                       </span>
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200/80">
-                        Current Avatar
-                      </span>
+                      <span className={changeAvatarHeroEyebrow}>Current Avatar</span>
                     </div>
 
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -481,19 +502,17 @@ export function ChangeAvatar() {
                         sizeClass="h-[88px] w-[88px] sm:h-24 sm:w-24"
                       />
                       <div className="min-w-0">
-                        <h2 className="text-xl font-semibold text-white sm:text-2xl">{currentAvatar.name}</h2>
-                        <p className="mt-1 text-sm text-[rgba(255,255,255,0.55)]">
+                        <h2 className={changeAvatarHeroName}>{currentAvatar.name}</h2>
+                        <p className={changeAvatarHeroMeta}>
                           {currentAvatar.gender} • {currentAvatar.ageRange} years
                         </p>
-                        <p className="mt-2 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)]">
-                          {currentAvatar.description}
-                        </p>
+                        <p className={changeAvatarHeroDesc}>{currentAvatar.description}</p>
                         {currentAvatar.specialty[0] ? (
                           <div className="mt-3">
                             <span className={changeAvatarTagPill}>{currentAvatar.specialty[0]}</span>
                           </div>
                         ) : null}
-                        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-[rgba(255,255,255,0.48)]">
+                        <div className={changeAvatarHeroStats}>
                           <span className="inline-flex items-center gap-1.5">
                             <Users className="h-3.5 w-3.5" aria-hidden />
                             {currentAvatar.totalUsers.toLocaleString()} users
@@ -515,7 +534,7 @@ export function ChangeAvatar() {
                     className={changeAvatarPreviewBtn}
                     aria-label={`Preview ${currentAvatar.name}'s voice`}
                   >
-                    <Volume2 className="h-4 w-4 text-violet-200/90" aria-hidden />
+                    <Volume2 className="h-4 w-4 text-violet-200/90 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700" aria-hidden />
                     {playingVoiceFor === currentAvatar.id ? "Playing…" : "Preview Voice"}
                   </motion.button>
                 </div>
@@ -558,7 +577,7 @@ export function ChangeAvatar() {
                         changeAvatarCompanionCard,
                         isCurrent && changeAvatarCompanionCardCurrent,
                         isSelected && !isCurrent && changeAvatarCompanionCardSelected,
-                        comingSoon && "cursor-not-allowed opacity-90",
+                        comingSoon && "cursor-not-allowed",
                       )}
                       aria-pressed={isSelected}
                       aria-disabled={isDisabled}
@@ -591,11 +610,11 @@ export function ChangeAvatar() {
                             ringClass="ring-2 ring-white/10"
                           />
                           <div className="min-w-0 flex-1">
-                            <h3 className="text-lg font-semibold text-white">{avatar.name}</h3>
-                            <p className="mt-0.5 text-sm text-[rgba(255,255,255,0.48)]">
+                            <h3 className={changeAvatarCompanionName}>{avatar.name}</h3>
+                            <p className={changeAvatarCompanionMuted}>
                               {avatar.gender} • {avatar.ageRange} years
                             </p>
-                            <motion.div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[rgba(255,255,255,0.45)]">
+                            <motion.div className={cn(changeAvatarCompanionMuted, "mt-2 flex flex-wrap items-center gap-3 text-xs")}>
                               <span className="inline-flex items-center gap-1">
                                 <Users className="h-3.5 w-3.5" aria-hidden />
                                 {avatar.totalUsers.toLocaleString()} users
@@ -605,10 +624,8 @@ export function ChangeAvatar() {
                         </div>
 
                         <div className="mt-4">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgba(255,255,255,0.4)]">
-                            Personality
-                          </p>
-                          <p className="mt-1 text-sm text-[rgba(255,255,255,0.62)]">{avatar.personality}</p>
+                          <p className={changeAvatarCompanionLabel}>Personality</p>
+                          <p className={changeAvatarCompanionBody}>{avatar.personality}</p>
                         </div>
 
                         {avatar.specialty.length > 0 ? (
@@ -621,12 +638,12 @@ export function ChangeAvatar() {
                           </div>
                         ) : null}
 
-                        <p className="mt-3 text-sm leading-relaxed text-[rgba(255,255,255,0.52)]">
+                        <p className={cn(changeAvatarCompanionBody, "mt-3 leading-relaxed")}>
                           {avatar.description}
                         </p>
 
-                        <div className="mt-4 border-t border-white/[0.06] pt-3">
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-[rgba(255,255,255,0.42)]">
+                        <div className={changeAvatarCompanionDivider}>
+                          <div className={cn(changeAvatarCompanionMuted, "flex flex-wrap items-center gap-3 text-xs")}>
                             <span className="inline-flex items-center gap-1">
                               <Volume2 className="h-3 w-3" aria-hidden />
                               {avatar.voiceType}

@@ -1,5 +1,14 @@
 import { cn } from "@/lib/utils";
 import {
+  modalDestructiveButton,
+  modalOverlay,
+  modalPanelMd,
+  modalPrimaryButton,
+  modalSecondaryButton,
+  modalSubtitle,
+  modalTitle,
+} from "@/lib/modalTheme";
+import {
   settingsCard,
   settingsIconChip,
   settingsPageAtmosphere,
@@ -7,13 +16,25 @@ import {
   settingsPageGlowTop,
   settingsPageVignette,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBackLink,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-export const EMERGENCY_HERO_IMG = "/community/hero-lake.jpg";
-export const EMERGENCY_RAIL_IMG = "/community/hero-lake.jpg";
+export const EMERGENCY_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+export const EMERGENCY_RAIL_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 
-export const emergencyPageAtmosphere = cn(
-  settingsPageAtmosphere
-);
+export const emergencyPageAtmosphere = cn(settingsPageAtmosphere, "emergency-contacts-page");
+
+export const emergencyHeroCard = cn(settingsSubpageHeroShell, "emergency-hero-card min-h-[240px] sm:min-h-[260px]");
 
 export const emergencyPageGlowTop = settingsPageGlowTop;
 export const emergencyPageFogMid = settingsPageFogMid;
@@ -35,49 +56,99 @@ export const emergencyRailCard = cn(
   "[html[data-theme=light]_&]:bg-[var(--rail-card-bg)]"
 );
 
-export const emergencyHeroCard = cn(
-  emergencyGlassCard,
-  "relative min-h-[240px] overflow-hidden rounded-[2rem] border-violet-400/12 sm:min-h-[260px] lg:min-h-[280px]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_72px_-18px_rgba(139,92,246,0.32),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
-);
-
-export const emergencyHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[center_38%]",
-  "brightness-[0.52] contrast-[0.94] saturate-[1.14]"
-);
-
-export const emergencyHeroOverlayLeft = cn(
-  "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/78 to-[#0a0b18]/20 lg:from-[#0a0b18]/96 lg:via-[#0a0b18]/55 lg:to-transparent",
-  "[html[data-ezri-theme=light]_&]:bg-[var(--hero-overlay-readability)]",
-  "[html[data-theme=light]_&]:bg-[var(--hero-overlay-readability)]"
-);
-
-export const emergencyHeroOverlayPurple = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_80%_90%_at_82%_48%,rgba(192,132,252,0.22)_0%,transparent_58%)]"
-);
-
-export const emergencyHeroOverlayWarmth = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_42%_36%_at_72%_72%,rgba(251,146,60,0.14)_0%,transparent_55%)]"
-);
+export const emergencyHeroImage = settingsSubpageHeroImage;
+export const emergencyHeroLightScrim = settingsSubpageHeroLightScrim;
+export const emergencyHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const emergencyHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const emergencyHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const emergencyHeroOverlayLeft = emergencyHeroOverlayReadability;
+export const emergencyHeroOverlayPurple = emergencyHeroOverlayAccent;
+export const emergencyHeroOverlayWarmth = emergencyHeroOverlayBottom;
 
 export const emergencyIconChip = settingsIconChip;
 
-export const emergencyBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.1em] text-violet-300/55",
-  "transition-colors hover:text-violet-200/95"
-);
+export const emergencyBackLink = settingsSubpageHeroBackLink;
 
 export const emergencyHeroTitle = cn(
-  "font-serif text-[clamp(1.85rem,4vw,2.75rem)] font-light leading-[1.06] tracking-tight text-white"
+  settingsSubpageHeroTitleSerif,
+  "text-[clamp(1.85rem,4vw,2.75rem)]"
 );
 
 export const emergencyHeroAccent = cn(
-  "bg-gradient-to-r from-fuchsia-200 via-rose-200 to-violet-200 bg-clip-text text-transparent",
-  "drop-shadow-[0_0_28px_rgba(236,72,153,0.4)]"
+  settingsSubpageHeroAccent,
+  "from-fuchsia-200 via-rose-200 to-violet-200"
 );
+
+/** Hero heart — semantic class avoids light-theme svg currentColor override */
+export const emergencyHeroIcon = cn(
+  "emergency-hero-icon h-8 w-8 shrink-0",
+  "drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]"
+);
+
+export const emergencyHeroSubtitle = cn(
+  "emergency-hero-subtitle mt-3 max-w-xl text-sm leading-relaxed sm:text-[15px]",
+  "text-[rgba(255,255,255,0.62)]"
+);
+
+export const emergencyRailTitle = "emergency-rail-title font-serif text-lg font-light text-white";
+
+export const emergencyRailItemTitle = "emergency-rail-title text-sm font-medium";
+
+export const emergencyRailBody = "emergency-rail-body mt-1 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]";
+
+export const emergencyAboutTitle = "emergency-about-title font-serif text-lg font-light text-white";
+
+export const emergencyScenicBanner = cn(emergencyRailCard, "emergency-scenic-banner relative overflow-hidden");
+
+export const emergencyScenicBannerImage = cn(
+  "emergency-scenic-banner-img absolute inset-0 z-0 h-full w-full object-cover object-[center_70%]",
+  "brightness-[0.38] saturate-[1.1]"
+);
+
+export const emergencyScenicLightScrim = cn(
+  "emergency-scenic-light-scrim",
+  settingsSubpageHeroLightScrim
+);
+
+export const emergencyScenicOverlayDark = cn(
+  "emergency-scenic-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-gradient-to-t from-[#0a0b18]/95 via-[#0a0b18]/70 to-[#0a0b18]/35"
+);
+
+export const emergencyScenicOverlayWarm = cn(
+  "emergency-scenic-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-[radial-gradient(ellipse_70%_50%_at_50%_100%,rgba(251,146,60,0.18)_0%,transparent_60%)]"
+);
+
+export const emergencyBannerTitle = "emergency-banner-title font-serif text-lg font-light";
+
+export const emergencyBannerTitleLg =
+  "emergency-banner-title font-serif text-xl font-light sm:text-[1.35rem]";
+
+export const emergencyBannerBody = "emergency-banner-body mt-2 text-sm leading-relaxed";
+
+export const emergencyBannerBodyMuted = "emergency-banner-body mt-2 text-sm";
+
+export const emergencyBannerContent = "emergency-banner-content relative z-10";
+
+export const emergencyResourcesBanner = cn(
+  "emergency-resources-banner relative overflow-hidden rounded-[1.75rem] border border-fuchsia-400/18 p-6 sm:p-7",
+  "bg-[linear-gradient(135deg,rgba(76,29,149,0.55)_0%,rgba(136,19,55,0.42)_45%,rgba(30,16,48,0.88)_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_48px_-12px_rgba(236,72,153,0.35),0_28px_72px_-36px_rgba(0,0,0,0.75)]"
+);
+
+export const emergencyResourcesBannerImg = cn(
+  "emergency-resources-banner-img pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-[center_42%] opacity-35 mix-blend-soft-light"
+);
+
+export const emergencyResourcesOverlayDark = cn(
+  "emergency-resources-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-[linear-gradient(135deg,rgba(76,29,149,0.65)_0%,rgba(136,19,55,0.5)_50%,rgba(15,10,35,0.85)_100%)]"
+);
+
+export const emergencyFooterMuted = "emergency-footer-muted text-sm text-[rgba(255,255,255,0.42)]";
+
+export const emergencyFooterFine = "emergency-footer-muted mt-1 text-xs text-[rgba(255,255,255,0.32)]";
 
 export const emergencyBtnPrimary = cn(
   "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white",
@@ -119,14 +190,11 @@ export const emergencyActionBtn = cn(
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
 );
 
-export const emergencyResourcesCard = cn(
-  "relative overflow-hidden rounded-[1.75rem] border border-fuchsia-400/18 p-6 sm:p-7",
-  "bg-[linear-gradient(135deg,rgba(76,29,149,0.55)_0%,rgba(136,19,55,0.42)_45%,rgba(30,16,48,0.88)_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_48px_-12px_rgba(236,72,153,0.35),0_28px_72px_-36px_rgba(0,0,0,0.75)]"
-);
+/** @deprecated Use emergencyResourcesBanner */
+export const emergencyResourcesCard = emergencyResourcesBanner;
 
 export const emergencyResourcesCta = cn(
-  "group mt-5 flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-white/20",
+  "emergency-resources-cta group mt-5 flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-white/20",
   "bg-[rgba(8,10,24,0.55)] px-4 py-3.5 text-sm font-semibold text-white backdrop-blur-md",
   "transition-all duration-300 hover:border-fuchsia-300/35 hover:bg-[rgba(12,10,28,0.72)]",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/40"
@@ -144,9 +212,10 @@ export const emergencySafetyRow = cn(
   "flex gap-3.5 border-b border-white/[0.05] py-4 last:border-b-0 first:pt-0 last:pb-0"
 );
 
-/** Cinematic modal backdrop — blurred, purple ambient, not flat gray */
+/** Modal backdrop — shared modalTheme + page hook for light CSS */
 export const emergencyModalOverlay = cn(
-  "fixed inset-0 bg-[rgba(6,8,22,0.68)] backdrop-blur-md",
+  modalOverlay,
+  "emergency-modal-overlay fixed inset-0",
   "before:pointer-events-none before:absolute before:inset-0 before:content-['']",
   "before:bg-[radial-gradient(ellipse_70%_55%_at_50%_40%,rgba(139,92,246,0.14)_0%,transparent_62%)]"
 );
@@ -163,10 +232,11 @@ export const emergencyModalOverlayDialog = cn(
   "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
 );
 
-/** Dark matte sanctuary shell — 28px, purple edge glow */
 export const emergencyModalShell = cn(
-  "w-full max-w-[min(600px,calc(100%-2rem))] max-h-[min(90vh,calc(100%-2rem))] overflow-y-auto",
-  "rounded-[28px] border border-violet-500/[0.22] p-7 sm:p-8",
+  modalPanelMd,
+  "emergency-modal-panel w-full max-w-[min(600px,calc(100%-2rem))] max-h-[min(90vh,calc(100%-2rem))] overflow-y-auto",
+  "rounded-[28px] p-7 sm:p-8",
+  "border-violet-500/[0.22]",
   "bg-[linear-gradient(180deg,rgba(18,18,38,0.98)_0%,rgba(8,9,22,0.98)_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_60px_-12px_rgba(139,92,246,0.32),0_32px_80px_-24px_rgba(0,0,0,0.78)]",
   "text-[rgba(255,255,255,0.94)]"
@@ -176,20 +246,20 @@ export const emergencyModalPanel = emergencyModalShell;
 
 export const emergencyModalHeaderIcon = cn(
   emergencyIconChip("pink"),
-  "h-12 w-12 shrink-0 [&_svg]:h-5 [&_svg]:w-5"
+  "emergency-modal-header-icon h-12 w-12 shrink-0 [&_svg]:h-5 [&_svg]:w-5"
 );
 
 export const emergencyModalEyebrow = cn(
-  "text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/55"
+  "emergency-modal-eyebrow text-[10px] font-semibold uppercase tracking-[0.2em]",
+  "text-fuchsia-300/55"
 );
 
 export const emergencyModalTitle = cn(
-  "font-serif text-xl font-light leading-snug text-white sm:text-[1.35rem]"
+  modalTitle,
+  "emergency-modal-title font-serif text-xl font-light leading-snug sm:text-[1.35rem]"
 );
 
-export const emergencyModalSubtitle = cn(
-  "mt-1 text-sm leading-relaxed text-[rgba(255,255,255,0.52)]"
-);
+export const emergencyModalSubtitle = cn(modalSubtitle, "emergency-modal-subtitle mt-1 leading-relaxed");
 
 export const emergencyModalSectionHeading = cn(
   "text-sm font-semibold text-[rgba(255,255,255,0.9)]"
@@ -212,23 +282,24 @@ export const emergencyModalAmberTitle = cn(
 
 /** Pink safety consent checkbox card */
 export const emergencyModalConsentBox = cn(
-  "rounded-2xl border border-fuchsia-400/18 px-4 py-3.5",
+  "emergency-modal-consent rounded-2xl border border-fuchsia-400/18 px-4 py-3.5",
   "bg-[linear-gradient(165deg,rgba(76,5,45,0.22)_0%,rgba(18,12,28,0.55)_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
 );
 
 export const emergencyModalCheckbox = cn(
-  "mt-0.5 border-violet-400/35 bg-[rgba(10,12,28,0.95)]",
+  "emergency-modal-checkbox mt-0.5 border-violet-400/35 bg-[rgba(10,12,28,0.95)]",
   "data-[state=checked]:border-fuchsia-400/50 data-[state=checked]:bg-violet-500",
   "data-[state=checked]:text-white focus-visible:ring-fuchsia-400/35"
 );
 
 export const emergencyModalCheckboxLabel = cn(
-  "cursor-pointer text-xs font-normal leading-snug text-[rgba(255,255,255,0.78)]"
+  "emergency-modal-checkbox-label cursor-pointer text-xs font-normal leading-snug",
+  "text-[rgba(255,255,255,0.78)]"
 );
 
 export const emergencyModalCheckboxHelp = cn(
-  "text-xs text-[rgba(255,255,255,0.42)]"
+  "emergency-modal-checkbox-help text-xs text-[rgba(255,255,255,0.42)]"
 );
 
 export const emergencyModalNoteList = "space-y-2.5";
@@ -237,35 +308,40 @@ export const emergencyModalNoteItem = cn(
   "flex gap-2.5 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]"
 );
 
-/** Explicit dark inputs — modals portal outside `.solace-app` (CSS vars fall back to light) */
 export const emergencyModalField = cn(
-  "flex min-h-[48px] items-center gap-2.5 rounded-2xl border border-violet-400/22 px-3.5",
+  "emergency-modal-field flex min-h-[48px] items-center gap-2.5 rounded-2xl border border-violet-400/22 px-3.5",
   "bg-[rgba(10,12,28,0.72)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
   "transition-all duration-300 focus-within:border-violet-400/38 focus-within:bg-[rgba(14,16,34,0.85)]",
   "focus-within:ring-2 focus-within:ring-violet-400/20"
 );
 
 export const emergencyModalInput = cn(
-  "flex-1 bg-transparent text-sm text-white/92 outline-none",
-  "placeholder:text-violet-300/40"
+  "emergency-modal-input flex-1 bg-transparent text-sm outline-none",
+  "text-white/92 placeholder:text-violet-300/40"
 );
 
-export const emergencyModalLabel = "mb-2 block text-sm font-medium text-white/88";
+export const emergencyModalLabel = cn(
+  "emergency-modal-label mb-2 block text-sm font-medium text-white/88"
+);
 
-export const emergencyModalFieldHint = "mb-2 text-xs text-violet-200/52";
+export const emergencyModalFieldHint = cn(
+  "emergency-modal-field-hint mb-2 text-xs text-violet-200/52"
+);
 
 export const emergencyModalPhoneButton = cn(
-  "h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl border border-violet-400/22 px-3 sm:w-[140px]",
+  "emergency-modal-phone-btn h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl border border-violet-400/22 px-3 sm:w-[140px]",
   "bg-[rgba(10,12,28,0.72)] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
   "transition-all duration-300 hover:border-violet-400/35 hover:bg-[rgba(14,16,34,0.82)]"
 );
 
 export const emergencyModalPhoneInput = cn(
-  "h-12 min-h-[48px] flex-1 rounded-2xl border border-violet-400/22 bg-[rgba(10,12,28,0.72)]",
+  "emergency-modal-phone-input h-12 min-h-[48px] flex-1 rounded-2xl border border-violet-400/22 bg-[rgba(10,12,28,0.72)]",
   "text-white/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
   "placeholder:text-violet-300/40",
   "transition-all duration-300 focus:border-violet-400/38 focus:ring-2 focus:ring-violet-400/20"
 );
+
+export const emergencyModalEmphasis = "emergency-modal-emphasis font-medium";
 
 export const emergencyModalFormStack = "space-y-[18px]";
 
@@ -274,33 +350,22 @@ export const emergencyModalBtnRow = cn(
 );
 
 export const emergencyModalBtnCancel = cn(
-  "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-2xl border border-white/[0.1] px-4 text-sm font-semibold",
-  "bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.02)_100%)]",
-  "text-[rgba(255,255,255,0.88)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-  "transition-all duration-300 hover:border-violet-300/28 hover:bg-violet-500/[0.08]",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+  modalSecondaryButton,
+  "emergency-modal-btn-cancel inline-flex min-h-[44px] flex-1 items-center justify-center rounded-2xl px-4 text-sm font-semibold",
   "disabled:cursor-not-allowed disabled:opacity-50"
 );
 
 export const emergencyModalBtnPrimary = cn(
-  "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-white",
-  "bg-[linear-gradient(135deg,#7C3AED_0%,#C026D3_55%,#EC4899_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_0_32px_-6px_rgba(168,85,247,0.45)]",
-  "transition-all duration-300 hover:enabled:brightness-110",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/40",
-  "disabled:cursor-not-allowed disabled:border disabled:border-violet-400/18",
-  "disabled:bg-[linear-gradient(135deg,rgba(76,29,149,0.42)_0%,rgba(88,28,135,0.38)_55%,rgba(76,5,95,0.35)_100%)]",
-  "disabled:text-[rgba(255,255,255,0.52)] disabled:shadow-[0_0_20px_-10px_rgba(139,92,246,0.2)] disabled:saturate-[0.85]"
+  modalPrimaryButton,
+  "emergency-modal-btn-save inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl px-4",
+  "disabled:cursor-not-allowed disabled:opacity-50"
 );
 
 export const emergencyModalBtnSave = emergencyModalBtnPrimary;
 
 export const emergencyModalBtnDestructive = cn(
-  "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-white",
-  "bg-[linear-gradient(135deg,#e11d48_0%,#be123c_55%,#9f1239_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_0_32px_-6px_rgba(244,63,94,0.42)]",
-  "transition-all duration-300 hover:enabled:brightness-110",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40",
+  modalDestructiveButton,
+  "emergency-modal-btn-destructive inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl px-4",
   "disabled:cursor-not-allowed disabled:opacity-50"
 );
 

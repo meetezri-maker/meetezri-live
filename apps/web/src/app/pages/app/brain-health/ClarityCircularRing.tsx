@@ -64,8 +64,8 @@ export function ClarityCircularRing({
         </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
-        <span className="text-[1.75rem] font-bold leading-none tracking-tight text-white">{safe}%</span>
-        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-violet-200/80">
+        <span className="text-[1.75rem] font-bold leading-none tracking-tight text-[var(--solace-text)]">{safe}%</span>
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-violet-600/90 [html[data-ezri-theme=dark]_&]:text-violet-200/80">
           {centerSublabel}
         </span>
       </div>

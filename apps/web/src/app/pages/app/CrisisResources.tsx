@@ -57,9 +57,10 @@ import {
   emergencyHeroAccent,
   emergencyHeroCard,
   emergencyHeroImage,
-  emergencyHeroOverlayLeft,
-  emergencyHeroOverlayPurple,
-  emergencyHeroOverlayWarmth,
+  emergencyHeroLightScrim,
+  emergencyHeroOverlayAccent,
+  emergencyHeroOverlayBottom,
+  emergencyHeroOverlayReadability,
   emergencyHeroTitle,
   emergencyIconChip,
   emergencyPageAtmosphere,
@@ -262,12 +263,21 @@ export function CrisisResources() {
           <div className="min-w-0 space-y-6 xl:col-start-1">
             {/* 1. Cinematic header / hero */}
             <section className={emergencyHeroCard}>
-              <img src={EMERGENCY_HERO_IMG} alt="" className={emergencyHeroImage} />
-              <motion.div className={emergencyHeroOverlayLeft} aria-hidden />
-              <motion.div className={emergencyHeroOverlayPurple} aria-hidden />
-              <motion.div className={emergencyHeroOverlayWarmth} aria-hidden />
+              <img
+                src={EMERGENCY_HERO_IMG}
+                alt=""
+                className={emergencyHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={emergencyHeroLightScrim} aria-hidden />
+              <div className={emergencyHeroOverlayReadability} aria-hidden />
+              <div className={emergencyHeroOverlayAccent} aria-hidden />
+              <div className={emergencyHeroOverlayBottom} aria-hidden />
 
-              <motion.div className="relative flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8">
+              <motion.div className="relative z-10 flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8">
                 <div>
                   <Link to="/app/settings" className={emergencyBackLink}>
                     <ArrowLeft className="h-4 w-4" aria-hidden />

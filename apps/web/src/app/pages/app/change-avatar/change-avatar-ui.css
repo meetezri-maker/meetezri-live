@@ -1,0 +1,140 @@
+/**
+ * Change avatar (/app/settings/change-avatar) — light theme readability.
+ */
+
+.solace-app .change-avatar-page .change-avatar-page-subtitle {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.solace-app .change-avatar-page .change-avatar-section-subtitle {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.solace-app .change-avatar-page .change-avatar-hero-eyebrow {
+  color: rgba(196, 181, 253, 0.8);
+}
+
+.solace-app .change-avatar-page .change-avatar-hero-name {
+  color: #fff;
+}
+
+.solace-app .change-avatar-page .change-avatar-hero-meta {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.solace-app .change-avatar-page .change-avatar-hero-desc {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.solace-app .change-avatar-page .change-avatar-hero-stats {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-page-subtitle,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-page-subtitle {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-section-subtitle,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-section-subtitle {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-eyebrow,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-eyebrow {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-name,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-name {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-meta,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-meta {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-desc,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-desc {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-stats,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-stats {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card {
+  background: linear-gradient(160deg, #ffffff 0%, #fbf8ff 55%, #f6f0ff 100%) !important;
+  border-color: var(--border, #e7ddfb) !important;
+  box-shadow: var(--solace-card-shadow, 0 12px 32px -12px rgba(88, 28, 135, 0.1)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card--selected,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card--selected {
+  border-color: rgba(167, 139, 250, 0.55) !important;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, #a78bfa 12%, #ffffff) 0%,
+    #faf5ff 100%
+  ) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card--current,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card--current {
+  border-color: rgba(52, 211, 153, 0.45) !important;
+  background: linear-gradient(160deg, #ecfdf5 0%, #ffffff 100%) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-name,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-name {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-muted,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-muted {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-body,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-divider,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-divider {
+  border-color: var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-preview-btn,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-preview-btn {
+  border-color: var(--border-strong, #d8c7f7) !important;
+  background: #ffffff !important;
+  color: var(--text-primary, #101828) !important;
+  box-shadow: 0 8px 24px -12px rgba(88, 28, 135, 0.12) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-rail-row,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-rail-row {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-soft, #fbf8ff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-hero-card .solace-hero-light-scrim {
+  display: block !important;
+}
+
+/* Coming soon companions — keep portrait visible under scrim */
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card .coming-soon-overlay,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card .coming-soon-overlay {
+  background: rgba(251, 248, 255, 0.42) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card img,
+html[data-theme="light"] .solace-app .change-avatar-page .change-avatar-companion-card img {
+  opacity: 1 !important;
+  filter: none !important;
+}

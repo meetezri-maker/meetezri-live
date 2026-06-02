@@ -7,10 +7,54 @@ import {
   settingsPageVignette,
   settingsCard,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBackLink,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroCopy,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroInner,
+  settingsSubpageHeroLead,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOrb,
+  settingsSubpageHeroOrbGlow,
+  settingsSubpageHeroOrbIcon,
+  settingsSubpageHeroOrbLabel,
+  settingsSubpageHeroOrbQuote,
+  settingsSubpageHeroOrbValue,
+  settingsSubpageHeroOrbWrap,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-export const NOTIFICATIONS_HERO_IMG = "/community/hero-lake.jpg";
+export const NOTIFICATIONS_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 export const NOTIFICATIONS_FOREST_IMG = "/community/scene-forest.jpg";
 export const NOTIFICATIONS_WATER_IMG = "/community/scene-water.jpg";
+
+export const notificationsHeroCard = settingsSubpageHeroShell;
+export const notificationsHeroImage = settingsSubpageHeroImage;
+export const notificationsHeroLightScrim = settingsSubpageHeroLightScrim;
+export const notificationsHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const notificationsHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const notificationsHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const notificationsHeroInner = settingsSubpageHeroInner;
+export const notificationsHeroCopy = settingsSubpageHeroCopy;
+export const notificationsBackLink = settingsSubpageHeroBackLink;
+export const notificationsHeroTitle = settingsSubpageHeroTitleSerif;
+export const notificationsHeroAccent = settingsSubpageHeroAccent;
+export const notificationsHeroLead = settingsSubpageHeroLead;
+export const notificationsHeroBody = settingsSubpageHeroBody;
+export const notificationsHeroOrbWrap = settingsSubpageHeroOrbWrap;
+export const notificationsHeroOrbGlow = settingsSubpageHeroOrbGlow;
+export const notificationsHeroOrb = settingsSubpageHeroOrb;
+export const notificationsHeroOrbIcon = settingsSubpageHeroOrbIcon;
+export const notificationsHeroOrbValue = settingsSubpageHeroOrbValue;
+export const notificationsHeroOrbLabel = settingsSubpageHeroOrbLabel;
+export const notificationsHeroOrbQuote = settingsSubpageHeroOrbQuote;
 
 export const notificationsPageAtmosphere = cn(
   settingsPageAtmosphere
@@ -32,47 +76,12 @@ export const notificationsRailCard = cn(
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_40px_-14px_rgba(139,92,246,0.18),0_24px_64px_-36px_rgba(0,0,0,0.72)]"
 );
 
-export const notificationsHeroCard = cn(
-  notificationsGlassCard,
-  "relative min-h-[280px] overflow-hidden rounded-[2rem] border-violet-400/12 sm:min-h-[300px] lg:min-h-[320px]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_72px_-18px_rgba(139,92,246,0.32),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
-);
-
-export const notificationsHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[center_38%]",
-  "brightness-[0.48] contrast-[0.95] saturate-[1.12]"
-);
-
-export const notificationsHeroOverlayLeft = cn(
-  "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/78 to-[#0a0b18]/18 lg:from-[#0a0b18]/96 lg:via-[#0a0b18]/52 lg:to-transparent"
-);
-
-export const notificationsHeroOverlayPurple = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_80%_90%_at_82%_48%,rgba(192,132,252,0.24)_0%,transparent_58%)]"
-);
-
-export const notificationsHeroOverlayWarmth = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_42%_36%_at_72%_72%,rgba(251,146,60,0.16)_0%,transparent_55%)]"
-);
-
 export const notificationsIconChip = settingsIconChip;
 
-export const notificationsBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.1em] text-violet-300/55",
-  "transition-colors hover:text-violet-200/95"
-);
-
-export const notificationsHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4.2vw,3rem)] font-light leading-[1.06] tracking-tight text-white"
-);
-
-export const notificationsHeroAccent = cn(
-  "bg-gradient-to-r from-violet-200 via-fuchsia-200 to-violet-300 bg-clip-text text-transparent",
-  "drop-shadow-[0_0_28px_rgba(167,139,250,0.45)]"
-);
+/** @deprecated Use notificationsHeroOverlayReadability — kept for gradual migration */
+export const notificationsHeroOverlayLeft = notificationsHeroOverlayReadability;
+export const notificationsHeroOverlayPurple = notificationsHeroOverlayAccent;
+export const notificationsHeroOverlayWarmth = notificationsHeroOverlayBottom;
 
 export const notificationsGroupLabel = cn(
   "text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/45"

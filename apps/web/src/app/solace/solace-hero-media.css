@@ -144,14 +144,14 @@ html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cove
   opacity: var(--hero-overlay-image-opacity) !important;
 }
 
-html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-gradient"]:not(button):not(a),
-html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-gradient"]:not(button):not(a),
-html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-[linear-gradient"]:not(button):not(a),
-html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-[linear-gradient"]:not(button):not(a),
-html[data-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-gradient"]:not(button):not(a),
-html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-gradient"]:not(button):not(a),
-html[data-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-[linear-gradient"]:not(button):not(a),
-html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-[linear-gradient"]:not(button):not(a) {
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-[linear-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-[linear-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-theme="light"] .solace-app .solace-hero-media.solace-on-dark [class*="bg-[linear-gradient"]:not(button):not(a):not(.solace-surface-light),
+html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card [class*="bg-[linear-gradient"]:not(button):not(a):not(.solace-surface-light) {
   background: var(--hero-overlay-image-scrim-side) !important;
   background-image: var(--hero-overlay-image-scrim-side) !important;
   opacity: var(--hero-overlay-image-opacity) !important;
@@ -228,7 +228,11 @@ html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light h2,
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light h3,
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light p,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light span,
+html[data-ezri-theme="light"]
+  .solace-app
+  .solace-on-dark:has(img[class*="object-cover"])
+  .solace-surface-light
+  span:not(.solace-icon-chip):not(.profile-ui-hero-stat-value):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light [class*="text-zinc-"],
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) [class*="text-gray-1"],
 html[data-ezri-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) [class*="text-gray-2"],
@@ -260,7 +264,11 @@ html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cove
 html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light h2,
 html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light h3,
 html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light p,
-html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light span,
+html[data-theme="light"]
+  .solace-app
+  .solace-on-dark:has(img[class*="object-cover"])
+  .solace-surface-light
+  span:not(.solace-icon-chip):not(.profile-ui-hero-stat-value):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-theme="light"] .solace-app .solace-on-dark:has(img[class*="object-cover"]) .solace-surface-light [class*="text-zinc-"],
 html[data-theme="light"] .solace-app a:has(img[class*="object-cover"]):has([class*="from-black"]) h1,
 html[data-theme="light"] .solace-app a:has(img[class*="object-cover"]):has([class*="from-black"]) h2,
@@ -307,13 +315,25 @@ html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-hero-content h
 html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-hero-content h2,
 html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-hero-content h3,
 html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-hero-content p,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-hero-content span:not([class*="from-violet"]):not([class*="from-fuchsia"]),
+html[data-ezri-theme="light"]
+  .solace-app
+  .solace-on-dark
+  .solace-hero-content
+  span:not([class*="from-violet"]):not([class*="from-fuchsia"]):not(.solace-icon-chip):not(
+    .profile-ui-hero-stat-value
+  ):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content h1,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content h2,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content h3,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content p,
-html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-hero-content span:not([class*="from-violet"]):not([class*="from-fuchsia"]),
+html[data-ezri-theme="light"]
+  .solace-app
+  .solace-image-card
+  .solace-hero-content
+  span:not([class*="from-violet"]):not([class*="from-fuchsia"]):not(.solace-icon-chip):not(
+    .profile-ui-hero-stat-value
+  ):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-theme="light"] .solace-app .solace-on-dark .solace-hero-content,
 html[data-theme="light"] .solace-app .solace-on-dark .solace-hero-content h1,
 html[data-theme="light"] .solace-app .solace-on-dark .solace-hero-content h2,
@@ -352,13 +372,23 @@ html[data-ezri-theme="light"] .solace-app .solace-hero-content h1,
 html[data-ezri-theme="light"] .solace-app .solace-hero-content h2,
 html[data-ezri-theme="light"] .solace-app .solace-hero-content h3,
 html[data-ezri-theme="light"] .solace-app .solace-hero-content p,
-html[data-ezri-theme="light"] .solace-app .solace-hero-content span:not([class*="from-violet"]):not([class*="from-fuchsia"]),
+html[data-ezri-theme="light"]
+  .solace-app
+  .solace-hero-content
+  span:not([class*="from-violet"]):not([class*="from-fuchsia"]):not(.solace-icon-chip):not(
+    .profile-ui-hero-stat-value
+  ):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-theme="light"] .solace-app .solace-hero-content,
 html[data-theme="light"] .solace-app .solace-hero-content h1,
 html[data-theme="light"] .solace-app .solace-hero-content h2,
 html[data-theme="light"] .solace-app .solace-hero-content h3,
 html[data-theme="light"] .solace-app .solace-hero-content p,
-html[data-theme="light"] .solace-app .solace-hero-content span:not([class*="from-violet"]):not([class*="from-fuchsia"]) {
+html[data-theme="light"]
+  .solace-app
+  .solace-hero-content
+  span:not([class*="from-violet"]):not([class*="from-fuchsia"]):not(.solace-icon-chip):not(
+    .profile-ui-hero-stat-value
+  ):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status) {
   color: var(--text-primary) !important;
   text-shadow: none !important;
 }
@@ -418,6 +448,140 @@ html[data-ezri-theme="light"] .solace-app .solace-rail-toggle--active {
   background: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(78, 205, 196, 0.1)) !important;
   border-color: rgba(167, 139, 250, 0.45) !important;
   box-shadow: 0 0 20px rgba(167, 139, 250, 0.18) !important;
+}
+
+/* ─── Image cards: restore dark glass (light theme remaps bg-black/ → lavender) ─ */
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/15"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/15"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/15"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/15"] {
+  background-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/25"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/25"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/25"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/25"] {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/30"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/30"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/30"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/30"] {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/35"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/35"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/35"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/35"] {
+  background-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/40"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/40"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/40"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/40"] {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/45"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/45"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/45"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/45"] {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="bg-black/55"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card [class*="bg-black/55"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="bg-black/55"],
+html[data-theme="light"] .solace-app .solace-image-card [class*="bg-black/55"] {
+  background-color: rgba(0, 0, 0, 0.55) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] svg,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="lucide"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] svg,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] svg,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="lucide"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] svg {
+  color: rgb(250 250 250) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-violet-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-violet-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-emerald-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-emerald-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-fuchsia-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-fuchsia-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-sky-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-sky-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-indigo-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-indigo-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-violet-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-violet-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-emerald-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-emerald-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-fuchsia-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-fuchsia-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-sky-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-sky-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="bg-black/"] [class*="text-indigo-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="bg-black/"] [class*="text-indigo-2"] {
+  color: rgb(228 228 231) !important;
+}
+
+/* Tinted icon chips on image cards (Community circles, etc.) */
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-2"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-amber-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-orange-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-violet-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-fuchsia-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-fuchsia-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-1"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-1"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-amber-1"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-orange-1"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-violet-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-amber-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-orange-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-violet-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-fuchsia-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-fuchsia-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-1"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-sky-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-indigo-1"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-amber-1"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-orange-1"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light):not(.community-feed-post) [class*="text-violet-1"] {
+  color: rgb(228 228 231) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="text-emerald-1"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="text-emerald-2"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-emerald-1"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-emerald-2"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="text-emerald-1"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) [class*="text-emerald-2"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-emerald-1"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-emerald-2"] {
+  color: rgb(167 243 208) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) svg.lucide,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) svg.lucide,
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light) svg.lucide,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) svg.lucide {
+  color: currentColor !important;
 }
 
 /* ─── Thumbnail / card cover images ─────────────────────────────────────────── */
@@ -518,7 +682,11 @@ html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-lig
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-light h3,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-light h4,
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-light p,
-html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-light span,
+html[data-ezri-theme="light"]
+  .solace-app
+  .solace-image-card
+  .solace-surface-light
+  span:not(.solace-icon-chip):not(.profile-ui-hero-stat-value):not(.profile-ui-hero-stat-label):not(.settings-quick-card-label):not(.settings-quick-card-status),
 html[data-ezri-theme="light"] .solace-app .solace-image-card .solace-surface-light [class*="text-zinc-"],
 html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-surface-light h1,
 html[data-ezri-theme="light"] .solace-app .solace-on-dark .solace-surface-light h2,
@@ -556,9 +724,282 @@ html[data-theme="light"] .solace-app .solace-image-card .solace-surface-light [c
   text-shadow: none !important;
 }
 
+/* Cinematic dark panels (Community rail, etc.) — keep tint + moonlit copy */
+html[data-ezri-theme="light"] .solace-app .solace-dark-panel,
+html[data-theme="light"] .solace-app .solace-dark-panel[class*="bg-[rgba(15"] {
+  background-color: rgba(15, 18, 32, 0.88) !important;
+  color: rgb(250 250 250) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#F7F3FF"],
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#f7f3ff"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#F7F3FF"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#f7f3ff"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#F7F3FF"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#f7f3ff"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#F7F3FF"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#f7f3ff"] {
+  color: rgba(247, 243, 255, 0.95) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#A7A1B8"],
+html[data-ezri-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#A7A1B8"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.community-feed-post) [class*="text-[#A7A1B8"],
+html[data-theme="light"] .solace-app .solace-image-card:not(.solace-surface-light):not(.community-feed-post) [class*="text-[#A7A1B8"] {
+  color: rgba(228, 228, 231, 0.9) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ─── Community page — white shell in light theme ───────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .community-page,
+html[data-theme="light"] .solace-app .community-page {
+  background: var(--solace-page-bg, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-page-atmosphere,
+html[data-theme="light"] .solace-app .community-page .community-page-atmosphere {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post-scrim,
+html[data-theme="light"] .solace-app .community-page .community-feed-post-scrim {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post h3,
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post p,
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post button,
+html[data-theme="light"] .solace-app .community-page .community-feed-post h3,
+html[data-theme="light"] .solace-app .community-page .community-feed-post p,
+html[data-theme="light"] .solace-app .community-page .community-feed-post button {
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post [class*="text-fuchsia-2"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post [class*="text-fuchsia-3"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post [class*="text-violet-2"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post [class*="text-violet-3"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post [class*="text-fuchsia-2"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post [class*="text-fuchsia-3"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post [class*="text-violet-2"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post [class*="text-violet-3"] {
+  color: #6d28d9 !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post button svg.lucide,
+html[data-theme="light"] .solace-app .community-page .community-feed-post button svg.lucide {
+  color: currentColor !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .bg-gradient-to-br .text-white,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .bg-gradient-to-br .text-white {
+  color: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart,
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart p,
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart span,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart .text-white,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart p,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart span,
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart .text-white {
+  background: transparent !important;
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart [class*="text-violet-"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart [class*="text-fuchsia-"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart [class*="text-violet-"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post .solace-post-share-chart [class*="text-fuchsia-"] {
+  color: #6d28d9 !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel.solace-dark-panel,
+html[data-theme="light"] .solace-app .community-page .community-rail-panel.solace-dark-panel {
+  background-color: var(--rail-card-bg, #ffffff) !important;
+  border-color: var(--rail-card-border, #e7ddfb) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel h3,
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel p,
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel span,
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel .text-white,
+html[data-theme="light"] .solace-app .community-page .community-rail-panel h3,
+html[data-theme="light"] .solace-app .community-page .community-rail-panel p,
+html[data-theme="light"] .solace-app .community-page .community-rail-panel span,
+html[data-theme="light"] .solace-app .community-page .community-rail-panel .text-white {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-[#F7"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-[#A7"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-[#F7"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-[#A7"] {
+  color: var(--text-secondary, #667085) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-2"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-fuchsia-2"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-2"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-fuchsia-2"] {
+  color: #6d28d9 !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-post .rounded-full[class*="uppercase"],
+html[data-theme="light"] .solace-app .community-page .community-feed-post .rounded-full[class*="uppercase"] {
+  color: #5b21b6 !important;
+}
+
+/* Feed pagination + load more — white card in light theme */
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination {
+  background-color: #ffffff !important;
+  border-color: var(--solace-card-border, #e7ddfb) !important;
+  color: var(--text-primary, #101828) !important;
+  box-shadow: var(--solace-card-shadow, 0 4px 24px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination p,
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination [class*="text-violet-1"],
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination p,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination [class*="text-violet-1"] {
+  color: var(--text-muted, #667085) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination .font-medium,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination .font-medium {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination button,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination button {
+  background-color: #f5f3ff !important;
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination button svg,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination button svg {
+  color: currentColor !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-pagination button:disabled,
+html[data-theme="light"] .solace-app .community-page .community-feed-pagination button:disabled {
+  opacity: 0.45 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-load-more,
+html[data-theme="light"] .solace-app .community-page .community-feed-load-more {
+  background-color: #ffffff !important;
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  color: #4c1d95 !important;
+  box-shadow: var(--solace-card-shadow, 0 4px 24px rgba(88, 28, 135, 0.08)) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-feed-load-more svg,
+html[data-theme="light"] .solace-app .community-page .community-feed-load-more svg {
+  color: #6d28d9 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-1"],
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-3"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-1"],
+html[data-theme="light"] .solace-app .community-page .community-rail-panel [class*="text-violet-3"] {
+  color: #4c1d95 !important;
+  text-shadow: none !important;
+}
+
 /* ─── Decorative absolute images inside cards (lotus, accents) ──────────────── */
 html[data-ezri-theme="light"] .solace-app button:has(img[class*="opacity-"]) img[class*="opacity-"],
 html[data-theme="light"] .solace-app button:has(img[class*="opacity-"]) img[class*="opacity-"] {
   filter: brightness(1.4) saturate(0.75) !important;
   opacity: 0.22 !important;
+}
+
+/* ─── Cinematic footer / privacy banners (light theme) ──────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner > img[class*="object-cover"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner > img[class*="object-cover"] {
+  filter: var(--solace-hero-img-filter) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner [class*="from-[#0"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner [class*="via-[#0"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner [class*="from-black"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner [class*="bg-gradient-to-r"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner [class*="bg-gradient-to-br"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner [class*="from-[#0"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner [class*="via-[#0"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner [class*="from-black"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner [class*="bg-gradient-to-r"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner [class*="bg-gradient-to-br"] {
+  background: var(--hero-overlay-image-scrim-side) !important;
+  background-image: var(--hero-overlay-image-scrim-side) !important;
+  opacity: var(--hero-overlay-image-opacity) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h1,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h2,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h3,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content p,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-zinc-"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-white"],
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content a,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h1,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h2,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content h3,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content p,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-zinc-"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-white"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content a {
+  color: rgb(250 250 250) !important;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-violet-"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-content [class*="text-violet-"] {
+  color: rgba(221, 214, 254, 0.95) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon {
+  border-color: rgba(167, 139, 250, 0.38) !important;
+  background-color: rgba(15, 18, 32, 0.78) !important;
+  color: #ddd6fe !important;
+  box-shadow: 0 0 24px -8px rgba(139, 92, 246, 0.45) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon svg,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon [class*="lucide"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon svg,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-cinematic-banner-icon [class*="lucide"] {
+  color: #ddd6fe !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip {
+  border-color: rgba(167, 139, 250, 0.38) !important;
+  background-color: rgba(15, 18, 32, 0.78) !important;
+  color: #ddd6fe !important;
+  box-shadow: 0 0 24px -8px rgba(139, 92, 246, 0.45) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip svg,
+html[data-ezri-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip [class*="lucide"],
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip svg,
+html[data-theme="light"] .solace-app .solace-cinematic-banner .solace-icon-chip [class*="lucide"] {
+  color: #ddd6fe !important;
+  text-shadow: none !important;
 }

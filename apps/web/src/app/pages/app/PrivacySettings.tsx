@@ -33,14 +33,28 @@ import {
   privacyBtnPrimary,
   privacyBtnRose,
   privacyCommitmentBanner,
+  privacyCommitmentBannerBody,
+  privacyCommitmentBannerContent,
+  privacyCommitmentBannerImage,
+  privacyCommitmentBannerLink,
+  privacyCommitmentBannerOverlay,
+  privacyCommitmentBannerTitle,
   privacyDataCard,
   privacyGlassCard,
   privacyHeroAccent,
+  privacyHeroBody,
   privacyHeroCard,
+  privacyHeroCopy,
   privacyHeroImage,
-  privacyHeroOverlayLeft,
-  privacyHeroOverlayPurple,
-  privacyHeroOverlayWarmth,
+  privacyHeroInner,
+  privacyHeroLead,
+  privacyHeroLightScrim,
+  privacyHeroOrb,
+  privacyHeroOrbGlow,
+  privacyHeroOrbWrap,
+  privacyHeroOverlayAccent,
+  privacyHeroOverlayBottom,
+  privacyHeroOverlayReadability,
   privacyHeroTitle,
   privacyIconChip,
   privacyLinkMuted,
@@ -512,13 +526,22 @@ export function PrivacySettings() {
           <div className="min-w-0 space-y-6">
             {/* Hero */}
             <section className={privacyHeroCard}>
-              <img src={PRIVACY_HERO_IMG} alt="" className={privacyHeroImage} />
-              <motion.div className={privacyHeroOverlayLeft} aria-hidden />
-              <motion.div className={privacyHeroOverlayPurple} aria-hidden />
-              <motion.div className={privacyHeroOverlayWarmth} aria-hidden />
+              <img
+                src={PRIVACY_HERO_IMG}
+                alt=""
+                className={privacyHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={privacyHeroLightScrim} aria-hidden />
+              <div className={privacyHeroOverlayReadability} aria-hidden />
+              <div className={privacyHeroOverlayAccent} aria-hidden />
+              <div className={privacyHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex h-full min-h-[280px] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:gap-8">
-                <div className="max-w-xl flex-1">
+              <div className={privacyHeroInner}>
+                <div className={privacyHeroCopy}>
                   <Link to="/app/settings" className={privacyBackLink}>
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                     Back to Settings
@@ -527,25 +550,24 @@ export function PrivacySettings() {
                   <h1 className={cn(privacyHeroTitle, "mt-5")}>
                     Privacy & <span className={privacyHeroAccent}>Security</span>
                   </h1>
-                  <p className="mt-3 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+                  <p className={privacyHeroLead}>
                     You&apos;re in control of your data, your privacy, and your safety.
                   </p>
-                  <p className="mt-4 inline-flex items-center gap-2 text-xs text-[rgba(255,255,255,0.5)]">
-                    <Shield className="h-3.5 w-3.5 text-violet-300/70" aria-hidden />
+                  <p className={cn(privacyHeroBody, "mt-4 inline-flex items-center gap-2")}>
+                    <Shield className="h-3.5 w-3.5 text-violet-300/70 [html[data-ezri-theme=light]_&]:text-violet-600 [html[data-theme=light]_&]:text-violet-600" aria-hidden />
                     We protect your privacy so you can focus on your wellbeing.
                   </p>
                 </div>
 
-                <motion.div className="flex shrink-0 justify-center lg:justify-end">
+                <motion.div className={privacyHeroOrbWrap}>
                   <div className="relative flex h-[190px] w-[190px] items-center justify-center sm:h-[210px] sm:w-[210px]">
-                    <div
-                      className={cn("absolute inset-0 rounded-full blur-md", securityTone.heroGlow)}
-                      aria-hidden
-                    />
-                    <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-violet-300/25 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(15,16,36,0.75)_100%)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_48px_-8px_rgba(139,92,246,0.5)] backdrop-blur-md">
+                    <div className={cn(privacyHeroOrbGlow, securityTone.heroGlow)} aria-hidden />
+                    <div className={privacyHeroOrb}>
                       <Shield className={cn("h-8 w-8", securityTone.shield)} aria-hidden />
-                      <p className="mt-2 text-lg font-semibold text-white">{securityStatus.heroTitle}</p>
-                      <p className="mt-1 max-w-[140px] text-[11px] leading-snug text-[rgba(255,255,255,0.55)]">
+                      <p className="settings-subpage-hero-orb-value mt-2 text-lg font-semibold text-white [html[data-ezri-theme=light]_&]:text-[var(--text-primary)] [html[data-theme=light]_&]:text-[var(--text-primary)]">
+                        {securityStatus.heroTitle}
+                      </p>
+                      <p className="settings-subpage-hero-orb-quote mt-1 max-w-[140px] text-[11px] leading-snug">
                         {securityStatus.heroSubtitle}
                       </p>
                     </div>
@@ -862,30 +884,28 @@ export function PrivacySettings() {
 
             {/* Commitment banner */}
             <section className={privacyCommitmentBanner}>
-              <img src={PRIVACY_BANNER_IMG} alt="" className="absolute inset-0 h-full w-full object-cover brightness-[0.4] saturate-[1.08]" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#0a0b18]/95 via-[#0a0b18]/75 to-[#0a0b18]/55" aria-hidden />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_0%_50%,rgba(139,92,246,0.15)_0%,transparent_55%)]" aria-hidden />
-
-              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-start">
+              <img src={PRIVACY_BANNER_IMG} alt="" className={privacyCommitmentBannerImage} />
+              <div className={privacyCommitmentBannerOverlay} aria-hidden />
+              <div className={cn(privacyCommitmentBannerContent, "gap-6 sm:items-start")}>
                 <motion.div className={cn(privacyIconChip("violet"), "h-14 w-14 shrink-0 [&_svg]:h-7 [&_svg]:w-7")}>
                   <Shield className="h-7 w-7" aria-hidden />
                 </motion.div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-serif text-2xl font-light text-white sm:text-[1.65rem]">
+                  <h2 className={cn("font-serif text-2xl font-light sm:text-[1.65rem]", privacyCommitmentBannerTitle)}>
                     Your wellbeing. Our responsibility.
                   </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[rgba(255,255,255,0.55)] sm:text-[15px]">
+                  <p className={cn("mt-3 max-w-2xl sm:text-[15px]", privacyCommitmentBannerBody)}>
                     We follow industry-leading security practices and HIPAA-aligned standards to keep your data
                     private, secure, and respected.
                   </p>
                   <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                    <Link to="/privacy" className={privacyLinkMuted}>
+                    <Link to="/privacy" className={privacyCommitmentBannerLink}>
                       Privacy Policy
                     </Link>
-                    <Link to="/terms" className={privacyLinkMuted}>
+                    <Link to="/terms" className={privacyCommitmentBannerLink}>
                       Terms of Service
                     </Link>
-                    <Link to="/privacy" className={privacyLinkMuted}>
+                    <Link to="/privacy" className={privacyCommitmentBannerLink}>
                       HIPAA Compliance
                     </Link>
                   </div>

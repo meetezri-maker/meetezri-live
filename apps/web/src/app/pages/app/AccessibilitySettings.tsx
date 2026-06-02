@@ -43,14 +43,11 @@ import {
   accessibilityHeroCard,
   accessibilityHeroIconCapsule,
   accessibilityHeroImage,
-  accessibilityHeroOverlayEmerald,
-  accessibilityHeroOverlayLeft,
-  accessibilityHeroOverlayPurpleNight,
-  accessibilityHeroOverlayPurpleSky,
-  accessibilityHeroOverlayReflection,
-  accessibilityHeroOverlayTitleHaze,
-  accessibilityHeroOverlayVignette,
-  accessibilityHeroOverlayWarmth,
+  accessibilityHeroInner,
+  accessibilityHeroLightScrim,
+  accessibilityHeroOverlayAccent,
+  accessibilityHeroOverlayBottom,
+  accessibilityHeroOverlayReadability,
   accessibilityHeroTitle,
   accessibilityIconChip,
   accessibilityMiniPreviewCard,
@@ -334,17 +331,21 @@ export function AccessibilitySettings() {
           <div className="min-w-0 space-y-6">
             {/* Hero */}
             <section className={accessibilityHeroCard}>
-              <img src={ACCESSIBILITY_HERO_IMG} alt="" className={accessibilityHeroImage} />
-              <motion.div className={accessibilityHeroOverlayLeft} aria-hidden />
-              <div className={accessibilityHeroOverlayPurpleSky} aria-hidden />
-              <div className={accessibilityHeroOverlayPurpleNight} aria-hidden />
-              <div className={accessibilityHeroOverlayEmerald} aria-hidden />
-              <div className={accessibilityHeroOverlayTitleHaze} aria-hidden />
-              <div className={accessibilityHeroOverlayWarmth} aria-hidden />
-              <div className={accessibilityHeroOverlayReflection} aria-hidden />
-              <div className={accessibilityHeroOverlayVignette} aria-hidden />
+              <img
+                src={ACCESSIBILITY_HERO_IMG}
+                alt=""
+                className={accessibilityHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={accessibilityHeroLightScrim} aria-hidden />
+              <div className={accessibilityHeroOverlayReadability} aria-hidden />
+              <div className={accessibilityHeroOverlayAccent} aria-hidden />
+              <div className={accessibilityHeroOverlayBottom} aria-hidden />
 
-              <div className="relative z-10 flex min-h-[232px] flex-col justify-between p-6 sm:min-h-[248px] sm:p-7 lg:min-h-[256px] lg:p-8">
+              <div className={accessibilityHeroInner}>
                 <Link to="/app/settings" className={accessibilityBackLink}>
                   <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
                   Back to Settings

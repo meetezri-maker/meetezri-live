@@ -51,19 +51,39 @@ import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
 import { SolaceSelect } from '@/app/solace';
 import {
+  achievementsBadgeCard,
+  achievementsBadgeEmblemLocked,
+  achievementsBadgeEmblemUnlocked,
+  achievementsBadgeIconUnlocked,
   achievementsCard,
+  achievementsCategoryPill,
   achievementsEmptyState,
+  achievementsHeroContent,
+  achievementsHeroImage,
+  achievementsHeroLightScrim,
   achievementsHeroOverlay,
   achievementsHeroOverlayBottom,
-  achievementsHeroSection,
+  achievementsHeroShell,
   achievementsHeroSubtitle,
   achievementsHeroTitle,
+  achievementsJourneyFocusCard,
+  achievementsJourneyNodeCircle,
+  achievementsJourneyNodeLabel,
+  achievementsJourneyNodeSub,
+  achievementsJourneySection,
+  achievementsJourneySubtitle,
+  achievementsJourneyTitle,
   achievementsMilestoneCard,
-  achievementsPageAtmosphere,
   achievementsPageFogMid,
   achievementsPageGlowTop,
+  achievementsPageRoot,
   achievementsPageVignette,
+  achievementsRecentBadgeIcon,
+  achievementsRecentLabel,
+  achievementsRecentSection,
+  achievementsRailIconChip,
   achievementsSectionPanel,
+  achievementsStatIconChip,
   achievementsStatStrip,
 } from '@/app/pages/app/achievements/achievementsUi';
 
@@ -662,9 +682,6 @@ export function Achievements() {
 
   const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
 
-  const unlockedEmblemClass =
-    'border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
-
   const iconMap: Record<string, LucideIcon> = {
     footprints: Target,
     target: Target,
@@ -1164,7 +1181,7 @@ export function Achievements() {
 
   return (
     <>
-      <div className={cn(achievementsPageAtmosphere, 'relative min-h-full pb-12')}>
+      <div className={cn(achievementsPageRoot, 'relative min-h-full pb-12')}>
         <div className={achievementsPageGlowTop} aria-hidden />
         <div className={achievementsPageFogMid} aria-hidden />
         <div className={achievementsPageVignette} aria-hidden />
@@ -1189,19 +1206,25 @@ export function Achievements() {
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
             <div className="min-w-0 space-y-8 sm:space-y-10">
               {/* Hero — full-bleed lotus scene */}
-              <section className={achievementsHeroSection}>
+              <section className={achievementsHeroShell}>
                 <img
                   src={ACHIEVEMENTS_IMAGES.hero}
                   alt="Glowing lotus on a moonlit lake with mountains at twilight"
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_50%]"
+                  className={cn(achievementsHeroImage, 'object-[58%_50%]')}
                   width={1600}
                   height={520}
                   loading="eager"
                   decoding="async"
                 />
+                <div className={achievementsHeroLightScrim} aria-hidden />
                 <div className={cn(achievementsHeroOverlay, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
                 <div className={cn(achievementsHeroOverlayBottom, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
-                <div className="solace-on-dark relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
+                <div
+                  className={cn(
+                    achievementsHeroContent,
+                    'flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12'
+                  )}
+                >
                   <h1 className={achievementsHeroTitle}>Achievements</h1>
                   <p className={achievementsHeroSubtitle}>
                     Celebrate your growth and the milestones that shape your best self.
@@ -1213,8 +1236,8 @@ export function Achievements() {
               <section className={achievementsStatStrip}>
                 <div className="grid grid-cols-2 divide-y divide-white/[0.06] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
-                      <Award className="h-4 w-4 text-amber-200/90" aria-hidden />
+                    <div className={achievementsStatIconChip('amber')} aria-hidden>
+                      <Award className="h-4 w-4" aria-hidden />
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Unlocked</p>
@@ -1231,8 +1254,8 @@ export function Achievements() {
                     </div>
                   </div>
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/10 ring-1 ring-fuchsia-400/18">
-                      <Star className="h-4 w-4 text-fuchsia-200/90" aria-hidden />
+                    <div className={achievementsStatIconChip('violet')} aria-hidden>
+                      <Star className="h-4 w-4" aria-hidden />
                     </div>
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total points</p>
@@ -1240,8 +1263,8 @@ export function Achievements() {
                     </div>
                   </div>
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-400/18">
-                      <Flame className="h-4 w-4 text-emerald-200/90" aria-hidden />
+                    <div className={achievementsStatIconChip('emerald')} aria-hidden>
+                      <Flame className="h-4 w-4" aria-hidden />
                     </div>
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -1255,8 +1278,8 @@ export function Achievements() {
                     </div>
                   </div>
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-400/18">
-                      <Crown className="h-4 w-4 text-sky-200/90" aria-hidden />
+                    <div className={achievementsStatIconChip('blue')} aria-hidden>
+                      <Crown className="h-4 w-4" aria-hidden />
                     </div>
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -1282,12 +1305,7 @@ export function Achievements() {
                       type="button"
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedCategory(category.id)}
-                      className={cn(
-                        'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
-                        isActive
-                          ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
-                          : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
-                      )}
+                      className={achievementsCategoryPill(isActive)}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
                       {category.label}
@@ -1297,7 +1315,7 @@ export function Achievements() {
               </div>
 
               {/* Recently unlocked */}
-              <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(120deg,rgba(251,191,36,0.06),rgba(88,28,135,0.08),#0a0f1a)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md sm:p-7">
+              <section className={achievementsRecentSection}>
                 {recentUnlocked ? (
                   <>
                     <VaultParticles className="opacity-35" />
@@ -1306,16 +1324,11 @@ export function Achievements() {
                         <div className="relative flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
                           <div className="absolute inset-0 rotate-45 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/15 via-fuchsia-900/20 to-violet-950/50" />
                           <div className="absolute inset-2.5 rotate-45 rounded-xl border border-white/10 bg-black/35" />
-                          <FeaturedIcon
-                            className="relative z-10 h-12 w-12 text-amber-100/95"
-                            aria-hidden
-                          />
+                          <FeaturedIcon className={achievementsRecentBadgeIcon} aria-hidden />
                         </div>
                       </div>
                       <div className="min-w-0 space-y-2 text-center lg:text-left">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/85">
-                          Recently Unlocked
-                        </p>
+                        <p className={achievementsRecentLabel}>Recently Unlocked</p>
                         <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">{recentUnlocked.title}</h2>
                         <p className="text-sm leading-relaxed text-zinc-400">{recentUnlocked.description}</p>
                       </div>
@@ -1382,11 +1395,12 @@ export function Achievements() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
                         className={cn(
-                          'group relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border bg-[var(--solace-card-bg)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition',
+                          achievementsBadgeCard,
                           isUnlocked
-                            ? 'border-emerald-400/12 hover:border-emerald-400/22'
+                            ? 'border-emerald-400/12 hover:border-emerald-400/22 [html[data-ezri-theme=light]_&:border-emerald-300/45 [html[data-theme=light]_&:border-emerald-300/45'
                             : 'border-white/[0.06] hover:border-white/12',
-                          isSelected && 'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d]'
+                          isSelected &&
+                            'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d] [html[data-ezri-theme=light]_&:ring-offset-white [html[data-theme=light]_&:ring-offset-white'
                         )}
                       >
                         <button
@@ -1403,22 +1417,18 @@ export function Achievements() {
                           <div
                             className={cn(
                               'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
-                              isUnlocked
-                                ? unlockedEmblemClass
-                                : 'border-white/[0.06] bg-black/50 opacity-75 saturate-[0.7]'
+                              isUnlocked ? achievementsBadgeEmblemUnlocked : achievementsBadgeEmblemLocked
                             )}
                           >
                             <Icon
                               className={cn(
                                 'h-9 w-9',
-                                isUnlocked
-                                  ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]'
-                                  : 'text-zinc-500'
+                                isUnlocked ? achievementsBadgeIconUnlocked : 'text-zinc-500'
                               )}
                               aria-hidden
                             />
                             {!isUnlocked ? (
-                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40">
+                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 [html[data-ezri-theme=light]_&:bg-violet-100/60 [html[data-theme=light]_&:bg-violet-100/60">
                                 <Lock className="h-5 w-5 text-zinc-500" aria-hidden />
                               </div>
                             ) : null}
@@ -1509,18 +1519,22 @@ export function Achievements() {
           ) : null}
 
           {/* Achievement Journey */}
-          <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(125deg,rgba(10,14,24,0.96),rgba(24,12,40,0.45))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_60px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:p-8">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(251,191,36,0.06),transparent_42%)]" />
-            <h2 className="relative font-serif text-xl font-semibold text-white sm:text-2xl">Achievement Journey</h2>
-            <p className="relative mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          <section className={achievementsJourneySection}>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(251,191,36,0.06),transparent_42%)] [html[data-ezri-theme=light]_&]:opacity-40 [html[data-theme=light]_&]:opacity-40" />
+            <h2 className={achievementsJourneyTitle}>Achievement Journey</h2>
+            <p className={achievementsJourneySubtitle}>
               A gentle arc from your first brave step to the future you are building — one unlock at a time.
             </p>
 
             {selectedAchievement ? (
-              <div className="relative mt-5 rounded-2xl border border-white/[0.08] bg-black/35 px-4 py-3 backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Journey focus</p>
-                <p className="mt-1 text-sm font-semibold text-white">{selectedAchievement.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+              <div className={achievementsJourneyFocusCard}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 [html[data-ezri-theme=light]_&]:text-[var(--text-muted)] [html[data-theme=light]_&]:text-[var(--text-muted)]">
+                  Journey focus
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white [html[data-ezri-theme=light]_&]:text-[var(--text-primary)] [html[data-theme=light]_&]:text-[var(--text-primary)]">
+                  {selectedAchievement.title}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400 [html[data-ezri-theme=light]_&]:text-[var(--text-secondary)] [html[data-theme=light]_&]:text-[var(--text-secondary)]">
                   {selectedAchievement.unlocked ? (
                     <>
                       Earned and held — the path ahead stays lit through{' '}
@@ -1556,44 +1570,28 @@ export function Achievements() {
                   const active = idx === highlightIdx;
                   const passed = idx < highlightIdx;
                   const isFinal = idx === journeyNodes.length - 1;
+                  const nodeState = active ? 'active' : passed ? 'passed' : 'upcoming';
                   return (
                     <div key={node.key} className="relative z-10 flex min-w-[88px] flex-1 flex-col items-center text-center sm:min-w-0">
                       <div className="relative mb-2 flex h-12 w-12 items-center justify-center">
                         {active ? (
                           <span
-                            className="absolute inset-0 rounded-full bg-fuchsia-500/15 blur-md"
+                            className="absolute inset-0 rounded-full bg-fuchsia-500/15 blur-md [html[data-ezri-theme=light]_&]:bg-violet-300/25 [html[data-theme=light]_&]:bg-violet-300/25"
                             aria-hidden
                           />
                         ) : null}
                         {isFinal && active ? (
                           <span
-                            className="absolute -inset-1 rounded-full bg-amber-400/10 blur-md"
+                            className="absolute -inset-1 rounded-full bg-amber-400/10 blur-md [html[data-ezri-theme=light]_&]:bg-amber-300/20 [html[data-theme=light]_&]:bg-amber-300/20"
                             aria-hidden
                           />
                         ) : null}
-                        <div
-                          className={cn(
-                            'relative flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur-md transition',
-                            active &&
-                              'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100 shadow-[0_0_22px_-6px_rgba(168,85,247,0.45)]',
-                            passed &&
-                              !active &&
-                              'border-cyan-400/28 bg-cyan-500/8 text-cyan-100/90 shadow-[0_0_14px_-8px_rgba(34,211,238,0.25)]',
-                            !passed && !active && 'border-white/[0.09] bg-white/[0.03] text-zinc-500'
-                          )}
-                        >
-                          <JIcon className="h-5 w-5" aria-hidden />
+                        <div className={achievementsJourneyNodeCircle(nodeState)}>
+                          <JIcon aria-hidden />
                         </div>
                       </div>
-                      <p
-                        className={cn(
-                          'text-[11px] font-semibold uppercase tracking-wide',
-                          active ? 'text-fuchsia-200/95' : 'text-zinc-500'
-                        )}
-                      >
-                        {node.label}
-                      </p>
-                      <p className="mt-1 text-[10px] leading-snug text-zinc-600">{node.sub}</p>
+                      <p className={achievementsJourneyNodeLabel(active)}>{node.label}</p>
+                      <p className={achievementsJourneyNodeSub}>{node.sub}</p>
                     </div>
                   );
                 })}
@@ -1940,8 +1938,8 @@ export function Achievements() {
 
               <div className="rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-500/12 ring-1 ring-fuchsia-400/22">
-                    <Diamond className="h-5 w-5 text-fuchsia-200/95" aria-hidden />
+                  <div className={achievementsRailIconChip('violet')} aria-hidden>
+                    <Diamond className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 text-left">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Achievement Points</p>
@@ -1969,12 +1967,11 @@ export function Achievements() {
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-orange-400/15 bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+              <div className="rounded-3xl border border-orange-400/15 bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl [html[data-ezri-theme=light]_&:border-amber-200/50 [html[data-theme=light]_&:border-amber-200/50">
                 <div className="flex items-start gap-3">
-                  <Flame
-                    className="mt-0.5 h-6 w-6 shrink-0 text-amber-300/90"
-                    aria-hidden
-                  />
+                  <div className={cn(achievementsRailIconChip('amber'), 'mt-0.5 !h-10 !w-10')} aria-hidden>
+                    <Flame className="h-5 w-5" aria-hidden />
+                  </div>
                   <div className="min-w-0 text-left">
                     <p className="font-serif text-base font-semibold text-white">Keep Going!</p>
                     <p className="mt-2 text-sm font-medium leading-relaxed text-zinc-300">
@@ -2001,7 +1998,9 @@ export function Achievements() {
               <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(251,191,36,0.08),transparent_48%)]" />
                 <div className="relative flex items-start gap-3">
-                  <Headphones className="mt-0.5 h-6 w-6 shrink-0 text-cyan-200/80" aria-hidden />
+                  <div className={cn(achievementsRailIconChip('cyan'), 'mt-0.5 !h-10 !w-10')} aria-hidden>
+                    <Headphones className="h-5 w-5" aria-hidden />
+                  </div>
                   <div className="min-w-0 flex-1 text-left">
                     <p className="font-serif text-base font-semibold text-white">Need Help?</p>
                     <p className="mt-1 text-sm leading-relaxed text-zinc-400">

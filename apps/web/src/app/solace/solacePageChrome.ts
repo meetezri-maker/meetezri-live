@@ -56,6 +56,45 @@ export const solaceImageCard = "solace-image-card solace-on-dark";
 export const solaceSurfaceLight =
   "solace-surface-light border-[color:var(--border)] bg-[rgba(255,255,255,0.92)] text-[var(--text-primary)] backdrop-blur-xl";
 
+/** Dark nested region (charts on image cards) — moonlit copy in light theme */
+export const solaceSurfaceDark = "solace-on-dark solace-surface-dark";
+
+/** Cinematic rail / insight panels — moonlit copy in light theme */
+export const solaceDarkPanel = cn(
+  "solace-on-dark solace-dark-panel",
+  "rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] backdrop-blur-xl"
+);
+
+/** Community page shell — light theme uses white page + cards */
+export const communityPageRoot =
+  "community-page relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)] transition-colors duration-500";
+
+export const communityPageAtmosphere =
+  "community-page-atmosphere pointer-events-none absolute inset-0";
+
+/** Feed post shell — light theme uses plain white cards (no solace-on-dark). */
+export const communityFeedPostCard = cn(
+  "community-feed-post relative overflow-hidden rounded-2xl border transition-colors duration-300",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:border-white/[0.08]",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)]",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:hover:border-violet-400/25",
+  "[html[data-ezri-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-ezri-theme=light]_&]:bg-white [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-ezri-theme=light]_&]:hover:border-violet-300/40",
+  "[html[data-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:hover:border-violet-300/40",
+);
+
+/** Dark-theme cinematic feed posts only — keeps moonlit copy on scrims. */
+export const communityFeedPostCinematic = cn(
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:solace-image-card",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:solace-on-dark",
+);
+
+export const communityRailPanel = cn(
+  "community-rail-panel",
+  solaceDarkPanel,
+  "[html[data-ezri-theme=light]_&]:solace-rail-card [html[data-ezri-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-ezri-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-ezri-theme=light]_&]:!text-[var(--solace-text)] [html[data-ezri-theme=light]_&]:!shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:solace-rail-card [html[data-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-theme=light]_&]:!text-[var(--solace-text)] [html[data-theme=light]_&]:!shadow-[var(--solace-card-shadow)]"
+);
+
 /** Wrap full-bleed hero sections — enables light-theme image + overlay fixes */
 export const solaceHeroMediaShell = cn(
   "solace-hero-media",
@@ -65,6 +104,44 @@ export const solaceHeroMediaShell = cn(
 
 /** Text block over hero imagery in light theme (dark readable copy) */
 export const solaceHeroContent = "solace-hero-content relative z-10";
+
+/** Full-bleed scenic footer / privacy strip — moonlit copy in light theme */
+export const solaceCinematicBanner = cn(
+  "solace-cinematic-banner",
+  solaceHeroMediaShell,
+  "relative overflow-hidden rounded-3xl border border-white/[0.08]",
+  "[html[data-ezri-theme=light]_&]:border-[color:var(--border)]",
+  "[html[data-theme=light]_&]:border-[color:var(--border)]"
+);
+
+export const solaceCinematicBannerOverlay = cn(
+  "pointer-events-none absolute inset-0 z-[1]",
+  "bg-gradient-to-r from-[#07080f]/97 via-[#07080f]/88 to-[#07080f]/55"
+);
+
+export const solaceCinematicBannerContent = cn(
+  solaceHeroContent,
+  "solace-cinematic-banner-content relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:gap-6 sm:p-8"
+);
+
+export const solaceCinematicBannerTitle =
+  "font-medium text-zinc-100 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]";
+
+export const solaceCinematicBannerBody = cn(
+  "mt-1 text-sm leading-relaxed text-zinc-400 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)]"
+);
+
+export const solaceCinematicBannerLink = cn(
+  "text-violet-300/90 underline-offset-2 hover:text-violet-200 hover:underline [text-shadow:0_1px_8px_rgba(0,0,0,0.4)]"
+);
+
+/** Icon well on scenic banners — dark glass so the glyph stays visible in light theme */
+export const solaceCinematicBannerIcon = cn(
+  "solace-cinematic-banner-icon flex size-12 shrink-0 items-center justify-center rounded-2xl",
+  "border border-violet-400/25 bg-[rgba(15,18,32,0.72)] text-violet-200",
+  "shadow-[0_0_24px_-8px_rgba(139,92,246,0.45)] backdrop-blur-md",
+  "[&_svg]:size-6 [&_svg]:text-violet-200"
+);
 
 /** Optional extra pastel scrim (light theme CSS) */
 export const solaceHeroLightScrim = cn(

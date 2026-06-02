@@ -14,7 +14,6 @@ import {
   Download,
   ExternalLink,
   AlertTriangle,
-  Lock,
   Sparkles,
   MessageCircle,
   History,
@@ -35,19 +34,36 @@ import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
+import { SolacePrivacyFooter } from "@/app/solace/SolacePrivacyFooter";
 import {
   billingCard,
+  billingChevronMuted,
+  billingCurrentBadge,
+  billingFeatureCheck,
   billingGhostBtn,
+  billingHeroContent,
+  billingHeroEyebrow,
+  billingHeroImage,
+  billingHeroLead,
   billingHeroOverlay,
   billingHeroOverlayBottom,
   billingHeroSection,
   billingHeroTitle,
+  billingIconChip,
   billingPageAtmosphere,
   billingPageFogMid,
   billingPageGlowTop,
   billingPageSubtitle,
   billingPageTitle,
+  billingPaginationBar,
+  billingPaginationBtn,
+  billingPlanCard,
+  billingPlanCardCurrent,
+  billingPlanIconChipClass,
   billingRailCard,
+  billingSectionHeading,
+  billingSelectTrigger,
+  billingStatusBadgeClass,
 } from "@/app/pages/app/billing/billingUi";
 
 const PAYG_CAPSULES = [25, 50, 100, 200] as const;
@@ -705,7 +721,7 @@ export function Billing() {
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
-                  className="absolute inset-0 size-full object-cover"
+                  className={billingHeroImage}
                   width={1600}
                   height={1000}
                   loading="eager"
@@ -714,15 +730,20 @@ export function Billing() {
                 <div className={cn(billingHeroOverlay, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
                 <div className={cn(billingHeroOverlayBottom, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
 
-                <div className="solace-on-dark relative z-10 flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
+                <div
+                  className={cn(
+                    billingHeroContent,
+                    "flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10"
+                  )}
+                >
                   <div className="max-w-xl space-y-5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-violet-200/80">Current plan</p>
+                    <p className={billingHeroEyebrow}>Current plan</p>
                     <h2 id="current-plan-title" className={billingHeroTitle}>
                       {currentPlan.displayName}
                     </h2>
-                    <p className="text-sm leading-relaxed text-zinc-300">{heroRenewalLead}</p>
+                    <p className={billingHeroLead}>{heroRenewalLead}</p>
                     {billingEndIsValid ? (
-                      <p className="text-sm font-medium text-zinc-100">
+                      <p className="text-sm font-medium text-zinc-100 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)]">
                         {billingEndDate!.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                       </p>
                     ) : null}
@@ -774,7 +795,7 @@ export function Billing() {
 
               {/* 3 Manage your plan */}
               <section aria-labelledby="manage-plan-heading" className="space-y-5">
-                <h2 id="manage-plan-heading" className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">
+                <h2 id="manage-plan-heading" className={billingSectionHeading}>
                   Manage your plan
                 </h2>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -787,30 +808,26 @@ export function Billing() {
                     return (
                       <article
                         key={planId}
-                        className={cn(
-                          "relative flex flex-col overflow-hidden rounded-3xl border p-6 sm:p-7",
-                          "bg-gradient-to-b from-white/[0.06] to-white/[0.02]",
-                          isCurrent ? "border-fuchsia-400/45 shadow-[0_0_40px_rgba(192,132,252,0.15)]" : "border-white/[0.07]"
-                        )}
+                        className={cn(billingPlanCard, isCurrent && billingPlanCardCurrent)}
                       >
                         {isCurrent && (
-                          <span className="absolute right-4 top-4 rounded-full border border-fuchsia-400/35 bg-fuchsia-500/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-fuchsia-100/95">
+                          <span className={billingCurrentBadge}>
                             Current plan
                           </span>
                         )}
-                        <div className={cn("mb-4 inline-flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br text-white", plan.gradient)}>
+                        <div className={billingPlanIconChipClass(planId)}>
                           <Icon className="size-5" aria-hidden />
                         </div>
-                        <h3 className="font-medium text-zinc-50">{plan.displayName}</h3>
-                        <p className="mt-2 text-2xl font-light text-zinc-100">
+                        <h3 className="font-medium text-[var(--solace-text)]">{plan.displayName}</h3>
+                        <p className="mt-2 text-2xl font-light text-[var(--solace-text)]">
                           ${plan.price}
-                          <span className="text-sm font-normal text-zinc-500">/mo</span>
+                          <span className="text-sm font-normal text-[var(--solace-muted)]">/mo</span>
                         </p>
-                        <p className="mt-1 text-xs text-zinc-500">{plan.credits} min/mo · extra ${plan.payAsYouGoRate ?? "—"}/min</p>
-                        <ul className="mt-5 flex-1 space-y-2.5 text-[13px] leading-snug text-zinc-400">
+                        <p className="mt-1 text-xs text-[var(--solace-muted)]">{plan.credits} min/mo · extra ${plan.payAsYouGoRate ?? "—"}/min</p>
+                        <ul className="mt-5 flex-1 space-y-2.5 text-[13px] leading-snug text-[var(--solace-muted)]">
                           {plan.features.map((f) => (
                             <li key={f} className="flex gap-2">
-                              <Check className="mt-0.5 size-3.5 shrink-0 text-violet-400/90" aria-hidden />
+                              <Check className={billingFeatureCheck} aria-hidden />
                               <span>{f}</span>
                             </li>
                           ))}
@@ -886,7 +903,7 @@ export function Billing() {
                 <section aria-labelledby="more-minutes-heading" className={cn("p-6 sm:p-8", panel)}>
                   <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-start gap-4">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
+                      <div className={cn("solace-icon-chip solace-icon-chip--amber", "!size-11 !rounded-2xl")}>
                         <Zap className="size-6" aria-hidden />
                       </div>
                       <div>
@@ -927,7 +944,7 @@ export function Billing() {
               {/* 5 Billing history & invoices */}
               <section ref={historyTableRef} id="billing-history" className="scroll-mt-24 space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <h2 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Billing history & invoices</h2>
+                  <h2 className={billingSectionHeading}>Billing history & invoices</h2>
                   {invoices.length > 0 ? (
                     <button
                       type="button"
@@ -971,12 +988,7 @@ export function Billing() {
                                     ${Number(invoice.amount_due).toFixed(2)}
                                   </td>
                                   <td className="px-4 py-4">
-                                    <span
-                                      className={cn(
-                                        "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize",
-                                        paid ? "bg-emerald-500/15 text-emerald-200/95" : "bg-white/[0.06] text-zinc-400"
-                                      )}
-                                    >
+                                    <span className={billingStatusBadgeClass(paid)}>
                                       {invoice.status || "—"}
                                     </span>
                                   </td>
@@ -1033,12 +1045,7 @@ export function Billing() {
                                 <span className="shrink-0 text-sm tabular-nums text-zinc-200">${Number(invoice.amount_due).toFixed(2)}</span>
                               </div>
                               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                <span
-                                  className={cn(
-                                    "rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize",
-                                    paid ? "bg-emerald-500/15 text-emerald-200/95" : "bg-white/[0.06] text-zinc-400"
-                                  )}
-                                >
+                                <span className={billingStatusBadgeClass(paid)}>
                                   {invoice.status || "—"}
                                 </span>
                                 <div className="flex gap-1">
@@ -1073,7 +1080,7 @@ export function Billing() {
                         })}
                       </ul>
 
-                      <div className="border-t border-white/[0.06] bg-black/25 px-4 py-4 sm:px-6">
+                      <div className={billingPaginationBar}>
                         <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3">
                             <label htmlFor="billing-invoice-page-size" className="sr-only">
@@ -1088,7 +1095,7 @@ export function Billing() {
                               }}
                               ariaLabel="Rows per page"
                               variant="default"
-                              triggerClassName="min-h-[44px] rounded-full"
+                              triggerClassName={billingSelectTrigger}
                               options={INVOICE_PAGE_SIZE_OPTIONS.map((n) => ({
                                 value: String(n),
                                 label: `${n} per page`,
@@ -1101,11 +1108,11 @@ export function Billing() {
                               aria-label="Previous page"
                               onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
                               disabled={invoicePagination.safePage <= 1}
-                              className="inline-flex size-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:border-violet-400/25 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-30"
+                              className={billingPaginationBtn}
                             >
                               <ChevronLeft className="size-5" />
                             </button>
-                            <span className="min-w-[8.5rem] text-center text-xs tabular-nums text-zinc-500 sm:text-sm">
+                            <span className="min-w-[8.5rem] text-center text-xs tabular-nums text-[var(--solace-muted)] sm:text-sm">
                               {invoicePagination.from}–{invoicePagination.to} of {invoicePagination.total}
                             </span>
                             <button
@@ -1115,7 +1122,7 @@ export function Billing() {
                                 setInvoicePage((p) => Math.min(invoicePagination.totalPages, p + 1))
                               }
                               disabled={invoicePagination.safePage >= invoicePagination.totalPages}
-                              className="inline-flex size-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:border-violet-400/25 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-30"
+                              className={billingPaginationBtn}
                             >
                               <ChevronRight className="size-5" />
                             </button>
@@ -1128,36 +1135,7 @@ export function Billing() {
               </section>
 
               {/* 6 Privacy banner */}
-              <footer className="relative overflow-hidden rounded-3xl border border-white/[0.08]">
-                <img
-                  src={HERO_SCENERY_SRC}
-                  alt=""
-                  className="absolute inset-0 size-full object-cover"
-                  width={900}
-                  height={600}
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div
-                  className="absolute inset-0 bg-gradient-to-r from-[#07080f]/97 via-[#07080f]/88 to-[#07080f]/55"
-                  aria-hidden
-                />
-                <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:gap-6 sm:p-8">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/50 text-violet-200">
-                    <Lock className="size-6" aria-hidden />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-zinc-100">Your privacy and peace of mind are our priority.</p>
-                    <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-                      Your data is encrypted, secure, and never shared.{" "}
-                      <Link to="/privacy" className="text-violet-300/90 underline-offset-2 hover:text-violet-200 hover:underline">
-                        Read our Privacy Policy
-                      </Link>
-                      .
-                    </p>
-                  </div>
-                </div>
-              </footer>
+              <SolacePrivacyFooter />
             </div>
 
             {/* ——— Right rail (desktop only for minutes block duplicate fix: minutes hidden lg:block in rail) ——— */}
@@ -1168,7 +1146,7 @@ export function Billing() {
               <div className={cn("p-6", panel)}>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Payment method</p>
                 <div className="mt-5 flex items-center gap-4">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-zinc-300">
+                  <div className={billingIconChip}>
                     <CreditCard className="size-6" aria-hidden />
                   </div>
                   <div className="min-w-0">
@@ -1214,24 +1192,24 @@ export function Billing() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Billing preferences</p>
                 <ul className="mt-4 space-y-0 divide-y divide-white/[0.06]">
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-zinc-400">Billing cycle</span>
-                    <span className="flex items-center gap-1 font-medium text-zinc-100">
+                    <span className="text-[var(--solace-muted)]">Billing cycle</span>
+                    <span className="flex items-center gap-1 font-medium text-[var(--solace-text)]">
                       {formatBillingCycle(subscriptionSource?.billing_cycle)}
-                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
+                      <ChevronRight className={billingChevronMuted} aria-hidden />
                     </span>
                   </li>
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-zinc-400">Email receipts</span>
-                    <span className="flex items-center gap-1 text-zinc-300">
+                    <span className="text-[var(--solace-muted)]">Email receipts</span>
+                    <span className="flex items-center gap-1 text-[var(--solace-muted)]">
                       {emailReceiptsLabel}
-                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
+                      <ChevronRight className={billingChevronMuted} aria-hidden />
                     </span>
                   </li>
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-zinc-400">Auto renewal</span>
-                    <span className="flex items-center gap-1 font-medium text-zinc-100">
+                    <span className="text-[var(--solace-muted)]">Auto renewal</span>
+                    <span className="flex items-center gap-1 font-medium text-[var(--solace-text)]">
                       {autoRenewalLabel}
-                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
+                      <ChevronRight className={billingChevronMuted} aria-hidden />
                     </span>
                   </li>
                 </ul>

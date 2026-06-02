@@ -61,12 +61,21 @@ import {
   wellnessPlanGlassCard,
   wellnessPlanHeroCard,
   wellnessPlanHeroImage,
-  wellnessPlanHeroOverlayLeft,
-  wellnessPlanHeroOverlayPurple,
-  wellnessPlanHeroOverlayWarmth,
+  wellnessPlanHeroLightScrim,
+  wellnessPlanHeroOverlayAccent,
+  wellnessPlanHeroOverlayBottom,
+  wellnessPlanHeroOverlayReadability,
   wellnessPlanHeroTitle,
   wellnessPlanIconChip,
-  wellnessPlanPageAtmosphere,
+  safetyInsightsEmergencyCta,
+  safetyInsightsPageAtmosphere,
+  safetyInsightsResourcesBanner,
+  safetyInsightsResourcesBannerOverlayAccent,
+  safetyInsightsResourcesBannerOverlayDark,
+  wellnessPlanBottomBannerBody,
+  wellnessPlanBottomBannerContent,
+  wellnessPlanBottomBannerImg,
+  wellnessPlanBottomBannerTitle,
   wellnessPlanPageFogMid,
   wellnessPlanPageGlowTop,
   wellnessPlanPageVignette,
@@ -388,7 +397,7 @@ export function SafetyInsights() {
 
   return (
     <motion.div
-      className={wellnessPlanPageAtmosphere}
+      className={safetyInsightsPageAtmosphere}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
@@ -455,25 +464,30 @@ export function SafetyInsights() {
                 src={WELLNESS_PLAN_HERO_IMG}
                 alt=""
                 className={wellnessPlanHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
               />
-              <div className={wellnessPlanHeroOverlayLeft} aria-hidden />
-              <motion.div className={wellnessPlanHeroOverlayPurple} aria-hidden />
-              <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
+              <div className={wellnessPlanHeroLightScrim} aria-hidden />
+              <div className={wellnessPlanHeroOverlayReadability} aria-hidden />
+              <div className={wellnessPlanHeroOverlayAccent} aria-hidden />
+              <div className={wellnessPlanHeroOverlayBottom} aria-hidden />
 
-              <motion.div className="relative flex min-h-[280px] flex-col gap-6 p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+              <motion.div className="relative z-10 flex min-h-[280px] flex-col gap-6 p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:justify-between lg:gap-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-center lg:flex-1">
                   <SafetyScoreRing score={insights.safetyScore} />
                   <div className="min-w-0 flex-1">
-                    <h2 className="font-serif text-2xl font-light text-white sm:text-3xl">
+                    <h2 className="font-serif text-2xl font-light text-white sm:text-3xl [html[data-ezri-theme=light]_&]:text-[var(--text-primary)] [html[data-theme=light]_&]:text-[var(--text-primary)]">
                       {scoreLabel} Wellness
                     </h2>
-                    <p className="mt-2 text-sm text-[rgba(255,255,255,0.55)]">
+                    <p className="settings-subpage-hero-body mt-2 text-sm">
                       Based on {insights.moodCheckInsLast30} mood check-in
                       {insights.moodCheckInsLast30 === 1 ? "" : "s"} and{" "}
                       {insights.last30DaysCount} safety moment
                       {insights.last30DaysCount === 1 ? "" : "s"} in the last 30 days
                     </p>
-                    <p className="mt-3 max-w-md text-sm leading-relaxed text-rose-200/75">
+                    <p className={cn("mt-3 max-w-md text-sm leading-relaxed", "text-rose-200/75 [html[data-ezri-theme=light]_&]:text-[var(--text-secondary)] [html[data-theme=light]_&]:text-[var(--text-secondary)]")}>
                       {getSupportiveMessage(insights.safetyScore, insights.last30DaysCount)}
                     </p>
                     <div className="mt-4 flex items-center gap-2 text-sm text-emerald-300/85">
@@ -860,42 +874,22 @@ export function SafetyInsights() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="relative min-h-[140px] overflow-hidden rounded-[1.75rem] border border-fuchsia-400/20"
+              className={safetyInsightsResourcesBanner}
               aria-labelledby="safety-insights-emergency-heading"
             >
-              <img
-                src={WELLNESS_PLAN_BANNER_IMG}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover object-[20%_50%] brightness-[0.35]"
-              />
-              <div
-                className="absolute inset-0 bg-gradient-to-r from-[#3b0a28]/95 via-[#2a0a24]/80 to-[#1a0a20]/70"
-                aria-hidden
-              />
-              <div
-                className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_0%_50%,rgba(255,79,163,0.25)_0%,transparent_60%)]"
-                aria-hidden
-              />
-              <div className="relative flex min-h-[140px] flex-col items-start justify-center gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+              <img src={WELLNESS_PLAN_BANNER_IMG} alt="" className={wellnessPlanBottomBannerImg} />
+              <div className={safetyInsightsResourcesBannerOverlayDark} aria-hidden />
+              <div className={safetyInsightsResourcesBannerOverlayAccent} aria-hidden />
+              <div className={cn(wellnessPlanBottomBannerContent, "gap-4")}>
                 <div>
-                  <h2
-                    id="safety-insights-emergency-heading"
-                    className="font-serif text-xl font-light text-white sm:text-2xl"
-                  >
+                  <h2 id="safety-insights-emergency-heading" className={wellnessPlanBottomBannerTitle}>
                     Helpful Resources — Available 24/7
                   </h2>
-                  <p className="mt-2 text-sm text-[rgba(255,255,255,0.6)]">
+                  <p className={wellnessPlanBottomBannerBody}>
                     You are not alone. Help is always available.
                   </p>
                 </div>
-                <Link
-                  to="/app/emergency-resources"
-                  className={cn(
-                    "inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-full px-6 py-3",
-                    "bg-white text-sm font-semibold text-fuchsia-900",
-                    "shadow-[0_0_32px_-6px_rgba(255,255,255,0.35)] transition hover:bg-white/95"
-                  )}
-                >
+                <Link to="/app/emergency-resources" className={safetyInsightsEmergencyCta}>
                   Emergency Resources
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>

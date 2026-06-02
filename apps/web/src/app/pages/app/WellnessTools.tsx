@@ -33,6 +33,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
+import {
+  solaceHeroContent,
+  solaceHeroMediaShell,
+  solaceImageCard,
+} from "@/app/solace/solacePageChrome";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
 import {
   WELLNESS_TOOLS_IMAGES,
@@ -1017,7 +1022,12 @@ export function WellnessTools() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.04 }}
-                className="relative h-[260px] overflow-hidden rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10"
+                className={cn(
+                  solaceHeroMediaShell,
+                  "h-[260px] rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10",
+                  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+                  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
+                )}
               >
                 <img
                   src={WELLNESS_TOOLS_IMAGES.hero}
@@ -1037,7 +1047,7 @@ export function WellnessTools() {
                   aria-hidden
                 />
                 <div className="relative z-10 grid h-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
-                  <div className="flex flex-col justify-center gap-5 px-6 py-5 sm:px-8">
+                  <div className={cn(solaceHeroContent, "flex flex-col justify-center gap-5 px-6 py-5 sm:px-8")}>
                     <h2 className="font-serif text-[clamp(1.25rem,2.8vw,1.75rem)] font-normal leading-tight tracking-tight text-white">
                       Tools to help you{" "}
                       <span className="bg-gradient-to-r from-fuchsia-300 via-violet-200 to-indigo-200 bg-clip-text italic text-transparent">
@@ -1088,6 +1098,7 @@ export function WellnessTools() {
                           setShowOnlyFavorites(false);
                         }}
                         className={cn(
+                          solaceImageCard,
                           "group relative flex h-[72px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition",
                           active
                             ? "border-violet-400/45 shadow-[0_0_36px_rgba(139,92,246,0.35),0_12px_32px_-18px_rgba(236,72,153,0.12)] ring-1 ring-fuchsia-400/20"
@@ -1162,6 +1173,7 @@ export function WellnessTools() {
                           scrollToFeatured();
                         }}
                         className={cn(
+                          solaceImageCard,
                           "group relative flex h-[180px] w-[min(200px,78vw)] shrink-0 flex-col justify-end overflow-hidden rounded-2xl border p-5 text-left shadow-[0_18px_48px_-28px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.04] transition lg:min-w-0 lg:w-full",
                           active
                             ? "border-violet-400/50 shadow-[0_0_44px_rgba(139,92,246,0.38),0_20px_56px_-28px_rgba(236,72,153,0.15)] ring-fuchsia-400/25"
@@ -1266,7 +1278,10 @@ export function WellnessTools() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.03 + index * 0.02 }}
                           whileHover={{ y: -2 }}
-                          className="group relative h-[250px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_72px_-30px_rgba(0,0,0,0.88),0_0_60px_-18px_rgba(139,92,246,0.32),0_0_40px_-24px_rgba(236,72,153,0.1)] ring-1 ring-fuchsia-500/10"
+                          className={cn(
+                            solaceImageCard,
+                            "group relative h-[250px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_72px_-30px_rgba(0,0,0,0.88),0_0_60px_-18px_rgba(139,92,246,0.32),0_0_40px_-24px_rgba(236,72,153,0.1)] ring-1 ring-fuchsia-500/10"
+                          )}
                         >
                           <div
                             className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
@@ -1553,7 +1568,12 @@ export function WellnessTools() {
                 </div>
               </div>
 
-              <div className="relative h-[360px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_100px_-40px_rgba(139,92,246,0.38),0_24px_64px_-36px_rgba(0,0,0,0.82)] ring-1 ring-fuchsia-500/10">
+              <div
+                className={cn(
+                  solaceImageCard,
+                  "relative h-[360px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_100px_-40px_rgba(139,92,246,0.38),0_24px_64px_-36px_rgba(0,0,0,0.82)] ring-1 ring-fuchsia-500/10"
+                )}
+              >
                 <img
                   src={WELLNESS_TOOLS_IMAGES.quote}
                   alt=""

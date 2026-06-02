@@ -124,16 +124,16 @@ export function BrainHealthRightRail({
 
         <div className="mt-4 space-y-2.5">
           {/* Focus window */}
-          <div className="flex gap-3 rounded-xl border border-white/[0.06] bg-black/25 p-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-950/40 text-cyan-300/90">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-100/80 text-cyan-700 [html[data-ezri-theme=dark]_&]:border-cyan-500/20 [html[data-ezri-theme=dark]_&]:bg-cyan-950/40 [html[data-ezri-theme=dark]_&]:text-cyan-300/90">
               <Clock className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-zinc-100">Focus window</p>
-              <p className="mt-0.5 break-words text-[13px] font-medium leading-snug tabular-nums text-zinc-200/95">
+              <p className="text-xs font-semibold text-[var(--solace-text)]">Focus window</p>
+              <p className="mt-0.5 break-words text-[13px] font-medium leading-snug tabular-nums text-[var(--text-secondary)]">
                 {focusWindowTimeLabel}
               </p>
-              <p className="mt-1 text-[11px] leading-snug text-zinc-500">{focusWindowSupportingLine}</p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--solace-muted)]">{focusWindowSupportingLine}</p>
               <div className="mt-2.5 text-cyan-400/75">
                 <MiniSparkline points={focusSparklinePoints} />
               </div>
@@ -141,26 +141,26 @@ export function BrainHealthRightRail({
           </div>
 
           {/* Cognitive energy */}
-          <div className="flex gap-3 rounded-xl border border-white/[0.06] bg-black/25 p-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-950/30 text-emerald-300/90">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-100/80 text-emerald-700 [html[data-ezri-theme=dark]_&]:border-emerald-500/20 [html[data-ezri-theme=dark]_&]:bg-emerald-950/30 [html[data-ezri-theme=dark]_&]:text-emerald-300/90">
               <Battery className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-zinc-100">Cognitive energy</p>
-              <p className="mt-0.5 text-[13px] font-medium text-zinc-200/95">{cognitiveEnergyLabel}</p>
-              <p className="mt-1 text-[11px] leading-snug text-zinc-500">{cognitiveEnergyHint}</p>
+              <p className="text-xs font-semibold text-[var(--solace-text)]">Cognitive energy</p>
+              <p className="mt-0.5 text-[13px] font-medium text-[var(--text-secondary)]">{cognitiveEnergyLabel}</p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--solace-muted)]">{cognitiveEnergyHint}</p>
             </div>
           </div>
 
           {/* Mental recovery */}
-          <div className="flex gap-3 rounded-xl border border-white/[0.06] bg-black/25 p-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rose-500/20 bg-rose-950/25 text-rose-300/85">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rose-400/30 bg-rose-100/80 text-rose-700 [html[data-ezri-theme=dark]_&]:border-rose-500/20 [html[data-ezri-theme=dark]_&]:bg-rose-950/25 [html[data-ezri-theme=dark]_&]:text-rose-300/85">
               <Sparkles className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-zinc-100">Mental recovery</p>
-              <p className="mt-0.5 text-[13px] font-medium text-zinc-200/95">{mentalRecoveryLabel}</p>
-              <p className="mt-1 text-[11px] leading-snug text-zinc-500">{mentalRecoveryHint}</p>
+              <p className="text-xs font-semibold text-[var(--solace-text)]">Mental recovery</p>
+              <p className="mt-0.5 text-[13px] font-medium text-[var(--text-secondary)]">{mentalRecoveryLabel}</p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--solace-muted)]">{mentalRecoveryHint}</p>
             </div>
           </div>
         </div>
@@ -195,7 +195,7 @@ export function BrainHealthRightRail({
                 centerSublabel="Clarity"
               />
             </div>
-            <p className="mt-3 text-center text-xs text-zinc-400">
+            <p className="mt-3 text-center text-xs text-[var(--solace-muted)]">
               From your moods and reflections — not a diagnosis.
             </p>
             <div className="mt-4 h-[100px] w-full">
@@ -228,7 +228,7 @@ export function BrainHealthRightRail({
             </div>
           </div>
         ) : (
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          <p className="mt-4 text-sm leading-relaxed text-[var(--solace-muted)]">
             Log a mood check-in, sleep entry, or guided reflection to see your clarity trend.
           </p>
         )}
@@ -239,30 +239,30 @@ export function BrainHealthRightRail({
         {insightRows.length > 0 ? (
           <ul className="mt-4 space-y-3">
             {insightRows.map((row) => (
-              <li key={row.key} className="flex gap-3 rounded-lg border border-white/[0.04] bg-black/15 p-2.5">
+              <li key={row.key} className="flex gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--card-muted)] p-2.5 [html[data-ezri-theme=dark]_&]:border-white/[0.04] [html[data-ezri-theme=dark]_&]:bg-black/15">
                 <span
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/[0.06]",
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700",
                     row.iconWrap
                   )}
                 >
-                  <row.Icon className="h-4 w-4 text-zinc-200" aria-hidden />
+                  <row.Icon className="h-4 w-4" aria-hidden />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm leading-snug text-zinc-100/95">{row.text}</p>
-                  <p className="mt-1 text-[11px] text-zinc-500">{row.date}</p>
+                  <p className="text-sm leading-snug text-[var(--solace-text)]">{row.text}</p>
+                  <p className="mt-1 text-[11px] text-[var(--solace-muted)]">{row.date}</p>
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">Insights will appear as you use Brain Health.</p>
+          <p className="mt-4 text-sm leading-relaxed text-[var(--solace-muted)]">Insights will appear as you use Brain Health.</p>
         )}
       </SolacePanel>
 
       <SolacePanel glow="violet" className="solace-rail-card light-theme-card-hover p-4 sm:p-5">
-        <p className="text-sm font-medium text-zinc-100">Need extra support?</p>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+        <p className="text-sm font-medium text-[var(--solace-text)]">Need extra support?</p>
+        <p className="mt-2 text-xs leading-relaxed text-[var(--solace-muted)]">
           Talk to Solace anytime or explore tools that can help.
         </p>
         <Link
@@ -274,7 +274,7 @@ export function BrainHealthRightRail({
         </Link>
       </SolacePanel>
 
-      <p className="flex items-center gap-1.5 px-1 text-[11px] text-zinc-600">
+      <p className="flex items-center gap-1.5 px-1 text-[11px] text-[var(--text-soft)]">
         <Sparkles className="h-3.5 w-3.5" aria-hidden />
         Solace listens without judging.
       </p>

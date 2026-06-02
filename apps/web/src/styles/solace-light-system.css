@@ -483,3 +483,123 @@ html[data-theme="light"] .solace-app .solace-session-awaiting-media {
   background: var(--bg-gradient, linear-gradient(135deg, #ffffff 0%, #fbf8ff 38%, #f3ecff 72%, #ecfdfb 100%)) !important;
   color: var(--text-primary) !important;
 }
+
+/* ─── Brain Health page (light sanctuary) ──────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page,
+html[data-theme="light"] .solace-app .solace-brain-health-page {
+  background: var(--solace-page-bg, var(--bg-gradient)) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page [class*="bg-zinc-6"],
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page [class*="bg-zinc-7"],
+html[data-theme="light"] .solace-app .solace-brain-health-page [class*="bg-zinc-6"],
+html[data-theme="light"] .solace-app .solace-brain-health-page [class*="bg-zinc-7"] {
+  background-color: rgba(167, 139, 250, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .solace-hero-media > img[class*="object-cover"],
+html[data-theme="light"] .solace-app .solace-brain-health-page .solace-hero-media > img[class*="object-cover"] {
+  filter: brightness(1.06) saturate(0.92) contrast(1.02);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state > img[class*="object-cover"],
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state > img[class*="object-cover"] {
+  opacity: 0.28 !important;
+}
+
+/* ─── Portaled selects (modals, forms) — match pastel light surfaces ───────── */
+html[data-ezri-theme="light"] [data-slot="select-content"].solace-select-content,
+html[data-theme="light"] [data-slot="select-content"].solace-select-content,
+html[data-ezri-theme="light"] [data-slot="select-content"][class*="bg-[#090b12"],
+html[data-theme="light"] [data-slot="select-content"][class*="bg-[#090b12"],
+html[data-ezri-theme="light"] [data-slot="select-content"][class*="bg-[#0b1020"],
+html[data-theme="light"] [data-slot="select-content"][class*="bg-[#0b1020"] {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  color: var(--text-primary, #101828) !important;
+  box-shadow:
+    0 20px 50px -12px rgba(88, 28, 135, 0.14),
+    0 0 28px rgba(167, 139, 250, 0.12) !important;
+}
+
+html[data-ezri-theme="light"] [data-slot="select-item"][class*="text-zinc-2"],
+html[data-theme="light"] [data-slot="select-item"][class*="text-zinc-2"] {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] [data-slot="select-item"][data-highlighted],
+html[data-theme="light"] [data-slot="select-item"][data-highlighted] {
+  background: #f3ecff !important;
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] [data-slot="select-item"][data-state="checked"],
+html[data-theme="light"] [data-slot="select-item"][data-state="checked"] {
+  background: color-mix(in srgb, #a78bfa 28%, #ffffff) !important;
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] [data-slot="select-label"][class*="text-zinc-5"],
+html[data-theme="light"] [data-slot="select-label"][class*="text-zinc-5"] {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* ─── Profile page (/app/user-profile) ─────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .profile-page .solace-hero-environment h1,
+html[data-ezri-theme="light"] .solace-app .profile-page .solace-hero-environment p,
+html[data-ezri-theme="light"] .solace-app .profile-page .solace-hero-environment label,
+html[data-theme="light"] .solace-app .profile-page .solace-hero-environment h1,
+html[data-theme="light"] .solace-app .profile-page .solace-hero-environment p,
+html[data-theme="light"] .solace-app .profile-page .solace-hero-environment label {
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-profile-dropdown,
+html[data-theme="light"] .solace-app .solace-profile-dropdown {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Let profile Tailwind light variants & profile-ui.css win over global pale-text remaps */
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-[rgba(255,255,255"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-[rgba(255,255,255"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-violet-100"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-violet-200"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-violet-300"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-violet-100"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-violet-200"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-violet-300"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-emerald-100"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-emerald-200"],
+html[data-ezri-theme="light"] .solace-app .profile-page [class*="text-emerald-300"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-emerald-100"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-emerald-200"],
+html[data-theme="light"] .solace-app .profile-page [class*="text-emerald-300"] {
+  color: unset !important;
+}
+
+/* Settings hub — quick-setting cards on hero (white boxes need dark copy) */
+html[data-ezri-theme="light"] .solace-app .settings-quick-card .settings-quick-card-label,
+html[data-theme="light"] .solace-app .settings-quick-card .settings-quick-card-label {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .settings-quick-card .settings-quick-card-status,
+html[data-theme="light"] .solace-app .settings-quick-card .settings-quick-card-status {
+  text-shadow: none !important;
+}
+
+/* Account settings — undo global pale-text remaps inside page */
+html[data-ezri-theme="light"] .solace-app .account-settings-page [class*="text-[rgba(255,255,255"],
+html[data-theme="light"] .solace-app .account-settings-page [class*="text-[rgba(255,255,255"],
+html[data-ezri-theme="light"] .solace-app .account-settings-page [class*="text-violet-100"],
+html[data-ezri-theme="light"] .solace-app .account-settings-page [class*="text-violet-200"],
+html[data-ezri-theme="light"] .solace-app .account-settings-page [class*="text-violet-300"],
+html[data-theme="light"] .solace-app .account-settings-page [class*="text-violet-100"],
+html[data-theme="light"] .solace-app .account-settings-page [class*="text-violet-200"],
+html[data-theme="light"] .solace-app .account-settings-page [class*="text-violet-300"] {
+  color: unset !important;
+}

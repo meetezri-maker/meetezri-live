@@ -34,9 +34,10 @@ import {
   wellnessPlanHeroTitle,
   wellnessPlanHeroCard,
   wellnessPlanHeroImage,
-  wellnessPlanHeroOverlayLeft,
-  wellnessPlanHeroOverlayPurple,
-  wellnessPlanHeroOverlayWarmth,
+  wellnessPlanHeroLightScrim,
+  wellnessPlanHeroOverlayAccent,
+  wellnessPlanHeroOverlayBottom,
+  wellnessPlanHeroOverlayReadability,
   wellnessPlanIconChip,
   wellnessPlanGlassCard,
   wellnessPlanBtnGhost,
@@ -549,11 +550,12 @@ export function ResourceAnalyticsPage() {
                 width={1600}
                 height={900}
               />
-              <div className={wellnessPlanHeroOverlayLeft} aria-hidden />
-              <div className={wellnessPlanHeroOverlayPurple} aria-hidden />
-              <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
+              <div className={wellnessPlanHeroLightScrim} aria-hidden />
+              <div className={wellnessPlanHeroOverlayReadability} aria-hidden />
+              <div className={wellnessPlanHeroOverlayAccent} aria-hidden />
+              <div className={wellnessPlanHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex min-h-[240px] flex-col justify-center p-5 sm:min-h-[260px] sm:p-7 lg:min-h-[280px]">
+              <div className="relative z-10 flex min-h-[240px] flex-col justify-center p-5 sm:min-h-[260px] sm:p-7 lg:min-h-[280px]">
                 <div className="flex flex-1 flex-col justify-end">
                   <div className="flex flex-wrap items-start gap-4">
                     <div className={wellnessPlanIconChip('pink')}>
@@ -561,7 +563,7 @@ export function ResourceAnalyticsPage() {
                     </div>
                     <div>
                       <h1 className={wellnessPlanHeroTitle}>Resource Analytics</h1>
-                      <p className="mt-2 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.58)] sm:text-[15px]">
+                      <p className="settings-subpage-hero-lead mt-2 max-w-xl">
                         Understanding what support resources helped you most.
                       </p>
                     </div>

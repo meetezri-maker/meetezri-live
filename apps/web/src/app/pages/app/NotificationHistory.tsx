@@ -25,9 +25,10 @@ import {
   emergencyHeroAccent,
   emergencyHeroCard,
   emergencyHeroImage,
-  emergencyHeroOverlayLeft,
-  emergencyHeroOverlayPurple,
-  emergencyHeroOverlayWarmth,
+  emergencyHeroLightScrim,
+  emergencyHeroOverlayAccent,
+  emergencyHeroOverlayBottom,
+  emergencyHeroOverlayReadability,
   emergencyHeroTitle,
   emergencyIconOrb,
   emergencyNotificationCard,
@@ -222,11 +223,12 @@ export function NotificationHistory() {
                 width={1600}
                 height={900}
               />
-              <div className={emergencyHeroOverlayLeft} aria-hidden />
-              <div className={emergencyHeroOverlayPurple} aria-hidden />
-              <div className={emergencyHeroOverlayWarmth} aria-hidden />
+              <div className={emergencyHeroLightScrim} aria-hidden />
+              <div className={emergencyHeroOverlayReadability} aria-hidden />
+              <div className={emergencyHeroOverlayAccent} aria-hidden />
+              <div className={emergencyHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex min-h-[min(280px,36vh)] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[280px] lg:flex-row lg:items-center lg:gap-10">
+              <div className="relative z-10 flex min-h-[min(280px,36vh)] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[280px] lg:flex-row lg:items-center lg:gap-10">
                 <div className="max-w-lg flex-1">
                   <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-400/30 bg-fuchsia-500/15 shadow-[0_0_40px_-8px_rgba(236,72,153,0.55)]">
                     <Bell className="h-7 w-7 text-fuchsia-200" aria-hidden />

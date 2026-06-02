@@ -13,8 +13,22 @@ import {
   solaceSectionTitle,
 } from "@/app/solace/solacePageChrome";
 import { settingsIconChip } from "@/app/pages/app/settings-hub/settingsIconChip";
-
-export const APPEARANCE_HERO_IMG = "/community/hero-lake.jpg";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroCopy,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroInnerCompact,
+  settingsSubpageHeroLead,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShellCompact,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
+export const APPEARANCE_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 export const APPEARANCE_LOTUS_IMG = "/community/scene-water.jpg";
 
 export const appearancePageAtmosphere = solacePageAtmosphere;
@@ -26,34 +40,19 @@ export const appearanceGlassCard = solaceGlassPanel;
 
 export const appearanceRailCard = cn(appearanceGlassCard, "rounded-[1.65rem] p-5 sm:p-6");
 
-export const appearanceHeroCard = cn(
-  appearanceGlassCard,
-  "relative min-h-[220px] overflow-hidden rounded-[2rem] sm:min-h-[240px] lg:min-h-[250px]"
-);
-
-export const appearanceHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[72%_center]",
-  "brightness-[0.5] contrast-[0.96] saturate-[1.14]",
-  "[html[data-ezri-theme=light]_&]:brightness-[0.88]"
-);
-
-export const appearanceHeroOverlayLeft = cn(
-  "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/82 to-[#0a0b18]/15 lg:from-[#0a0b18]/95 lg:via-[#0a0b18]/62 lg:to-transparent",
-  "[html[data-ezri-theme=light]_&]:from-white/90 [html[data-ezri-theme=light]_&]:via-white/55 [html[data-ezri-theme=light]_&]:to-transparent"
-);
-
-export const appearanceHeroOverlayPurple = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_75%_85%_at_78%_42%,rgba(192,132,252,0.24)_0%,transparent_58%)]",
-  "[html[data-ezri-theme=light]_&]:bg-[radial-gradient(ellipse_75%_85%_at_78%_42%,rgba(167,139,250,0.14)_0%,transparent_58%)]"
-);
-
-export const appearanceHeroOverlayWarmth = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_38%_32%_at_78%_68%,rgba(251,146,60,0.18)_0%,transparent_55%)]",
-  "[html[data-ezri-theme=light]_&]:opacity-70"
-);
+export const appearanceHeroCard = settingsSubpageHeroShellCompact;
+export const appearanceHeroImage = cn(settingsSubpageHeroImage, "object-[72%_center]");
+export const appearanceHeroLightScrim = settingsSubpageHeroLightScrim;
+export const appearanceHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const appearanceHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const appearanceHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const appearanceHeroInner = settingsSubpageHeroInnerCompact;
+export const appearanceHeroCopy = settingsSubpageHeroCopy;
+export const appearanceHeroLead = settingsSubpageHeroLead;
+export const appearanceHeroBody = settingsSubpageHeroBody;
+export const appearanceHeroOverlayLeft = appearanceHeroOverlayReadability;
+export const appearanceHeroOverlayPurple = appearanceHeroOverlayAccent;
+export const appearanceHeroOverlayWarmth = appearanceHeroOverlayBottom;
 
 export const appearanceSectionLabel = solaceSectionTitle;
 export const appearanceSectionHeading = solaceSectionHeading;
@@ -61,13 +60,15 @@ export const appearanceSectionSubtitle = solaceSectionSubtitle;
 export const appearanceBackLink = solaceBackLink;
 
 export const appearanceHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4vw,2.75rem)] font-light leading-[1.06] tracking-tight text-[var(--solace-text)]"
+  settingsSubpageHeroTitleSerif,
+  "text-[clamp(2rem,4vw,2.75rem)]"
 );
 
 export const appearanceHeroAccent = cn(
-  "bg-gradient-to-r from-rose-200 via-fuchsia-200 to-violet-200 bg-clip-text text-transparent",
-  "drop-shadow-[0_0_28px_rgba(236,72,153,0.4)]",
-  "[html[data-ezri-theme=light]_&]:from-violet-600 [html[data-ezri-theme=light]_&]:via-fuchsia-600 [html[data-ezri-theme=light]_&]:to-violet-700"
+  settingsSubpageHeroAccent,
+  "from-rose-200 via-fuchsia-200 to-violet-200",
+  "[html[data-ezri-theme=light]_&]:text-fuchsia-700",
+  "[html[data-theme=light]_&]:text-fuchsia-700"
 );
 
 export const appearancePanel = cn(appearanceGlassCard, "p-5 sm:p-7");
@@ -120,8 +121,8 @@ export function appearanceThemeClasses() {
     backLink: appearanceBackLink,
     heroTitle: appearanceHeroTitle,
     heroAccent: appearanceHeroAccent,
-    heroLead: "mt-2 text-sm text-[var(--solace-muted)] sm:text-[15px]",
-    heroBody: "mt-3 max-w-lg text-xs leading-relaxed text-[var(--solace-muted)] sm:text-sm",
+    heroLead: cn(appearanceHeroLead, "mt-2"),
+    heroBody: appearanceHeroBody,
     btnGhost: appearanceBtnGhost,
     miniPreviewCard: appearanceMiniPreviewCard,
     bgStyleCard: cn(

@@ -44,11 +44,23 @@ import {
   notificationsGlassCard,
   notificationsGroupLabel,
   notificationsHeroAccent,
+  notificationsHeroBody,
   notificationsHeroCard,
+  notificationsHeroCopy,
   notificationsHeroImage,
-  notificationsHeroOverlayLeft,
-  notificationsHeroOverlayPurple,
-  notificationsHeroOverlayWarmth,
+  notificationsHeroInner,
+  notificationsHeroLead,
+  notificationsHeroLightScrim,
+  notificationsHeroOrb,
+  notificationsHeroOrbGlow,
+  notificationsHeroOrbIcon,
+  notificationsHeroOrbLabel,
+  notificationsHeroOrbQuote,
+  notificationsHeroOrbValue,
+  notificationsHeroOrbWrap,
+  notificationsHeroOverlayAccent,
+  notificationsHeroOverlayBottom,
+  notificationsHeroOverlayReadability,
   notificationsHeroTitle,
   notificationsIconChip,
   notificationsPageAtmosphere,
@@ -340,13 +352,22 @@ export function Notifications() {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
           <div className="min-w-0 space-y-6">
             <section className={notificationsHeroCard}>
-              <img src={NOTIFICATIONS_HERO_IMG} alt="" className={notificationsHeroImage} />
-              <div className={notificationsHeroOverlayLeft} aria-hidden />
-              <div className={notificationsHeroOverlayPurple} aria-hidden />
-              <div className={notificationsHeroOverlayWarmth} aria-hidden />
+              <img
+                src={NOTIFICATIONS_HERO_IMG}
+                alt=""
+                className={notificationsHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={notificationsHeroLightScrim} aria-hidden />
+              <div className={notificationsHeroOverlayReadability} aria-hidden />
+              <div className={notificationsHeroOverlayAccent} aria-hidden />
+              <div className={notificationsHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex h-full min-h-[280px] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:gap-8">
-                <div className="max-w-xl flex-1">
+              <div className={notificationsHeroInner}>
+                <div className={notificationsHeroCopy}>
                   <Link to="/app/settings" className={notificationsBackLink}>
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                     Back to Settings
@@ -354,31 +375,26 @@ export function Notifications() {
                   <h1 className={cn(notificationsHeroTitle, "mt-5")}>
                     <span className={notificationsHeroAccent}>Notifications</span>
                   </h1>
-                  <p className="mt-3 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+                  <p className={notificationsHeroLead}>
                     Stay connected to your wellbeing journey.
                   </p>
-                  <p className="mt-3 max-w-lg text-xs leading-relaxed text-[rgba(255,255,255,0.48)]">
+                  <p className={notificationsHeroBody}>
                     We&apos;ll keep you gently informed about what matters most on your path to healing and growth.
                   </p>
                 </div>
 
                 <motion.div
-                  className="flex shrink-0 justify-center lg:justify-end"
+                  className={notificationsHeroOrbWrap}
                   animate={{ scale: [1, 1.02, 1] }}
                   transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                 >
                   <div className="relative flex h-[200px] w-[200px] items-center justify-center sm:h-[210px] sm:w-[210px]">
-                    <div
-                      className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.28)_0%,rgba(139,92,246,0.12)_45%,transparent_70%)] blur-md"
-                      aria-hidden
-                    />
-                    <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-fuchsia-300/25 bg-[linear-gradient(180deg,rgba(255,255,255,0.09)_0%,rgba(15,16,36,0.78)_100%)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_52px_-8px_rgba(192,132,252,0.55)] backdrop-blur-md">
-                      <Bell className="h-7 w-7 text-violet-200/90" aria-hidden />
-                      <p className="mt-2 text-3xl font-semibold text-white">{displayUnreadCount}</p>
-                      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-fuchsia-200/70">
-                        Unread moments
-                      </p>
-                      <p className="mt-2 max-w-[150px] text-[10px] leading-snug text-[rgba(255,255,255,0.5)]">
+                    <div className={notificationsHeroOrbGlow} aria-hidden />
+                    <div className={notificationsHeroOrb}>
+                      <Bell className={notificationsHeroOrbIcon} aria-hidden />
+                      <p className={notificationsHeroOrbValue}>{displayUnreadCount}</p>
+                      <p className={notificationsHeroOrbLabel}>Unread moments</p>
+                      <p className={notificationsHeroOrbQuote}>
                         You&apos;re doing better than you think.
                       </p>
                     </div>

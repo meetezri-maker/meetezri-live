@@ -1,0 +1,116 @@
+/**
+ * Reading library (/app/settings/resources) — light theme.
+ */
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .resources-library-page .resources-hero-card .solace-hero-light-scrim {
+  display: block !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-hero-eyebrow,
+html[data-theme="light"] .solace-app .resources-library-page .resources-hero-eyebrow {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-hero-title,
+html[data-theme="light"] .solace-app .resources-library-page .resources-hero-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-hero-subtitle,
+html[data-theme="light"] .solace-app .resources-library-page .resources-hero-subtitle {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-search-icon,
+html[data-theme="light"] .solace-app .resources-library-page .resources-search-icon {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* Card body — light surface, dark copy (visual header stays cinematic) */
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-card-body,
+html[data-theme="light"] .solace-app .resources-library-page .resource-card-body {
+  background: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-card-title,
+html[data-theme="light"] .solace-app .resources-library-page .resource-card-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-card-desc,
+html[data-theme="light"] .solace-app .resources-library-page .resource-card-desc {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-card-meta,
+html[data-theme="light"] .solace-app .resources-library-page .resource-card-meta {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-card-tag,
+html[data-theme="light"] .solace-app .resources-library-page .resource-card-tag {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-soft, #fbf8ff) !important;
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-favorite-btn,
+html[data-theme="light"] .solace-app .resources-library-page .resource-favorite-btn {
+  border-color: rgba(255, 255, 255, 0.65) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-favorite-btn--active,
+html[data-theme="light"] .solace-app .resources-library-page .resource-favorite-btn--active {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  background: #fff1f2 !important;
+  color: #be123c !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-external-btn,
+html[data-theme="light"] .solace-app .resources-library-page .resource-external-btn {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-soft, #fbf8ff) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-difficulty--beginner,
+html[data-theme="light"] .solace-app .resources-library-page .resource-difficulty--beginner {
+  border-color: rgba(52, 211, 153, 0.35) !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-difficulty--intermediate,
+html[data-theme="light"] .solace-app .resources-library-page .resource-difficulty--intermediate {
+  border-color: rgba(251, 191, 36, 0.4) !important;
+  background: #fffbeb !important;
+  color: #b45309 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resource-difficulty--advanced,
+html[data-theme="light"] .solace-app .resources-library-page .resource-difficulty--advanced {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  background: #fff1f2 !important;
+  color: #be123c !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-empty-state,
+html[data-theme="light"] .solace-app .resources-library-page .resources-empty-state {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-soft, #fbf8ff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-empty-title,
+html[data-theme="light"] .solace-app .resources-library-page .resources-empty-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .resources-library-page .resources-empty-desc,
+html[data-theme="light"] .solace-app .resources-library-page .resources-footer-muted,
+html[data-theme="light"] .solace-app .resources-library-page .resources-empty-desc,
+html[data-theme="light"] .solace-app .resources-library-page .resources-footer-muted {
+  color: var(--text-muted, #667085) !important;
+}
