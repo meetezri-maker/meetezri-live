@@ -56,6 +56,37 @@ export const solaceImageCard = "solace-image-card solace-on-dark";
 export const solaceSurfaceLight =
   "solace-surface-light border-[color:var(--border)] bg-[rgba(255,255,255,0.92)] text-[var(--text-primary)] backdrop-blur-xl";
 
+/** Dark nested region (charts on image cards) — moonlit copy in light theme */
+export const solaceSurfaceDark = "solace-on-dark solace-surface-dark";
+
+/** Cinematic rail / insight panels — moonlit copy in light theme */
+export const solaceDarkPanel = cn(
+  "solace-on-dark solace-dark-panel",
+  "rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] backdrop-blur-xl"
+);
+
+/** Community page shell — light theme uses white page + cards */
+export const communityPageRoot =
+  "community-page relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)] transition-colors duration-500";
+
+export const communityPageAtmosphere =
+  "community-page-atmosphere pointer-events-none absolute inset-0";
+
+export const communityFeedPostCard = cn(
+  "community-feed-post relative overflow-hidden rounded-2xl border transition-colors duration-300",
+  solaceImageCard,
+  "border-white/[0.08] shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)] hover:border-violet-400/25",
+  "[html[data-ezri-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-ezri-theme=light]_&]:bg-white [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-ezri-theme=light]_&]:hover:border-violet-300/40",
+  "[html[data-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:hover:border-violet-300/40"
+);
+
+export const communityRailPanel = cn(
+  "community-rail-panel",
+  solaceDarkPanel,
+  "[html[data-ezri-theme=light]_&]:solace-rail-card [html[data-ezri-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-ezri-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-ezri-theme=light]_&]:!text-[var(--solace-text)] [html[data-ezri-theme=light]_&]:!shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:solace-rail-card [html[data-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-theme=light]_&]:!text-[var(--solace-text)] [html[data-theme=light]_&]:!shadow-[var(--solace-card-shadow)]"
+);
+
 /** Wrap full-bleed hero sections — enables light-theme image + overlay fixes */
 export const solaceHeroMediaShell = cn(
   "solace-hero-media",

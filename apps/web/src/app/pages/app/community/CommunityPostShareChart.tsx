@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { solaceSurfaceDark } from "@/app/solace/solacePageChrome";
 import type { CommunityPostShareVisual } from "@/lib/communityPostShare";
 
 interface CommunityPostShareChartProps {
@@ -94,14 +95,13 @@ export function CommunityPostShareChart({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-[240px] w-full flex-col items-center overflow-hidden px-2 py-3 sm:px-3",
+        solaceSurfaceDark,
+        "solace-post-share-chart relative flex h-full min-h-[240px] w-full flex-col items-center overflow-hidden bg-transparent px-2 py-3 sm:px-3",
         className,
       )}
       role="img"
       aria-label={`${visual.title} wheel chart, ${score} percent overall`}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[#070a14]" />
-
       <p className="relative mb-1 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-violet-200/65">
         {visual.title}
       </p>
@@ -125,7 +125,7 @@ export function CommunityPostShareChart({
           <path
             d="M 12 60 A 48 48 0 0 1 108 60"
             fill="none"
-            stroke="rgba(255,255,255,0.1)"
+            className="stroke-white/15"
             strokeWidth="9"
             strokeLinecap="round"
           />

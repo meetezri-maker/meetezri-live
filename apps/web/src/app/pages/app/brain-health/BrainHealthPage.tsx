@@ -45,6 +45,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import { SolaceSupportStrip } from "@/app/solace";
 import {
+  solaceHeroMediaShell,
   solaceHeroOverlayReadability,
   solacePageAtmosphere,
 } from "@/app/solace/solacePageChrome";
@@ -162,13 +163,20 @@ const INSIGHT_BY_LOAD: Partial<Record<LoadItem, string>> = {
 };
 
 const CLIMATE_AURA: Record<MentalClimate, string> = {
-  clear: "from-sky-100/50 via-transparent to-cyan-100/30 dark:from-sky-900/25 dark:to-cyan-950/20",
-  foggy: "from-slate-200/50 via-transparent to-zinc-200/35 dark:from-slate-800/30 dark:to-zinc-900/20",
-  heavy: "from-violet-200/45 via-transparent to-slate-300/35 dark:from-violet-900/25 dark:to-slate-900/35",
-  scattered: "from-amber-100/45 via-transparent to-rose-100/35 dark:from-amber-900/20 dark:to-rose-950/20",
-  overfull: "from-primary/20 via-fuchsia-200/20 to-orange-100/25 dark:from-primary/20 dark:to-orange-900/20",
-  steady: "from-emerald-100/45 via-transparent to-sky-100/35 dark:from-emerald-900/20 dark:to-sky-900/20",
-  restless: "from-indigo-100/45 via-transparent to-violet-100/35 dark:from-indigo-900/20 dark:to-violet-900/25",
+  clear:
+    "from-sky-100/50 via-transparent to-cyan-100/30 [html[data-ezri-theme=dark]_&]:from-sky-900/25 [html[data-ezri-theme=dark]_&]:to-cyan-950/20",
+  foggy:
+    "from-slate-200/50 via-transparent to-zinc-200/35 [html[data-ezri-theme=dark]_&]:from-slate-800/30 [html[data-ezri-theme=dark]_&]:to-zinc-900/20",
+  heavy:
+    "from-violet-200/45 via-transparent to-slate-300/35 [html[data-ezri-theme=dark]_&]:from-violet-900/25 [html[data-ezri-theme=dark]_&]:to-slate-900/35",
+  scattered:
+    "from-amber-100/45 via-transparent to-rose-100/35 [html[data-ezri-theme=dark]_&]:from-amber-900/20 [html[data-ezri-theme=dark]_&]:to-rose-950/20",
+  overfull:
+    "from-primary/20 via-fuchsia-200/20 to-orange-100/25 [html[data-ezri-theme=dark]_&]:from-primary/20 [html[data-ezri-theme=dark]_&]:to-orange-900/20",
+  steady:
+    "from-emerald-100/45 via-transparent to-sky-100/35 [html[data-ezri-theme=dark]_&]:from-emerald-900/20 [html[data-ezri-theme=dark]_&]:to-sky-900/20",
+  restless:
+    "from-indigo-100/45 via-transparent to-violet-100/35 [html[data-ezri-theme=dark]_&]:from-indigo-900/20 [html[data-ezri-theme=dark]_&]:to-violet-900/25",
 };
 
 const HELP_PATHS: Array<{ id: ExcludeHelpNull; label: string }> = [
@@ -802,10 +810,8 @@ export function BrainHealthPage() {
     <div
       className={cn(
         solacePageAtmosphere,
-        "relative min-h-full pb-6 transition-[filter,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]",
-        "bg-gradient-to-b from-[#05060d] via-[#070a14] to-[#03040a]",
-        "[html[data-ezri-theme=light]_&]:bg-[var(--bg-gradient)]",
-        "[html[data-theme=light]_&]:bg-[var(--bg-gradient)]",
+        "solace-brain-health-page relative min-h-full pb-6 transition-[filter,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "[html[data-ezri-theme=dark]_&]:bg-gradient-to-b [html[data-ezri-theme=dark]_&]:from-[#05060d] [html[data-ezri-theme=dark]_&]:via-[#070a14] [html[data-ezri-theme=dark]_&]:to-[#03040a]",
         selectedPath === "slow_down" && "[filter:saturate(0.95)_brightness(0.98)]"
       )}
     >
@@ -820,18 +826,18 @@ export function BrainHealthPage() {
       <div className="relative z-[1] mx-auto max-w-[1400px] px-4 pb-8 pt-5 md:px-6 md:pt-7 lg:px-8">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3 sm:gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/80 to-slate-950/90 shadow-[0_0_28px_rgba(139,92,246,0.25)]">
-              <Brain className="h-6 w-6 text-violet-200/95" aria-hidden />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-100 to-fuchsia-50 shadow-md dark:border-violet-500/25 dark:from-violet-950/80 dark:to-slate-950/90 dark:shadow-[0_0_28px_rgba(139,92,246,0.25)]">
+              <Brain className="h-6 w-6 text-violet-700 dark:text-violet-200/95" aria-hidden />
             </span>
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 sm:text-[1.65rem]">Brain Health</h1>
-              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-400">
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--solace-text)] sm:text-[1.65rem]">Brain Health</h1>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-[var(--solace-muted)]">
                 Understand your mental load, clarity, and emotional balance.
               </p>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end md:flex-row md:items-center">
-            <p className="order-last text-[11px] text-zinc-500 sm:order-none" aria-live="polite">
+            <p className="order-last text-[11px] text-[var(--solace-muted)] sm:order-none" aria-live="polite">
               {saveStatus === "saving" && (
                 <span className="inline-flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -845,9 +851,9 @@ export function BrainHealthPage() {
             <button
               type="button"
               onClick={() => setHowItWorksOpen(true)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-violet-400/25 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-4 py-2 text-sm font-medium text-[var(--solace-text)] transition-colors hover:border-violet-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-violet-400/25 dark:hover:bg-white/[0.07]"
             >
-              <CircleHelp className="h-4 w-4 text-violet-300/90" aria-hidden />
+              <CircleHelp className="h-4 w-4 text-violet-600 dark:text-violet-300/90" aria-hidden />
               How it works
             </button>
           </div>
@@ -857,7 +863,11 @@ export function BrainHealthPage() {
           <div className="min-w-0 space-y-8 xl:space-y-10">
             {/* Guided hero */}
             <section
-              className="light-theme-card light-theme-card-hover relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
+              className={cn(
+                solaceHeroMediaShell,
+                "light-theme-card light-theme-card-hover relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] shadow-[var(--solace-card-shadow)] sm:rounded-[1.5rem]",
+                "[html[data-ezri-theme=dark]_&]:shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)]"
+              )}
               aria-labelledby="guided-hero-heading"
             >
               <img
@@ -867,17 +877,15 @@ export function BrainHealthPage() {
                 loading="eager"
                 decoding="async"
               />
+              <div className={cn(solaceHeroOverlayReadability)} aria-hidden />
               <div
-                className={cn(
-                  solaceHeroOverlayReadability,
-                  "pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-[#0a0c14]/32 via-[#0a0c14]/10 to-transparent"
-                )}
+                className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block"
                 aria-hidden
               />
 
               <div className="relative z-[1] p-5 sm:p-7 lg:min-h-[220px] lg:p-8 lg:pr-[min(13rem,22vw)]">
                 <div className="min-w-0 max-w-2xl">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">Guided reflection</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-700/90 dark:text-violet-300/80">Guided reflection</p>
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={`${reflectionStep}-${reflectionFlowComplete ? "done" : "go"}`}
@@ -888,21 +896,21 @@ export function BrainHealthPage() {
                     >
                       <h2
                         id="guided-hero-heading"
-                        className="mt-3 font-serif text-[clamp(1.35rem,4vw,2rem)] font-medium leading-snug tracking-tight text-zinc-50"
+                        className="mt-3 font-serif text-[clamp(1.35rem,4vw,2rem)] font-medium leading-snug tracking-tight text-[var(--solace-text)]"
                       >
                         {currentQuestion.question}
                       </h2>
-                      <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-400">
+                      <p className="mt-3 max-w-lg text-sm leading-relaxed text-[var(--solace-muted)]">
                         Take a moment. There&apos;s no right or wrong answer.
                       </p>
                     </motion.div>
                   </AnimatePresence>
                   <div className="mt-6 flex w-full max-w-md flex-col gap-2">
-                    <span className="text-xs font-medium tabular-nums text-zinc-400">
+                    <span className="text-xs font-medium tabular-nums text-[var(--solace-muted)]">
                       {progressLabelCurrent} / {GUIDED_STEP_COUNT}
                     </span>
                     <div
-                      className="h-1 w-full min-w-0 overflow-hidden rounded-full bg-white/[0.06]"
+                      className="h-1 w-full min-w-0 overflow-hidden rounded-full bg-violet-200/50 dark:bg-white/[0.06]"
                       role="progressbar"
                       aria-valuemin={1}
                       aria-valuemax={GUIDED_STEP_COUNT}
@@ -924,7 +932,7 @@ export function BrainHealthPage() {
                   aria-hidden
                 >
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_40%_35%,rgba(253,186,116,0.35),rgba(244,63,94,0.12)_40%,transparent_68%)] blur-md" />
-                  <div className="relative h-[150px] w-[150px] overflow-hidden rounded-full border border-violet-400/20 bg-black/40 shadow-[0_0_40px_rgba(167,139,250,0.25)]">
+                  <div className="relative h-[150px] w-[150px] overflow-hidden rounded-full border border-violet-400/20 bg-violet-100/70 shadow-[0_0_40px_rgba(167,139,250,0.25)] [html[data-ezri-theme=dark]_&]:bg-black/40">
                     <img
                       src={BRAIN_HEALTH_IMAGES.companionOrb}
                       alt=""
@@ -972,31 +980,31 @@ export function BrainHealthPage() {
                   const cardClass = cn(
                     "relative flex min-h-[120px] w-[min(42vw,160px)] min-w-0 shrink-0 snap-center flex-col items-center rounded-xl border px-2.5 pb-3 pt-4 text-center transition-all duration-300 sm:min-h-[132px] sm:w-full sm:max-w-none md:min-h-[140px]",
                     locked &&
-                      "cursor-not-allowed border-white/[0.04] bg-black/20 opacity-[0.38] shadow-none saturate-[0.65]",
+                      "cursor-not-allowed border-[color:var(--border)] bg-[var(--card-muted)] opacity-[0.38] shadow-none saturate-[0.65] dark:border-white/[0.04] dark:bg-black/20",
                     !locked &&
                       !active &&
                       completed &&
-                      "cursor-pointer border-violet-500/20 bg-gradient-to-b from-violet-950/20 to-[#080910] shadow-[0_0_20px_rgba(139,92,246,0.1)] hover:border-violet-400/30",
+                      "cursor-pointer border-violet-400/30 bg-gradient-to-b from-violet-100/80 to-[var(--card-soft)] shadow-sm hover:border-violet-400/45 dark:border-violet-500/20 dark:from-violet-950/20 dark:to-[#080910] dark:shadow-[0_0_20px_rgba(139,92,246,0.1)] dark:hover:border-violet-400/30",
                     !locked &&
                       !active &&
                       !completed &&
-                      "cursor-pointer border-white/[0.06] bg-black/25 hover:border-white/10 hover:bg-black/32",
+                      "cursor-pointer border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] dark:border-white/[0.06] dark:bg-black/25 dark:hover:border-white/10 dark:hover:bg-black/32",
                     active &&
-                      "z-[1] border-violet-400/55 bg-gradient-to-b from-violet-950/45 to-[#070a16] shadow-[0_0_36px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                      "z-[1] border-violet-500/40 bg-gradient-to-b from-violet-100 to-[var(--card-lavender)] shadow-md dark:border-violet-400/55 dark:from-violet-950/45 dark:to-[#070a16] dark:shadow-[0_0_36px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]"
                   );
                   const iconClass = cn(
                     "mb-2 h-5 w-5 shrink-0 sm:h-6 sm:w-6",
-                    active && "text-violet-200 drop-shadow-[0_0_10px_rgba(167,139,250,0.55)]",
-                    !active && completed && "text-violet-300/80",
-                    !active && !completed && !locked && "text-zinc-500",
-                    locked && "text-zinc-600"
+                    active && "text-violet-700 drop-shadow-none dark:text-violet-200 dark:drop-shadow-[0_0_10px_rgba(167,139,250,0.55)]",
+                    !active && completed && "text-violet-600 dark:text-violet-300/80",
+                    !active && !completed && !locked && "text-[var(--solace-muted)]",
+                    locked && "text-[var(--text-soft)]"
                   );
                   const labelClass = cn(
                     "line-clamp-3 max-w-[11.5rem] text-[10px] font-medium leading-snug sm:max-w-none sm:text-[11px]",
-                    active && "text-zinc-50",
-                    completed && "text-zinc-300",
-                    !active && !completed && !locked && "text-zinc-500",
-                    locked && "text-zinc-600"
+                    active && "text-[var(--solace-text)]",
+                    completed && "text-[var(--text-secondary)]",
+                    !active && !completed && !locked && "text-[var(--solace-muted)]",
+                    locked && "text-[var(--text-soft)]"
                   );
                   return (
                     <div
@@ -1037,7 +1045,7 @@ export function BrainHealthPage() {
               </div>
 
               <div className="flex flex-col items-center gap-3" aria-label="Reflection navigation">
-                <p className="text-[11px] font-medium tabular-nums tracking-wide text-zinc-500">
+                <p className="text-[11px] font-medium tabular-nums tracking-wide text-[var(--solace-muted)]">
                   {progressLabelCurrent} of {GUIDED_STEP_COUNT}
                 </p>
                 <div className="flex w-full max-w-md flex-wrap items-center justify-center gap-3 sm:max-w-lg">
@@ -1047,7 +1055,7 @@ export function BrainHealthPage() {
                     disabled={reflectionStep <= 0}
                     className={cn(
                       "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
-                      "border-white/[0.08] bg-black/35 text-zinc-200 hover:border-cyan-400/25 hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35",
+                      "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-cyan-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35 dark:border-white/[0.08] dark:bg-black/35 dark:text-zinc-200 dark:hover:border-cyan-400/25 dark:hover:bg-black/45",
                       reflectionStep <= 0 && "pointer-events-none opacity-35"
                     )}
                   >
@@ -1055,7 +1063,7 @@ export function BrainHealthPage() {
                     Back
                   </button>
 
-                  <div className="flex max-w-[100vw] items-center gap-1 rounded-full border border-white/[0.07] bg-black/30 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:gap-2 sm:px-3 sm:py-2">
+                  <div className="flex max-w-[100vw] items-center gap-1 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-2 py-1.5 shadow-sm sm:gap-2 sm:px-3 sm:py-2 dark:border-white/[0.07] dark:bg-black/30 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     {GUIDED_QUESTIONS.map((_, dotIdx) => {
                       const lockedDot =
                         dotIdx > maxAccessibleStep ||
@@ -1099,9 +1107,9 @@ export function BrainHealthPage() {
                     className={cn(
                       "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
                       isLastReflectionStep &&
-                        "border-violet-400/35 bg-gradient-to-r from-violet-950/40 to-indigo-950/30 text-violet-100 hover:border-violet-400/50 hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
+                        "border-violet-500/35 bg-gradient-to-r from-violet-100 to-indigo-100 text-violet-900 hover:border-violet-400/50 hover:shadow-md dark:border-violet-400/35 dark:from-violet-950/40 dark:to-indigo-950/30 dark:text-violet-100 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
                       !isLastReflectionStep &&
-                        "border-white/[0.08] bg-black/35 text-zinc-200 hover:border-violet-400/35 hover:bg-violet-950/30",
+                        "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-violet-400/35 hover:bg-[var(--card-soft)] dark:border-white/[0.08] dark:bg-black/35 dark:text-zinc-200 dark:hover:bg-violet-950/30",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                       nextBubbleDisabled && "pointer-events-none opacity-35"
                     )}
@@ -1115,7 +1123,7 @@ export function BrainHealthPage() {
 
             {/* Answers */}
             <section aria-labelledby="answer-heading" className="min-w-0">
-              <h3 id="answer-heading" className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              <h3 id="answer-heading" className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--solace-muted)]">
                 Choose what feels true for you
               </h3>
               <AnimatePresence mode="wait">
@@ -1140,8 +1148,8 @@ export function BrainHealthPage() {
                           "group relative flex min-h-[52px] w-full flex-row items-start gap-4 rounded-xl border p-4 text-left transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 sm:min-h-[56px] sm:p-5",
                           wide ? "sm:col-span-2 lg:col-span-3" : "",
                           selected
-                            ? "border-violet-400/50 bg-gradient-to-r from-violet-950/25 to-[#080a14] shadow-[0_0_26px_rgba(139,92,246,0.18)]"
-                            : "border-white/[0.06] bg-black/28 hover:border-violet-500/20 hover:bg-black/38"
+                            ? "border-violet-500/40 bg-gradient-to-r from-violet-100/90 to-[var(--card-soft)] shadow-md dark:border-violet-400/50 dark:from-violet-950/25 dark:to-[#080a14] dark:shadow-[0_0_26px_rgba(139,92,246,0.18)]"
+                            : "border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] dark:border-white/[0.06] dark:bg-black/28 dark:hover:border-violet-500/20 dark:hover:bg-black/38"
                         )}
                         aria-pressed={selected}
                       >
@@ -1150,12 +1158,12 @@ export function BrainHealthPage() {
                             <Check className="h-4 w-4" aria-hidden />
                           </span>
                         )}
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-zinc-300 group-hover:border-violet-400/25 sm:h-12 sm:w-12">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 group-hover:border-violet-400/35 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-300 dark:group-hover:border-violet-400/25 sm:h-12 sm:w-12">
                           <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
                         </span>
                         <div className="min-w-0 flex-1 pr-10">
-                          <span className="block text-sm font-semibold text-zinc-100 sm:text-[15px]">{choice.title}</span>
-                          <span className="mt-1 block text-xs leading-relaxed text-zinc-500 sm:text-[13px]">{choice.sub}</span>
+                          <span className="block text-sm font-semibold text-[var(--solace-text)] sm:text-[15px]">{choice.title}</span>
+                          <span className="mt-1 block text-xs leading-relaxed text-[var(--solace-muted)] sm:text-[13px]">{choice.sub}</span>
                         </div>
                       </button>
                     );
@@ -1168,7 +1176,11 @@ export function BrainHealthPage() {
             <section
               ref={liveMentalStateRef}
               id="live-mental-state"
-              className="relative scroll-mt-24 overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-gradient-to-br from-[#070916] via-[#05060d] to-[#0c0612] p-5 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] sm:rounded-[1.5rem] sm:p-7"
+              className={cn(
+                solaceHeroMediaShell,
+                "light-theme-card relative scroll-mt-24 overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] p-5 shadow-[var(--solace-card-shadow)] sm:rounded-[1.5rem] sm:p-7",
+                "[html[data-ezri-theme=dark]_&]:border-white/[0.07] [html[data-ezri-theme=dark]_&]:bg-gradient-to-br [html[data-ezri-theme=dark]_&]:from-[#070916] [html[data-ezri-theme=dark]_&]:via-[#05060d] [html[data-ezri-theme=dark]_&]:to-[#0c0612] [html[data-ezri-theme=dark]_&]:shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)]"
+              )}
               aria-labelledby="live-state-heading"
             >
               <img
@@ -1183,20 +1195,20 @@ export function BrainHealthPage() {
                 <div>
                   <p
                     id="live-state-heading"
-                    className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-200/70"
+                    className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600/90 dark:text-rose-200/70"
                   >
                     Your mental state (live)
                   </p>
                   <div className="mt-3 flex items-center gap-2">
                     <span className="h-2 w-2 shrink-0 rounded-full bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.7)]" aria-hidden />
-                    <h3 className="text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">{liveMental.title}</h3>
+                    <h3 className="text-xl font-semibold tracking-tight text-[var(--solace-text)] sm:text-2xl">{liveMental.title}</h3>
                   </div>
-                  <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-400">{liveMental.body}</p>
+                  <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--solace-muted)]">{liveMental.body}</p>
                   <div className="mt-5 flex flex-wrap gap-2">
                     {liveMental.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full border border-violet-400/20 bg-violet-950/35 px-3 py-1 text-[11px] font-medium text-violet-100/90"
+                        className="rounded-full border border-violet-400/30 bg-violet-100/80 px-3 py-1 text-[11px] font-medium text-violet-800 dark:border-violet-400/20 dark:bg-violet-950/35 dark:text-violet-100/90"
                       >
                         {tag}
                       </span>
@@ -1205,7 +1217,7 @@ export function BrainHealthPage() {
                 </div>
                 <div className="relative mx-auto flex h-[200px] w-[200px] items-center justify-center" aria-hidden>
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(251,146,60,0.45),rgba(244,63,94,0.15)_42%,transparent_70%)] blur-md" />
-                  <div className="relative h-[168px] w-[168px] overflow-hidden rounded-full border border-orange-400/25 bg-black/45 shadow-[0_0_48px_rgba(251,113,133,0.22)]">
+                  <div className="relative h-[168px] w-[168px] overflow-hidden rounded-full border border-orange-400/25 bg-rose-100/70 shadow-[0_0_48px_rgba(251,113,133,0.22)] [html[data-ezri-theme=dark]_&]:bg-black/45">
                     <img
                       src={BRAIN_HEALTH_IMAGES.companionOrb}
                       alt=""
@@ -1233,7 +1245,7 @@ export function BrainHealthPage() {
 
             {/* What may help */}
             <section aria-labelledby="help-now-heading">
-              <h3 id="help-now-heading" className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              <h3 id="help-now-heading" className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--solace-muted)]">
                 What may help right now
               </h3>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1241,24 +1253,24 @@ export function BrainHealthPage() {
                   <div
                     key={tool.id}
                     className={cn(
-                      "flex min-h-[44px] flex-col rounded-xl border border-white/[0.06] bg-black/28 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+                      "light-theme-card flex min-h-[44px] flex-col rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 dark:border-white/[0.06] dark:bg-black/28",
                       tool.accent
                     )}
                   >
                     <div className="flex min-w-0 flex-1 gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-zinc-200">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-200">
                         <tool.Icon className="h-5 w-5" aria-hidden />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-100">{tool.title}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tool.sub}</p>
-                        <p className="mt-2 text-[11px] font-medium text-zinc-600">{tool.duration}</p>
+                        <p className="text-sm font-semibold text-[var(--solace-text)]">{tool.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-[var(--solace-muted)]">{tool.sub}</p>
+                        <p className="mt-2 text-[11px] font-medium text-[var(--text-soft)]">{tool.duration}</p>
                       </div>
                     </div>
                     <Link
                       to={tool.to}
                       onClick={() => handleSelectPath(tool.pathId)}
-                      className="mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-white/10 bg-white/[0.06] text-zinc-200 transition-colors hover:border-violet-400/30 hover:bg-violet-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 sm:mt-0 sm:self-center"
+                      className="mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 transition-colors hover:border-violet-400/35 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200 dark:hover:border-violet-400/30 dark:hover:bg-violet-500/15 dark:hover:text-white sm:mt-0 sm:self-center"
                       aria-label={`Start ${tool.title}`}
                     >
                       <Play className="ml-0.5 h-4 w-4" fill="currentColor" aria-hidden />
@@ -1271,10 +1283,10 @@ export function BrainHealthPage() {
             {/* Preserved Ezri + next step */}
             <section
               ref={responseRef}
-              className="rounded-[1.25rem] border border-white/[0.06] bg-black/25 p-5 sm:p-6"
+              className="light-theme-card rounded-[1.25rem] border border-[color:var(--border)] bg-[var(--card)] p-5 sm:p-6 dark:border-white/[0.06] dark:bg-black/25"
               aria-label="Solace reflection"
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Solace</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--solace-muted)]">Solace</p>
               <AnimatePresence mode="wait">
                 <motion.p
                   key={selectedPath ?? "fallback"}
@@ -1282,12 +1294,12 @@ export function BrainHealthPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
                   transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
-                  className="mt-3 text-sm leading-relaxed text-zinc-200/95 sm:text-base"
+                  className="mt-3 text-sm leading-relaxed text-[var(--solace-text)] sm:text-base"
                 >
                   {selectedPath ? EZRI_RESPONSE[selectedPath] : "Let's make this feel a little lighter."}
                 </motion.p>
               </AnimatePresence>
-              <h4 className="mt-6 text-sm font-semibold text-zinc-200">One next step</h4>
+              <h4 className="mt-6 text-sm font-semibold text-[var(--solace-text)]">One next step</h4>
               <AnimatePresence mode="wait">
                 <motion.p
                   key={selectedPath ?? "next-fallback"}
@@ -1295,7 +1307,7 @@ export function BrainHealthPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
                   transition={{ duration: 0.36, ease: [0.4, 0, 0.2, 1] }}
-                  className="mt-2 text-sm text-zinc-400"
+                  className="mt-2 text-sm text-[var(--solace-muted)]"
                 >
                   {selectedPath ? NEXT_STEP[selectedPath] : "Take one breath, then choose one thing to keep and one thing to release."}
                 </motion.p>
@@ -1315,7 +1327,7 @@ export function BrainHealthPage() {
                   whileHover={reducedMotion ? undefined : { scale: 1.02 }}
                   whileTap={reducedMotion ? undefined : { scale: 0.98 }}
                   onClick={showReturnLine}
-                  className="inline-flex min-h-11 items-center rounded-full border border-white/[0.1] bg-white/[0.04] px-6 py-2.5 text-sm font-medium text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+                  className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-zinc-300"
                 >
                   Return later
                 </motion.button>
@@ -1327,7 +1339,7 @@ export function BrainHealthPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
                     transition={{ duration: 0.35 }}
-                    className="mt-4 text-sm text-zinc-500"
+                    className="mt-4 text-sm text-[var(--solace-muted)]"
                   >
                     This space will be here when you need it.
                   </motion.p>
@@ -1376,14 +1388,14 @@ export function BrainHealthPage() {
       <Dialog open={howItWorksOpen} onOpenChange={setHowItWorksOpen}>
         <DialogContent className="light-theme-card max-w-md border-white/10 bg-[var(--solace-card-bg)] text-[var(--solace-text)] shadow-[0_0_60px_rgba(0,0,0,0.65)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]">
           <DialogHeader>
-            <DialogTitle className="text-zinc-50">How Brain Health works</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle className="text-[var(--solace-text)]">How Brain Health works</DialogTitle>
+            <DialogDescription className="text-[var(--solace-muted)]">
               This page is a gentle mirror — not a test. Move through the five reflections at your own pace. Your
               choices shape what Solace highlights and save only what you already sync with your profile (mental climate
               and load tags). Nothing here is a diagnosis.
             </DialogDescription>
           </DialogHeader>
-          <ul className="list-inside list-disc space-y-2 text-sm text-zinc-400">
+          <ul className="list-inside list-disc space-y-2 text-sm text-[var(--solace-muted)]">
             <li>Future steps stay softly locked until you answer — completed steps stay open to revisit.</li>
             <li>Back and Next bubbles sit under the cards; answers gently advance you when you&apos;re ready.</li>
             <li>The bottom bar is always here for crisis resources and calm sound.</li>

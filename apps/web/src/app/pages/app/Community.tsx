@@ -48,6 +48,15 @@ import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
+import {
+  communityFeedPostCard,
+  communityPageAtmosphere,
+  communityPageRoot,
+  communityRailPanel,
+  solaceHeroContent,
+  solaceHeroMediaShell,
+  solaceImageCard,
+} from "@/app/solace/solacePageChrome";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { EmojiText } from "@/components/ui/EmojiText";
@@ -387,9 +396,19 @@ function CinematicEnter({ children, delay = 0, className }: CinematicEnterProps)
 
 function CommunityLoadingSkeleton() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
+    <div className={communityPageRoot}>
+      <div
+        className={cn(
+          communityPageAtmosphere,
+          "bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]"
+        )}
+      />
+      <div
+        className={cn(
+          communityPageAtmosphere,
+          "bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]"
+        )}
+      />
 
       <div className="relative z-10 mx-auto max-w-[1720px] px-4 pb-24 pt-8 sm:px-6 sm:pt-10 lg:px-10">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -689,18 +708,18 @@ export function Community() {
   const getRoleBadge = (role: string) => {
     const badges = {
       member: {
-        bg: "bg-white/10 ring-1 ring-white/15",
-        text: "text-violet-100/90",
+        bg: "bg-white/10 ring-1 ring-white/15 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-ezri-theme=light]_&]:ring-violet-200/80 [html[data-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:ring-violet-200/80",
+        text: "text-violet-100/90 [html[data-ezri-theme=light]_&]:text-violet-800 [html[data-theme=light]_&]:text-violet-800",
         label: "Member",
       },
       moderator: {
-        bg: "bg-sky-500/15 ring-1 ring-sky-400/35",
-        text: "text-sky-100",
+        bg: "bg-sky-500/15 ring-1 ring-sky-400/35 [html[data-ezri-theme=light]_&]:bg-sky-100 [html[data-ezri-theme=light]_&]:ring-sky-300/70 [html[data-theme=light]_&]:bg-sky-100 [html[data-theme=light]_&]:ring-sky-300/70",
+        text: "text-sky-100 [html[data-ezri-theme=light]_&]:text-sky-800 [html[data-theme=light]_&]:text-sky-800",
         label: "Moderator",
       },
       companion: {
-        bg: "bg-fuchsia-500/15 ring-1 ring-fuchsia-400/40",
-        text: "text-fuchsia-100",
+        bg: "bg-fuchsia-500/15 ring-1 ring-fuchsia-400/40 [html[data-ezri-theme=light]_&]:bg-fuchsia-100 [html[data-ezri-theme=light]_&]:ring-fuchsia-300/70 [html[data-theme=light]_&]:bg-fuchsia-100 [html[data-theme=light]_&]:ring-fuchsia-300/70",
+        text: "text-fuchsia-100 [html[data-ezri-theme=light]_&]:text-fuchsia-800 [html[data-theme=light]_&]:text-fuchsia-800",
         label: "Companion",
       },
     };
@@ -1034,10 +1053,25 @@ export function Community() {
 
   return (
     <>
-      <div className="relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)] transition-colors duration-500">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.4] mix-blend-soft-light bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22 opacity=%220.06%22/%3E%3C/svg%3E')]" />
+      <div className={communityPageRoot}>
+        <div
+          className={cn(
+            communityPageAtmosphere,
+            "bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]"
+          )}
+        />
+        <div
+          className={cn(
+            communityPageAtmosphere,
+            "bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]"
+          )}
+        />
+        <div
+          className={cn(
+            communityPageAtmosphere,
+            "opacity-[0.4] mix-blend-soft-light bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22 opacity=%220.06%22/%3E%3C/svg%3E')]"
+          )}
+        />
 
         <div className="relative z-10 mx-auto max-w-[1720px] px-4 pb-24 pt-8 sm:px-6 sm:pt-10 lg:px-10">
           <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1046,8 +1080,8 @@ export function Community() {
                 <Users className="h-5 w-5" aria-hidden />
               </div>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#F7F3FF] sm:text-4xl">Community</h1>
-                <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[#A7A1B8] sm:text-[15px]">
+                <h1 className="text-3xl font-semibold tracking-tight text-[var(--solace-text)] sm:text-4xl">Community</h1>
+                <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[var(--solace-muted)] sm:text-[15px]">
                   Connect, share and support each other.
                 </p>
               </div>
@@ -1106,7 +1140,14 @@ export function Community() {
           </details>
 
           <CinematicEnter className="mb-10">
-            <div className="relative min-h-[280px] overflow-hidden rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] lg:min-h-[300px]">
+            <div
+              className={cn(
+                solaceHeroMediaShell,
+                "min-h-[280px] rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] lg:min-h-[300px]",
+                "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+                "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
+              )}
+            >
               <img
                 src={COMMUNITY_IMAGES.hero}
                 alt=""
@@ -1126,7 +1167,12 @@ export function Community() {
                 className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.15)_0%,transparent_50%)]"
                 aria-hidden
               />
-              <div className="relative z-10 flex min-h-[280px] flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:min-h-[300px] lg:px-10">
+              <div
+                className={cn(
+                  solaceHeroContent,
+                  "flex min-h-[280px] flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:min-h-[300px] lg:px-10"
+                )}
+              >
                 <h2 className="text-balance font-serif text-3xl font-normal leading-[1.12] tracking-tight text-white sm:text-[2.25rem] lg:text-[2.5rem]">
                   A safe place to{" "}
                   <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-pink-300 bg-clip-text text-transparent">
@@ -1165,8 +1211,10 @@ export function Community() {
           <section className="mb-10">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-[#F7F3FF]">Find your circle</h3>
-                <p className="mt-1 text-sm leading-relaxed text-[#A7A1B8]">Choose a space that feels right for what you need.</p>
+                <h3 className="text-lg font-semibold text-[var(--solace-text)]">Find your circle</h3>
+                <p className="mt-1 text-sm leading-relaxed text-[var(--solace-muted)]">
+                  Choose a space that feels right for what you need.
+                </p>
               </div>
               <button
                 type="button"
@@ -1192,7 +1240,10 @@ export function Community() {
                         setActiveTab("groups");
                         if (groupsData.length === 0) void loadMeta({ includeGroups: true });
                       }}
-                      className="group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#050816] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
+                      className={cn(
+                        solaceImageCard,
+                        "group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#050816] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
+                      )}
                     >
                       <img
                         src={space.image}
@@ -1412,7 +1463,7 @@ export function Community() {
                 (loadingPosts ? (
                   <CommunityFeedPostsSkeleton />
                 ) : filteredPosts.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.03] py-20 text-center text-violet-200/55 backdrop-blur-md">
+                  <div className="rounded-3xl border border-dashed border-[color:var(--solace-card-border)] bg-[var(--solace-card-bg)] py-20 text-center text-[var(--solace-muted)] shadow-[var(--solace-card-shadow)] backdrop-blur-md">
                     No posts yet. Be the first to share—or check back soon.
                   </div>
                 ) : (
@@ -1455,7 +1506,9 @@ export function Community() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-[15px] font-semibold tracking-tight text-[#F7F3FF]">{post.author.name}</h3>
+                            <h3 className="truncate text-[15px] font-semibold tracking-tight text-[var(--solace-text)]">
+                              {post.author.name}
+                            </h3>
                             <span
                               className={cn(
                                 "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
@@ -1466,11 +1519,11 @@ export function Community() {
                               {getRoleBadge(post.author.role).label}
                             </span>
                           </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#A7A1B8]">
-                            <span className="truncate rounded-full border border-fuchsia-400/12 bg-fuchsia-500/10 px-2 py-0.5 font-medium text-fuchsia-100/85">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--solace-muted)]">
+                            <span className="truncate rounded-full border border-fuchsia-400/12 bg-fuchsia-500/10 px-2 py-0.5 font-medium text-fuchsia-100/85 [html[data-ezri-theme=light]_&]:border-fuchsia-300/40 [html[data-ezri-theme=light]_&]:bg-fuchsia-50 [html[data-ezri-theme=light]_&]:text-fuchsia-800 [html[data-theme=light]_&]:border-fuchsia-300/40 [html[data-theme=light]_&]:bg-fuchsia-50 [html[data-theme=light]_&]:text-fuchsia-800">
                               {post.category}
                             </span>
-                            <span className="text-violet-500/40">·</span>
+                            <span className="text-violet-500/40 [html[data-ezri-theme=light]_&]:text-violet-400/70 [html[data-theme=light]_&]:text-violet-400/70">·</span>
                             <Clock className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
                             <span>{timeLabel}</span>
                           </div>
@@ -1483,12 +1536,12 @@ export function Community() {
                         <div className="space-y-0">
                           <article
                             id={`post-${post.id}`}
-                            className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)] transition-colors duration-300 hover:border-violet-400/25"
+                            className={communityFeedPostCard}
                           >
                             <div
                               className={cn(
                                 "absolute inset-y-0 right-0 hidden w-[min(48%,280px)] overflow-hidden sm:block",
-                                postShareVisual ? "z-20" : "pointer-events-none",
+                                postShareVisual ? "z-20 solace-on-dark" : "pointer-events-none",
                               )}
                               aria-hidden={!postShareVisual}
                             >
@@ -1516,7 +1569,7 @@ export function Community() {
                             </div>
                             <div
                               className={cn(
-                                "pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94",
+                                "community-feed-post-scrim pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94",
                                 postShareVisual
                                   ? "sm:right-[min(48%,280px)] sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-transparent"
                                   : "sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-[#050816]/55",
@@ -1618,13 +1671,13 @@ export function Community() {
                                   </div>
                                 </div>
                               ) : (
-                                <p className="mt-2.5 text-pretty text-sm leading-relaxed text-[#F7F3FF]/90 whitespace-pre-wrap">
+                                <p className="mt-2.5 text-pretty text-sm leading-relaxed text-[var(--solace-text)] whitespace-pre-wrap">
                                   <EmojiText emojiSize={20}>{post.content}</EmojiText>
                                 </p>
                               )}
 
                               {postShareVisual ? (
-                                <div className="mt-4 overflow-hidden rounded-xl border border-violet-400/20 bg-black/30 shadow-[0_0_28px_-8px_rgba(168,85,247,0.45)] sm:hidden">
+                                <div className="solace-on-dark mt-4 overflow-hidden rounded-xl border border-violet-400/20 shadow-[0_0_28px_-8px_rgba(168,85,247,0.2)] sm:hidden">
                                   <CommunityPostShareChart
                                     visual={postShareVisual}
                                     chartId={`${post.id}-mobile`}
@@ -1651,7 +1704,9 @@ export function Community() {
                                     type="button"
                                     className={cn(
                                       "inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm transition-colors",
-                                      post.likedByMe ? "text-rose-300" : "text-[#A7A1B8] hover:text-rose-200",
+                                      post.likedByMe
+                                        ? "text-rose-300 [html[data-ezri-theme=light]_&]:text-rose-600 [html[data-theme=light]_&]:text-rose-600"
+                                        : "text-[var(--solace-muted)] hover:text-rose-200 [html[data-ezri-theme=light]_&]:hover:text-rose-600 [html[data-theme=light]_&]:hover:text-rose-600",
                                     )}
                                     onClick={() => handleLikePost(post.id)}
                                     aria-label={post.likedByMe ? "Unlike post" : "Like post"}
@@ -1662,7 +1717,7 @@ export function Community() {
                                   </button>
                                   <button
                                     type="button"
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm text-[#A7A1B8] transition-colors hover:text-fuchsia-200"
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm text-[var(--solace-muted)] transition-colors hover:text-fuchsia-200 [html[data-ezri-theme=light]_&]:hover:text-fuchsia-700 [html[data-theme=light]_&]:hover:text-fuchsia-700"
                                     onClick={() => toggleCommentsForPost(post)}
                                     aria-label={openCommentsPostId === post.id ? "Hide comments" : "Show comments"}
                                   >
@@ -1673,8 +1728,10 @@ export function Community() {
 
                                 {proofLine ? (
                                   <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 px-2 sm:flex">
-                                    <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
-                                    <p className="truncate text-center text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
+                                    <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70 [html[data-ezri-theme=light]_&]:text-violet-600 [html[data-theme=light]_&]:text-violet-600" aria-hidden />
+                                    <p className="truncate text-center text-[11px] font-medium text-fuchsia-200/75 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700">
+                                      {proofLine}
+                                    </p>
                                   </div>
                                 ) : (
                                   <div className="hidden flex-1 sm:block" />
@@ -1683,7 +1740,7 @@ export function Community() {
                                 <div className="ml-auto flex items-center gap-0.5">
                                   <button
                                     type="button"
-                                    className="rounded-lg p-2 text-[#A7A1B8] transition-colors hover:bg-white/[0.06] hover:text-amber-200"
+                                    className="rounded-lg p-2 text-[var(--solace-muted)] transition-colors hover:bg-white/[0.06] hover:text-amber-200 [html[data-ezri-theme=light]_&]:hover:bg-violet-50 [html[data-ezri-theme=light]_&]:hover:text-amber-700 [html[data-theme=light]_&]:hover:bg-violet-50 [html[data-theme=light]_&]:hover:text-amber-700"
                                     onClick={() => toggleBookmarkPost(post.id)}
                                     aria-label={bookmarkedPostIds.has(post.id) ? "Remove bookmark" : "Bookmark post"}
                                     aria-pressed={bookmarkedPostIds.has(post.id)}
@@ -1694,7 +1751,7 @@ export function Community() {
                                     type="button"
                                     whileHover={{ y: -1 }}
                                     transition={{ duration: 0.25 }}
-                                    className="rounded-lg p-2 text-[#A7A1B8] transition-colors hover:bg-white/[0.06] hover:text-violet-100"
+                                    className="rounded-lg p-2 text-[var(--solace-muted)] transition-colors hover:bg-white/[0.06] hover:text-violet-100 [html[data-ezri-theme=light]_&]:hover:bg-violet-50 [html[data-ezri-theme=light]_&]:hover:text-violet-700 [html[data-theme=light]_&]:hover:bg-violet-50 [html[data-theme=light]_&]:hover:text-violet-700"
                                     onClick={() => handleSharePost(post.id)}
                                     aria-label="Share post"
                                   >
@@ -1705,8 +1762,10 @@ export function Community() {
 
                               {proofLine ? (
                                 <div className="mt-2 flex items-center gap-2 border-t border-transparent pt-0 sm:hidden">
-                                  <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
-                                  <p className="text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
+                                  <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70 [html[data-ezri-theme=light]_&]:text-violet-600 [html[data-theme=light]_&]:text-violet-600" aria-hidden />
+                                  <p className="text-[11px] font-medium text-fuchsia-200/75 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700">
+                                    {proofLine}
+                                  </p>
                                 </div>
                               ) : null}
                             </div>
@@ -2114,7 +2173,12 @@ export function Community() {
               )}
 
               <CinematicEnter delay={0.15} className="mt-10">
-                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]">
+                <div
+                  className={cn(
+                    solaceImageCard,
+                    "relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]"
+                  )}
+                >
                   <img
                     src={COMMUNITY_IMAGES.togetherness}
                     alt=""
@@ -2158,8 +2222,15 @@ export function Community() {
 
             <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
               <CinematicEnter delay={0.05}>
-                <div className="rounded-[26px] border border-fuchsia-500/20 bg-[rgba(15,18,32,0.82)] p-6 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl">
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
+                <div
+                  className={cn(
+                    communityRailPanel,
+                    "border-fuchsia-500/20 p-6 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.75)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
+                  )}
+                >
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
+                    Community Pulse
+                  </h3>
                   {loadingMeta && overview == null ? (
                     <div className="mb-4 flex justify-center py-6">
                       <Loader2 className="h-6 w-6 animate-spin text-fuchsia-300/70" aria-hidden />
@@ -2168,7 +2239,7 @@ export function Community() {
                   ) : (
                     <>
                       {communityPulse.percent != null ? (
-                        <p className="mb-4 text-center text-sm font-medium leading-snug text-[#F7F3FF]/90">
+                        <p className="mb-4 text-center text-sm font-medium leading-snug text-[var(--solace-text)]">
                           {communityPulse.headline}
                         </p>
                       ) : null}
@@ -2212,15 +2283,15 @@ export function Community() {
                         </svg>
                         {communityPulse.percent != null ? (
                           <>
-                            <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-white">
+                            <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-[var(--solace-text)]">
                               {communityPulse.percent}%
                             </p>
-                            <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-fuchsia-200/70">
+                            <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-[var(--solace-muted)]">
                               {communityPulse.detail}
                             </p>
                           </>
                         ) : (
-                          <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[#A7A1B8]">
+                          <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[var(--solace-muted)]">
                             {communityPulse.detail}
                           </p>
                         )}
@@ -2231,19 +2302,19 @@ export function Community() {
               </CinematicEnter>
 
               <CinematicEnter delay={0.1}>
-                <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">
+                <div className={cn(communityRailPanel, "p-6")}>
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
                     Active Now
                   </h3>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-4xl font-semibold tabular-nums tracking-tight text-white">
+                    <p className="text-4xl font-semibold tabular-nums tracking-tight text-[var(--solace-text)]">
                       {stats.activeNow.toLocaleString()}
                     </p>
-                    <p className="text-sm font-medium text-fuchsia-200/80">
+                    <p className="text-sm font-medium text-[var(--solace-muted)]">
                       {stats.activeNow === 1 ? "member online" : "members online"}
                     </p>
                   </div>
-                  <p className="mt-3 text-sm leading-relaxed text-[#A7A1B8]">
+                  <p className="mt-3 text-sm leading-relaxed text-[var(--solace-muted)]">
                     {stats.activeNow > 0
                       ? "Members active in Community in the last 15 minutes."
                       : "You're here — check in or post to let others know you're part of the space."}
@@ -2252,16 +2323,16 @@ export function Community() {
               </CinematicEnter>
 
               <CinematicEnter delay={0.12}>
-                <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
+                <div className={cn(communityRailPanel, "p-6")}>
                   <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-200/70">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
                       <TrendingUp className="h-4 w-4 text-fuchsia-300/80" aria-hidden />
                       Trending Topics
                     </h3>
                     {trendingTopics.length > 0 ? (
                       <button
                         type="button"
-                        className="text-xs font-semibold text-fuchsia-200/80 underline-offset-4 transition-colors hover:text-fuchsia-100 hover:underline"
+                        className="text-xs font-semibold text-fuchsia-200/80 underline-offset-4 transition-colors hover:text-fuchsia-100 hover:underline [html[data-ezri-theme=light]_&]:text-fuchsia-700 [html[data-ezri-theme=light]_&]:hover:text-fuchsia-800 [html[data-theme=light]_&]:text-fuchsia-700 [html[data-theme=light]_&]:hover:text-fuchsia-800"
                         onClick={() => setActiveTab("trending")}
                       >
                         View all
@@ -2272,8 +2343,12 @@ export function Community() {
                     {trendingTopics.slice(0, 5).map((topic) => (
                       <div key={topic.tag}>
                         <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate font-medium text-violet-100/90">#{topic.tag}</span>
-                          <span className="shrink-0 tabular-nums text-violet-300/45">{topic.posts}</span>
+                          <span className="truncate font-medium text-violet-100/90 [html[data-ezri-theme=light]_&]:text-violet-900 [html[data-theme=light]_&]:text-violet-900">
+                            #{topic.tag}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-violet-300/45 [html[data-ezri-theme=light]_&]:text-violet-600/80 [html[data-theme=light]_&]:text-violet-600/80">
+                            {topic.posts}
+                          </span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
                           <div
@@ -2284,19 +2359,21 @@ export function Community() {
                       </div>
                     ))}
                     {trendingTopics.length === 0 && (
-                      <p className="text-sm text-violet-200/45">Topics will appear as people share.</p>
+                      <p className="text-sm text-violet-200/45 [html[data-ezri-theme=light]_&]:text-[var(--solace-muted)] [html[data-theme=light]_&]:text-[var(--solace-muted)]">
+                        Topics will appear as people share.
+                      </p>
                     )}
                   </div>
                 </div>
               </CinematicEnter>
 
               <CinematicEnter delay={0.14}>
-                <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">
+                <div className={cn(communityRailPanel, "p-6")}>
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
                     Support Circles Happening Now
                   </h3>
                   {supportCirclesPreview.length === 0 ? (
-                    <p className="text-sm leading-relaxed text-[#A7A1B8]">
+                    <p className="text-sm leading-relaxed text-[var(--solace-muted)]">
                       No open circles yet. Explore groups when you&apos;re ready.
                     </p>
                   ) : (
@@ -2306,22 +2383,24 @@ export function Community() {
                         return (
                           <li
                             key={g.id}
-                            className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2.5"
+                            className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2.5 [html[data-ezri-theme=light]_&]:border-violet-200/50 [html[data-ezri-theme=light]_&]:bg-violet-50/80 [html[data-theme=light]_&]:border-violet-200/50 [html[data-theme=light]_&]:bg-violet-50/80"
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-500/10 text-violet-100">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-500/10 text-violet-100 [html[data-ezri-theme=light]_&]:border-violet-300/40 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:border-violet-300/40 [html[data-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:text-violet-700">
                                 <RowIcon className="h-5 w-5" aria-hidden />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-white">{g.name}</p>
-                                <p className="truncate text-xs text-violet-300/50">
+                                <p className="truncate text-sm font-medium text-white [html[data-ezri-theme=light]_&]:text-violet-950 [html[data-theme=light]_&]:text-violet-950">
+                                  {g.name}
+                                </p>
+                                <p className="truncate text-xs text-violet-300/50 [html[data-ezri-theme=light]_&]:text-violet-600/75 [html[data-theme=light]_&]:text-violet-600/75">
                                   {g.members > 0 ? `${g.members.toLocaleString()} members` : "Open circle"}
                                 </p>
                               </div>
                             </div>
                             <button
                               type="button"
-                              className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3.5 py-2 text-xs font-semibold text-fuchsia-100/90 transition-colors hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3.5 py-2 text-xs font-semibold text-fuchsia-100/90 transition-colors hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-50 [html[data-ezri-theme=light]_&]:border-fuchsia-300/50 [html[data-ezri-theme=light]_&]:bg-fuchsia-50 [html[data-ezri-theme=light]_&]:text-fuchsia-800 [html[data-theme=light]_&]:border-fuchsia-300/50 [html[data-theme=light]_&]:bg-fuchsia-50 [html[data-theme=light]_&]:text-fuchsia-800"
                               disabled={groupActionId === g.id}
                               onClick={() => {
                                 if (g.isJoined) {
@@ -2360,7 +2439,12 @@ export function Community() {
               </CinematicEnter>
 
               <CinematicEnter delay={0.15}>
-                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-500/15 shadow-[0_28px_70px_-40px_rgba(0,0,0,0.8)]">
+                <div
+                  className={cn(
+                    solaceImageCard,
+                    "relative overflow-hidden rounded-[26px] border border-fuchsia-500/15 shadow-[0_28px_70px_-40px_rgba(0,0,0,0.8)]"
+                  )}
+                >
                   <img
                     src={COMMUNITY_IMAGES.dailyReminder}
                     alt=""
@@ -2383,9 +2467,9 @@ export function Community() {
               </CinematicEnter>
 
               <CinematicEnter delay={0.18}>
-                <div className="rounded-[26px] border border-violet-400/15 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
-                  <h3 className="mb-4 text-base font-semibold text-[#F7F3FF]">Community Guidelines</h3>
-                  <ul className="space-y-3 text-sm leading-relaxed text-[#A7A1B8]">
+                <div className={cn(communityRailPanel, "border-violet-400/15 p-6")}>
+                  <h3 className="mb-4 text-base font-semibold text-[var(--solace-text)]">Community Guidelines</h3>
+                  <ul className="space-y-3 text-sm leading-relaxed text-[var(--solace-muted)]">
                     <li className="flex gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300/80" strokeWidth={2.5} aria-hidden />
                       <span>Be respectful and kind.</span>
