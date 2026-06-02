@@ -3752,7 +3752,7 @@ export function ActiveSession() {
       isSoundOff={isSoundOff}
       onToggleSoundOff={handleToggleSoundOff}
       onShowEndConfirm={handleShowEndConfirm}
-      pipOpen={Boolean(permissionsGranted && stream)}
+      pipOpen={Boolean(stream)}
       pipPos={pipPos}
       videoRef={videoRef}
       onPipPointerDown={handlePipPointerDown}
