@@ -49,8 +49,19 @@ export const solaceHeroImage = cn(
   "brightness-[0.94] contrast-[1.05] saturate-[1.08]"
 );
 
+/** Image + text overlay — light theme: 40% scrim, moonlit copy */
+export const solaceImageCard = "solace-image-card solace-on-dark";
+
+/** Light strip/card on top of heroes — dark readable copy in light theme */
+export const solaceSurfaceLight =
+  "solace-surface-light border-[color:var(--border)] bg-[rgba(255,255,255,0.92)] text-[var(--text-primary)] backdrop-blur-xl";
+
 /** Wrap full-bleed hero sections — enables light-theme image + overlay fixes */
-export const solaceHeroMediaShell = "solace-hero-media relative isolate overflow-hidden";
+export const solaceHeroMediaShell = cn(
+  "solace-hero-media",
+  solaceImageCard,
+  "relative isolate overflow-hidden"
+);
 
 /** Text block over hero imagery in light theme (dark readable copy) */
 export const solaceHeroContent = "solace-hero-content relative z-10";
@@ -71,7 +82,8 @@ export const solaceHeroOverlayReadability = cn(
 export const solaceHeroOverlayBottom = cn(
   "pointer-events-none absolute inset-0 z-[1]",
   "bg-[linear-gradient(180deg,transparent_0%,rgba(5,8,22,0.28)_50%,rgba(5,8,22,0.62)_100%)]",
-  "[html[data-ezri-theme=light]_&]:bg-[linear-gradient(180deg,transparent_0%,rgba(243,236,255,0.2)_50%,rgba(239,231,255,0.45)_100%)]"
+  "[html[data-ezri-theme=light]_&]:bg-[linear-gradient(180deg,transparent_0%,rgba(243,236,255,0.16)_50%,rgba(239,231,255,0.4)_100%)]",
+  "[html[data-theme=light]_&]:bg-[linear-gradient(180deg,transparent_0%,rgba(243,236,255,0.16)_50%,rgba(239,231,255,0.4)_100%)]"
 );
 
 export const solaceHeroOverlayAccent = cn(

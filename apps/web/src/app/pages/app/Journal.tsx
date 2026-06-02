@@ -401,7 +401,7 @@ function JournalHeroBackdrop({ className, moodTag }: JournalHeroBackdropProps) {
   return (
     <div
       className={cn(
-        "relative min-h-[220px] w-full overflow-hidden md:min-h-[300px] lg:min-h-[min(100%,320px)]",
+        "solace-image-card solace-on-dark relative min-h-[220px] w-full overflow-hidden md:min-h-[300px] lg:min-h-[min(100%,320px)]",
         className
       )}
     >

@@ -104,7 +104,7 @@ export function applySemanticThemeTokens(theme: AppearanceTheme) {
     root.style.setProperty("--rail-card-border", "rgba(167, 139, 250, 0.3)");
     root.style.setProperty(
       "--hero-overlay-readability",
-      "linear-gradient(90deg, rgba(255, 255, 255, 0.86) 0%, rgba(246, 240, 255, 0.58) 55%, rgba(10, 15, 30, 0.28) 100%)"
+      "linear-gradient(90deg, rgba(255, 255, 255, 0.4) 0%, rgba(246, 240, 255, 0.28) 55%, rgba(10, 15, 30, 0.12) 100%)"
     );
     root.style.setProperty("--accent-primary", "#4ecdc4");
     root.style.setProperty("--accent-secondary", "#a78bfa");

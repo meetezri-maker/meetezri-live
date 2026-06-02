@@ -235,7 +235,7 @@ export function MoodCheckIn() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
-                  "solace-hero-media relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
+                  "solace-hero-media solace-image-card solace-on-dark relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
                   "shadow-[0_48px_120px_-58px_rgba(0,0,0,0.92)] sm:rounded-[2.1rem]",
                   "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
                   "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"

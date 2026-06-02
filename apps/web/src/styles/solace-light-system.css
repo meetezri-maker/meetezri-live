@@ -209,17 +209,36 @@ html[data-theme="light"] .solace-app .solace-on-dark * {
   color: inherit;
 }
 
-html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-white,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-50,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-100,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-200,
-html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="text-zinc-"],
-html[data-theme="light"] .solace-app .solace-on-dark .text-white,
-html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-50,
-html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-100,
-html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-200,
-html[data-theme="light"] .solace-app .solace-on-dark [class*="text-zinc-"] {
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-white,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-50,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-100,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-200,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-zinc-"],
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-white,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-50,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-100,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) .text-zinc-200,
+html[data-theme="light"] .solace-app .solace-on-dark:not(.solace-surface-light) [class*="text-zinc-"] {
   color: rgb(250 250 250) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-surface-light,
+html[data-ezri-theme="light"] .solace-app .solace-surface-light p,
+html[data-ezri-theme="light"] .solace-app .solace-surface-light span,
+html[data-ezri-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-"],
+html[data-theme="light"] .solace-app .solace-surface-light,
+html[data-theme="light"] .solace-app .solace-surface-light p,
+html[data-theme="light"] .solace-app .solace-surface-light span,
+html[data-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-"] {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-5"],
+html[data-ezri-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-4"],
+html[data-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-5"],
+html[data-theme="light"] .solace-app .solace-surface-light [class*="text-zinc-4"] {
+  color: var(--text-muted, #667085) !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="text-violet-2"],

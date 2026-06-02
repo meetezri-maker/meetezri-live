@@ -29,7 +29,12 @@ import {
   SolaceSupportStrip,
   type JourneyAmbiance,
 } from "@/app/solace";
-import { solaceHeroContent, solaceHeroLightScrim, solaceHeroMediaShell } from "@/app/solace/solacePageChrome";
+import {
+  solaceHeroContent,
+  solaceHeroLightScrim,
+  solaceHeroMediaShell,
+  solaceImageCard,
+} from "@/app/solace/solacePageChrome";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 
 export interface SolaceQuickAction {
@@ -202,7 +207,12 @@ function RightRailContent({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/40 via-transparent to-transparent"
           aria-hidden
         />
-        <div className={cn(solaceHeroContent, "flex min-h-[172px] flex-col justify-center p-5 sm:p-6")}>
+        <div
+          className={cn(
+            solaceHeroContent,
+            "flex min-h-[172px] flex-col justify-center p-5 sm:p-6"
+          )}
+        >
           <span className="font-serif text-4xl leading-none text-violet-200/35" aria-hidden>
             “
           </span>
@@ -371,7 +381,7 @@ export function SolaceDashboardView({
               transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
             >
                 <SolacePanel glow="violet" className="overflow-hidden p-0">
-                  <div className="relative min-h-[300px] md:min-h-[380px]">
+                  <div className={cn(solaceImageCard, "relative min-h-[300px] md:min-h-[380px]")}>
                     <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
                     <div className="relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
                       <div className="relative min-h-[220px] md:min-h-0">
@@ -508,9 +518,17 @@ export function SolaceDashboardView({
                       to={card.to}
                       className="group relative min-w-[82%] shrink-0 snap-start sm:min-w-[48%] lg:min-w-0"
                     >
-                      <div className="relative flex min-h-[280px] flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] transition-[transform,box-shadow] duration-500 ease-out hover:-translate-y-1 hover:shadow-[0_36px_90px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45">
+                      <div
+                        className={cn(
+                          solaceImageCard,
+                          "relative flex min-h-[280px] flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] transition-[transform,box-shadow] duration-500 ease-out hover:-translate-y-1 hover:shadow-[0_36px_90px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45"
+                        )}
+                      >
                         <SolaceJourneyCardVisual ambiance={card.ambiance} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+                        <div
+                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent"
+                          aria-hidden
+                        />
                         <div className="absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white shadow-[0_0_26px_rgba(139,92,246,0.3)] backdrop-blur-sm transition-transform duration-500 group-hover:scale-105">
                           <Play className="h-4 w-4" fill="currentColor" aria-hidden />
                         </div>

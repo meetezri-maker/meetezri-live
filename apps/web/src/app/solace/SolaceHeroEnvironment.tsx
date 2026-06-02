@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { solaceImageCard } from "@/app/solace/solacePageChrome";
 import { cn } from "@/lib/utils";
 
 export interface SolaceHeroEnvironmentProps extends HTMLAttributes<HTMLDivElement> {
@@ -34,7 +35,9 @@ export function SolaceHeroEnvironment({
   return (
     <div
       className={cn(
-        "solace-hero-media solace-hero-environment relative isolate overflow-hidden rounded-[28px] border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)] text-[var(--solace-ds-text)] shadow-[var(--solace-ds-shadow-cinematic)]",
+        "solace-hero-media solace-hero-environment",
+        solaceImageCard,
+        "relative isolate overflow-hidden rounded-[28px] border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)] text-[var(--solace-ds-text)] shadow-[var(--solace-ds-shadow-cinematic)]",
         className
       )}
       {...rest}

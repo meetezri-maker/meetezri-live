@@ -70,9 +70,9 @@ html[data-theme="light"] {
 
   --hero-overlay-readability: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.86) 0%,
-    rgba(246, 240, 255, 0.58) 55%,
-    rgba(10, 15, 30, 0.28) 100%
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(246, 240, 255, 0.28) 55%,
+    rgba(10, 15, 30, 0.12) 100%
   );
 
   /* shadcn / app aliases */
@@ -307,7 +307,7 @@ html[data-ezri-theme="light"] .solace-app [class*="rgba(46,26,88"],
 html[data-ezri-theme="light"] .solace-app [class*="rgba(30,20,60"],
 html[data-theme="light"] .solace-app [class*="rgba(46,26,88"],
 html[data-theme="light"] .solace-app [class*="rgba(30,20,60"] {
-  opacity: 0.35 !important;
+  opacity: 0.4 !important;
 }
 
 html[data-ezri-theme="light"] .solace-app [class*="rgba(4,5,14"],
