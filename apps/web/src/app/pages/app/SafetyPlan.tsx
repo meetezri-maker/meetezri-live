@@ -43,15 +43,25 @@ import {
   wellnessPlanAddZone,
   wellnessPlanBackLink,
   wellnessPlanBottomBanner,
+  wellnessPlanBottomBannerBody,
+  wellnessPlanBottomBannerContent,
+  wellnessPlanBottomBannerImg,
+  wellnessPlanBottomBannerOverlayDark,
+  wellnessPlanBottomBannerOverlayWarm,
+  wellnessPlanBottomBannerTagline,
+  wellnessPlanBottomBannerTitle,
   wellnessPlanBtnGhost,
   wellnessPlanBtnRose,
   wellnessPlanGlassCard,
   wellnessPlanHandwritten,
   wellnessPlanHeroCard,
   wellnessPlanHeroImage,
-  wellnessPlanHeroOverlayLeft,
-  wellnessPlanHeroOverlayPurple,
-  wellnessPlanHeroOverlayWarmth,
+  wellnessPlanHeroInner,
+  wellnessPlanHeroLead,
+  wellnessPlanHeroLightScrim,
+  wellnessPlanHeroOverlayAccent,
+  wellnessPlanHeroOverlayBottom,
+  wellnessPlanHeroOverlayReadability,
   wellnessPlanHeroTitle,
   wellnessPlanIconChip,
   wellnessPlanItemRow,
@@ -265,12 +275,21 @@ export function SafetyPlan() {
         <div className="wellness-plan-print-grid grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
           <div className="min-w-0 space-y-6">
             <section className={wellnessPlanHeroCard}>
-              <img src={WELLNESS_PLAN_HERO_IMG} alt="" className={wellnessPlanHeroImage} />
-              <div className={wellnessPlanHeroOverlayLeft} aria-hidden />
-              <motion.div className={wellnessPlanHeroOverlayPurple} aria-hidden />
-              <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
+              <img
+                src={WELLNESS_PLAN_HERO_IMG}
+                alt=""
+                className={wellnessPlanHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={wellnessPlanHeroLightScrim} aria-hidden />
+              <div className={wellnessPlanHeroOverlayReadability} aria-hidden />
+              <div className={wellnessPlanHeroOverlayAccent} aria-hidden />
+              <div className={wellnessPlanHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex min-h-[280px] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px]">
+              <div className={wellnessPlanHeroInner}>
                 <div className="max-w-2xl">
                   <Link to="/app/settings" className={cn(wellnessPlanBackLink, "print:hidden")}>
                     <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -299,7 +318,7 @@ export function SafetyPlan() {
                     </motion.div>
                   </div>
 
-                  <p className="mt-4 max-w-xl text-sm leading-relaxed text-rose-200/80 sm:text-[15px]">
+                  <p className={cn(wellnessPlanHeroLead, "mt-4 max-w-xl")}>
                     Your personalized plan for managing difficult moments and staying safe.
                   </p>
                   <p className="mt-3 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
@@ -554,31 +573,19 @@ export function SafetyPlan() {
                     transition={{ delay: 0.55 }}
                     className={cn(wellnessPlanBottomBanner, "print:hidden")}
                   >
-                    <img
-                      src={WELLNESS_PLAN_BANNER_IMG}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover object-[20%_50%] brightness-[0.38]"
-                    />
-                    <div
-                      className="absolute inset-0 bg-gradient-to-r from-[#0a0b18]/95 via-[#0a0b18]/72 to-[#0a0b18]/45"
-                      aria-hidden
-                    />
-                    <div
-                      className="absolute inset-0 bg-[radial-gradient(ellipse_50%_80%_at_12%_50%,rgba(251,146,60,0.18)_0%,transparent_55%)]"
-                      aria-hidden
-                    />
-                    <div className="relative flex min-h-[140px] flex-col items-start justify-center gap-3 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+                    <img src={WELLNESS_PLAN_BANNER_IMG} alt="" className={wellnessPlanBottomBannerImg} />
+                    <div className={wellnessPlanBottomBannerOverlayDark} aria-hidden />
+                    <div className={wellnessPlanBottomBannerOverlayWarm} aria-hidden />
+                    <div className={wellnessPlanBottomBannerContent}>
                       <div>
-                        <p className="font-serif text-xl font-light text-white sm:text-2xl">
+                        <p className={wellnessPlanBottomBannerTitle}>
                           You Deserve Support. You Deserve Peace.
                         </p>
-                        <p className="mt-2 max-w-lg text-sm text-[rgba(255,255,255,0.55)]">
+                        <p className={wellnessPlanBottomBannerBody}>
                           Your wellness is a priority. Take it one step at a time.
                         </p>
                       </div>
-                      <p className={cn(wellnessPlanHandwritten, "shrink-0 sm:text-right")}>
-                        You matter. ♡
-                      </p>
+                      <p className={wellnessPlanBottomBannerTagline}>You matter. ♡</p>
                     </div>
                   </motion.section>
                 </>

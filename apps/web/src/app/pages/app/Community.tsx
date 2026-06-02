@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
 import {
   communityFeedPostCard,
+  communityFeedPostCinematic,
   communityPageAtmosphere,
   communityPageRoot,
   communityRailPanel,
@@ -1536,7 +1537,7 @@ export function Community() {
                         <div className="space-y-0">
                           <article
                             id={`post-${post.id}`}
-                            className={communityFeedPostCard}
+                            className={cn(communityFeedPostCard, communityFeedPostCinematic)}
                           >
                             <div
                               className={cn(
@@ -1601,7 +1602,7 @@ export function Community() {
                                 )}
                                 <div className="flex shrink-0 items-start gap-1.5">
                                   {moodTag ? (
-                                    <span className="rounded-full border border-violet-400/25 bg-violet-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-violet-100/95">
+                                    <span className="rounded-full border border-violet-400/25 bg-violet-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-violet-100/95 [html[data-ezri-theme=light]_&]:border-violet-300/50 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-ezri-theme=light]_&]:text-violet-800 [html[data-theme=light]_&]:border-violet-300/50 [html[data-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:text-violet-800">
                                       #{moodTag.replace(/\s+/g, "-")}
                                     </span>
                                   ) : null}
@@ -1609,7 +1610,7 @@ export function Community() {
                                     <>
                                       <button
                                         type="button"
-                                        className="rounded-lg p-2 text-violet-300/70 transition-colors hover:bg-white/[0.06] hover:text-fuchsia-200"
+                                        className="rounded-lg p-2 text-violet-300/70 transition-colors hover:bg-white/[0.06] hover:text-fuchsia-200 [html[data-ezri-theme=light]_&]:text-violet-600 [html[data-ezri-theme=light]_&]:hover:bg-violet-50 [html[data-ezri-theme=light]_&]:hover:text-fuchsia-700 [html[data-theme=light]_&]:text-violet-600 [html[data-theme=light]_&]:hover:bg-violet-50 [html[data-theme=light]_&]:hover:text-fuchsia-700"
                                         onClick={() => startEditPost(post)}
                                         aria-label="Edit post"
                                       >
@@ -1617,7 +1618,7 @@ export function Community() {
                                       </button>
                                       <button
                                         type="button"
-                                        className="rounded-lg p-2 text-violet-300/70 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
+                                        className="rounded-lg p-2 text-violet-300/70 transition-colors hover:bg-rose-500/10 hover:text-rose-200 [html[data-ezri-theme=light]_&]:text-violet-600 [html[data-ezri-theme=light]_&]:hover:bg-rose-50 [html[data-ezri-theme=light]_&]:hover:text-rose-600 [html[data-theme=light]_&]:text-violet-600 [html[data-theme=light]_&]:hover:bg-rose-50 [html[data-theme=light]_&]:hover:text-rose-600"
                                         onClick={() => void handleDeletePost(post)}
                                         aria-label="Delete post"
                                       >
@@ -1690,7 +1691,7 @@ export function Community() {
                                   {extraTags.slice(0, 4).map((tag) => (
                                     <span
                                       key={tag}
-                                      className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-violet-200/75"
+                                      className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-violet-200/75 [html[data-ezri-theme=light]_&]:border-violet-200/60 [html[data-ezri-theme=light]_&]:bg-violet-50 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:border-violet-200/60 [html[data-theme=light]_&]:bg-violet-50 [html[data-theme=light]_&]:text-violet-700"
                                     >
                                       #{tag}
                                     </span>
@@ -1698,7 +1699,7 @@ export function Community() {
                                 </div>
                               ) : null}
 
-                              <div className="mt-3 flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
+                              <div className="mt-3 flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5 [html[data-ezri-theme=light]_&]:border-violet-100 [html[data-theme=light]_&]:border-violet-100">
                                 <div className="flex flex-wrap items-center gap-3">
                                   <button
                                     type="button"
@@ -2039,30 +2040,34 @@ export function Community() {
                 <div className="mt-8 flex justify-center">
                   <button
                     type="button"
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-white/10 bg-[rgba(15,18,32,0.72)] px-6 py-2.5 text-sm font-semibold text-[#F7F3FF] shadow-[0_0_24px_rgba(139,92,246,0.18)] backdrop-blur-md transition-colors hover:border-violet-400/35 hover:bg-white/[0.06]"
+                    className="community-feed-load-more inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-white/10 bg-[rgba(15,18,32,0.72)] px-6 py-2.5 text-sm font-semibold text-[#F7F3FF] shadow-[0_0_24px_rgba(139,92,246,0.18)] backdrop-blur-md transition-colors hover:border-violet-400/35 hover:bg-white/[0.06] [html[data-ezri-theme=light]_&]:border-violet-200/60 [html[data-ezri-theme=light]_&]:bg-white [html[data-ezri-theme=light]_&]:text-violet-900 [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-ezri-theme=light]_&]:hover:border-violet-300/50 [html[data-ezri-theme=light]_&]:hover:bg-violet-50 [html[data-theme=light]_&]:border-violet-200/60 [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:text-violet-900 [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:hover:border-violet-300/50 [html[data-theme=light]_&]:hover:bg-violet-50"
                     onClick={() => setFeedPage((p) => Math.min(feedTotalPages, p + 1))}
                   >
                     Load more posts
-                    <ChevronDown className="h-4 w-4 text-violet-200/80" aria-hidden />
+                    <ChevronDown className="h-4 w-4 text-violet-200/80 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700" aria-hidden />
                   </button>
                 </div>
               )}
 
               {activeTab === "feed" && !loadingPosts && filteredPosts.length > 0 && feedTotalPages > 1 && (
                 <nav
-                  className="mt-4 flex flex-col items-stretch gap-3 rounded-2xl border border-white/[0.08] bg-[rgba(15,18,32,0.55)] px-4 py-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between"
+                  className="community-feed-pagination mt-4 flex flex-col items-stretch gap-3 rounded-2xl border border-white/[0.08] bg-[rgba(15,18,32,0.55)] px-4 py-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between [html[data-ezri-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-ezri-theme=light]_&]:bg-white [html[data-ezri-theme=light]_&]:text-[var(--solace-text)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:border-[color:var(--solace-card-border)] [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:text-[var(--solace-text)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                   aria-label="Feed pagination"
                 >
-                  <p className="text-center text-sm text-violet-100/70 sm:text-left">
+                  <p className="text-center text-sm text-violet-100/70 sm:text-left [html[data-ezri-theme=light]_&]:text-[var(--solace-muted)] [html[data-theme=light]_&]:text-[var(--solace-muted)]">
                     Showing{" "}
-                    <span className="font-medium text-white">
+                    <span className="font-medium text-white [html[data-ezri-theme=light]_&]:text-[var(--solace-text)] [html[data-theme=light]_&]:text-[var(--solace-text)]">
                       {(Math.min(feedPage, feedTotalPages) - 1) * FEED_PAGE_SIZE + 1}
                     </span>
                     –
-                    <span className="font-medium text-white">
+                    <span className="font-medium text-white [html[data-ezri-theme=light]_&]:text-[var(--solace-text)] [html[data-theme=light]_&]:text-[var(--solace-text)]">
                       {Math.min(Math.min(feedPage, feedTotalPages) * FEED_PAGE_SIZE, filteredPosts.length)}
                     </span>{" "}
-                    of <span className="font-medium text-white">{filteredPosts.length}</span> posts
+                    of{" "}
+                    <span className="font-medium text-white [html[data-ezri-theme=light]_&]:text-[var(--solace-text)] [html[data-theme=light]_&]:text-[var(--solace-text)]">
+                      {filteredPosts.length}
+                    </span>{" "}
+                    posts
                   </p>
                   <div className="flex items-center justify-center gap-2">
                     <button
@@ -2070,11 +2075,11 @@ export function Community() {
                       aria-label="Previous page"
                       disabled={feedPage <= 1}
                       onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-violet-100 transition-colors hover:border-amber-400/30 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-violet-100 transition-colors hover:border-amber-400/30 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 [html[data-ezri-theme=light]_&]:border-violet-200/60 [html[data-ezri-theme=light]_&]:bg-violet-50 [html[data-ezri-theme=light]_&]:text-violet-800 [html[data-ezri-theme=light]_&]:hover:border-violet-300/60 [html[data-ezri-theme=light]_&]:hover:bg-violet-100 [html[data-theme=light]_&]:border-violet-200/60 [html[data-theme=light]_&]:bg-violet-50 [html[data-theme=light]_&]:text-violet-800 [html[data-theme=light]_&]:hover:border-violet-300/60 [html[data-theme=light]_&]:hover:bg-violet-100"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
-                    <span className="min-w-[7rem] text-center text-sm tabular-nums text-violet-100/85">
+                    <span className="min-w-[7rem] text-center text-sm tabular-nums text-violet-100/85 [html[data-ezri-theme=light]_&]:text-violet-800 [html[data-theme=light]_&]:text-violet-800">
                       Page {Math.min(feedPage, feedTotalPages)} of {feedTotalPages}
                     </span>
                     <button
@@ -2082,7 +2087,7 @@ export function Community() {
                       aria-label="Next page"
                       disabled={feedPage >= feedTotalPages}
                       onClick={() => setFeedPage((p) => Math.min(feedTotalPages, p + 1))}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-violet-100 transition-colors hover:border-amber-400/30 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-violet-100 transition-colors hover:border-amber-400/30 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 [html[data-ezri-theme=light]_&]:border-violet-200/60 [html[data-ezri-theme=light]_&]:bg-violet-50 [html[data-ezri-theme=light]_&]:text-violet-800 [html[data-ezri-theme=light]_&]:hover:border-violet-300/60 [html[data-ezri-theme=light]_&]:hover:bg-violet-100 [html[data-theme=light]_&]:border-violet-200/60 [html[data-theme=light]_&]:bg-violet-50 [html[data-theme=light]_&]:text-violet-800 [html[data-theme=light]_&]:hover:border-violet-300/60 [html[data-theme=light]_&]:hover:bg-violet-100"
                     >
                       <ChevronRight className="h-5 w-5" />
                     </button>

@@ -190,8 +190,15 @@ export const modalTabInactive = cn(
   "[html[data-ezri-theme=light]_&]:border-[color:var(--border)]",
   "[html[data-ezri-theme=light]_&]:bg-[var(--card-muted)]",
   "[html[data-ezri-theme=light]_&]:text-[var(--text-muted)]",
+  "[html[data-ezri-theme=light]_&]:hover:border-violet-300/50",
+  "[html[data-ezri-theme=light]_&]:hover:bg-[var(--surface-lavender,#f5eeff)]",
+  "[html[data-ezri-theme=light]_&]:hover:text-[var(--button-secondary-text,#5b21b6)]",
   "[html[data-theme=light]_&]:border-[color:var(--border)]",
-  "[html[data-theme=light]_&]:bg-[var(--card-muted)]"
+  "[html[data-theme=light]_&]:bg-[var(--card-muted)]",
+  "[html[data-theme=light]_&]:text-[var(--text-muted)]",
+  "[html[data-theme=light]_&]:hover:border-violet-300/50",
+  "[html[data-theme=light]_&]:hover:bg-[var(--surface-lavender,#f5eeff)]",
+  "[html[data-theme=light]_&]:hover:text-[var(--button-secondary-text,#5b21b6)]"
 );
 
 export const modalPrimaryButton = cn(

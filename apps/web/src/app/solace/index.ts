@@ -4,6 +4,8 @@ export { SolaceJourneyCardVisual } from "./SolaceJourneyCardVisual";
 export type { JourneyAmbiance } from "./SolaceJourneyCardVisual";
 export { SolaceHeroAtmosphere } from "./SolaceHeroAtmosphere";
 export { SolaceSupportStrip } from "./SolaceSupportStrip";
+export { SolacePrivacyFooter } from "./SolacePrivacyFooter";
+export type { SolacePrivacyFooterProps } from "./SolacePrivacyFooter";
 
 /** @alias Semantic alias for glowing panels */
 export { SolacePanel as SolaceGlowCard } from "./SolacePanel";
@@ -30,6 +32,7 @@ export type { SolacePlanCardProps } from "./SolacePlanCard";
 export {
   SolaceSelect,
   solaceSelectContentClass,
+  solaceSelectLabelClass,
   solaceSelectItemClass,
   solaceSelectItemCompactClass,
   solaceSelectTriggerCompact,

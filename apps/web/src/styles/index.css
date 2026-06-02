@@ -6,5 +6,13 @@
 @import './solace-light-system.css';
 @import '../app/solace/solace-icon-chips.css';
 @import '../app/solace/solace-hero-media.css';
+@import '../app/pages/app/profile/profile-ui.css';
+@import '../app/pages/app/account-settings/account-settings-ui.css';
+@import '../app/pages/app/settings-hub/settings-subpage-hero.css';
+@import '../app/pages/app/change-avatar/change-avatar-ui.css';
+@import '../components/ui/coming-soon-overlay.css';
+@import '../app/pages/app/resources-library/resources-library-ui.css';
+@import '../app/pages/app/emergency-contacts/emergency-contacts-ui.css';
+@import '../app/pages/app/wellness-plan-settings/wellness-plan-ui.css';
 @import '../app/pages/app/appearance-settings/appearanceTheme.css';
 @import '../app/landing/landing-tokens.css';

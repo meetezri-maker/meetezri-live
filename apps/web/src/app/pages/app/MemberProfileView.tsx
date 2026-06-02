@@ -31,7 +31,9 @@ import {
   profileCardSubtitle,
   profileCardTitle,
   profileHeroShell,
+  profileHeroStatLabel,
   profileHeroStatStrip,
+  profileHeroStatValue,
   profileIconCircle,
   profileMilestoneChip,
   profilePageAtmosphere,
@@ -350,17 +352,8 @@ export function MemberProfileView() {
                       <span className={profileIconCircle(s.tone)}>
                         <s.icon className="h-4 w-4" />
                       </span>
-                      <span className="text-xl font-bold tabular-nums text-[rgba(255,255,255,0.96)] sm:text-2xl">
-                        {s.value}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-center text-[10px] font-semibold uppercase tracking-wider",
-                          profileBodyMuted
-                        )}
-                      >
-                        {s.label}
-                      </span>
+                      <span className={cn("text-center", profileHeroStatValue)}>{s.value}</span>
+                      <span className={cn("text-center", profileHeroStatLabel)}>{s.label}</span>
                     </div>
                   ))}
                 </div>

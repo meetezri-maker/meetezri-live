@@ -1,0 +1,308 @@
+/**
+ * Emergency contacts (/app/settings/emergency-contacts) — light theme on image banners.
+ */
+
+/* Banner copy — semantic (no text-white / rgba in class names) */
+.solace-app .emergency-contacts-page .emergency-banner-title {
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+}
+
+.solace-app .emergency-contacts-page .emergency-banner-body {
+  color: rgba(255, 255, 255, 0.62);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .solace-hero-light-scrim {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* Hero heart — stay white on cinematic banner (beats solace-image-card svg currentColor) */
+.solace-app .emergency-contacts-page .emergency-hero-card .emergency-hero-icon {
+  color: rgba(244, 114, 182, 0.92);
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .emergency-hero-icon,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .emergency-hero-icon.lucide,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card svg.emergency-hero-icon,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .emergency-hero-icon,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card .emergency-hero-icon.lucide,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-card svg.emergency-hero-icon {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  filter: drop-shadow(0 0 16px rgba(236, 72, 153, 0.45));
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-subtitle,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-hero-subtitle {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-rail-title,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-rail-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-rail-body,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-rail-body {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-about-title,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-about-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+/* ─── “Need help right now?” — light theme = pastel card, no dark photo ─── */
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner {
+  background: linear-gradient(145deg, #fff7ed 0%, #fce7f3 48%, #f5f3ff 100%) !important;
+  border-color: rgba(244, 63, 94, 0.22) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-banner-img,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-banner-img {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-light-scrim,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-light-scrim,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-overlays-dark,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-scenic-overlays-dark,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="from-[#0"],
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="via-[#0"],
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="bg-gradient-to-t"],
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="from-[#0"],
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="via-[#0"],
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner [class*="bg-gradient-to-t"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-title,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-body,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner h2,
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner p,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-title,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-body,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner h2,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner p {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-body,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-scenic-banner .emergency-banner-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+/* Helpful resources CTA strip */
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner {
+  background: linear-gradient(135deg, #f6f0ff 0%, #fce7f3 48%, #ffffff 100%) !important;
+  border-color: rgba(236, 72, 153, 0.28) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-resources-banner-img,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-resources-banner-img {
+  opacity: 0.18 !important;
+  mix-blend-mode: normal !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-resources-overlays-dark,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-resources-overlays-dark {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-banner-title,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-banner-title {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-banner-body,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-banner .emergency-banner-body {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-cta,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-cta {
+  border-color: var(--border-strong, #d8c7f7) !important;
+  background: #ffffff !important;
+  color: var(--text-primary, #101828) !important;
+  backdrop-filter: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-cta:hover,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-resources-cta:hover {
+  border-color: rgba(236, 72, 153, 0.4) !important;
+  background: #fdf2f8 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .emergency-contacts-page .emergency-footer-muted,
+html[data-theme="light"] .solace-app .emergency-contacts-page .emergency-footer-muted {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* ─── Add / edit / delete contact modals (fixed layer; html-scoped for light theme) ─── */
+html[data-ezri-theme="light"] .emergency-modal-overlay,
+html[data-theme="light"] .emergency-modal-overlay {
+  background: rgba(251, 248, 255, 0.78) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-overlay::before,
+html[data-theme="light"] .emergency-modal-overlay::before {
+  opacity: 0.35;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-panel,
+html[data-theme="light"] .emergency-modal-panel {
+  background: var(--card-solid, #ffffff) !important;
+  border-color: var(--border, #e7ddfb) !important;
+  color: var(--text-primary, #101828) !important;
+  box-shadow:
+    0 24px 60px rgba(88, 28, 135, 0.12),
+    0 0 32px rgba(167, 139, 250, 0.14) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-eyebrow,
+html[data-theme="light"] .emergency-modal-eyebrow {
+  color: #a21caf !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-title,
+html[data-theme="light"] .emergency-modal-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-subtitle,
+html[data-theme="light"] .emergency-modal-subtitle {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-emphasis,
+html[data-theme="light"] .emergency-modal-emphasis {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-label,
+html[data-theme="light"] .emergency-modal-label {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-field-hint,
+html[data-theme="light"] .emergency-modal-field-hint {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-field,
+html[data-theme="light"] .emergency-modal-field {
+  border-color: var(--input-border, #ddd0fa) !important;
+  background: var(--input-bg, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-field:focus-within,
+html[data-theme="light"] .emergency-modal-field:focus-within {
+  border-color: rgba(124, 58, 237, 0.45) !important;
+  background: var(--input-bg, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-input,
+html[data-theme="light"] .emergency-modal-input {
+  color: var(--input-text, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-input::placeholder,
+html[data-theme="light"] .emergency-modal-input::placeholder {
+  color: var(--input-placeholder, #98a2b3) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-field [class*="text-violet"],
+html[data-ezri-theme="light"] .emergency-modal-field [class*="text-fuchsia"],
+html[data-ezri-theme="light"] .emergency-modal-field [class*="text-cyan"],
+html[data-theme="light"] .emergency-modal-field [class*="text-violet"],
+html[data-theme="light"] .emergency-modal-field [class*="text-fuchsia"],
+html[data-theme="light"] .emergency-modal-field [class*="text-cyan"] {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-phone-btn,
+html[data-ezri-theme="light"] .emergency-modal-phone-input,
+html[data-theme="light"] .emergency-modal-phone-btn,
+html[data-theme="light"] .emergency-modal-phone-input {
+  border-color: var(--input-border, #ddd0fa) !important;
+  background: var(--input-bg, #ffffff) !important;
+  color: var(--input-text, #101828) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-phone-input::placeholder,
+html[data-theme="light"] .emergency-modal-phone-input::placeholder {
+  color: var(--input-placeholder, #98a2b3) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-consent,
+html[data-theme="light"] .emergency-modal-consent {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-muted, #f8f3ff) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-checkbox-label,
+html[data-theme="light"] .emergency-modal-checkbox-label {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-checkbox-help,
+html[data-theme="light"] .emergency-modal-checkbox-help {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-checkbox,
+html[data-theme="light"] .emergency-modal-checkbox {
+  border-color: var(--border-strong, #d8c7f7) !important;
+  background: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-header-icon,
+html[data-theme="light"] .emergency-modal-header-icon {
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  background: var(--surface-lavender, #f5eeff) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-header-icon svg,
+html[data-theme="light"] .emergency-modal-header-icon svg {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-btn-cancel,
+html[data-theme="light"] .emergency-modal-btn-cancel {
+  border-color: var(--button-secondary-border, #d8c7f7) !important;
+  background: var(--button-secondary-bg, #f6f0ff) !important;
+  color: var(--button-secondary-text, #5b21b6) !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-btn-save,
+html[data-theme="light"] .emergency-modal-btn-save {
+  color: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-btn-save:disabled,
+html[data-theme="light"] .emergency-modal-btn-save:disabled {
+  opacity: 0.55 !important;
+  color: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .emergency-modal-btn-destructive,
+html[data-theme="light"] .emergency-modal-btn-destructive {
+  color: #ffffff !important;
+}

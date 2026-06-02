@@ -32,12 +32,24 @@ import {
   resourcesExternalBtn,
   resourcesFavoriteBtn,
   resourcesHeroCard,
+  resourcesCardBody,
+  resourcesCardDesc,
+  resourcesCardMeta,
+  resourcesCardTag,
+  resourcesCardTitle,
+  resourcesEmptyDesc,
+  resourcesEmptyState,
+  resourcesEmptyTitle,
+  resourcesFooterFine,
+  resourcesFooterMuted,
   resourcesHeroGlowPurple,
   resourcesHeroGlowWarmth,
   resourcesHeroImage,
+  resourcesHeroLightScrim,
   resourcesHeroOverlay,
   resourcesHeroSubtitle,
   resourcesHeroTitle,
+  resourcesSearchIcon,
   resourcesPageAtmosphere,
   resourcesPageFogMid,
   resourcesPageGlowTop,
@@ -205,29 +217,13 @@ export function Resources() {
             className={resourcesHeroImage}
             width={1600}
             height={640}
+            loading="eager"
+            decoding="async"
           />
-          <motion.div
-            className={resourcesHeroOverlay}
-            aria-hidden
-            animate={{ opacity: [0.92, 1, 0.92] }}
-            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className={resourcesHeroGlowPurple}
-            aria-hidden
-            animate={{ opacity: [0.7, 1, 0.7] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className={resourcesHeroGlowWarmth}
-            aria-hidden
-            animate={{ opacity: [0.65, 0.95, 0.65] }}
-            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-          />
-          <div
-            className="pointer-events-none absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.45)]"
-            aria-hidden
-          />
+          <div className={resourcesHeroLightScrim} aria-hidden />
+          <div className={resourcesHeroOverlay} aria-hidden />
+          <div className={resourcesHeroGlowPurple} aria-hidden />
+          <div className={resourcesHeroGlowWarmth} aria-hidden />
 
           <div className="relative z-10 flex min-h-[220px] flex-col justify-end p-6 sm:min-h-[260px] sm:p-8 lg:min-h-[300px] lg:p-10">
             <Link to="/app/settings" className={resourcesBackLink}>
@@ -252,7 +248,10 @@ export function Resources() {
             transition={{ delay: 0.05, duration: 0.35 }}
           >
             <Search
-              className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[rgba(255,255,255,0.38)]"
+              className={cn(
+                resourcesSearchIcon,
+                "pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[rgba(255,255,255,0.38)]"
+              )}
               aria-hidden
             />
             <input
@@ -292,13 +291,13 @@ export function Resources() {
         {/* 3. Resource grid */}
         {filteredArticles.length === 0 ? (
           <motion.div
-            className="mt-8 rounded-[1.4rem] border border-dashed border-white/[0.12] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] px-6 py-16 text-center"
+            className={resourcesEmptyState}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <BookOpen className="mx-auto mb-4 h-10 w-10 text-violet-300/80" aria-hidden />
-            <p className="text-lg font-semibold text-white">No resources match</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-[rgba(255,255,255,0.48)]">
+            <BookOpen className="mx-auto mb-4 h-10 w-10 text-violet-500/80" aria-hidden />
+            <p className={resourcesEmptyTitle}>No resources match</p>
+            <p className={resourcesEmptyDesc}>
               Try another category or clear your search.
             </p>
             <button
@@ -356,10 +355,7 @@ export function Resources() {
                       </span>
                       {extraTags.length > 0
                         ? extraTags.slice(0, 1).map((tag) => (
-                            <span
-                              key={tag}
-                              className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/70 uppercase"
-                            >
+                            <span key={tag} className={resourcesCardTag}>
                               {tag}
                             </span>
                           ))
@@ -393,16 +389,14 @@ export function Resources() {
                   </motion.div>
 
                   {/* Card body */}
-                  <div className="flex flex-1 flex-col p-4 sm:p-[1.125rem]">
+                  <div className={resourcesCardBody}>
                     <motion.div
                       className="mb-2 flex items-start justify-between gap-2"
                       initial={false}
                       whileHover={{ x: 1 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <h2 className="line-clamp-2 text-[0.95rem] font-bold leading-snug text-white">
-                        {article.title}
-                      </h2>
+                      <h2 className={resourcesCardTitle}>{article.title}</h2>
                       {showRating ? (
                         <div className="flex shrink-0 items-center gap-0.5 text-amber-300/90">
                           <Star className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
@@ -411,11 +405,9 @@ export function Resources() {
                       ) : null}
                     </motion.div>
 
-                    <p className="line-clamp-3 flex-1 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
-                      {article.description}
-                    </p>
+                    <p className={resourcesCardDesc}>{article.description}</p>
 
-                    <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[rgba(255,255,255,0.42)]">
+                    <div className={resourcesCardMeta}>
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" aria-hidden />
                         {article.duration}
@@ -471,8 +463,8 @@ export function Resources() {
 
         {/* 4. Footer */}
         <footer className="pt-2 text-center">
-          <p className="text-sm text-[rgba(255,255,255,0.42)]">Made with care for your wellbeing</p>
-          <p className="mt-1 text-xs text-[rgba(255,255,255,0.32)]">
+          <p className={resourcesFooterMuted}>Made with care for your wellbeing</p>
+          <p className={resourcesFooterFine}>
             Solace v1.0.0 • © 2026 •{" "}
             <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
               Privacy

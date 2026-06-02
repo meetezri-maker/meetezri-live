@@ -1,6 +1,15 @@
 import { cn } from "@/lib/utils";
 import { solaceInputSurface } from "@/app/solace/solacePageChrome";
 import {
+  solaceCinematicBanner,
+  solaceCinematicBannerBody,
+  solaceCinematicBannerContent,
+  solaceCinematicBannerLink,
+  solaceCinematicBannerOverlay,
+  solaceCinematicBannerTitle,
+  solaceHeroImage,
+} from "@/app/solace/solacePageChrome";
+import {
   settingsCard,
   settingsIconChip,
   settingsPageAtmosphere,
@@ -8,9 +17,28 @@ import {
   settingsPageGlowTop,
   settingsPageVignette,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBackLink,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroCopy,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroInner,
+  settingsSubpageHeroLead,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+  settingsSubpageHeroOrb,
+  settingsSubpageHeroOrbGlow,
+  settingsSubpageHeroOrbWrap,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-export const PRIVACY_HERO_IMG = "/community/hero-lake.jpg";
-export const PRIVACY_BANNER_IMG = "/community/hero-lake.jpg";
+export const PRIVACY_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+export const PRIVACY_BANNER_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 export const PRIVACY_ENCRYPTION_IMG = "/community/scene-forest.jpg";
 
 export const privacyPageAtmosphere = settingsPageAtmosphere;
@@ -30,31 +58,19 @@ export const privacyRailCard = cn(
 /** Rail card without outer violet glow (e.g. bottom sidebar card). */
 export const privacyRailCardFlat = cn(settingsCard, "rounded-3xl p-5 sm:p-6");
 
-export const privacyHeroCard = cn(
-  privacyGlassCard,
-  "relative min-h-[280px] overflow-hidden rounded-[2rem] border-violet-400/12 sm:min-h-[300px] lg:min-h-[320px]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_72px_-18px_rgba(139,92,246,0.32),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
-);
-
-export const privacyHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[center_38%]",
-  "brightness-[0.52] contrast-[0.94] saturate-[1.14]"
-);
-
-export const privacyHeroOverlayLeft = cn(
-  "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/78 to-[#0a0b18]/20 lg:from-[#0a0b18]/96 lg:via-[#0a0b18]/55 lg:to-transparent"
-);
-
-export const privacyHeroOverlayPurple = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_80%_90%_at_82%_48%,rgba(192,132,252,0.22)_0%,transparent_58%)]"
-);
-
-export const privacyHeroOverlayWarmth = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_42%_36%_at_72%_72%,rgba(251,146,60,0.14)_0%,transparent_55%)]"
-);
+export const privacyHeroCard = settingsSubpageHeroShell;
+export const privacyHeroImage = settingsSubpageHeroImage;
+export const privacyHeroLightScrim = settingsSubpageHeroLightScrim;
+export const privacyHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const privacyHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const privacyHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const privacyHeroInner = settingsSubpageHeroInner;
+export const privacyHeroCopy = settingsSubpageHeroCopy;
+export const privacyHeroLead = settingsSubpageHeroLead;
+export const privacyHeroBody = settingsSubpageHeroBody;
+export const privacyHeroOverlayLeft = privacyHeroOverlayReadability;
+export const privacyHeroOverlayPurple = privacyHeroOverlayAccent;
+export const privacyHeroOverlayWarmth = privacyHeroOverlayBottom;
 
 export const privacyIconChip = settingsIconChip;
 
@@ -65,19 +81,12 @@ export const privacySectionTitle = cn(
 
 export const privacySectionSubtitle = "mt-1 text-sm text-[var(--solace-muted)]";
 
-export const privacyBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.1em] text-[color:var(--accent-secondary,#a78bfa)]/55",
-  "transition-colors hover:text-violet-200/95"
-);
-
-export const privacyHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4.2vw,3rem)] font-light leading-[1.06] tracking-tight text-white"
-);
-
-export const privacyHeroAccent = cn(
-  "bg-gradient-to-r from-violet-200 via-fuchsia-200 to-violet-300 bg-clip-text text-transparent",
-  "drop-shadow-[0_0_28px_rgba(167,139,250,0.45)]"
-);
+export const privacyBackLink = settingsSubpageHeroBackLink;
+export const privacyHeroTitle = settingsSubpageHeroTitleSerif;
+export const privacyHeroAccent = settingsSubpageHeroAccent;
+export const privacyHeroOrbWrap = settingsSubpageHeroOrbWrap;
+export const privacyHeroOrbGlow = settingsSubpageHeroOrbGlow;
+export const privacyHeroOrb = settingsSubpageHeroOrb;
 
 export const privacyBtnGhost = cn(
   "inline-flex min-h-[36px] items-center justify-center rounded-full border border-white/[0.1] px-4 py-1.5",
@@ -128,9 +137,16 @@ export const privacyDataCard = cn(
 );
 
 export const privacyCommitmentBanner = cn(
-  privacyGlassCard,
-  "relative overflow-hidden rounded-[1.75rem] border-violet-400/10 p-6 sm:p-8"
+  solaceCinematicBanner,
+  "rounded-[1.75rem] border-violet-400/10"
 );
+
+export { solaceCinematicBannerContent as privacyCommitmentBannerContent };
+export { solaceCinematicBannerOverlay as privacyCommitmentBannerOverlay };
+export { solaceHeroImage as privacyCommitmentBannerImage };
+export { solaceCinematicBannerTitle as privacyCommitmentBannerTitle };
+export { solaceCinematicBannerBody as privacyCommitmentBannerBody };
+export { solaceCinematicBannerLink as privacyCommitmentBannerLink };
 
 export const privacyLinkMuted = cn(
   "inline-flex items-center gap-1 text-xs font-semibold text-violet-300/80 transition hover:text-violet-200"

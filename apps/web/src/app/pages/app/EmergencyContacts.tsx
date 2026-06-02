@@ -58,16 +58,19 @@ import {
   emergencyContactCard,
   emergencyGlassCard,
   emergencyHeroAccent,
+  emergencyHeroIcon,
   emergencyHeroCard,
   emergencyHeroImage,
-  emergencyHeroOverlayLeft,
-  emergencyHeroOverlayPurple,
-  emergencyHeroOverlayWarmth,
+  emergencyHeroLightScrim,
+  emergencyHeroOverlayAccent,
+  emergencyHeroOverlayBottom,
+  emergencyHeroOverlayReadability,
   emergencyHeroTitle,
   emergencyIconChip,
   emergencyModalBtnCancel,
   emergencyModalBtnDestructive,
   emergencyModalBtnRow,
+  emergencyModalEmphasis,
   emergencyModalBtnSave,
   emergencyModalCheckbox,
   emergencyModalCheckboxHelp,
@@ -90,10 +93,29 @@ import {
   emergencyPageFogMid,
   emergencyPageGlowTop,
   emergencyPageVignette,
+  emergencyAboutTitle,
+  emergencyBannerBody,
+  emergencyBannerBodyMuted,
+  emergencyBannerContent,
+  emergencyBannerTitle,
+  emergencyBannerTitleLg,
+  emergencyFooterFine,
+  emergencyFooterMuted,
+  emergencyHeroSubtitle,
+  emergencyRailBody,
   emergencyRailCard,
-  emergencyResourcesCard,
+  emergencyRailItemTitle,
+  emergencyRailTitle,
+  emergencyResourcesBanner,
+  emergencyResourcesBannerImg,
   emergencyResourcesCta,
+  emergencyResourcesOverlayDark,
   emergencySafetyRow,
+  emergencyScenicBanner,
+  emergencyScenicBannerImage,
+  emergencyScenicLightScrim,
+  emergencyScenicOverlayDark,
+  emergencyScenicOverlayWarm,
 } from "@/app/pages/app/emergency-contacts/emergencyContactsUi";
 
 interface EmergencyContact {
@@ -445,12 +467,17 @@ export function EmergencyContacts() {
                   src={EMERGENCY_HERO_IMG}
                   alt=""
                   className={emergencyHeroImage}
+                  width={1600}
+                  height={900}
+                  loading="eager"
+                  decoding="async"
                 />
-                <motion.div className={emergencyHeroOverlayLeft} aria-hidden />
-                <motion.div className={emergencyHeroOverlayPurple} aria-hidden />
-                <motion.div className={emergencyHeroOverlayWarmth} aria-hidden />
+                <div className={emergencyHeroLightScrim} aria-hidden />
+                <div className={emergencyHeroOverlayReadability} aria-hidden />
+                <div className={emergencyHeroOverlayAccent} aria-hidden />
+                <div className={emergencyHeroOverlayBottom} aria-hidden />
 
-                <div className="relative flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8">
+                <div className="relative z-10 flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8">
                   <div>
                     <button
                       type="button"
@@ -464,16 +491,12 @@ export function EmergencyContacts() {
                     <motion.div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-3">
-                          <Heart
-                            className="h-8 w-8 shrink-0 text-fuchsia-300/90 drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]"
-                            strokeWidth={1.5}
-                            aria-hidden
-                          />
+                          <Heart className={emergencyHeroIcon} strokeWidth={1.5} aria-hidden />
                           <h1 className={emergencyHeroTitle}>
                             Emergency <span className={emergencyHeroAccent}>Contacts</span>
                           </h1>
                         </div>
-                        <p className="mt-3 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+                        <p className={emergencyHeroSubtitle}>
                           Manage contacts we can notify if you need support
                         </p>
                       </div>
@@ -501,9 +524,7 @@ export function EmergencyContacts() {
                   </div>
                   <motion.div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="font-serif text-lg font-light text-white">
-                        About Emergency Contacts
-                      </h2>
+                      <h2 className={emergencyAboutTitle}>About Emergency Contacts</h2>
                       <button
                         type="button"
                         onClick={() => setConsentReviewOpen(true)}
@@ -703,7 +724,7 @@ export function EmergencyContacts() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.08 }}
               >
-                <h2 className="font-serif text-lg font-light text-white">For your safety</h2>
+                <h2 className={emergencyRailTitle}>For your safety</h2>
                 <div className="mt-5">
                   {SAFETY_GUIDANCE.map((item) => (
                     <div key={item.title} className={emergencySafetyRow}>
@@ -711,10 +732,8 @@ export function EmergencyContacts() {
                         <item.icon className="h-4 w-4" aria-hidden />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-[rgba(255,255,255,0.92)]">{item.title}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">
-                          {item.description}
-                        </p>
+                        <p className={emergencyRailItemTitle}>{item.title}</p>
+                        <p className={emergencyRailBody}>{item.description}</p>
                       </div>
                     </div>
                   ))}
@@ -723,28 +742,19 @@ export function EmergencyContacts() {
 
               {/* Need help right now? */}
               <motion.div
-                className={cn(emergencyRailCard, "relative overflow-hidden")}
+                className={emergencyScenicBanner}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.12 }}
               >
-                <img
-                  src={EMERGENCY_RAIL_IMG}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover object-[center_70%] brightness-[0.38] saturate-[1.1]"
-                />
-                <div
-                  className="absolute inset-0 bg-gradient-to-t from-[#0a0b18]/95 via-[#0a0b18]/70 to-[#0a0b18]/35"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_100%,rgba(251,146,60,0.18)_0%,transparent_60%)]"
-                  aria-hidden
-                />
+                <img src={EMERGENCY_RAIL_IMG} alt="" className={emergencyScenicBannerImage} />
+                <div className={emergencyScenicLightScrim} aria-hidden />
+                <div className={emergencyScenicOverlayDark} aria-hidden />
+                <div className={emergencyScenicOverlayWarm} aria-hidden />
 
-                <div className="relative">
-                  <h2 className="font-serif text-lg font-light text-white">Need help right now?</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.58)]">
+                <div className={emergencyBannerContent}>
+                  <h2 className={emergencyBannerTitle}>Need help right now?</h2>
+                  <p className={emergencyBannerBody}>
                     You don&apos;t have to go through this alone.
                   </p>
                   <Link to="/app/emergency-resources" className={cn(emergencyBtnRose, "mt-5")}>
@@ -758,20 +768,13 @@ export function EmergencyContacts() {
             <motion.div className="min-w-0 space-y-6 xl:col-start-1">
             {/* 4. Helpful Resources */}
             <section
-              className={emergencyResourcesCard}
+              className={emergencyResourcesBanner}
               aria-labelledby="emergency-resources-heading"
             >
-              <img
-                src={EMERGENCY_HERO_IMG}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover object-[center_42%] opacity-35 mix-blend-soft-light"
-              />
-              <div
-                className="absolute inset-0 bg-[linear-gradient(135deg,rgba(76,29,149,0.65)_0%,rgba(136,19,55,0.5)_50%,rgba(15,10,35,0.85)_100%)]"
-                aria-hidden
-              />
+              <img src={EMERGENCY_HERO_IMG} alt="" className={emergencyResourcesBannerImg} />
+              <div className={emergencyResourcesOverlayDark} aria-hidden />
 
-              <div className="relative">
+              <div className={emergencyBannerContent}>
                 <div className="flex flex-wrap items-start gap-4">
                   <motion.div
                     className={cn(
@@ -782,13 +785,10 @@ export function EmergencyContacts() {
                     <Phone className="h-5 w-5" aria-hidden />
                   </motion.div>
                   <div className="min-w-0 flex-1">
-                    <h2
-                      id="emergency-resources-heading"
-                      className="font-serif text-xl font-light text-white sm:text-[1.35rem]"
-                    >
+                    <h2 id="emergency-resources-heading" className={emergencyBannerTitleLg}>
                       Helpful Resources Available 24/7
                     </h2>
-                    <p className="mt-2 text-sm text-[rgba(255,255,255,0.62)]">
+                    <p className={emergencyBannerBodyMuted}>
                       Support is always here when you need it.
                     </p>
                   </div>
@@ -806,11 +806,11 @@ export function EmergencyContacts() {
 
             {/* 5. Footer */}
             <footer className="pb-2 pt-2 text-center">
-              <div className="mb-2 flex items-center justify-center gap-2 text-sm text-[rgba(255,255,255,0.42)]">
+              <div className={cn("mb-2 flex items-center justify-center gap-2", emergencyFooterMuted)}>
                 <Heart className="h-4 w-4 text-fuchsia-400/70" aria-hidden />
                 <span>Made with care for your wellbeing</span>
               </div>
-              <p className="text-xs text-[rgba(255,255,255,0.32)]">
+              <p className={emergencyFooterFine}>
                 Solace v1.0.0 • © 2026 •{" "}
                 <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
                   Privacy
@@ -864,7 +864,7 @@ export function EmergencyContacts() {
                   </h2>
                   <p id="emergency-contact-delete-desc" className={emergencyModalSubtitle}>
                     Are you sure you want to remove{" "}
-                    <span className="font-medium text-white/90">{deleteTarget.name}</span> from
+                    <span className={emergencyModalEmphasis}>{deleteTarget.name}</span> from
                     your emergency contacts? This cannot be undone.
                   </p>
                 </div>

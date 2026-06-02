@@ -1,0 +1,31 @@
+/**
+ * Settings subpage heroes — readable copy + light surfaces (notifications, privacy, etc.)
+ */
+
+.solace-app .settings-subpage-hero-lead {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.solace-app .settings-subpage-hero-body {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+html[data-ezri-theme="light"] .solace-app .settings-subpage-hero-lead,
+html[data-theme="light"] .solace-app .settings-subpage-hero-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .settings-subpage-hero-body,
+html[data-theme="light"] .solace-app .settings-subpage-hero-body {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .settings-subpage-hero-orb-quote,
+html[data-theme="light"] .solace-app .settings-subpage-hero-orb-quote {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .settings-subpage-hero .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .settings-subpage-hero .solace-hero-light-scrim {
+  display: block !important;
+}

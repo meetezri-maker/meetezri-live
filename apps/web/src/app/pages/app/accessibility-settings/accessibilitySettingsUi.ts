@@ -16,10 +16,20 @@ import {
   settingsSectionTitle,
   settingsBtnPrimary,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroInnerCompact,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShellCompact,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-
-
-export const ACCESSIBILITY_HERO_IMG = "/community/hero-lake.jpg";
+export const ACCESSIBILITY_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 
 export const ACCESSIBILITY_HEART_IMG = "/community/scene-stars.jpg";
 
@@ -94,108 +104,28 @@ export const accessibilityRailCard = cn(
 
 
 export const accessibilityHeroCard = cn(
-
-  accessibilityGlassCard,
-
-  "relative min-h-[232px] overflow-hidden rounded-[1.85rem] sm:min-h-[248px] lg:min-h-[256px]",
-
-  "border border-emerald-400/22 border-violet-400/12",
-
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_80px_-20px_rgba(52,211,153,0.32),0_0_64px_-24px_rgba(139,92,246,0.22),0_32px_80px_-40px_rgba(0,0,0,0.85)]"
-
+  settingsSubpageHeroShellCompact,
+  "border-emerald-400/22"
 );
-
-
 
 export const accessibilityHeroImage = cn(
-
-  "absolute inset-0 h-full w-full scale-[1.06] object-cover object-[86%_42%]",
-
-  "brightness-[0.62] contrast-[1.04] saturate-[1.28]"
-
+  settingsSubpageHeroImage,
+  "scale-[1.06] object-[86%_42%]"
 );
 
-
-
-export const accessibilityHeroOverlayLeft = cn(
-
-  "absolute inset-0",
-
-  "bg-gradient-to-r from-[#070812]/97 via-[#0a0b18]/78 via-[42%] to-transparent",
-
-  "lg:from-[#070812]/94 lg:via-[#0a0b18]/58 lg:via-[48%] lg:to-transparent"
-
-);
-
-
-
-export const accessibilityHeroOverlayPurpleSky = cn(
-
-  "absolute inset-0",
-
-  "bg-gradient-to-b from-[rgba(46,26,88,0.55)] via-[rgba(30,20,60,0.18)] via-[38%] to-transparent"
-
-);
-
-
-
-export const accessibilityHeroOverlayPurpleNight = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_80%_90%_at_82%_38%,rgba(168,85,247,0.32)_0%,rgba(139,92,246,0.12)_42%,transparent_62%)]"
-
-);
-
-
-
-export const accessibilityHeroOverlayEmerald = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_55%_70%_at_14%_58%,rgba(52,211,153,0.28)_0%,rgba(16,185,129,0.08)_38%,transparent_62%)]"
-
-);
-
-
-
-export const accessibilityHeroOverlayTitleHaze = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_50%_55%_at_28%_52%,rgba(139,92,246,0.16)_0%,transparent_58%)]"
-
-);
-
-
-
-export const accessibilityHeroOverlayWarmth = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_42%_38%_at_86%_56%,rgba(251,191,36,0.38)_0%,rgba(249,115,22,0.14)_38%,transparent_62%)]"
-
-);
-
-
-
-export const accessibilityHeroOverlayReflection = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_60%_28%_at_72%_88%,rgba(56,189,248,0.08)_0%,transparent_55%)]"
-
-);
-
-
-
-export const accessibilityHeroOverlayVignette = cn(
-
-  "absolute inset-0",
-
-  "bg-[radial-gradient(ellipse_120%_90%_at_50%_50%,transparent_45%,rgba(4,5,14,0.35)_100%)]"
-
-);
+export const accessibilityHeroLightScrim = settingsSubpageHeroLightScrim;
+export const accessibilityHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const accessibilityHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const accessibilityHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const accessibilityHeroInner = settingsSubpageHeroInnerCompact;
+export const accessibilityHeroOverlayLeft = accessibilityHeroOverlayReadability;
+export const accessibilityHeroOverlayPurpleSky = accessibilityHeroOverlayReadability;
+export const accessibilityHeroOverlayPurpleNight = accessibilityHeroOverlayAccent;
+export const accessibilityHeroOverlayEmerald = accessibilityHeroOverlayAccent;
+export const accessibilityHeroOverlayTitleHaze = accessibilityHeroOverlayReadability;
+export const accessibilityHeroOverlayWarmth = accessibilityHeroOverlayBottom;
+export const accessibilityHeroOverlayReflection = accessibilityHeroOverlayBottom;
+export const accessibilityHeroOverlayVignette = accessibilityHeroOverlayBottom;
 
 
 
@@ -240,28 +170,21 @@ export const accessibilityBackLink = cn(
 
 
 export const accessibilityHeroTitle = cn(
-
-  "font-serif text-[clamp(2.05rem,4.2vw,2.85rem)] font-light leading-[1.05] tracking-tight text-white",
-
-  "drop-shadow-[0_2px_24px_rgba(139,92,246,0.18)]"
-
+  settingsSubpageHeroTitleSerif,
+  "text-[clamp(2.05rem,4.2vw,2.85rem)] leading-[1.05]"
 );
-
-
 
 export const accessibilityHeroAccent = cn(
-
   "mt-1.5 text-sm font-medium text-emerald-300 sm:text-[15px]",
-
-  "drop-shadow-[0_0_20px_rgba(52,211,153,0.35)]"
-
+  "drop-shadow-[0_0_20px_rgba(52,211,153,0.35)]",
+  "[html[data-ezri-theme=light]_&]:text-emerald-700 [html[data-ezri-theme=light]_&]:drop-shadow-none",
+  "[html[data-theme=light]_&]:text-emerald-700 [html[data-theme=light]_&]:drop-shadow-none"
 );
 
-
-
-export const accessibilityHeroBody =
-
-  "mt-3 max-w-md text-xs leading-relaxed text-[rgba(210,205,230,0.62)] sm:text-sm sm:leading-relaxed";
+export const accessibilityHeroBody = cn(
+  settingsSubpageHeroBody,
+  "max-w-md sm:text-sm sm:leading-relaxed"
+);
 
 
 

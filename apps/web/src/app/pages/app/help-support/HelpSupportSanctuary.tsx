@@ -26,8 +26,21 @@ import { Link } from "react-router-dom";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SOLACE_SUPPORT_CARD_IMG, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroLead,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-const HERO_IMG = "/community/hero-lake.jpg";
+const HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 const BANNER_IMG = "/community/scene-water.jpg";
 const COMFORT_IMG = TALK_ENV_CANDLE;
 const LANTERN_IMG = SOLACE_SUPPORT_CARD_IMG;
@@ -205,41 +218,20 @@ export function SupportHero({ backLink }: SupportHeroProps) {
   return (
     <section className="space-y-4">
       {backLink}
-      <div
-        className={cn(
-          glassPanel,
-          "relative isolate min-h-[320px] overflow-hidden sm:min-h-[360px] lg:min-h-[380px]"
-        )}
-      >
+      <div className={cn(settingsSubpageHeroShell, "min-h-[320px] sm:min-h-[360px] lg:min-h-[380px]")}>
         <img
           src={HERO_IMG}
           alt=""
-          className="absolute inset-0 h-full w-full scale-105 object-cover object-[center_35%]"
+          className={cn(settingsSubpageHeroImage, "scale-105 object-[center_35%]")}
           width={1800}
           height={900}
           loading="eager"
+          decoding="async"
         />
-        {/* Lighter overlay — let the cabin/moon image dominate emotionally */}
-        <motion.div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#05060c]/92 via-[#05060c]/55 to-[#05060c]/25 lg:via-[#05060c]/45 lg:to-transparent"
-          aria-hidden
-        />
-        <motion.div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05060c]/80 via-transparent to-[#1e1040]/20"
-          aria-hidden
-        />
-        <motion.div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_50%,rgba(168,85,247,0.22),transparent_50%)]"
-          aria-hidden
-        />
-        <motion.div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_80%,rgba(251,146,60,0.12),transparent_45%)]"
-          aria-hidden
-        />
-        <motion.div
-          className="pointer-events-none absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.35)]"
-          aria-hidden
-        />
+        <div className={settingsSubpageHeroLightScrim} aria-hidden />
+        <div className={settingsSubpageHeroOverlayReadability} aria-hidden />
+        <div className={settingsSubpageHeroOverlayAccent} aria-hidden />
+        <div className={settingsSubpageHeroOverlayBottom} aria-hidden />
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -252,17 +244,14 @@ export function SupportHero({ backLink }: SupportHeroProps) {
             transition={{ delay: 0.1 }}
             className="max-w-xl space-y-4 lg:max-w-[52%]"
           >
-            <h1 className="font-serif text-[clamp(2.25rem,5vw,3.15rem)] font-light leading-[1.08] tracking-tight text-white [text-shadow:0_2px_40px_rgba(0,0,0,0.5)]">
-              Support{" "}
-              <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-violet-300 bg-clip-text text-transparent">
-                Center
-              </span>
+            <h1 className={cn(settingsSubpageHeroTitleSerif, "text-[clamp(2.25rem,5vw,3.15rem)] leading-[1.08]")}>
+              Support <span className={settingsSubpageHeroAccent}>Center</span>
             </h1>
-            <p className="max-w-md text-[15px] leading-relaxed text-zinc-200/95">
+            <p className={cn(settingsSubpageHeroLead, "max-w-md")}>
               We&apos;re here to support you on your journey. Whether you need technical help, emotional
               guidance, or just someone to listen — our team is ready.
             </p>
-            <p className="flex items-start gap-2.5 text-sm leading-relaxed text-violet-100/90">
+            <p className={cn(settingsSubpageHeroBody, "flex items-start gap-2.5 text-violet-100/90 [html[data-ezri-theme=light]_&]:text-[var(--text-secondary)] [html[data-theme=light]_&]:text-[var(--text-secondary)]")}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-fuchsia-400/25 bg-fuchsia-500/15 shadow-[0_0_16px_rgba(236,72,153,0.2)]">
                 <Heart className="h-4 w-4 text-fuchsia-200" aria-hidden />
               </span>

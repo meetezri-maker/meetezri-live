@@ -3,7 +3,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import { type Area } from "react-easy-crop";
 import { Shield } from "lucide-react";
-import { profileIconCircle, profilePill } from "./profile/profileUi";
+import {
+  profileFieldRow,
+  profileFieldRowLabel,
+  profileIconCircle,
+  profilePill,
+} from "./profile/profileUi";
 import { ProfileSanctuaryLayout } from "./profile/ProfileSanctuaryLayout";
 import { useState, useEffect, useMemo, useRef } from "react";
 
@@ -222,18 +227,10 @@ function FieldRow({
   iconTone?: "violet" | "pink" | "cyan" | "amber" | "rose" | "emerald";
 }) {
   return (
-    <div
-      className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 transition-all ${
-        editing
-          ? "border-violet-400/30 bg-violet-500/[0.08]"
-          : "border-white/[0.06] bg-white/[0.03] hover:border-violet-400/20 hover:bg-violet-500/[0.04]"
-      }`}
-    >
+    <div className={profileFieldRow(editing)}>
       <span className={profileIconCircle(iconTone)}>{icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-          {label}
-        </p>
+        <p className={profileFieldRowLabel}>{label}</p>
         {children}
       </div>
     </div>

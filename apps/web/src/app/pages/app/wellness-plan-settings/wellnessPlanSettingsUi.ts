@@ -7,13 +7,27 @@ import {
   settingsPageVignette,
   settingsCard,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroAccent,
+  settingsSubpageHeroBackLink,
+  settingsSubpageHeroBody,
+  settingsSubpageHeroCopy,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroInner,
+  settingsSubpageHeroLead,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-export const WELLNESS_PLAN_HERO_IMG = "/community/hero-lake.jpg";
-export const WELLNESS_PLAN_BANNER_IMG = "/community/scene-water.jpg";
+export const WELLNESS_PLAN_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+export const WELLNESS_PLAN_BANNER_IMG = SETTINGS_SUBPAGE_HERO_IMG;
 
-export const wellnessPlanPageAtmosphere = cn(
-  settingsPageAtmosphere
-);
+export const wellnessPlanPageAtmosphere = cn(settingsPageAtmosphere, "wellness-plan-page");
 
 export const wellnessPlanPageGlowTop = settingsPageGlowTop;
 export const wellnessPlanPageFogMid = settingsPageFogMid;
@@ -32,46 +46,103 @@ export const wellnessPlanRailCard = cn(
 );
 
 export const wellnessPlanHeroCard = cn(
-  wellnessPlanGlassCard,
-  "relative min-h-[280px] overflow-hidden rounded-[2rem] border-rose-400/14 sm:min-h-[300px] lg:min-h-[320px]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_72px_-18px_rgba(244,63,94,0.22),0_0_56px_-20px_rgba(139,92,246,0.28),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
+  settingsSubpageHeroShell,
+  "wellness-plan-hero-card border-rose-400/20"
 );
-
-export const wellnessPlanHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[72%_38%]",
-  "brightness-[0.42] contrast-[0.98] saturate-[1.15]"
-);
-
-export const wellnessPlanHeroOverlayLeft = cn(
-  "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/82 to-[#0a0b18]/12 lg:from-[#0a0b18]/97 lg:via-[#0a0b18]/58 lg:to-transparent"
-);
-
-export const wellnessPlanHeroOverlayPurple = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_75%_85%_at_88%_42%,rgba(192,132,252,0.28)_0%,transparent_58%)]"
-);
-
-export const wellnessPlanHeroOverlayWarmth = cn(
-  "absolute inset-0",
-  "bg-[radial-gradient(ellipse_38%_34%_at_78%_68%,rgba(251,146,60,0.22)_0%,transparent_55%)]"
-);
+export const wellnessPlanHeroImage = cn(settingsSubpageHeroImage, "object-[72%_38%]");
+export const wellnessPlanHeroLightScrim = settingsSubpageHeroLightScrim;
+export const wellnessPlanHeroOverlayReadability = settingsSubpageHeroOverlayReadability;
+export const wellnessPlanHeroOverlayBottom = settingsSubpageHeroOverlayBottom;
+export const wellnessPlanHeroOverlayAccent = settingsSubpageHeroOverlayAccent;
+export const wellnessPlanHeroInner = settingsSubpageHeroInner;
+export const wellnessPlanHeroCopy = settingsSubpageHeroCopy;
+export const wellnessPlanHeroBody = settingsSubpageHeroBody;
+export const wellnessPlanHeroOverlayLeft = wellnessPlanHeroOverlayReadability;
+export const wellnessPlanHeroOverlayPurple = wellnessPlanHeroOverlayAccent;
+export const wellnessPlanHeroOverlayWarmth = wellnessPlanHeroOverlayBottom;
 
 export const wellnessPlanIconChip = settingsIconChip;
 
 export const wellnessPlanBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.1em] text-rose-300/55",
-  "transition-colors hover:text-rose-200/95"
+  settingsSubpageHeroBackLink,
+  "text-rose-300/55 hover:text-rose-200/95",
+  "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)]",
+  "[html[data-theme=light]_&]:text-[var(--text-secondary)]"
 );
 
-export const wellnessPlanHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4.2vw,3rem)] font-light leading-[1.06] tracking-tight text-white"
+export const wellnessPlanHeroTitle = settingsSubpageHeroTitleSerif;
+export const wellnessPlanHeroAccent = settingsSubpageHeroAccent;
+
+export const wellnessPlanHeroLead = cn(
+  settingsSubpageHeroLead,
+  "text-rose-200/80",
+  "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)]",
+  "[html[data-theme=light]_&]:text-[var(--text-secondary)]"
 );
 
 export const wellnessPlanHandwritten = cn(
-  "font-serif text-lg italic text-rose-300/85",
+  "wellness-plan-handwritten font-serif text-lg italic",
   "drop-shadow-[0_0_20px_rgba(244,63,94,0.25)]"
 );
+
+export const wellnessPlanBottomBanner = cn(
+  "wellness-plan-bottom-banner relative min-h-[140px] overflow-hidden rounded-3xl border border-rose-400/12",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_48px_-16px_rgba(139,92,246,0.18)]"
+);
+
+export const wellnessPlanBottomBannerImg = cn(
+  "wellness-plan-bottom-banner-img pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-[20%_50%] brightness-[0.38]"
+);
+
+export const wellnessPlanBottomBannerOverlayDark = cn(
+  "wellness-plan-bottom-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-gradient-to-r from-[#0a0b18]/95 via-[#0a0b18]/72 to-[#0a0b18]/45"
+);
+
+export const wellnessPlanBottomBannerOverlayWarm = cn(
+  "wellness-plan-bottom-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-[radial-gradient(ellipse_50%_80%_at_12%_50%,rgba(251,146,60,0.18)_0%,transparent_55%)]"
+);
+
+export const wellnessPlanBottomBannerContent = cn(
+  "wellness-plan-bottom-banner-content relative z-10 flex min-h-[140px] flex-col items-start justify-center gap-3 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+);
+
+export const wellnessPlanBottomBannerTitle =
+  "wellness-plan-bottom-banner-title font-serif text-xl font-light sm:text-2xl";
+
+export const wellnessPlanBottomBannerBody = "wellness-plan-bottom-banner-body mt-2 max-w-lg text-sm";
+
+export const wellnessPlanBottomBannerTagline = cn(
+  "wellness-plan-bottom-banner-tagline font-serif text-lg italic shrink-0 sm:text-right"
+);
+
+/** Safety insights — “Helpful Resources” strip (reuses bottom-banner light theme CSS) */
+export const safetyInsightsResourcesBanner = cn(
+  wellnessPlanBottomBanner,
+  "safety-insights-resources-banner rounded-[1.75rem] border-fuchsia-400/20"
+);
+
+export const safetyInsightsResourcesBannerOverlayDark = cn(
+  "wellness-plan-bottom-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-gradient-to-r from-[#3b0a28]/95 via-[#2a0a24]/80 to-[#1a0a20]/70"
+);
+
+export const safetyInsightsResourcesBannerOverlayAccent = cn(
+  "wellness-plan-bottom-overlays-dark pointer-events-none absolute inset-0 z-[1]",
+  "bg-[radial-gradient(ellipse_60%_80%_at_0%_50%,rgba(255,79,163,0.25)_0%,transparent_60%)]"
+);
+
+export const safetyInsightsEmergencyCta = cn(
+  "safety-insights-emergency-cta inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-full px-6 py-3",
+  "bg-white text-sm font-semibold text-fuchsia-900",
+  "shadow-[0_0_32px_-6px_rgba(255,255,255,0.35)] transition hover:bg-white/95",
+  "[html[data-ezri-theme=light]_&]:border [html[data-ezri-theme=light]_&]:border-fuchsia-200/60",
+  "[html[data-ezri-theme=light]_&]:shadow-[0_8px_24px_-8px_rgba(236,72,153,0.2)]",
+  "[html[data-theme=light]_&]:border [html[data-theme=light]_&]:border-fuchsia-200/60"
+);
+
+export const safetyInsightsPageAtmosphere = cn(wellnessPlanPageAtmosphere, "safety-insights-page");
 
 export const wellnessPlanSectionCard = (accent: "rose" | "pink" | "magenta" | "violet" | "amber") =>
   cn(
@@ -140,11 +211,6 @@ export const wellnessPlanBtnRose = cn(
   "bg-[linear-gradient(135deg,#e11d48_0%,#db2777_55%,#c026d3_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_36px_-6px_rgba(244,63,94,0.55)]",
   "transition-all duration-300 hover:brightness-110"
-);
-
-export const wellnessPlanBottomBanner = cn(
-  "relative min-h-[140px] overflow-hidden rounded-3xl border border-rose-400/12",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_48px_-16px_rgba(139,92,246,0.18)]"
 );
 
 export const wellnessPlanRailActionRow = cn(

@@ -826,8 +826,8 @@ export function BrainHealthPage() {
       <div className="relative z-[1] mx-auto max-w-[1400px] px-4 pb-8 pt-5 md:px-6 md:pt-7 lg:px-8">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3 sm:gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-100 to-fuchsia-50 shadow-md dark:border-violet-500/25 dark:from-violet-950/80 dark:to-slate-950/90 dark:shadow-[0_0_28px_rgba(139,92,246,0.25)]">
-              <Brain className="h-6 w-6 text-violet-700 dark:text-violet-200/95" aria-hidden />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-100 to-fuchsia-50 shadow-md [html[data-ezri-theme=dark]_&]:border-violet-500/25 [html[data-ezri-theme=dark]_&]:from-violet-950/80 [html[data-ezri-theme=dark]_&]:to-slate-950/90 [html[data-ezri-theme=dark]_&]:shadow-[0_0_28px_rgba(139,92,246,0.25)]">
+              <Brain className="h-6 w-6 text-violet-700 [html[data-ezri-theme=dark]_&]:text-violet-200/95" aria-hidden />
             </span>
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--solace-text)] sm:text-[1.65rem]">Brain Health</h1>
@@ -851,9 +851,9 @@ export function BrainHealthPage() {
             <button
               type="button"
               onClick={() => setHowItWorksOpen(true)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-4 py-2 text-sm font-medium text-[var(--solace-text)] transition-colors hover:border-violet-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-violet-400/25 dark:hover:bg-white/[0.07]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-4 py-2 text-sm font-medium text-[var(--solace-text)] transition-colors hover:border-violet-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-violet-400/25 [html[data-ezri-theme=dark]_&]:hover:bg-white/[0.07]"
             >
-              <CircleHelp className="h-4 w-4 text-violet-600 dark:text-violet-300/90" aria-hidden />
+              <CircleHelp className="h-4 w-4 text-violet-600 [html[data-ezri-theme=dark]_&]:text-violet-300/90" aria-hidden />
               How it works
             </button>
           </div>
@@ -885,7 +885,7 @@ export function BrainHealthPage() {
 
               <div className="relative z-[1] p-5 sm:p-7 lg:min-h-[220px] lg:p-8 lg:pr-[min(13rem,22vw)]">
                 <div className="min-w-0 max-w-2xl">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-700/90 dark:text-violet-300/80">Guided reflection</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-700/90 [html[data-ezri-theme=dark]_&]:text-violet-300/80">Guided reflection</p>
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={`${reflectionStep}-${reflectionFlowComplete ? "done" : "go"}`}
@@ -910,7 +910,7 @@ export function BrainHealthPage() {
                       {progressLabelCurrent} / {GUIDED_STEP_COUNT}
                     </span>
                     <div
-                      className="h-1 w-full min-w-0 overflow-hidden rounded-full bg-violet-200/50 dark:bg-white/[0.06]"
+                      className="h-1 w-full min-w-0 overflow-hidden rounded-full bg-violet-200/50 [html[data-ezri-theme=dark]_&]:bg-white/[0.06]"
                       role="progressbar"
                       aria-valuemin={1}
                       aria-valuemax={GUIDED_STEP_COUNT}
@@ -980,22 +980,22 @@ export function BrainHealthPage() {
                   const cardClass = cn(
                     "relative flex min-h-[120px] w-[min(42vw,160px)] min-w-0 shrink-0 snap-center flex-col items-center rounded-xl border px-2.5 pb-3 pt-4 text-center transition-all duration-300 sm:min-h-[132px] sm:w-full sm:max-w-none md:min-h-[140px]",
                     locked &&
-                      "cursor-not-allowed border-[color:var(--border)] bg-[var(--card-muted)] opacity-[0.38] shadow-none saturate-[0.65] dark:border-white/[0.04] dark:bg-black/20",
+                      "cursor-not-allowed border-[color:var(--border)] bg-[var(--card-muted)] opacity-[0.38] shadow-none saturate-[0.65] [html[data-ezri-theme=dark]_&]:border-white/[0.04] [html[data-ezri-theme=dark]_&]:bg-black/20",
                     !locked &&
                       !active &&
                       completed &&
-                      "cursor-pointer border-violet-400/30 bg-gradient-to-b from-violet-100/80 to-[var(--card-soft)] shadow-sm hover:border-violet-400/45 dark:border-violet-500/20 dark:from-violet-950/20 dark:to-[#080910] dark:shadow-[0_0_20px_rgba(139,92,246,0.1)] dark:hover:border-violet-400/30",
+                      "cursor-pointer border-violet-400/30 bg-gradient-to-b from-violet-100/80 to-[var(--card-soft)] shadow-sm hover:border-violet-400/45 [html[data-ezri-theme=dark]_&]:border-violet-500/20 [html[data-ezri-theme=dark]_&]:from-violet-950/20 [html[data-ezri-theme=dark]_&]:to-[#080910] [html[data-ezri-theme=dark]_&]:shadow-[0_0_20px_rgba(139,92,246,0.1)] [html[data-ezri-theme=dark]_&]:hover:border-violet-400/30",
                     !locked &&
                       !active &&
                       !completed &&
-                      "cursor-pointer border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] dark:border-white/[0.06] dark:bg-black/25 dark:hover:border-white/10 dark:hover:bg-black/32",
+                      "cursor-pointer border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25 [html[data-ezri-theme=dark]_&]:hover:border-white/10 [html[data-ezri-theme=dark]_&]:hover:bg-black/32",
                     active &&
-                      "z-[1] border-violet-500/40 bg-gradient-to-b from-violet-100 to-[var(--card-lavender)] shadow-md dark:border-violet-400/55 dark:from-violet-950/45 dark:to-[#070a16] dark:shadow-[0_0_36px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                      "z-[1] border-violet-500/40 bg-gradient-to-b from-violet-100 to-[var(--card-lavender)] shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/55 [html[data-ezri-theme=dark]_&]:from-violet-950/45 [html[data-ezri-theme=dark]_&]:to-[#070a16] [html[data-ezri-theme=dark]_&]:shadow-[0_0_36px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]"
                   );
                   const iconClass = cn(
                     "mb-2 h-5 w-5 shrink-0 sm:h-6 sm:w-6",
-                    active && "text-violet-700 drop-shadow-none dark:text-violet-200 dark:drop-shadow-[0_0_10px_rgba(167,139,250,0.55)]",
-                    !active && completed && "text-violet-600 dark:text-violet-300/80",
+                    active && "text-violet-700 drop-shadow-none [html[data-ezri-theme=dark]_&]:text-violet-200 [html[data-ezri-theme=dark]_&]:drop-shadow-[0_0_10px_rgba(167,139,250,0.55)]",
+                    !active && completed && "text-violet-600 [html[data-ezri-theme=dark]_&]:text-violet-300/80",
                     !active && !completed && !locked && "text-[var(--solace-muted)]",
                     locked && "text-[var(--text-soft)]"
                   );
@@ -1013,13 +1013,13 @@ export function BrainHealthPage() {
                     >
                       {idx > 0 && (
                         <ArrowRight
-                          className="mt-[2.75rem] hidden h-3.5 w-3.5 shrink-0 text-zinc-600 sm:block"
+                          className="mt-[2.75rem] hidden h-3.5 w-3.5 shrink-0 text-[var(--solace-muted)] sm:block"
                           aria-hidden
                         />
                       )}
                       {locked ? (
                         <div className={cn(cardClass, "flex-1")} aria-disabled="true">
-                          <Lock className="absolute right-2 top-2 h-3.5 w-3.5 text-zinc-600" aria-hidden />
+                          <Lock className="absolute right-2 top-2 h-3.5 w-3.5 text-[var(--text-soft)]" aria-hidden />
                           <Icon className={iconClass} aria-hidden />
                           <span className={labelClass}>{q.shortLabel}</span>
                         </div>
@@ -1055,7 +1055,7 @@ export function BrainHealthPage() {
                     disabled={reflectionStep <= 0}
                     className={cn(
                       "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
-                      "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-cyan-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35 dark:border-white/[0.08] dark:bg-black/35 dark:text-zinc-200 dark:hover:border-cyan-400/25 dark:hover:bg-black/45",
+                      "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-cyan-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35 [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-black/35 [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-cyan-400/25 [html[data-ezri-theme=dark]_&]:hover:bg-black/45",
                       reflectionStep <= 0 && "pointer-events-none opacity-35"
                     )}
                   >
@@ -1063,7 +1063,7 @@ export function BrainHealthPage() {
                     Back
                   </button>
 
-                  <div className="flex max-w-[100vw] items-center gap-1 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-2 py-1.5 shadow-sm sm:gap-2 sm:px-3 sm:py-2 dark:border-white/[0.07] dark:bg-black/30 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="flex max-w-[100vw] items-center gap-1 rounded-full border border-[color:var(--border)] bg-[var(--card)] px-2 py-1.5 shadow-sm sm:gap-2 sm:px-3 sm:py-2 [html[data-ezri-theme=dark]_&]:border-white/[0.07] [html[data-ezri-theme=dark]_&]:bg-black/30 [html[data-ezri-theme=dark]_&]:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     {GUIDED_QUESTIONS.map((_, dotIdx) => {
                       const lockedDot =
                         dotIdx > maxAccessibleStep ||
@@ -1080,7 +1080,9 @@ export function BrainHealthPage() {
                           className={cn(
                             "flex min-h-10 min-w-10 items-center justify-center rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 sm:min-h-11 sm:min-w-11",
                             lockedDot && "cursor-not-allowed opacity-30",
-                            !lockedDot && !activeDot && "hover:bg-white/[0.05]",
+                            !lockedDot &&
+                              !activeDot &&
+                              "hover:bg-violet-100/60 [html[data-ezri-theme=dark]_&]:hover:bg-white/[0.05]",
                             activeDot &&
                               "bg-gradient-to-br from-violet-500/35 to-indigo-600/25 shadow-[0_0_18px_rgba(139,92,246,0.45)] ring-1 ring-violet-400/40"
                           )}
@@ -1090,8 +1092,8 @@ export function BrainHealthPage() {
                               "mx-auto block rounded-full transition-all",
                               activeDot ? "h-3 w-3 bg-violet-200 shadow-[0_0_10px_rgba(167,139,250,0.8)]" : "h-2 w-2",
                               doneDot && !activeDot && "bg-violet-400/55",
-                              !doneDot && !activeDot && !lockedDot && "bg-zinc-600",
-                              lockedDot && "bg-zinc-700"
+                              !doneDot && !activeDot && !lockedDot && "bg-violet-300/70",
+                              lockedDot && "bg-[var(--text-soft)]/50"
                             )}
                           />
                         </button>
@@ -1107,9 +1109,9 @@ export function BrainHealthPage() {
                     className={cn(
                       "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
                       isLastReflectionStep &&
-                        "border-violet-500/35 bg-gradient-to-r from-violet-100 to-indigo-100 text-violet-900 hover:border-violet-400/50 hover:shadow-md dark:border-violet-400/35 dark:from-violet-950/40 dark:to-indigo-950/30 dark:text-violet-100 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
+                        "border-violet-500/35 bg-gradient-to-r from-violet-100 to-indigo-100 text-violet-900 hover:border-violet-400/50 hover:shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/35 [html[data-ezri-theme=dark]_&]:from-violet-950/40 [html[data-ezri-theme=dark]_&]:to-indigo-950/30 [html[data-ezri-theme=dark]_&]:text-violet-100 [html[data-ezri-theme=dark]_&]:hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
                       !isLastReflectionStep &&
-                        "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-violet-400/35 hover:bg-[var(--card-soft)] dark:border-white/[0.08] dark:bg-black/35 dark:text-zinc-200 dark:hover:bg-violet-950/30",
+                        "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-violet-400/35 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-black/35 [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:bg-violet-950/30",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                       nextBubbleDisabled && "pointer-events-none opacity-35"
                     )}
@@ -1148,8 +1150,8 @@ export function BrainHealthPage() {
                           "group relative flex min-h-[52px] w-full flex-row items-start gap-4 rounded-xl border p-4 text-left transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 sm:min-h-[56px] sm:p-5",
                           wide ? "sm:col-span-2 lg:col-span-3" : "",
                           selected
-                            ? "border-violet-500/40 bg-gradient-to-r from-violet-100/90 to-[var(--card-soft)] shadow-md dark:border-violet-400/50 dark:from-violet-950/25 dark:to-[#080a14] dark:shadow-[0_0_26px_rgba(139,92,246,0.18)]"
-                            : "border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] dark:border-white/[0.06] dark:bg-black/28 dark:hover:border-violet-500/20 dark:hover:bg-black/38"
+                            ? "border-violet-500/40 bg-gradient-to-r from-violet-100/90 to-[var(--card-soft)] shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/50 [html[data-ezri-theme=dark]_&]:from-violet-950/25 [html[data-ezri-theme=dark]_&]:to-[#080a14] [html[data-ezri-theme=dark]_&]:shadow-[0_0_26px_rgba(139,92,246,0.18)]"
+                            : "border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/28 [html[data-ezri-theme=dark]_&]:hover:border-violet-500/20 [html[data-ezri-theme=dark]_&]:hover:bg-black/38"
                         )}
                         aria-pressed={selected}
                       >
@@ -1158,7 +1160,7 @@ export function BrainHealthPage() {
                             <Check className="h-4 w-4" aria-hidden />
                           </span>
                         )}
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 group-hover:border-violet-400/35 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-300 dark:group-hover:border-violet-400/25 sm:h-12 sm:w-12">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 group-hover:border-violet-400/35 [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-300 [html[data-ezri-theme=dark]_&]:group-hover:border-violet-400/25 sm:h-12 sm:w-12">
                           <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
                         </span>
                         <div className="min-w-0 flex-1 pr-10">
@@ -1186,16 +1188,21 @@ export function BrainHealthPage() {
               <img
                 src={BRAIN_HEALTH_IMAGES.hero}
                 alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[70%_50%] opacity-[0.42]"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[70%_50%] opacity-[0.42] [html[data-ezri-theme=light]_&]:opacity-[0.28]"
                 loading="lazy"
                 decoding="async"
+              />
+              <div className={cn(solaceHeroOverlayReadability, "opacity-90")} aria-hidden />
+              <div
+                className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block"
+                aria-hidden
               />
               <div className="pointer-events-none absolute -right-10 bottom-0 h-64 w-64 rounded-full bg-[radial-gradient(circle_at_center,rgba(251,113,133,0.2),transparent_62%)] blur-2xl" aria-hidden />
               <div className="relative z-[1] grid gap-8 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
                 <div>
                   <p
                     id="live-state-heading"
-                    className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600/90 dark:text-rose-200/70"
+                    className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600/90 [html[data-ezri-theme=dark]_&]:text-rose-200/70"
                   >
                     Your mental state (live)
                   </p>
@@ -1208,7 +1215,7 @@ export function BrainHealthPage() {
                     {liveMental.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full border border-violet-400/30 bg-violet-100/80 px-3 py-1 text-[11px] font-medium text-violet-800 dark:border-violet-400/20 dark:bg-violet-950/35 dark:text-violet-100/90"
+                        className="rounded-full border border-violet-400/30 bg-violet-100/80 px-3 py-1 text-[11px] font-medium text-violet-800 [html[data-ezri-theme=dark]_&]:border-violet-400/20 [html[data-ezri-theme=dark]_&]:bg-violet-950/35 [html[data-ezri-theme=dark]_&]:text-violet-100/90"
                       >
                         {tag}
                       </span>
@@ -1253,12 +1260,12 @@ export function BrainHealthPage() {
                   <div
                     key={tool.id}
                     className={cn(
-                      "light-theme-card flex min-h-[44px] flex-col rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 dark:border-white/[0.06] dark:bg-black/28",
+                      "light-theme-card flex min-h-[44px] flex-col rounded-xl border border-[color:var(--border)] bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/28",
                       tool.accent
                     )}
                   >
                     <div className="flex min-w-0 flex-1 gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-zinc-200">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-200">
                         <tool.Icon className="h-5 w-5" aria-hidden />
                       </span>
                       <div className="min-w-0">
@@ -1270,7 +1277,7 @@ export function BrainHealthPage() {
                     <Link
                       to={tool.to}
                       onClick={() => handleSelectPath(tool.pathId)}
-                      className="mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 transition-colors hover:border-violet-400/35 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200 dark:hover:border-violet-400/30 dark:hover:bg-violet-500/15 dark:hover:text-white sm:mt-0 sm:self-center"
+                      className="mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 transition-colors hover:border-violet-400/35 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 [html[data-ezri-theme=dark]_&]:border-white/10 [html[data-ezri-theme=dark]_&]:bg-white/[0.06] [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-violet-400/30 [html[data-ezri-theme=dark]_&]:hover:bg-violet-500/15 [html[data-ezri-theme=dark]_&]:hover:text-white sm:mt-0 sm:self-center"
                       aria-label={`Start ${tool.title}`}
                     >
                       <Play className="ml-0.5 h-4 w-4" fill="currentColor" aria-hidden />
@@ -1283,7 +1290,7 @@ export function BrainHealthPage() {
             {/* Preserved Ezri + next step */}
             <section
               ref={responseRef}
-              className="light-theme-card rounded-[1.25rem] border border-[color:var(--border)] bg-[var(--card)] p-5 sm:p-6 dark:border-white/[0.06] dark:bg-black/25"
+              className="light-theme-card rounded-[1.25rem] border border-[color:var(--border)] bg-[var(--card)] p-5 sm:p-6 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25"
               aria-label="Solace reflection"
             >
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--solace-muted)]">Solace</p>
@@ -1327,7 +1334,7 @@ export function BrainHealthPage() {
                   whileHover={reducedMotion ? undefined : { scale: 1.02 }}
                   whileTap={reducedMotion ? undefined : { scale: 0.98 }}
                   onClick={showReturnLine}
-                  className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-zinc-300"
+                  className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 [html[data-ezri-theme=dark]_&]:border-white/[0.1] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-300"
                 >
                   Return later
                 </motion.button>

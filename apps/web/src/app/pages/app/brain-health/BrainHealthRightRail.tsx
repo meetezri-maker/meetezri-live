@@ -124,8 +124,8 @@ export function BrainHealthRightRail({
 
         <div className="mt-4 space-y-2.5">
           {/* Focus window */}
-          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 dark:border-white/[0.06] dark:bg-black/25">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-100/80 text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-950/40 dark:text-cyan-300/90">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-100/80 text-cyan-700 [html[data-ezri-theme=dark]_&]:border-cyan-500/20 [html[data-ezri-theme=dark]_&]:bg-cyan-950/40 [html[data-ezri-theme=dark]_&]:text-cyan-300/90">
               <Clock className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -141,8 +141,8 @@ export function BrainHealthRightRail({
           </div>
 
           {/* Cognitive energy */}
-          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 dark:border-white/[0.06] dark:bg-black/25">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-100/80 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-950/30 dark:text-emerald-300/90">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-100/80 text-emerald-700 [html[data-ezri-theme=dark]_&]:border-emerald-500/20 [html[data-ezri-theme=dark]_&]:bg-emerald-950/30 [html[data-ezri-theme=dark]_&]:text-emerald-300/90">
               <Battery className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -153,8 +153,8 @@ export function BrainHealthRightRail({
           </div>
 
           {/* Mental recovery */}
-          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 dark:border-white/[0.06] dark:bg-black/25">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rose-400/30 bg-rose-100/80 text-rose-700 dark:border-rose-500/20 dark:bg-rose-950/25 dark:text-rose-300/85">
+          <div className="flex gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--card-soft)] p-3 [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rose-400/30 bg-rose-100/80 text-rose-700 [html[data-ezri-theme=dark]_&]:border-rose-500/20 [html[data-ezri-theme=dark]_&]:bg-rose-950/25 [html[data-ezri-theme=dark]_&]:text-rose-300/85">
               <Sparkles className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -239,14 +239,14 @@ export function BrainHealthRightRail({
         {insightRows.length > 0 ? (
           <ul className="mt-4 space-y-3">
             {insightRows.map((row) => (
-              <li key={row.key} className="flex gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--card-muted)] p-2.5 dark:border-white/[0.04] dark:bg-black/15">
+              <li key={row.key} className="flex gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--card-muted)] p-2.5 [html[data-ezri-theme=dark]_&]:border-white/[0.04] [html[data-ezri-theme=dark]_&]:bg-black/15">
                 <span
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/[0.06]",
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700",
                     row.iconWrap
                   )}
                 >
-                  <row.Icon className="h-4 w-4 text-zinc-200" aria-hidden />
+                  <row.Icon className="h-4 w-4" aria-hidden />
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm leading-snug text-[var(--solace-text)]">{row.text}</p>

@@ -1,0 +1,93 @@
+/**
+ * Wellness plan + Safety insights — light theme on cinematic CTA banners.
+ */
+
+.solace-app .wellness-plan-page .wellness-plan-bottom-banner-title,
+.solace-app .safety-insights-page .wellness-plan-bottom-banner-title {
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+}
+
+.solace-app .wellness-plan-page .wellness-plan-bottom-banner-body,
+.solace-app .safety-insights-page .wellness-plan-bottom-banner-body {
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+}
+
+.solace-app .wellness-plan-page .wellness-plan-handwritten,
+.solace-app .wellness-plan-page .wellness-plan-bottom-banner-tagline {
+  color: rgba(253, 164, 175, 0.9);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-hero-card .solace-hero-light-scrim,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-hero-card .solace-hero-light-scrim {
+  display: block !important;
+}
+
+/* Bottom CTA banners — pastel card in light theme */
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner {
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 45%, #f5f3ff 100%) !important;
+  border-color: rgba(236, 72, 153, 0.28) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-img,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-img,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-img,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-img {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-overlays-dark,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-overlays-dark,
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="from-[#0"],
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="via-[#0"],
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="from-[#3"],
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="via-[#2"],
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="bg-gradient-to-r"],
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-overlays-dark,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="from-[#0"],
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner [class*="bg-gradient-to-r"],
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-overlays-dark,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="from-[#0"],
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="via-[#0"],
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="from-[#3"],
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="via-[#2"],
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="bg-gradient-to-r"],
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-overlays-dark,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="from-[#3"],
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner [class*="bg-gradient-to-r"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-title,
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-body,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-title,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-body,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-title,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-body,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-title,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-body {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-body,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-body,
+html[data-ezri-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-body,
+html[data-theme="light"] .solace-app .safety-insights-page .wellness-plan-bottom-banner-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-tagline,
+html[data-theme="light"] .solace-app .wellness-plan-page .wellness-plan-bottom-banner-tagline {
+  color: #be123c !important;
+}

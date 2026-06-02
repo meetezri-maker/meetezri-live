@@ -26,11 +26,15 @@ import {
   notificationsBtnGhost,
   notificationsGlassCard,
   notificationsHeroAccent,
+  notificationsHeroBody,
   notificationsHeroCard,
   notificationsHeroImage,
-  notificationsHeroOverlayLeft,
-  notificationsHeroOverlayPurple,
-  notificationsHeroOverlayWarmth,
+  notificationsHeroInner,
+  notificationsHeroLead,
+  notificationsHeroLightScrim,
+  notificationsHeroOverlayAccent,
+  notificationsHeroOverlayBottom,
+  notificationsHeroOverlayReadability,
   notificationsHeroTitle,
   notificationsIconChip,
   notificationsPageAtmosphere,
@@ -199,14 +203,17 @@ export function RecentActivityHistory() {
             src={MOOD_CHECKIN_IMAGES.heroBanner}
             alt=""
             className={notificationsHeroImage}
+            width={1600}
+            height={900}
             loading="eager"
             decoding="async"
           />
-          <div className={notificationsHeroOverlayLeft} aria-hidden />
-          <div className={notificationsHeroOverlayPurple} aria-hidden />
-          <div className={notificationsHeroOverlayWarmth} aria-hidden />
+          <div className={notificationsHeroLightScrim} aria-hidden />
+          <div className={notificationsHeroOverlayReadability} aria-hidden />
+          <div className={notificationsHeroOverlayAccent} aria-hidden />
+          <div className={notificationsHeroOverlayBottom} aria-hidden />
 
-          <div className="relative flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8 lg:flex-row lg:items-end lg:gap-6">
+          <div className={cn(notificationsHeroInner, "min-h-[240px] sm:min-h-[260px] lg:flex-row lg:items-end lg:gap-6")}>
             <div className="max-w-xl flex-1">
               <Link to="/app/dashboard" className={notificationsBackLink}>
                 <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -215,7 +222,7 @@ export function RecentActivityHistory() {
               <h1 className={cn(notificationsHeroTitle, "mt-5")}>
                 <span className={notificationsHeroAccent}>Recent Activity</span> History
               </h1>
-              <p className="mt-3 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+              <p className={notificationsHeroLead}>
                 Full timeline of your latest check-ins, journals, sessions, and app activity.
               </p>
             </div>

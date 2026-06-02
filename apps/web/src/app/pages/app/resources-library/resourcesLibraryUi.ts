@@ -6,59 +6,60 @@ import {
   settingsPageGlowTop,
   settingsPageVignette,
 } from "@/app/pages/app/settings-hub/settingsUi";
+import {
+  SETTINGS_SUBPAGE_HERO_IMG,
+  settingsSubpageHeroBackLink,
+  settingsSubpageHeroImage,
+  settingsSubpageHeroLightScrim,
+  settingsSubpageHeroOverlayAccent,
+  settingsSubpageHeroOverlayBottom,
+  settingsSubpageHeroOverlayReadability,
+  settingsSubpageHeroShell,
+  settingsSubpageHeroTitleSerif,
+} from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-export const RESOURCES_HERO_IMG = "/community/hero-lake.jpg";
+const light = "[html[data-ezri-theme=light]_&]";
+const lightAlt = "[html[data-theme=light]_&]";
 
-export const resourcesPageAtmosphere = cn(
-  settingsPageAtmosphere
-);
+export const RESOURCES_HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+
+export const resourcesPageAtmosphere = cn(settingsPageAtmosphere, "resources-library-page");
 
 export const resourcesPageGlowTop = settingsPageGlowTop;
 export const resourcesPageFogMid = settingsPageFogMid;
 export const resourcesPageVignette = settingsPageVignette;
 
 export const resourcesHeroCard = cn(
-  "relative min-h-[220px] overflow-hidden rounded-[1.75rem] border border-violet-400/12 sm:min-h-[260px] lg:min-h-[300px]",
-  "bg-[linear-gradient(180deg,rgba(18,18,40,0.95)_0%,rgba(10,10,24,0.98)_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_72px_-18px_rgba(139,92,246,0.32),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
+  settingsSubpageHeroShell,
+  "resources-hero-card min-h-[220px] sm:min-h-[260px] lg:min-h-[300px]"
 );
 
-export const resourcesHeroImage = cn(
-  "absolute inset-0 h-full w-full object-cover object-[center_42%]",
-  "brightness-[0.48] contrast-[0.95] saturate-[1.12]"
-);
+export const resourcesHeroImage = cn(settingsSubpageHeroImage, "object-[center_42%]");
+export const resourcesHeroLightScrim = settingsSubpageHeroLightScrim;
+export const resourcesHeroOverlay = settingsSubpageHeroOverlayReadability;
+export const resourcesHeroGlowPurple = settingsSubpageHeroOverlayAccent;
+export const resourcesHeroGlowWarmth = settingsSubpageHeroOverlayBottom;
 
-export const resourcesHeroOverlay = cn(
-  "absolute inset-0",
-  "bg-[linear-gradient(180deg,rgba(10,11,24,0.35)_0%,rgba(10,11,24,0.62)_42%,rgba(8,9,20,0.92)_100%)]"
-);
-
-export const resourcesHeroGlowPurple = cn(
-  "pointer-events-none absolute inset-0",
-  "bg-[radial-gradient(ellipse_70%_55%_at_18%_22%,rgba(167,139,250,0.22)_0%,transparent_58%)]"
-);
-
-export const resourcesHeroGlowWarmth = cn(
-  "pointer-events-none absolute inset-0",
-  "bg-[radial-gradient(ellipse_42%_38%_at_78%_68%,rgba(251,146,60,0.16)_0%,transparent_55%)]"
-);
-
-export const resourcesBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.08em] text-[color:var(--accent-secondary,#a78bfa)]/70",
-  "transition-colors hover:text-[color:var(--accent-secondary,#a78bfa)]"
-);
+export const resourcesBackLink = cn(settingsSubpageHeroBackLink, "resources-hero-eyebrow");
 
 export const resourcesHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4.2vw,3.15rem)] font-light leading-[1.06] tracking-tight text-[var(--solace-text)]"
+  settingsSubpageHeroTitleSerif,
+  "resources-hero-title text-[clamp(2rem,4.2vw,3.15rem)]"
 );
 
-export const resourcesHeroSubtitle =
-  "mt-2 max-w-2xl text-sm leading-relaxed text-[var(--solace-muted)] sm:text-[0.95rem]";
+export const resourcesHeroSubtitle = cn(
+  "resources-hero-subtitle mt-2 max-w-2xl text-sm leading-relaxed sm:text-[0.95rem]",
+  "text-[rgba(255,255,255,0.62)]",
+  `${light}:text-[var(--text-secondary)]`,
+  `${lightAlt}:text-[var(--text-secondary)]`
+);
 
 export const resourcesSearchInput = cn(
   solaceInputSurface,
   "w-full min-h-[44px] pl-11 pr-4 text-sm shadow-[var(--solace-card-shadow)]"
 );
+
+export const resourcesSearchIcon = "resources-search-icon";
 
 export const resourcesSelect = cn(
   solaceInputSurface,
@@ -66,11 +67,28 @@ export const resourcesSelect = cn(
 );
 
 export const resourcesCardShell = cn(
-  "group flex h-full flex-col overflow-hidden rounded-[1.4rem] border border-white/[0.07]",
-  "bg-[linear-gradient(180deg,rgba(16,16,36,0.98)_0%,rgba(9,9,22,0.99)_100%)]",
+  "group flex h-full flex-col overflow-hidden rounded-[1.4rem] border",
+  "border-white/[0.07] bg-[linear-gradient(180deg,rgba(16,16,36,0.98)_0%,rgba(9,9,22,0.99)_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_40px_-16px_rgba(139,92,246,0.12),0_20px_56px_-32px_rgba(0,0,0,0.75)]",
   "transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-400/22",
-  "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_48px_-12px_rgba(139,92,246,0.22),0_24px_64px_-28px_rgba(0,0,0,0.8)]"
+  `${light}:border-[color:var(--border)] ${light}:bg-white ${light}:shadow-[var(--solace-card-shadow)]`,
+  `${lightAlt}:border-[color:var(--border)] ${lightAlt}:bg-white`
+);
+
+export const resourcesCardBody = "resource-card-body flex flex-1 flex-col p-4 sm:p-[1.125rem]";
+
+export const resourcesCardTitle =
+  "resource-card-title line-clamp-2 text-[0.95rem] font-bold leading-snug text-white";
+
+export const resourcesCardDesc =
+  "resource-card-desc line-clamp-3 flex-1 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]";
+
+export const resourcesCardMeta =
+  "resource-card-meta mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[rgba(255,255,255,0.42)]";
+
+export const resourcesCardTag = cn(
+  "resource-card-tag w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5",
+  "text-[9px] font-semibold uppercase tracking-[0.12em] text-white/70"
 );
 
 export const resourcesReadBtn = cn(
@@ -81,14 +99,15 @@ export const resourcesReadBtn = cn(
 );
 
 export const resourcesExternalBtn = cn(
-  "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/[0.1]",
+  "resource-external-btn flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/[0.1]",
   "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.75)]",
   "transition-all duration-300 hover:border-violet-400/25 hover:bg-violet-500/[0.1] hover:text-white"
 );
 
 export const resourcesFavoriteBtn = (active: boolean) =>
   cn(
-    "flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-md transition-all duration-300",
+    "resource-favorite-btn flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-md transition-all duration-300",
+    active && "resource-favorite-btn--active",
     active
       ? "border-rose-400/30 bg-rose-500/20 text-rose-300 shadow-[0_0_20px_-6px_rgba(244,63,94,0.45)]"
       : "border-white/[0.08] bg-black/30 text-white/80 hover:border-violet-400/25 hover:bg-violet-500/15 hover:text-white"
@@ -101,7 +120,7 @@ export interface ResourceCardAtmosphere {
   pillClass: string;
 }
 
-/** Dark premium category atmospheres — page-local only (does not change shared gradient tokens). */
+/** Category visual header — stays dark/cinematic; body uses light surface in light theme */
 export function getResourceCardAtmosphere(category: string): ResourceCardAtmosphere {
   const key = category.toLowerCase();
 
@@ -171,26 +190,42 @@ export function getResourceCardAtmosphere(category: string): ResourceCardAtmosph
 }
 
 export function getDifficultyPillClass(difficulty: string): string {
-  const colors = {
-    beginner: "border-emerald-400/22 bg-emerald-500/12 text-emerald-200/90",
-    intermediate: "border-amber-400/22 bg-amber-500/12 text-amber-200/90",
-    advanced: "border-rose-400/22 bg-rose-500/12 text-rose-200/90",
+  const base = "rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize";
+  const colors: Record<string, string> = {
+    beginner: cn(base, "resource-difficulty--beginner border-emerald-400/22 bg-emerald-500/12 text-emerald-200/90"),
+    intermediate: cn(base, "resource-difficulty--intermediate border-amber-400/22 bg-amber-500/12 text-amber-200/90"),
+    advanced: cn(base, "resource-difficulty--advanced border-rose-400/22 bg-rose-500/12 text-rose-200/90"),
   };
-  return colors[difficulty as keyof typeof colors] ?? colors.beginner;
+  return colors[difficulty] ?? colors.beginner;
 }
 
 export function formatCategoryLabel(category: string): string {
   return category.replace(/\s+/g, " ").toUpperCase();
 }
 
+export const resourcesEmptyState = cn(
+  "resources-empty-state mt-8 rounded-[1.4rem] border border-dashed border-white/[0.12]",
+  "bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] px-6 py-16 text-center"
+);
+
+export const resourcesEmptyTitle = "resources-empty-title text-lg font-semibold text-white";
+
+export const resourcesEmptyDesc = "resources-empty-desc mx-auto mt-2 max-w-md text-sm text-[rgba(255,255,255,0.48)]";
+
+export const resourcesFooterMuted = "resources-footer-muted text-sm text-[rgba(255,255,255,0.42)]";
+
+export const resourcesFooterFine = "resources-footer-muted mt-1 text-xs text-[rgba(255,255,255,0.32)]";
+
 export const resourcesArticleShell = cn(
   "overflow-hidden rounded-[1.4rem] border border-white/[0.07]",
   "bg-[linear-gradient(180deg,rgba(16,16,36,0.98)_0%,rgba(9,9,22,0.99)_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_40px_-16px_rgba(139,92,246,0.12),0_20px_56px_-32px_rgba(0,0,0,0.75)]"
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_40px_-16px_rgba(139,92,246,0.12),0_20px_56px_-32px_rgba(0,0,0,0.75)]",
+  `${light}:border-[color:var(--border)] ${light}:bg-white ${light}:shadow-[var(--solace-card-shadow)]`
 );
 
 export const resourcesArticleTitle = cn(
-  "font-serif text-[clamp(1.65rem,3.5vw,2.35rem)] font-light leading-[1.1] tracking-tight text-[var(--solace-text)]"
+  "font-serif text-[clamp(1.65rem,3.5vw,2.35rem)] font-light leading-[1.1] tracking-tight",
+  "text-[var(--solace-text)]"
 );
 
 export const resourcesArticleBodyText =
@@ -198,7 +233,8 @@ export const resourcesArticleBodyText =
 
 export const resourcesArticleStepShell = cn(
   "flex gap-4 rounded-xl border border-white/[0.08] p-4 sm:p-5",
-  "bg-[rgba(255,255,255,0.03)]"
+  "bg-[rgba(255,255,255,0.03)]",
+  `${light}:border-[color:var(--border)] ${light}:bg-[var(--card-soft)]`
 );
 
 export const resourcesArticleStepNumber = cn(

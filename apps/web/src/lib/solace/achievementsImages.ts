@@ -1,5 +1,7 @@
-/** Static assets under `public/achievements/` for the Achievements page. */
+import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
+
+/** Static assets for the Achievements page (shared mood-check-in hero art). */
 export const ACHIEVEMENTS_IMAGES = {
   /** Hero — glowing lotus on a moonlit lake */
-  hero: "/achievements/hero.png",
+  hero: MOOD_CHECKIN_IMAGES.heroBanner,
 } as const;

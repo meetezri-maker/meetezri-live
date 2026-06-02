@@ -19,9 +19,11 @@ import {
   appearanceHeroAccent,
   appearanceHeroCard,
   appearanceHeroImage,
-  appearanceHeroOverlayLeft,
-  appearanceHeroOverlayPurple,
-  appearanceHeroOverlayWarmth,
+  appearanceHeroInner,
+  appearanceHeroLightScrim,
+  appearanceHeroOverlayAccent,
+  appearanceHeroOverlayBottom,
+  appearanceHeroOverlayReadability,
   appearanceHeroTitle,
   appearanceIconChip,
   appearanceMiniPreviewCard,
@@ -315,12 +317,21 @@ export function AppearanceSettings() {
         >
             {/* Hero */}
             <section className={appearanceHeroCard}>
-              <img src={APPEARANCE_HERO_IMG} alt="" className={appearanceHeroImage} />
-              <motion.div className={appearanceHeroOverlayLeft} aria-hidden />
-              <motion.div className={appearanceHeroOverlayPurple} aria-hidden />
-              <motion.div className={appearanceHeroOverlayWarmth} aria-hidden />
+              <img
+                src={APPEARANCE_HERO_IMG}
+                alt=""
+                className={appearanceHeroImage}
+                width={1600}
+                height={900}
+                loading="eager"
+                decoding="async"
+              />
+              <div className={appearanceHeroLightScrim} aria-hidden />
+              <div className={appearanceHeroOverlayReadability} aria-hidden />
+              <div className={appearanceHeroOverlayAccent} aria-hidden />
+              <div className={appearanceHeroOverlayBottom} aria-hidden />
 
-              <div className="relative flex h-full min-h-[220px] flex-col justify-end p-6 sm:min-h-[240px] sm:p-8 lg:min-h-[250px]">
+              <div className={appearanceHeroInner}>
                 <Link to="/app/settings" className={tc.backLink}>
                   <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
                   Back to Settings

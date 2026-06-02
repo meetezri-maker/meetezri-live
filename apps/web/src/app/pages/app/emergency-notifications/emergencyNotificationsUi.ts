@@ -6,8 +6,13 @@ import {
   notificationsHeroAccent,
   notificationsHeroCard,
   notificationsHeroImage,
+  notificationsHeroInner,
+  notificationsHeroLightScrim,
+  notificationsHeroOverlayAccent,
+  notificationsHeroOverlayBottom,
   notificationsHeroOverlayLeft,
   notificationsHeroOverlayPurple,
+  notificationsHeroOverlayReadability,
   notificationsHeroOverlayWarmth,
   notificationsHeroTitle,
   notificationsIconChip,
@@ -30,6 +35,11 @@ export const emergencyHeroTitle = notificationsHeroTitle;
 export const emergencyHeroAccent = notificationsHeroAccent;
 export const emergencyHeroCard = notificationsHeroCard;
 export const emergencyHeroImage = notificationsHeroImage;
+export const emergencyHeroLightScrim = notificationsHeroLightScrim;
+export const emergencyHeroInner = notificationsHeroInner;
+export const emergencyHeroOverlayReadability = notificationsHeroOverlayReadability;
+export const emergencyHeroOverlayBottom = notificationsHeroOverlayBottom;
+export const emergencyHeroOverlayAccent = notificationsHeroOverlayAccent;
 export const emergencyHeroOverlayLeft = notificationsHeroOverlayLeft;
 export const emergencyHeroOverlayPurple = notificationsHeroOverlayPurple;
 export const emergencyHeroOverlayWarmth = notificationsHeroOverlayWarmth;

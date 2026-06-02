@@ -1,0 +1,29 @@
+/**
+ * Coming Soon scrim — avoid Tailwind bg-black/* (remapped to solid fills in light theme).
+ */
+
+.coming-soon-overlay {
+  background: rgba(8, 10, 22, 0.48);
+  backdrop-filter: blur(1px);
+}
+
+.coming-soon-overlay-badge {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(8, 10, 22, 0.82);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+html[data-ezri-theme="light"] .coming-soon-overlay,
+html[data-theme="light"] .coming-soon-overlay {
+  background: rgba(251, 248, 255, 0.55) !important;
+  backdrop-filter: blur(2px);
+}
+
+html[data-ezri-theme="light"] .coming-soon-overlay-badge,
+html[data-theme="light"] .coming-soon-overlay-badge {
+  border-color: rgba(167, 139, 250, 0.45) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #5b21b6 !important;
+  box-shadow: 0 8px 24px rgba(88, 28, 135, 0.12) !important;
+}

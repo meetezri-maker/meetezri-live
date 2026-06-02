@@ -74,15 +74,31 @@ import {
   accountDropdownCommandItem,
   accountDropdownCommandList,
   accountDropdownPopover,
+  accountFooterFine,
+  accountFooterMuted,
   accountHelpImage,
   accountHelpOverlay,
+  accountHelpOverlayLight,
+  accountRailDisplayName,
+  accountRailHeading,
+  accountRailPlanBadge,
+  accountTipDesc,
+  accountTipTitle,
   accountHeroCard,
   accountHeroImage,
   accountHeroOverlayLeft,
   accountHeroOverlayTop,
+  accountHeroEyebrow,
+  accountHeroHeading,
+  accountHeroInsetShadow,
+  accountHeroLightScrimLayer,
   accountHeroOverlayMoon,
   accountHeroOverlayPurple,
   accountHeroOverlayWarmth,
+  accountTextMuted,
+  accountTextPrimary,
+  accountTextSecondary,
+  accountTextSubtle,
   accountIconChip,
   accountInput,
   accountLabel,
@@ -1155,19 +1171,26 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
               className={accountHeroCard}
             >
               <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
-                <img src={ACCOUNT_HERO_IMG} alt="" className={accountHeroImage} width={1600} height={900} loading="eager" decoding="async" />
+                <img
+                  src={ACCOUNT_HERO_IMG}
+                  alt="Calm moonlit landscape"
+                  className={accountHeroImage}
+                  width={1600}
+                  height={900}
+                  loading="eager"
+                  decoding="async"
+                />
+                <div className={accountHeroLightScrimLayer} />
                 <div className={accountHeroOverlayLeft} />
                 <div className={accountHeroOverlayTop} />
                 <div className={accountHeroOverlayPurple} />
                 <div className={accountHeroOverlayWarmth} />
                 <div className={accountHeroOverlayMoon} />
-                <div className="absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.32)]" />
+                <div className={accountHeroInsetShadow} />
               </div>
               <div className="relative z-10 flex min-h-[260px] flex-col justify-center lg:min-h-[280px]">
                 <div className="flex flex-1 flex-col justify-center gap-6 p-7 sm:p-9 lg:max-w-[58%]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/55">
-                    Profile picture
-                  </p>
+                  <p className={accountHeroEyebrow}>Profile picture</p>
                   <motion.div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                     <div className="relative shrink-0">
                       <div className={accountAvatarHalo} aria-hidden />
@@ -1201,8 +1224,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       </motion.button>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 className="font-serif text-lg font-light text-white">Change photo</h2>
-                      <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.5)]">
+                      <h2 className={accountHeroHeading}>Change photo</h2>
+                      <p className={cn("mt-1.5", accountTextSecondary)}>
                         Upload a new profile picture (JPG, PNG, max 5MB)
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -1388,7 +1411,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <Phone className="w-4 h-4 inline mr-1" />
                   Phone number
                 </label>
-                <p className="mb-2 text-xs text-[rgba(255,255,255,0.42)]">
+                <p className={cn("mb-2", accountTextSubtle)}>
                   Country code and number (exactly 12 digits including code).
                 </p>
                 <PhoneInput
@@ -1525,8 +1548,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <Key className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium text-[rgba(255,255,255,0.94)]">Change password</p>
-                    <p className="text-sm text-[rgba(255,255,255,0.48)]">
+                    <p className={accountTextPrimary}>Change password</p>
+                    <p className={accountTextMuted}>
                       {user?.updated_at 
                         ? `Last changed ${formatDistanceToNow(new Date(user.updated_at), { addSuffix: true })}`
                         : 'Never changed'}
@@ -1543,8 +1566,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       <Shield className="h-5 w-5" aria-hidden />
                     </div>
                     <div>
-                      <p className="font-medium text-[rgba(255,255,255,0.95)]">Two-factor authentication</p>
-                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.55)]">
+                      <p className={accountTextPrimary}>Two-factor authentication</p>
+                      <p className={cn("mt-1", accountTextSecondary)}>
                         {mfaFactors.length > 0 || knowledge2fa.enabled
                           ? `Enabled via ${
                               mfaFactors.length > 0 && knowledge2fa.enabled
@@ -1555,7 +1578,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                             }`
                           : 'Add an extra layer of security to your account'}
                       </p>
-                      <div className="mt-3 space-y-1.5 text-xs text-[rgba(255,255,255,0.5)]">
+                      <div className={cn("mt-3 space-y-1.5", accountTextSubtle)}>
                         <p>Available options:</p>
                         <ul className="list-disc pl-4 space-y-1">
                           <li>Authenticator app (Google Authenticator/Authy)</li>
@@ -1606,8 +1629,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
 
               <div className={accountDangerInner}>
                 <div>
-                  <p className="font-medium text-[rgba(255,255,255,0.92)]">Deactivate account</p>
-                  <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
+                  <p className={accountTextPrimary}>Deactivate account</p>
+                  <p className={cn("mt-1", accountTextMuted)}>
                     Pause your account — you can reactivate anytime via email
                   </p>
                 </div>
@@ -1643,11 +1666,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             </motion.button>
 
             <footer className="pb-2 pt-4 text-center">
-              <div className="mb-2 flex items-center justify-center gap-2 text-sm text-[rgba(255,255,255,0.42)]">
+              <div className={cn("mb-2 flex items-center justify-center gap-2 text-sm", accountFooterMuted)}>
                 <Heart className="h-4 w-4 text-fuchsia-400/70" aria-hidden />
                 <span>Made with care for your wellbeing</span>
               </div>
-              <p className="text-xs text-[rgba(255,255,255,0.32)]">
+              <p className={accountFooterFine}>
                 Solace v1.0.0 • © 2026 •{" "}
                 <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
                   Privacy
@@ -1663,7 +1686,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
           <aside className="w-full shrink-0 space-y-5 xl:sticky xl:top-4 xl:w-[min(100%,320px)] xl:flex-[3] xl:self-start">
             <div className={cn(accountRailCard, "relative overflow-hidden p-6")}>
               <div className={accountRailProfileGlow} aria-hidden />
-              <h2 className="relative text-sm font-semibold text-[rgba(255,255,255,0.92)]">Your profile</h2>
+              <h2 className={cn("relative", accountRailHeading)}>Your profile</h2>
               <div className="relative mt-5 flex flex-col items-center text-center">
                 <div className="relative">
                   <div className={accountAvatarHalo} aria-hidden />
@@ -1679,10 +1702,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     </motion.div>
                   )}
                 </div>
-                <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
-                <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold tracking-wide text-violet-200/90">
-                  {planLabel}
-                </span>
+                <p className={accountRailDisplayName}>{displayName}</p>
+                <span className={accountRailPlanBadge}>{planLabel}</span>
                 <Link to="/app/billing" className={cn(accountBtnPrimary, "mt-4 w-full")}>
                   Manage Plan
                 </Link>
@@ -1690,7 +1711,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             </div>
 
             <div className={cn(accountRailCard, "p-6")}>
-              <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Account tips</h2>
+              <h2 className={accountRailHeading}>Account tips</h2>
               <ul className={accountTipsList}>
                 <AccountTipRow
                   icon={User}
@@ -1724,9 +1745,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 decoding="async"
               />
               <div className={accountHelpOverlay} aria-hidden />
+              <div className={accountHelpOverlayLight} aria-hidden />
               <div className="relative z-10 flex min-h-[152px] flex-col justify-end">
-                <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Need help?</h2>
-                <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.55)]">We&apos;re here for you</p>
+                <h2 className={accountRailHeading}>Need help?</h2>
+                <p className={cn("mt-1.5 text-sm", accountTextSecondary)}>We&apos;re here for you</p>
                 <Link to="/app/settings/help-support" className={cn(accountBtnPrimary, "relative mt-4 w-full")}>
                   Contact support
                 </Link>
@@ -1739,8 +1761,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <Lock className="h-5 w-5" aria-hidden />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Your data is safe</h2>
-                  <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                  <h2 className={accountRailHeading}>Your data is safe</h2>
+                  <p className={cn("mt-2 text-xs leading-relaxed", accountTextMuted)}>
                     We use advanced encryption to keep your information private and secure.
                   </p>
                   <Link
@@ -2428,8 +2450,8 @@ function AccountTipRow({ icon: Icon, tone, title, description }: AccountTipRowPr
         <Icon className="h-4 w-4" aria-hidden />
       </div>
       <div>
-        <p className="text-sm font-medium text-[rgba(255,255,255,0.9)]">{title}</p>
-        <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.45)]">{description}</p>
+        <p className={accountTipTitle}>{title}</p>
+        <p className={accountTipDesc}>{description}</p>
       </div>
     </li>
   );

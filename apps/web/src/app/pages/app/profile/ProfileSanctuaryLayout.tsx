@@ -74,10 +74,16 @@ import {
   profileBodyMuted,
   profileBtnGhost,
   profileBtnPrimary,
+  profileCameraButton,
   profileCard,
   profileCardHeader,
   profileCardSubtitle,
   profileCardTitle,
+  profileChipSelected,
+  profileChipUnselected,
+  profileDialogContent,
+  profileDialogDescription,
+  profileDialogTitle,
   profileEmergencyBg,
   profileEmergencyCard,
   profileEmergencyWarmthAmber,
@@ -87,7 +93,21 @@ import {
   profileEmergencyPhoneButton,
   profileEmergencyPhoneInput,
   profileFieldLabel,
+  profileFieldValue,
+  profileFieldValueEmpty,
+  profileFormLabel,
+  profileInlineButton,
+  profileInlineInput,
+  profileHeroBio,
+  profileHeroMeta,
+  profileHeroMetaStrong,
+  profileHeroName,
   profileHeroShell,
+  profileHeroStatDivide,
+  profileHeroStatLabel,
+  profileHeroStatStrip,
+  profileHeroStatValue,
+  profileHeroToggleLabel,
   profileInput,
   profilePhoneButton,
   profilePhoneInput,
@@ -97,19 +117,42 @@ import {
   profileDropdownCommandItem,
   profileDropdownCommandList,
   profileDropdownPopover,
-  profileHeroStatStrip,
+  profileAchievementsLink,
+  profileBannerBtnAmber,
+  profileBannerBtnViolet,
+  profileBtnDanger,
+  profileBtnRoseGhost,
   profileIconCircle,
+  profileIconAmberMd,
+  profileIconEmeraldMd,
+  profileIconRoseSm,
+  profileIconVioletMd,
+  profileIconVioletSm,
+  profileMemberTag,
   profileMilestoneChip,
+  profileMilestoneUnlockedIcon,
   profilePageAtmosphere,
   profilePageGlowBottom,
   profilePageFogMid,
   profilePageGlowTop,
   profilePageNoise,
   profilePageVignette,
-  profilePill,
+  profilePillAmber,
+  profilePillEmerald,
+  profilePillHeroOnMedia,
+  profilePillViolet,
   profileRightRailGlow,
+  profileTrophyIcon,
+  profileWhyWeAskBtn,
   profileRow,
+  profileRowChevron,
+  profileRowTitle,
+  profileRowValue,
+  profileSectionDivider,
   profileSupportTile,
+  profileSupportTitle,
+  profileTrialBanner,
+  profileVerifyBanner,
 } from "./profileUi";
 
 type CropArea = { x: number; y: number; width: number; height: number };
@@ -266,22 +309,26 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex items-center justify-between gap-4 px-5 py-4 ${profileCard} border-amber-500/25 bg-amber-950/35`}
+            className={`flex items-center justify-between gap-4 px-5 py-4 ${profileVerifyBanner}`}
           >
             <motion.div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/20">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/20 [html[data-ezri-theme=light]_&]:bg-amber-100 [html[data-theme=light]_&]:bg-amber-100">
+                <AlertTriangle className="h-4 w-4 text-amber-400 [html[data-ezri-theme=light]_&]:text-amber-700 [html[data-theme=light]_&]:text-amber-700" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-amber-100">Verify your email</p>
-                <p className="text-xs text-amber-200/70">Secure your account and unlock all features.</p>
+                <p className="text-sm font-semibold text-amber-100 [html[data-ezri-theme=light]_&]:text-amber-900 [html[data-theme=light]_&]:text-amber-900">
+                  Verify your email
+                </p>
+                <p className="text-xs text-amber-200/70 [html[data-ezri-theme=light]_&]:text-amber-800/90 [html[data-theme=light]_&]:text-amber-800/90">
+                  Secure your account and unlock all features.
+                </p>
               </div>
             </motion.div>
             <button
               type="button"
               onClick={handleResendVerification}
               disabled={resending}
-              className="shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+              className={profileBannerBtnAmber}
             >
               {resending ? "Sending…" : "Resend link"}
             </button>
@@ -292,15 +339,17 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex items-center justify-between gap-4 px-5 py-4 ${profileCard} border-violet-500/25 bg-violet-950/30`}
+            className={`flex items-center justify-between gap-4 px-5 py-4 ${profileTrialBanner}`}
           >
             <div className="flex min-w-0 items-center gap-3">
-              <motion.div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/20">
-                <AlertTriangle className="h-4 w-4 text-violet-300" />
+              <motion.div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/20 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:bg-violet-100">
+                <AlertTriangle className="h-4 w-4 text-violet-300 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700" />
               </motion.div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-violet-100">Complete your trial profile</p>
-                <p className="text-xs text-violet-200/70">
+                <p className="text-sm font-semibold text-violet-100 [html[data-ezri-theme=light]_&]:text-violet-900 [html[data-theme=light]_&]:text-violet-900">
+                  Complete your trial profile
+                </p>
+                <p className="text-xs text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-800/90 [html[data-theme=light]_&]:text-violet-800/90">
                   Your profile is {profileCompletion.percent}% complete. Add missing details to finish setup.
                 </p>
               </div>
@@ -311,7 +360,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                 setIsEditing(true);
                 scrollToProfileField(profileCompletion.missingFields[0]?.key || "name");
               }}
-              className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-500"
+              className={profileBannerBtnViolet}
             >
               Complete now
             </button>
@@ -362,7 +411,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <button
                         type="button"
                         onClick={handleOpenExistingAvatarEditor}
-                        className="absolute -bottom-0.5 -right-0.5 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/90 text-white shadow-lg transition-transform hover:scale-105"
+                        className={profileCameraButton}
                         aria-label="Edit photo"
                       >
                         <Camera className="h-4 w-4" />
@@ -370,19 +419,13 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                     </div>
 
                     <div className="min-w-0 flex-1 space-y-2 pb-1">
-                      <h1 className="text-2xl font-semibold tracking-tight text-[rgba(255,255,255,0.96)] [text-shadow:0_0_32px_rgba(167,139,250,0.2)] sm:text-3xl">
-                        {displayName}
-                      </h1>
-                      <p className="text-sm text-[rgba(255,255,255,0.68)]">
-                        Member since <span className="font-medium text-[rgba(255,255,255,0.92)]">{joinedAt || "—"}</span>
+                      <h1 className={profileHeroName}>{displayName}</h1>
+                      <p className={profileHeroMeta}>
+                        Member since <span className={profileHeroMetaStrong}>{joinedAt || "—"}</span>
                       </p>
-                      <span
-                        className={`${profilePill} border-violet-400/25 bg-violet-500/18 text-violet-100 shadow-[0_0_28px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.1)]`}
-                      >
-                        {planPill}
-                      </span>
+                      <span className={profilePillHeroOnMedia}>{planPill}</span>
                       {personalBio?.trim() ? (
-                        <p className="max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.72)]">{personalBio.trim()}</p>
+                        <p className={profileHeroBio}>{personalBio.trim()}</p>
                       ) : null}
                       <div className="flex flex-wrap items-center gap-3 pt-1">
                         <span className={`text-[11px] ${profileBodyMuted}`}>Photo in community</span>
@@ -393,7 +436,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         />
                         <label
                           htmlFor="community-avatar-toggle-profile"
-                          className="cursor-pointer text-[11px] font-medium text-zinc-300"
+                          className={profileHeroToggleLabel}
                         >
                           {communityAvatarPublic ? "Public" : "Hidden"}
                         </label>
@@ -403,7 +446,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                 </div>
 
                 <motion.div className={profileHeroStatStrip}>
-                  <div className="grid grid-cols-3 divide-x divide-white/[0.06]">
+                  <div className={profileHeroStatDivide}>
                     {[
                       { icon: Activity, label: "Talks", value: userStats.sessions, tone: "violet" as const },
                       { icon: Heart, label: "Check-ins", value: userStats.checkins, tone: "pink" as const },
@@ -413,8 +456,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         <span className={profileIconCircle(stat.tone)}>
                           <stat.icon className="h-4 w-4" />
                         </span>
-                        <span className="text-xl font-bold tabular-nums text-[rgba(255,255,255,0.96)] sm:text-2xl">{stat.value}</span>
-                        <span className={`text-[10px] font-semibold uppercase tracking-wider ${profileBodyMuted}`}>{stat.label}</span>
+                        <span className={profileHeroStatValue}>{stat.value}</span>
+                        <span className={profileHeroStatLabel}>{stat.label}</span>
                       </div>
                     ))}
                   </div>
@@ -447,10 +490,10 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         <row.icon className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-zinc-100">{row.title}</p>
-                        <p className="truncate text-xs text-zinc-500">{row.value}</p>
+                        <p className={profileRowTitle}>{row.title}</p>
+                        <p className={profileRowValue}>{row.value}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 group-hover:text-violet-300" />
+                      <ChevronRight className={profileRowChevron} />
                     </Link>
                   ))}
                 </div>
@@ -478,8 +521,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <span className={profileIconCircle(row.tone)}>
                         <row.icon className="h-4 w-4" />
                       </span>
-                      <p className="flex-1 text-sm font-medium text-zinc-100">{row.title}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 group-hover:text-violet-300" />
+                      <p className={cn("flex-1", profileRowTitle)}>{row.title}</p>
+                      <ChevronRight className={profileRowChevron} />
                     </Link>
                   ))}
                 </div>
@@ -491,14 +534,11 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
               <div className={profileCardHeader}>
                 <div>
                   <h2 className={`flex items-center gap-2 ${profileCardTitle}`}>
-                    <Trophy className="h-5 w-5 text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.45)]" /> Milestones
+                    <Trophy className={profileTrophyIcon} /> Milestones
                   </h2>
                   <p className={profileCardSubtitle}>Track your achievements on your Solace journey</p>
                 </div>
-                <Link
-                  to="/app/settings/achievements"
-                  className="rounded-xl border border-violet-400/20 bg-violet-500/12 px-3 py-2 text-xs font-semibold text-violet-100 shadow-[0_0_24px_-10px_rgba(139,92,246,0.4)] transition-all hover:bg-violet-500/18 hover:shadow-[0_0_28px_-8px_rgba(139,92,246,0.45)]"
-                >
+                <Link to="/app/settings/achievements" className={profileAchievementsLink}>
                   View all achievements
                 </Link>
               </div>
@@ -506,9 +546,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                 {milestones.map((m) => (
                   <li key={m.id} className={profileMilestoneChip(m.unlocked)}>
                     {m.unlocked ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                      <CheckCircle2 className={profileMilestoneUnlockedIcon} />
                     ) : (
-                      <Circle className="h-4 w-4 shrink-0 text-zinc-600" />
+                      <Circle className={cn("h-4 w-4 shrink-0", profileBodyMuted)} />
                     )}
                     <span className={m.unlocked ? "font-medium" : ""}>{m.label}</span>
                   </li>
@@ -539,10 +579,10 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <item.icon className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-zinc-100">{item.title}</p>
-                      <p className="text-[11px] text-zinc-500">{item.subtitle}</p>
+                      <p className={profileSupportTitle}>{item.title}</p>
+                      <p className={cn("text-[11px]", profileRowValue)}>{item.subtitle}</p>
                     </div>
-                    <ChevronRight className="mt-2 h-4 w-4 text-zinc-600 group-hover:text-fuchsia-300" />
+                    <ChevronRight className={cn("mt-2 h-4 w-4", profileRowChevron, "group-hover:text-fuchsia-500 [html[data-ezri-theme=light]_&]:group-hover:text-fuchsia-600")} />
                   </Link>
                 ))}
               </div>
@@ -557,14 +597,14 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
             >
               <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6">
                 <div>
-                  <h2 className="text-sm font-semibold text-zinc-200">Danger zone</h2>
-                  <p className="text-xs text-zinc-500">End your current session</p>
+                  <h2 className={cn("text-sm font-semibold", profileRowTitle)}>Danger zone</h2>
+                  <p className={cn("text-xs", profileRowValue)}>End your current session</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-rose-400/25 bg-[linear-gradient(135deg,rgba(244,63,94,0.14)_0%,rgba(190,24,93,0.1)_100%)] px-4 py-2.5 text-sm font-semibold text-rose-100 shadow-[0_0_24px_-10px_rgba(244,63,94,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-rose-400/35 hover:shadow-[0_0_32px_-8px_rgba(244,63,94,0.4)] disabled:opacity-60"
+                  className={profileBtnDanger}
                 >
                   {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
                   {isLoggingOut ? "Logging out…" : "Log Out"}
@@ -581,7 +621,12 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`${profileCard} overflow-visible ${isEditing ? "ring-1 ring-violet-400/30" : ""}`}
+                  className={cn(
+                    profileCard,
+                    "overflow-visible",
+                    isEditing &&
+                      "ring-1 ring-violet-400/30 [html[data-ezri-theme=light]_&]:ring-violet-300/50 [html[data-theme=light]_&]:ring-violet-300/50"
+                  )}
                 >
                   <div className={profileCardHeader}>
                     <div>
@@ -589,7 +634,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <p className={profileCardSubtitle}>Your details and preferences</p>
                     </div>
                     {isEditing && (
-                      <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-200">
+                      <span className={profileMemberTag}>
                         Editing
                       </span>
                     )}
@@ -629,7 +674,10 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                       ariaLabel="Pronouns"
                                       placeholder="Select pronouns"
                                       variant="default"
-                                      triggerClassName="h-auto w-full border-0 bg-transparent px-0 py-0 text-sm font-medium text-zinc-100 shadow-none"
+                                      triggerClassName={cn(
+                                        profileInlineInput,
+                                        "h-auto border-0 px-0 py-0 shadow-none"
+                                      )}
                                       options={[
                                         ...pronounsOptions.map((option) => ({
                                           value: option,
@@ -644,7 +692,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                         disabled={isSaving}
                                         placeholder="Type custom pronouns"
                                         onChange={(e) => field.onChange(e.target.value)}
-                                        className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600"
+                                        className={profileInlineInput}
                                       />
                                     )}
                                   </motion.div>
@@ -670,7 +718,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                       <button
                                         type="button"
                                         disabled={isSaving}
-                                        className="flex w-full items-center justify-between bg-transparent text-sm font-medium text-zinc-100 outline-none disabled:opacity-60"
+                                        className={profileInlineButton}
                                       >
                                         <span className="truncate text-left">
                                           {field.value ? formatTimezoneOptionLabel(field.value) : "Select timezone"}
@@ -723,21 +771,21 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                     {...field}
                                     disabled={isSaving}
                                     placeholder={f.placeholder}
-                                    className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600"
+                                    className={profileInlineInput}
                                   />
                                 )
                               ) : (
-                                <p className="truncate text-sm font-medium text-zinc-200">
+                                <p className={cn("truncate", profileFieldValue)}>
                                   {f.name === "birthday" ? (
                                     profileAgeDisplayLabel(profileAgeStorage ?? field.value) || (
-                                      <span className="font-normal text-zinc-600">Not set</span>
+                                      <span className={profileFieldValueEmpty}>Not set</span>
                                     )
                                   ) : f.name === "location" && field.value ? (
                                     formatTimezoneOptionLabel(String(field.value))
                                   ) : field.value ? (
                                     String(field.value)
                                   ) : (
-                                    <span className="font-normal text-zinc-600">Not set</span>
+                                    <span className={profileFieldValueEmpty}>Not set</span>
                                   )}
                                 </p>
                               )}
@@ -756,7 +804,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           {isEditing ? (
                             <div className="space-y-2 rounded-2xl border border-violet-400/25 bg-violet-500/[0.08] px-3.5 py-3">
                               <p className={`flex items-center gap-2 ${profileFieldLabel}`}>
-                                <Phone className="h-3.5 w-3.5 text-violet-300" />
+                                <Phone className={profileIconVioletSm} />
                                 Phone
                               </p>
                               <PhoneInput
@@ -777,8 +825,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                             </div>
                           ) : (
                             <FieldRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" editing={false}>
-                              <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
-                                {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
+                              <p className={profileFieldValue}>
+                                {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
                               </p>
                             </FieldRow>
                           )}
@@ -825,7 +873,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <h2 className={profileCardTitle}>Wellness snapshot</h2>
                       <p className={profileCardSubtitle}>Your current wellness overview</p>
                     </div>
-                    {isSaving && <Loader2 className="h-4 w-4 animate-spin text-violet-400" />}
+                    {isSaving && <Loader2 className={cn("h-4 w-4 animate-spin", profileIconVioletMd)} />}
                   </div>
                   <div className="space-y-5 p-4 sm:p-5">
                     <FormField
@@ -834,8 +882,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       render={({ field }) => (
                         <FormItem id="profile-field-in_therapy" className="scroll-mt-24">
                           <div className="mb-2 flex items-center gap-2">
-                            <Users className="h-4 w-4 text-violet-400" />
-                            <FormLabel className="text-sm font-semibold text-zinc-300">Therapist</FormLabel>
+                            <Users className={profileIconVioletMd} />
+                            <FormLabel className={profileFormLabel}>Therapist</FormLabel>
                           </div>
                           <FormControl>
                             {isEditing ? (
@@ -853,7 +901,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                 ]}
                               />
                             ) : (
-                              <span className={`${PILL} border-violet-400/25 bg-violet-500/15 text-violet-200`}>
+                              <span className={profilePillViolet}>
                                 {field.value || "Not specified"}
                               </span>
                             )}
@@ -867,9 +915,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       name="selected_goals"
                       render={({ field }) => (
                         <FormItem id="profile-field-selected_goals" className="scroll-mt-24">
-                          <motion.div className="mb-2 flex items-center gap-2 border-t border-white/[0.06] pt-4">
-                            <Target className="h-4 w-4 text-emerald-400" />
-                            <FormLabel className="text-sm font-semibold text-zinc-300">Wellness goals</FormLabel>
+                          <motion.div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
+                            <Target className={profileIconEmeraldMd} />
+                            <FormLabel className={profileFormLabel}>Wellness goals</FormLabel>
                           </motion.div>
                           <FormControl>
                             {isEditing ? (
@@ -884,11 +932,10 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                       onClick={() =>
                                         field.onChange(selected ? field.value!.filter((v: string) => v !== g.value) : [...(field.value || []), g.value])
                                       }
-                                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-all ${
-                                        selected
-                                          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
-                                          : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-emerald-400/25"
-                                      }`}
+                                      className={cn(
+                                        "flex items-center gap-2 text-left transition-all",
+                                        selected ? profileChipSelected("emerald") : profileChipUnselected
+                                      )}
                                     >
                                       <FluentEmoji emoji={g.emoji} size={16} className="shrink-0" /> {g.label}
                                     </button>
@@ -901,13 +948,13 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                   field.value.map((v: string, i: number) => {
                                     const opt = goalsOptions.find((o) => o.value === v);
                                     return (
-                                      <span key={i} className={`${PILL} border-emerald-400/25 bg-emerald-500/12 text-emerald-200`}>
+                                      <span key={i} className={profilePillEmerald}>
                                         {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={16} /> : null} {opt?.label || getWellnessGoalLabel(v)}
                                       </span>
                                     );
                                   })
                                 ) : (
-                                  <p className="text-sm italic text-zinc-500">Not specified</p>
+                                  <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
                                 )}
                               </div>
                             )}
@@ -921,9 +968,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       name="selected_triggers"
                       render={({ field }) => (
                         <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
-                          <div className="mb-2 flex items-center gap-2 border-t border-white/[0.06] pt-4">
-                            <Zap className="h-4 w-4 text-amber-400" />
-                            <FormLabel className="text-sm font-semibold text-zinc-300">Challenges</FormLabel>
+                          <div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
+                            <Zap className={profileIconAmberMd} />
+                            <FormLabel className={profileFormLabel}>Challenges</FormLabel>
                           </div>
                           <FormControl>
                             {isEditing ? (
@@ -938,11 +985,10 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                       onClick={() =>
                                         field.onChange(selected ? field.value!.filter((v: string) => v !== t.value) : [...(field.value || []), t.value])
                                       }
-                                      className={`rounded-xl border px-2.5 py-2 text-left text-xs font-semibold transition-all ${
-                                        selected
-                                          ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
-                                          : "border-white/[0.08] bg-white/[0.03] text-zinc-400"
-                                      }`}
+                                      className={cn(
+                                        "px-2.5 py-2 text-left transition-all",
+                                        selected ? profileChipSelected("amber") : profileChipUnselected
+                                      )}
                                     >
                                       {t.label}
                                     </button>
@@ -955,13 +1001,13 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                   field.value.map((v: string, i: number) => {
                                     const opt = triggersOptions.find((o) => o.value === v);
                                     return (
-                                      <span key={i} className={`${PILL} border-amber-400/25 bg-amber-500/12 text-amber-200`}>
+                                      <span key={i} className={profilePillAmber}>
                                         {opt?.label || v}
                                       </span>
                                     );
                                   })
                                 ) : (
-                                  <p className="text-sm italic text-zinc-500">Not specified</p>
+                                  <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
                                 )}
                               </div>
                             )}
@@ -996,13 +1042,21 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                             onMouseLeave={() => setEmergencyInfoOpen(false)}
                             onFocus={() => setEmergencyInfoOpen(true)}
                             onBlur={() => setEmergencyInfoOpen(false)}
-                            className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/15"
+                            className={profileWhyWeAskBtn}
                             aria-label="Learn why emergency contact is needed"
                           >
                             <Info className="h-3.5 w-3.5" /> Why we ask
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent align="end" className="max-w-xs border-white/10 bg-zinc-900 text-xs text-zinc-300">
+                        <PopoverContent
+                          align="end"
+                          className={cn(
+                            "max-w-xs text-xs",
+                            profileDropdownPopover,
+                            "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)]",
+                            "[html[data-theme=light]_&]:text-[var(--text-secondary)]"
+                          )}
+                        >
                           We only use this contact during serious safety concerns, such as when we cannot reach you in a
                           high-risk wellbeing event. It is never used for marketing or regular app notifications.
                         </PopoverContent>
@@ -1028,8 +1082,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                   className={profileEmergencyInput}
                                 />
                               ) : (
-                                <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
-                                  {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
+                                <p className={profileFieldValue}>
+                                  {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
                                 </p>
                               )}
                               <FormMessage className="mt-0.5 text-xs" />
@@ -1061,9 +1115,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                               />
                             ) : (
                               <div className="flex items-center gap-2">
-                                <Phone className="h-3.5 w-3.5 text-rose-300/70" />
-                                <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
-                                  {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
+                                <Phone className={profileIconRoseSm} />
+                                <p className={profileFieldValue}>
+                                  {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
                                 </p>
                               </div>
                             )}
@@ -1073,7 +1127,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       />
                       {isEditing && (
                         <div className="rounded-xl border border-rose-400/20 bg-rose-500/[0.08] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                          <label className="flex cursor-pointer items-start gap-2 text-xs text-[rgba(255,255,255,0.72)]">
+                          <label className={cn("flex cursor-pointer items-start gap-2 text-xs", profileHeroBio)}>
                             <input
                               type="checkbox"
                               checked={emergencyConsentChecked}
@@ -1089,7 +1143,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       <button
                         type="button"
                         onClick={() => setIsEditing(true)}
-                        className={`${profileBtnGhost} w-full border-rose-500/20 text-rose-100 hover:bg-rose-500/10`}
+                        className={profileBtnRoseGhost}
                       >
                         Update contact
                       </button>
@@ -1103,10 +1157,12 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
       </div>
 
       <Dialog open={avatarEditorOpen} onOpenChange={setAvatarEditorOpen}>
-        <DialogContent className="border-white/10 bg-zinc-950 sm:max-w-xl">
+        <DialogContent className={profileDialogContent}>
           <DialogHeader>
-            <DialogTitle className="text-zinc-50">Adjust profile photo</DialogTitle>
-            <DialogDescription className="text-zinc-400">Crop and zoom your image before saving.</DialogDescription>
+            <DialogTitle className={profileDialogTitle}>Adjust profile photo</DialogTitle>
+            <DialogDescription className={profileDialogDescription}>
+              Crop and zoom your image before saving.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative mx-auto w-full max-w-[22rem] rounded-2xl border border-white/10 p-2">
@@ -1134,11 +1190,11 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
               </span>
             </div>
             {avatarSourceSize && (
-              <p className="text-xs text-zinc-500">
+              <p className={cn("text-xs", profileRowValue)}>
                 Original image: {avatarSourceSize.width} x {avatarSourceSize.height}px
               </p>
             )}
-            <label className="block text-xs font-semibold text-zinc-400">
+            <label className={cn("block text-xs font-semibold", profileFormLabel)}>
               Zoom ({avatarZoom.toFixed(1)}x)
               <input
                 type="range"
