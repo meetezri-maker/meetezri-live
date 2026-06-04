@@ -1,0 +1,129 @@
+/**
+ * Mood Check-In — light theme: vivid card photos + readable labels.
+ * Global solace-hero-media remaps button overlays (from-black) and dulls cover images.
+ */
+
+/* Default scrims (no from-black in class names — avoids global scrim remap) */
+.solace-app .mood-check-in-mood-card-scrim {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.48) 42%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+}
+
+.solace-app .mood-check-in-hero-side-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(10, 12, 20, 0.55) 0%,
+    rgba(10, 12, 20, 0.18) 48%,
+    transparent 100%
+  );
+}
+
+/* Mood grid cards */
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card .mood-check-in-mood-card-img,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card .mood-check-in-mood-card-img {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card .mood-check-in-mood-card-scrim,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card .mood-check-in-mood-card-scrim {
+  background: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.82) 0%,
+    rgba(15, 23, 42, 0.38) 34%,
+    transparent 68%
+  ) !important;
+  background-image: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.82) 0%,
+    rgba(15, 23, 42, 0.38) 34%,
+    transparent 68%
+  ) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card-title,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card-title {
+  color: rgba(255, 255, 255, 0.98) !important;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card-body,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card-body {
+  color: rgba(255, 255, 255, 0.88) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card--active,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-card--active {
+  border-color: rgba(124, 58, 237, 0.45) !important;
+  box-shadow:
+    0 20px 48px -20px rgba(88, 28, 135, 0.22),
+    inset 0 0 0 1px rgba(167, 139, 250, 0.28) !important;
+}
+
+/* Arrival hero — keep photo vivid, moonlit copy */
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero > img,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero > img {
+  filter: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-side-scrim,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-side-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(251, 248, 255, 0.35) 42%,
+    transparent 72%
+  ) !important;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(251, 248, 255, 0.35) 42%,
+    transparent 72%
+  ) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-title,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-title {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-lead,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-lead {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none;
+}
+
+/* Page chrome */
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-page-title,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-page-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-section-heading,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-section-heading {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-section-lead,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-section-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page header.mood-check-in-header,
+html[data-theme="light"] .solace-app .mood-check-in-page header.mood-check-in-header {
+  border-color: var(--border, #e7ddfb) !important;
+}

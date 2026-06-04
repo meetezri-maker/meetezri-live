@@ -18,7 +18,7 @@ export function SolaceSupportStrip({ getSupportSlot, className }: SolaceSupportS
     { to: "/app/settings/resources", label: "Reading Library", icon: BookMarked },
   ];
   return (
-    <SolacePanel glow="violet" className={cn("p-4 sm:p-5", className)}>
+    <SolacePanel glow="violet" className={cn("talk-it-out-support-dock p-4 sm:p-5", className)}>
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <img
@@ -29,10 +29,12 @@ export function SolaceSupportStrip({ getSupportSlot, className }: SolaceSupportS
             decoding="async"
           />
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--solace-muted)]">
+            <p className="talk-it-out-support-eyebrow text-xs uppercase tracking-[0.18em] text-[var(--solace-muted)]">
               When you need a hand
             </p>
-            <p className="text-base font-medium text-[var(--solace-text)]">Need support right now?</p>
+            <p className="talk-it-out-support-title text-base font-medium text-[var(--solace-text)]">
+              Need support right now?
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">{getSupportSlot}</div>
@@ -43,8 +45,8 @@ export function SolaceSupportStrip({ getSupportSlot, className }: SolaceSupportS
             key={to}
             to={to}
             className={cn(
-              "rounded-xl border border-white/[0.06] bg-black/25 px-3 py-3 text-center text-xs font-medium text-[var(--solace-text)] transition-all duration-500 hover:border-violet-400/25 hover:shadow-[var(--solace-glow-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
-              danger && "hover:border-rose-500/30 hover:shadow-[0_0_28px_rgba(190,18,60,0.18)]"
+              "talk-it-out-support-link rounded-xl border border-white/[0.06] bg-black/25 px-3 py-3 text-center text-xs font-medium text-[var(--solace-text)] transition-all duration-500 hover:border-violet-400/25 hover:shadow-[var(--solace-glow-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+              danger && "talk-it-out-support-link--danger hover:border-rose-500/30 hover:shadow-[0_0_28px_rgba(190,18,60,0.18)]"
             )}
           >
             <Icon className="mx-auto mb-1.5 h-4 w-4 text-[var(--solace-muted)]" aria-hidden />

@@ -1,0 +1,131 @@
+/**
+ * Talk It Out lobby (/app/talk-it-out) — light theme readability.
+ */
+
+/* Hero — moonlit copy on cinematic banner (not dark --solace-text) */
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-title,
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-supporting,
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-pill,
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-trust,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-title,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-supporting,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-pill,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-trust {
+  color: rgba(255, 255, 255, 0.96) !important;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-supporting,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-trust {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-pill,
+html[data-theme="light"] .solace-app .talk-it-out-hero .talk-it-out-hero-pill svg {
+  color: rgba(221, 214, 254, 0.95) !important;
+}
+
+/* Hero CTA — beat .solace-image-card [class*="bg-gradient-to-r"] scrim + .text-white remap */
+html[data-ezri-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.talk-it-out-hero-cta,
+html[data-ezri-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.solace-cta-gradient.talk-it-out-hero-cta,
+html[data-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.talk-it-out-hero-cta,
+html[data-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.solace-cta-gradient.talk-it-out-hero-cta {
+  background: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  opacity: 1 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(124, 58, 237, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.talk-it-out-hero-cta svg,
+html[data-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.talk-it-out-hero-cta svg {
+  color: #ffffff !important;
+}
+
+/* Start mode cards — body copy on white panels (avoid --solace-muted Tailwind remap) */
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-title,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-title {
+  color: #101828 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-body,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-body {
+  color: #475467 !important;
+  opacity: 1 !important;
+}
+
+/* Rail pills — active state (text-violet-50 is invisible on light lavender fill) */
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-pill--active,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-pill--active {
+  color: #5b21b6 !important;
+  border-color: rgba(124, 58, 237, 0.45) !important;
+  background: color-mix(in srgb, #a78bfa 18%, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-pill--inactive,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-pill--inactive {
+  color: var(--text-secondary, #475467) !important;
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-muted, #f8f3ff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-rail-label,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-rail-label {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-rail-heading,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-rail-heading {
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Support dock (Talk It Out, Mood, Dashboard, etc.) */
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-eyebrow,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-eyebrow {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-title,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-lead,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-title,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-lead {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-lead,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-muted, #f8f3ff) !important;
+  color: var(--text-primary, #101828) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link svg,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link svg {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link:hover,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link:hover {
+  border-color: var(--border-strong, #d8c7f7) !important;
+  background: var(--surface-lavender, #f5eeff) !important;
+}
+
+/* Emergency Resources — rose-100 was invisible on white */
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link--danger,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link--danger {
+  color: #9f1239 !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  background: #fff1f2 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link--danger:hover,
+html[data-theme="light"] .solace-app .talk-it-out-support-dock .talk-it-out-support-link--danger:hover {
+  border-color: rgba(225, 29, 72, 0.45) !important;
+  background: #ffe4e6 !important;
+}

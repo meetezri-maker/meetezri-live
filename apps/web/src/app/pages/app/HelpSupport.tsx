@@ -22,8 +22,13 @@ import { cn } from "@/lib/utils";
 import {
   modalCloseButton,
   modalInput,
+  modalLabel,
+  modalOverlay,
+  modalPanelMd,
   modalPrimaryButton,
   modalSecondaryButton,
+  modalSubtitle,
+  modalTitle,
 } from "@/lib/modalTheme";
 import { SolaceSelect } from "@/app/solace";
 import {
@@ -355,9 +360,6 @@ export function HelpSupport() {
     void loadTickets();
   }, []);
 
-  const inputClass =
-    "w-full rounded-xl border border-white/10 bg-black/35 px-4 py-2.5 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40";
-
   return (
     <>
       <SanctuaryPageShell>
@@ -390,24 +392,24 @@ export function HelpSupport() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+          className={cn(modalOverlay, "z-50")}
           onClick={() => setShowContactForm(false)}
         >
           <motion.div
             initial={{ scale: 0.96, y: 16 }}
             animate={{ scale: 1, y: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className={cn(glassPanel, "w-full max-w-lg p-6 sm:p-7")}
+            className={cn(modalPanelMd, "p-6 sm:p-7")}
           >
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <h2 className="font-serif text-xl font-light text-zinc-50">Send us a message</h2>
-                <p className="mt-1 text-sm text-zinc-500">We&apos;ll respond with care within 24 hours.</p>
+                <h2 className={modalTitle}>Send us a message</h2>
+                <p className={modalSubtitle}>We&apos;ll respond with care within 24 hours.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowContactForm(false)}
-                className="rounded-xl border border-white/10 p-2 text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                className={cn(modalCloseButton, "rounded-xl p-2")}
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -416,43 +418,43 @@ export function HelpSupport() {
 
             {submitted ? (
               <div className="py-8 text-center">
-                <CheckCircle className="mx-auto mb-4 h-14 w-14 text-emerald-400" />
-                <h3 className="font-serif text-lg font-light text-zinc-50">Message sent</h3>
-                <p className="mt-2 text-sm text-zinc-500">We&apos;ll get back to you within 24 hours.</p>
+                <CheckCircle className="mx-auto mb-4 h-14 w-14 text-emerald-500" />
+                <h3 className={cn(modalTitle, "text-lg")}>Message sent</h3>
+                <p className={cn(modalSubtitle, "mt-2")}>We&apos;ll get back to you within 24 hours.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Name</label>
+                  <label className={cn(modalLabel, "mb-1.5 block")}>Name</label>
                   <input
                     type="text"
                     required
                     value={contactForm.name}
                     onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                    className={inputClass}
+                    className={modalInput}
                     placeholder="Your name"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Email</label>
+                  <label className={cn(modalLabel, "mb-1.5 block")}>Email</label>
                   <input
                     type="email"
                     required
                     value={contactForm.email}
                     onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className={inputClass}
+                    className={modalInput}
                     placeholder="your@email.com"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Subject</label>
+                  <label className={cn(modalLabel, "mb-1.5 block")}>Subject</label>
                   <SolaceSelect
                     value={contactForm.subject}
                     onValueChange={(subject) => setContactForm({ ...contactForm, subject })}
                     ariaLabel="Contact subject"
                     placeholder="Select a topic"
                     variant="form"
-                    triggerClassName={inputClass}
+                    triggerClassName={modalInput}
                     options={[
                       { value: "technical", label: "Technical Issue" },
                       { value: "account", label: "Account & Billing" },
@@ -463,13 +465,13 @@ export function HelpSupport() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Message</label>
+                  <label className={cn(modalLabel, "mb-1.5 block")}>Message</label>
                   <textarea
                     required
                     value={contactForm.message}
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     rows={4}
-                    className={cn(inputClass, "resize-none")}
+                    className={cn(modalInput, "resize-none")}
                     placeholder="Tell us how we can help..."
                   />
                 </div>
@@ -477,13 +479,13 @@ export function HelpSupport() {
                   <button
                     type="button"
                     onClick={() => setShowContactForm(false)}
-                    className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.05]"
+                    className={cn(modalSecondaryButton, "flex-1 rounded-xl py-2.5 text-sm")}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(139,92,246,0.3)]"
+                    className={cn(modalPrimaryButton, "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm")}
                   >
                     <Send className="h-4 w-4" />
                     Send message
@@ -501,7 +503,7 @@ export function HelpSupport() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+            className={cn(modalOverlay, "z-50")}
             onClick={() => setShowResourceModal(false)}
           >
             <motion.div
@@ -806,7 +808,7 @@ export function HelpSupport() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+            className={cn(modalOverlay, "z-50")}
             onClick={() => {
               setTicketModalOpen(false);
               setActiveTicketId(null);

@@ -351,7 +351,7 @@ export function buildJourneyMilestoneSeeds(
       description: "You took the first step and had your first conversation.",
       occurredAt: d,
       pill: "Milestone",
-      pillColor: "bg-amber-500/20 text-amber-400",
+      pillColor: "progress-pill progress-pill--amber",
       tone: "milestone",
     });
   }
@@ -371,7 +371,7 @@ export function buildJourneyMilestoneSeeds(
         description: "You completed 10 mood check-ins.",
         occurredAt: d,
         pill: "Insight",
-        pillColor: "bg-pink-500/20 text-pink-400",
+        pillColor: "progress-pill progress-pill--pink",
         tone: "insight",
       });
     }
@@ -390,7 +390,7 @@ export function buildJourneyMilestoneSeeds(
       description: "You wrote a meaningful journal entry.",
       occurredAt: d,
       pill: "Reflection",
-      pillColor: "bg-purple-500/20 text-purple-400",
+      pillColor: "progress-pill progress-pill--purple",
       tone: "reflection",
     });
   }
@@ -402,7 +402,7 @@ export function buildJourneyMilestoneSeeds(
       description: "You showed up for yourself 7 days in a row.",
       occurredAt: now,
       pill: "Streak",
-      pillColor: "bg-orange-500/20 text-orange-400",
+      pillColor: "progress-pill progress-pill--orange",
       tone: "streak",
     });
   }
@@ -415,7 +415,7 @@ export function buildJourneyMilestoneSeeds(
       description: "You've maintained your wellness habits.",
       occurredAt: lastActivity ?? now,
       pill: "Achievement",
-      pillColor: "bg-green-500/20 text-green-400",
+      pillColor: "progress-pill progress-pill--green",
       tone: "achievement",
     });
   }

@@ -33,6 +33,21 @@ import {
 } from "recharts";
 import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
 import { SolaceSelect } from "@/app/solace";
+import {
+  modalOverlay,
+  modalPanelLg,
+  modalPanelHeader,
+  modalPanelBody,
+  modalTitle,
+  modalCloseButton,
+  modalInsetPanel,
+  modalLabel,
+  modalSectionTitle,
+  modalBodyText,
+  modalMutedText,
+  modalPrimaryButton,
+  modalSecondaryButton,
+} from "@/lib/modalTheme";
 
 interface SessionData {
   id: string;
@@ -180,15 +195,15 @@ function formatSessionDuration(s: BackendSession): { label: string; minutesForSt
 
 const SESSION_HISTORY_HERO_IMG = "/community/2.png";
 
-const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
-  Anxious: { bg: "bg-amber-500/20", text: "text-amber-400" },
-  Hopeful: { bg: "bg-emerald-500/20", text: "text-emerald-400" },
-  Emotional: { bg: "bg-pink-500/20", text: "text-pink-400" },
-  Grateful: { bg: "bg-purple-500/20", text: "text-purple-400" },
-  Calm: { bg: "bg-cyan-500/20", text: "text-cyan-400" },
-  Sad: { bg: "bg-blue-500/20", text: "text-blue-400" },
-  Happy: { bg: "bg-green-500/20", text: "text-green-400" },
-  Angry: { bg: "bg-red-500/20", text: "text-red-400" },
+const MOOD_COLORS: Record<string, string> = {
+  Anxious: "session-history-mood-pill session-history-mood-pill--amber",
+  Hopeful: "session-history-mood-pill session-history-mood-pill--emerald",
+  Emotional: "session-history-mood-pill session-history-mood-pill--pink",
+  Grateful: "session-history-mood-pill session-history-mood-pill--purple",
+  Calm: "session-history-mood-pill session-history-mood-pill--cyan",
+  Sad: "session-history-mood-pill session-history-mood-pill--blue",
+  Happy: "session-history-mood-pill session-history-mood-pill--green",
+  Angry: "session-history-mood-pill session-history-mood-pill--red",
 };
 
 interface CircularProgressProps {
@@ -312,26 +327,26 @@ export function SessionHistory() {
 
   if (profile?.subscription_plan === 'trial') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="session-history-page min-h-screen flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
+          className="session-history-gate-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
           <div className="relative">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
               <Lock className="w-8 h-8 text-purple-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-3">
+            <h2 className="session-history-gate-title text-2xl font-bold text-white mb-3">
               Talking History is a Core Feature
             </h2>
-            <p className="text-slate-400 mb-8">
+            <p className="session-history-gate-lead text-slate-400 mb-8">
               Upgrade to Core or Pro to unlock detailed talking logs and history.
             </p>
             <Button
               onClick={() => navigate('/app/billing')}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
+              className="session-history-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
             >
               View Plans
             </Button>
@@ -593,30 +608,30 @@ export function SessionHistory() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+      <div className="session-history-page min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1600px]">
           <div className="mb-8 flex items-center justify-between">
             <div className="space-y-2">
-              <div className="h-8 w-48 rounded-lg bg-slate-800/50 animate-pulse" />
-              <div className="h-4 w-72 rounded-lg bg-slate-800/30 animate-pulse" />
+              <div className="session-history-skeleton h-8 w-48 rounded-lg bg-slate-800/50 animate-pulse" />
+              <div className="session-history-skeleton h-4 w-72 rounded-lg bg-slate-800/30 animate-pulse" />
             </div>
-            <div className="h-10 w-32 rounded-xl bg-slate-800/50 animate-pulse" />
+            <div className="session-history-skeleton h-10 w-32 rounded-xl bg-slate-800/50 animate-pulse" />
           </div>
-          <div className="h-56 w-full rounded-3xl bg-slate-800/30 animate-pulse mb-6" />
+          <div className="session-history-skeleton h-56 w-full rounded-3xl bg-slate-800/30 animate-pulse mb-6" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-2xl bg-slate-800/30 animate-pulse" />
+              <div key={i} className="session-history-skeleton h-28 rounded-2xl bg-slate-800/30 animate-pulse" />
             ))}
           </div>
           <div className="flex flex-col xl:flex-row gap-6">
             <div className="flex-1 min-w-0 space-y-4">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-28 rounded-2xl bg-slate-800/30 animate-pulse" />
+                <div key={i} className="session-history-skeleton h-28 rounded-2xl bg-slate-800/30 animate-pulse" />
               ))}
             </div>
             <div className="w-full xl:w-80 space-y-4">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-48 rounded-2xl bg-slate-800/30 animate-pulse" />
+                <div key={i} className="session-history-skeleton h-48 rounded-2xl bg-slate-800/30 animate-pulse" />
               ))}
             </div>
           </div>
@@ -626,7 +641,7 @@ export function SessionHistory() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+    <div className="session-history-page min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px]">
         {/* Header */}
         <motion.div
@@ -637,13 +652,13 @@ export function SessionHistory() {
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full blur-lg opacity-50" />
-              <div className="relative w-10 h-10 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+              <div className="session-history-header-icon-wrap relative w-10 h-10 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
                 <Clock className="w-5 h-5 text-purple-400" />
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Talking History</h1>
-              <p className="text-sm text-slate-400">
+              <h1 className="session-history-page-title text-2xl font-bold text-white">Talking History</h1>
+              <p className="session-history-page-lead text-sm text-slate-400">
                 Review your past talks and track your emotional growth.
               </p>
             </div>
@@ -652,7 +667,7 @@ export function SessionHistory() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/25"
+              className="session-history-btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/25"
             >
               <Plus className="w-4 h-4" />
               New Talk
@@ -669,7 +684,7 @@ export function SessionHistory() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="relative overflow-hidden rounded-3xl min-h-[200px] border border-slate-800/50"
+              className="session-history-hero relative overflow-hidden rounded-3xl min-h-[200px] border border-slate-800/50"
             >
               <div className="absolute inset-0" aria-hidden>
                 <img
@@ -679,17 +694,17 @@ export function SessionHistory() {
                   loading="eager"
                   decoding="async"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/30" />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-purple-950/25" />
+                <div className="session-history-hero-scrim absolute inset-0" />
+                <div className="session-history-hero-scrim-v absolute inset-0" />
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.12),transparent_55%)]" />
               </div>
               <div className="relative z-10 px-8 py-10 flex items-center min-h-[200px]">
                 <div className="max-w-md">
-                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
+                  <h2 className="session-history-hero-title text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
                     Conversations you've carried through.{" "}
                     <span className="inline-block">💜</span>
                   </h2>
-                  <p className="text-slate-300 text-sm md:text-base leading-relaxed">
+                  <p className="session-history-hero-lead text-slate-300 text-sm md:text-base leading-relaxed">
                     Every talk is a step forward. Every word, a release.<br />
                     You're growing beautifully.
                   </p>
@@ -705,54 +720,54 @@ export function SessionHistory() {
               className="grid grid-cols-2 md:grid-cols-4 gap-4"
             >
               {/* Total Talks */}
-              <div className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
+              <div className="session-history-stat-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
                 <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent" />
                 <div className="absolute top-3 right-3 w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center">
                   <MessageSquare className="w-5 h-5 text-pink-400" />
                 </div>
                 <div className="relative">
-                  <p className="text-xs text-slate-400 mb-1">Total Talks</p>
-                  <p className="text-3xl font-bold text-white">{completedSessions.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">Sessions completed</p>
+                  <p className="session-history-stat-label text-xs text-slate-400 mb-1">Total Talks</p>
+                  <p className="session-history-stat-value text-3xl font-bold text-white">{completedSessions.length}</p>
+                  <p className="session-history-stat-meta text-xs text-slate-500 mt-1">Sessions completed</p>
                 </div>
               </div>
 
               {/* Total Time */}
-              <div className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
+              <div className="session-history-stat-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
                 <div className="absolute top-3 right-3 w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
                   <Clock className="w-5 h-5 text-purple-400" />
                 </div>
                 <div className="relative">
-                  <p className="text-xs text-slate-400 mb-1">Total Time</p>
-                  <p className="text-3xl font-bold text-white">{totalHours}h</p>
-                  <p className="text-xs text-slate-500 mt-1">Time spent talking</p>
+                  <p className="session-history-stat-label text-xs text-slate-400 mb-1">Total Time</p>
+                  <p className="session-history-stat-value text-3xl font-bold text-white">{totalHours}h</p>
+                  <p className="session-history-stat-meta text-xs text-slate-500 mt-1">Time spent talking</p>
                 </div>
               </div>
 
               {/* Messages Saved */}
-              <div className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
+              <div className="session-history-stat-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent" />
                 <div className="absolute top-3 right-3 w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
                   <Heart className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div className="relative">
-                  <p className="text-xs text-slate-400 mb-1">Messages Saved</p>
-                  <p className="text-3xl font-bold text-white">{totalMessages}</p>
-                  <p className="text-xs text-slate-500 mt-1">Important messages</p>
+                  <p className="session-history-stat-label text-xs text-slate-400 mb-1">Messages Saved</p>
+                  <p className="session-history-stat-value text-3xl font-bold text-white">{totalMessages}</p>
+                  <p className="session-history-stat-meta text-xs text-slate-500 mt-1">Important messages</p>
                 </div>
               </div>
 
               {/* Upcoming Talks */}
-              <div className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
+              <div className="session-history-stat-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-5">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
                 <div className="absolute top-3 right-3 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div className="relative">
-                  <p className="text-xs text-slate-400 mb-1">Upcoming Talks</p>
-                  <p className="text-3xl font-bold text-white">{upcomingSessions.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">{upcomingSessions.length > 0 ? "Scheduled sessions" : "None scheduled"}</p>
+                  <p className="session-history-stat-label text-xs text-slate-400 mb-1">Upcoming Talks</p>
+                  <p className="session-history-stat-value text-3xl font-bold text-white">{upcomingSessions.length}</p>
+                  <p className="session-history-stat-meta text-xs text-slate-500 mt-1">{upcomingSessions.length > 0 ? "Scheduled sessions" : "None scheduled"}</p>
                 </div>
               </div>
             </motion.div>
@@ -774,8 +789,8 @@ export function SessionHistory() {
                     className={cn(
                       "px-4 py-2 rounded-full text-sm font-medium transition-all",
                       filterTab === tab
-                        ? "bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white shadow-lg shadow-purple-500/20"
-                        : "bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50"
+                        ? "session-history-filter-btn--active bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white shadow-lg shadow-purple-500/20"
+                        : "session-history-filter-btn--inactive bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50"
                     )}
                   >
                     {tab === "all" && "All Talks"}
@@ -806,7 +821,7 @@ export function SessionHistory() {
                     placeholder="Search talks..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent text-sm"
+                    className="session-history-search w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent text-sm"
                   />
                 </div>
               </div>
@@ -818,21 +833,21 @@ export function SessionHistory() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-12 text-center"
+                  className="session-history-empty relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-12 text-center"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
                   <div className="relative">
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800/50 flex items-center justify-center">
                       <Calendar className="w-8 h-8 text-slate-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">No Talks Found</h3>
-                    <p className="text-slate-400 mb-6">
+                    <h3 className="session-history-panel-title text-lg font-semibold text-white mb-2">No Talks Found</h3>
+                    <p className="session-history-panel-lead text-slate-400 mb-6">
                       {filterTab === "favorites"
                         ? "You haven't favorited any talks yet"
                         : "Try adjusting your filters or start a new talk"}
                     </p>
                     <Link to="/app/session-lobby">
-                      <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-6">
+                      <Button className="session-history-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-6">
                         Start a New Talk
                       </Button>
                     </Link>
@@ -845,7 +860,7 @@ export function SessionHistory() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(index, 5) * 0.05 }}
-                    className="group relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm hover:border-purple-500/30 transition-all cursor-pointer"
+                    className="session-history-row group relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm hover:border-purple-500/30 transition-all cursor-pointer"
                     onClick={() => setSelectedSession(sessionItem)}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -882,19 +897,17 @@ export function SessionHistory() {
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-white mb-1 truncate">{sessionItem.summary}</h3>
-                        <p className="text-sm text-slate-400 mb-2 line-clamp-1">
+                        <h3 className="session-history-row-title font-semibold text-white mb-1 truncate">{sessionItem.summary}</h3>
+                        <p className="session-history-row-preview text-sm text-slate-400 mb-2 line-clamp-1">
                           You opened up about feeling overwhelmed and anxious.
                         </p>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300">
+                          <span className="session-history-type-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300">
                             {sessionItem.sessionType === "scheduled" ? "Scheduled Talk" : "Instant Talk"}
                           </span>
                           {sessionItem.mood && (
                             <span className={cn(
-                              "px-2.5 py-1 rounded-full text-xs font-medium",
-                              MOOD_COLORS[sessionItem.mood]?.bg || "bg-slate-800/80",
-                              MOOD_COLORS[sessionItem.mood]?.text || "text-slate-300"
+                              MOOD_COLORS[sessionItem.mood] || "session-history-type-pill"
                             )}>
                               {sessionItem.mood}
                             </span>
@@ -904,7 +917,7 @@ export function SessionHistory() {
 
                       {/* Meta & Actions */}
                       <div className="flex items-center gap-6 flex-shrink-0">
-                        <div className="hidden sm:flex items-center gap-4 text-sm text-slate-400">
+                        <div className="session-history-row-meta hidden sm:flex items-center gap-4 text-sm text-slate-400">
                           <div className="flex items-center gap-1.5">
                             <Calendar className="w-4 h-4" />
                             <span>{sessionItem.date}</span>
@@ -925,7 +938,7 @@ export function SessionHistory() {
                             whileTap={{ scale: 0.9 }}
                             onClick={(e) => handleToggleFavorite(sessionItem.id, e)}
                             className={cn(
-                              "p-2 rounded-lg transition-all",
+                              "session-history-row-action p-2 rounded-lg transition-all",
                               sessionItem.favorite
                                 ? "bg-yellow-500/20 text-yellow-400"
                                 : "bg-slate-800/50 text-slate-500 hover:text-yellow-400 hover:bg-slate-700/50"
@@ -938,7 +951,7 @@ export function SessionHistory() {
                               e.stopPropagation();
                               void handleExportSession(sessionItem);
                             }}
-                            className="p-2 rounded-lg bg-slate-800/50 text-slate-500 hover:text-white hover:bg-slate-700/50 transition-all"
+                            className="session-history-row-action p-2 rounded-lg bg-slate-800/50 text-slate-500 hover:text-white hover:bg-slate-700/50 transition-all"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
@@ -956,7 +969,7 @@ export function SessionHistory() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className="rounded-xl border border-slate-800/50 bg-slate-900/50"
+                className="session-history-pagination rounded-xl border border-slate-800/50 bg-slate-900/50"
               >
                 <AdminPaginationBar
                   variant="solace"
@@ -979,7 +992,7 @@ export function SessionHistory() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm"
+              className="session-history-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm"
             >
               <div
                 className="pointer-events-none absolute inset-0 opacity-30"
@@ -991,7 +1004,7 @@ export function SessionHistory() {
               />
               <div className="relative z-10 p-6">
                 <div className="mb-6 flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-white">Your Journey So Far</h3>
+                  <h3 className="session-history-panel-title font-semibold text-white">Your Journey So Far</h3>
                   <SessionHistoryPeriodSelect
                     id="session-history-journey-period"
                     value={timeFilter}
@@ -1007,11 +1020,11 @@ export function SessionHistory() {
                     </div>
                   </CircularProgress>
                   <div className="text-center mt-4">
-                    <p className="text-sm text-slate-400">You've had</p>
-                    <p className="text-3xl font-bold text-white">{sessionsInPeriod.length}</p>
-                    <p className="text-sm text-slate-300">{periodTalkSuffix(timeFilter)}</p>
+                    <p className="session-history-journey-sub text-sm text-slate-400">You've had</p>
+                    <p className="session-history-journey-count text-3xl font-bold text-white">{sessionsInPeriod.length}</p>
+                    <p className="session-history-journey-sub text-sm text-slate-300">{periodTalkSuffix(timeFilter)}</p>
                   </div>
-                  <p className="text-xs text-slate-500 mt-3 text-center">
+                  <p className="session-history-journey-hint text-xs text-slate-500 mt-3 text-center">
                     Keep going! You're doing amazing.
                   </p>
                 </div>
@@ -1023,7 +1036,7 @@ export function SessionHistory() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
+              className="session-history-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
             >
               <div
                 className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5"
@@ -1031,7 +1044,7 @@ export function SessionHistory() {
               />
               <div className="relative z-10">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-white">Mood Distribution</h3>
+                  <h3 className="session-history-panel-title font-semibold text-white">Mood Distribution</h3>
                   <SessionHistoryPeriodSelect
                     id="session-history-mood-period"
                     value={timeFilter}
@@ -1073,9 +1086,9 @@ export function SessionHistory() {
                             className="w-2.5 h-2.5 rounded-full"
                             style={{ backgroundColor: mood.color }}
                           />
-                          <span className="text-slate-400">{mood.name}</span>
+                          <span className="session-history-mood-row-label text-slate-400">{mood.name}</span>
                         </div>
-                        <span className="text-white font-medium">{mood.value}%</span>
+                        <span className="session-history-mood-row-value text-white font-medium">{mood.value}%</span>
                       </div>
                     ))}
                   </div>
@@ -1088,7 +1101,7 @@ export function SessionHistory() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
-              className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-900/20 via-slate-900/80 to-slate-900/90 backdrop-blur-sm p-6"
+              className="session-history-streak-panel relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-900/20 via-slate-900/80 to-slate-900/90 backdrop-blur-sm p-6"
             >
               <div
                 className="pointer-events-none absolute top-0 left-0 h-24 w-24 rounded-full bg-gradient-radial from-orange-500/20 via-orange-500/5 to-transparent blur-xl"
@@ -1098,7 +1111,7 @@ export function SessionHistory() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Flame className="w-5 h-5 text-orange-400" />
-                    <h3 className="font-semibold text-white">Longest Streak</h3>
+                    <h3 className="session-history-panel-title font-semibold text-white">Longest Streak</h3>
                   </div>
                   <SessionHistoryPeriodSelect
                     id="session-history-streak-period"
@@ -1109,8 +1122,8 @@ export function SessionHistory() {
                 </div>
 
                 <div className="mb-4">
-                  <p className="text-4xl font-bold text-white">{longestStreak} days</p>
-                  <p className="text-sm text-slate-400">Your best talk streak</p>
+                  <p className="session-history-streak-value text-4xl font-bold text-white">{longestStreak} days</p>
+                  <p className="session-history-panel-lead text-sm text-slate-400">Your best talk streak</p>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -1123,12 +1136,12 @@ export function SessionHistory() {
                             "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all",
                             isActive
                               ? "bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30"
-                              : "bg-slate-800/50 text-slate-500"
+                              : "session-history-streak-day--inactive bg-slate-800/50 text-slate-500"
                           )}
                         >
                           {isActive ? "✓" : day}
                         </div>
-                        <span className="text-[10px] text-slate-500">{day}</span>
+                        <span className="session-history-streak-day-label text-[10px] text-slate-500">{day}</span>
                       </div>
                     );
                   })}
@@ -1142,128 +1155,124 @@ export function SessionHistory() {
       {/* Session Detail Modal */}
       <AnimatePresence>
         {selectedSession && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedSession(null)}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
-            />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={cn(modalOverlay, "z-50")}
+            onClick={() => setSelectedSession(null)}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-2xl z-50"
+              className={cn(modalPanelLg, "relative max-h-[90vh] overflow-y-auto")}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/95 backdrop-blur-xl max-h-[90vh] overflow-y-auto">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
-                
-                {/* Modal Header */}
-                <div className="relative px-6 pt-6 pb-4 border-b border-slate-800/50">
-                  <button
-                    onClick={() => setSelectedSession(null)}
-                    className="absolute top-4 right-4 p-2 rounded-lg bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <h2 className="text-xl font-bold text-white">Talk Details</h2>
+              <div className={modalPanelHeader}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSession(null)}
+                  className={cn(modalCloseButton, "absolute top-4 right-4")}
+                  aria-label="Close talk details"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <h2 className={modalTitle}>Talk Details</h2>
+              </div>
+
+              <div className={modalPanelBody}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={modalInsetPanel}>
+                    <p className={modalLabel}>Date</p>
+                    <p className={cn(modalEmphasisText, "text-sm")}>{selectedSession.date}</p>
+                  </div>
+                  <div className={modalInsetPanel}>
+                    <p className={modalLabel}>Time</p>
+                    <p className={cn(modalEmphasisText, "text-sm")}>{selectedSession.timeLabel}</p>
+                  </div>
+                  <div className={modalInsetPanel}>
+                    <p className={modalLabel}>Duration</p>
+                    <p className={cn(modalEmphasisText, "text-sm")}>{selectedSession.duration}</p>
+                  </div>
+                  <div className={modalInsetPanel}>
+                    <p className={modalLabel}>Messages</p>
+                    <p className={cn(modalEmphasisText, "text-sm")}>{selectedSession.messagesCount}</p>
+                  </div>
                 </div>
 
-                <div className="relative p-6 space-y-6">
-                  {/* Session Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                      <p className="text-xs text-slate-500 mb-1">Date</p>
-                      <p className="text-sm font-medium text-white">{selectedSession.date}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                      <p className="text-xs text-slate-500 mb-1">Time</p>
-                      <p className="text-sm font-medium text-white">{selectedSession.timeLabel}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                      <p className="text-xs text-slate-500 mb-1">Duration</p>
-                      <p className="text-sm font-medium text-white">{selectedSession.duration}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                      <p className="text-xs text-slate-500 mb-1">Messages</p>
-                      <p className="text-sm font-medium text-white">{selectedSession.messagesCount}</p>
-                    </div>
-                  </div>
+                <div>
+                  <h3 className={cn(modalSectionTitle, "mb-2")}>Summary</h3>
+                  <p className={modalBodyText}>{selectedSession.summary}</p>
+                </div>
 
-                  {/* Summary */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-white mb-2">Summary</h3>
-                    <p className="text-sm text-slate-400">{selectedSession.summary}</p>
-                  </div>
-
-                  {/* Transcript */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-white mb-3">Transcript</h3>
-                    <div className="rounded-xl bg-slate-800/30 border border-slate-700/30 p-4 max-h-64 overflow-y-auto space-y-3">
-                      {loadingTranscript ? (
-                        <p className="text-sm text-slate-500 text-center py-4">Loading transcript...</p>
-                      ) : transcript.length > 0 ? (
-                        transcript.map((msg, i) => {
-                          const isUser = msg.role?.toLowerCase() === "user";
-                          return (
-                            <div key={i} className={cn("flex gap-3", isUser && "flex-row-reverse")}>
-                              <div className={cn(
+                <div>
+                  <h3 className={cn(modalSectionTitle, "mb-3")}>Transcript</h3>
+                  <div className={cn(modalInsetPanel, "max-h-64 overflow-y-auto space-y-3")}>
+                    {loadingTranscript ? (
+                      <p className={cn(modalMutedText, "text-sm text-center py-4")}>Loading transcript...</p>
+                    ) : transcript.length > 0 ? (
+                      transcript.map((msg, i) => {
+                        const isUser = msg.role?.toLowerCase() === "user";
+                        return (
+                          <div key={i} className={cn("flex gap-3", isUser && "flex-row-reverse")}>
+                            <div
+                              className={cn(
                                 "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium",
-                                isUser 
-                                  ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white" 
-                                  : "bg-slate-700 text-slate-300"
-                              )}>
-                                {isUser ? "U" : "E"}
-                              </div>
-                              <div className={cn(
-                                "p-3 rounded-xl max-w-[80%] text-sm",
-                                isUser 
-                                  ? "bg-purple-500/20 text-purple-100" 
-                                  : "bg-slate-700/50 text-slate-300"
-                              )}>
-                                <p>{msg.content}</p>
-                              </div>
+                                isUser
+                                  ? "session-history-transcript-avatar-user bg-gradient-to-br from-purple-500 to-pink-500 text-white"
+                                  : "session-history-transcript-avatar-assistant bg-slate-700 text-slate-300"
+                              )}
+                            >
+                              {isUser ? "U" : "E"}
                             </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-sm text-slate-500 text-center py-4 italic">
-                          No transcript available for this talk.
-                        </p>
-                      )}
-                    </div>
+                            <div
+                              className={cn(
+                                "p-3 rounded-xl max-w-[80%] text-sm",
+                                isUser
+                                  ? "session-history-transcript-user bg-purple-500/20 text-purple-100"
+                                  : "session-history-transcript-assistant bg-slate-700/50 text-slate-300"
+                              )}
+                            >
+                              <p>{msg.content}</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className={cn(modalMutedText, "text-sm text-center py-4 italic")}>
+                        No transcript available for this talk.
+                      </p>
+                    )}
                   </div>
+                </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      onClick={() => void handleExportSession(selectedSession, transcript)}
-                      variant="outline"
-                      className="flex-1 bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-700/50 rounded-xl"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Export Transcript
-                    </Button>
-                    <Button
-                      onClick={(e) => handleToggleFavorite(selectedSession.id, e)}
-                      variant="outline"
-                      className={cn(
-                        "bg-slate-800/50 border-slate-700/50 rounded-xl",
-                        selectedSession.favorite 
-                          ? "text-yellow-400 border-yellow-500/30" 
-                          : "text-white hover:bg-slate-700/50"
-                      )}
-                    >
-                      <Star className={cn("w-4 h-4", selectedSession.favorite && "fill-current")} />
-                    </Button>
-                  </div>
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    onClick={() => void handleExportSession(selectedSession, transcript)}
+                    variant="outline"
+                    className={cn(modalPrimaryButton, "flex-1 rounded-xl")}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Transcript
+                  </Button>
+                  <Button
+                    onClick={(e) => handleToggleFavorite(selectedSession.id, e)}
+                    variant="outline"
+                    className={cn(
+                      modalSecondaryButton,
+                      "rounded-xl",
+                      selectedSession.favorite && "text-yellow-600 border-yellow-500/40"
+                    )}
+                  >
+                    <Star className={cn("w-4 h-4", selectedSession.favorite && "fill-current")} />
+                  </Button>
                 </div>
               </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

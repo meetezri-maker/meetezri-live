@@ -1,0 +1,15 @@
+/**
+ * Wellness Tools — hero CTA in light theme (beat image-card scrim + .text-white remap).
+ */
+
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card button.wellness-tools-hero-cta,
+html[data-ezri-theme="light"] .solace-app .solace-hero-media.solace-image-card button.solace-cta-gradient.wellness-tools-hero-cta,
+html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card button.wellness-tools-hero-cta,
+html[data-theme="light"] .solace-app .solace-hero-media.solace-image-card button.solace-cta-gradient.wellness-tools-hero-cta {
+  background: linear-gradient(to right, #d946ef, #7c3aed, #6d28d9) !important;
+  background-image: linear-gradient(to right, #d946ef, #7c3aed, #6d28d9) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 28px -6px rgba(192, 38, 211, 0.45), 0 4px 16px -4px rgba(124, 58, 237, 0.35) !important;
+}

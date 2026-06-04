@@ -1,0 +1,50 @@
+/**
+ * Billing — hero CTAs & stat chips in light theme (cinematic hero).
+ */
+
+html[data-ezri-theme="light"] .solace-app .billing-hero-section.solace-hero-media.solace-image-card button.billing-hero-btn-primary,
+html[data-ezri-theme="light"] .solace-app .billing-hero-section.solace-hero-media.solace-image-card button.solace-cta-gradient.billing-hero-btn-primary,
+html[data-theme="light"] .solace-app .billing-hero-section.solace-hero-media.solace-image-card button.billing-hero-btn-primary,
+html[data-theme="light"] .solace-app .billing-hero-section.solace-hero-media.solace-image-card button.solace-cta-gradient.billing-hero-btn-primary {
+  background: linear-gradient(to right, #7c3aed, #c026d3, #a21caf) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #a21caf) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 28px -6px rgba(124, 58, 237, 0.45) !important;
+}
+
+/* Secondary — moonlit glass on hero (override global border-white/ → lavender remap) */
+html[data-ezri-theme="light"] .solace-app .billing-hero-section button.billing-hero-btn-secondary,
+html[data-theme="light"] .solace-app .billing-hero-section button.billing-hero-btn-secondary {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fafafa !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: blur(8px);
+}
+
+html[data-ezri-theme="light"] .solace-app .billing-hero-section button.billing-hero-btn-secondary:hover,
+html[data-theme="light"] .solace-app .billing-hero-section button.billing-hero-btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+
+/* Stat chips on hero */
+html[data-ezri-theme="light"] .solace-app .billing-hero-section .billing-hero-stat,
+html[data-theme="light"] .solace-app .billing-hero-section .billing-hero-stat {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  background-color: rgba(0, 0, 0, 0.42) !important;
+  background: rgba(0, 0, 0, 0.42) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .billing-hero-section .billing-hero-stat dt,
+html[data-theme="light"] .solace-app .billing-hero-section .billing-hero-stat dt {
+  color: rgba(228, 228, 231, 0.75) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .billing-hero-section .billing-hero-stat dd,
+html[data-theme="light"] .solace-app .billing-hero-section .billing-hero-stat dd {
+  color: #fafafa !important;
+}

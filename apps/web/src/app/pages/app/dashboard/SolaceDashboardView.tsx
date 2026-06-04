@@ -30,6 +30,7 @@ import {
   type JourneyAmbiance,
 } from "@/app/solace";
 import {
+  solaceCtaGradient,
   solaceHeroContent,
   solaceHeroLightScrim,
   solaceHeroMediaShell,
@@ -414,14 +415,16 @@ export function SolaceDashboardView({
                           {heroSubtext}
                         </p>
                         <div className="relative mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                          <Link to="/app/session-lobby" className="inline-flex">
-                            <span className="group relative inline-flex overflow-hidden rounded-full shadow-[0_0_48px_rgba(109,40,217,0.35)]">
-                              <span className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 opacity-95 transition-opacity duration-500 group-hover:opacity-100" />
-                              <span className="relative inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium tracking-wide text-white">
-                                Continue Conversation
-                                <Waves className="h-4 w-4 opacity-90" aria-hidden />
-                              </span>
-                            </span>
+                          <Link
+                            to="/app/session-lobby"
+                            className={cn(
+                              solaceCtaGradient,
+                              "dashboard-continue-cta group rounded-full px-7 py-3.5 text-sm font-medium tracking-wide",
+                              "shadow-[0_0_48px_rgba(109,40,217,0.35)] transition-opacity duration-300 hover:opacity-100"
+                            )}
+                          >
+                            Continue Conversation
+                            <Waves className="h-4 w-4 opacity-90" aria-hidden />
                           </Link>
                           {lastSessionLabel && (
                             <p className="text-[13px] text-zinc-500">

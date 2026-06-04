@@ -912,7 +912,7 @@ export function SleepTracker() {
 
   if (isLoading) {
     return (
-      <SolaceAmbientBackground className="min-h-[60vh] w-full min-w-0 rounded-[32px] p-4 sm:p-6">
+      <SolaceAmbientBackground className="sleep-tracker-page min-h-[60vh] w-full min-w-0 rounded-[32px] p-4 sm:p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.04] pb-6">
           <div className="max-w-3xl space-y-3">
             <Skeleton className="h-9 w-56 rounded-lg bg-white/[0.06]" />
@@ -940,33 +940,33 @@ export function SleepTracker() {
 
   return (
     <>
-      <SolaceAmbientBackground className="relative overflow-hidden rounded-[32px]">
+      <SolaceAmbientBackground className="sleep-tracker-page relative overflow-hidden rounded-[32px]">
         <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(168,85,247,0.12),transparent_50%)]"
+          className="sleep-tracker-page-vignette pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(168,85,247,0.12),transparent_50%)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.45)]"
+          className="sleep-tracker-page-vignette pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.45)]"
           aria-hidden
         />
 
         <div className="relative z-10 w-full min-w-0 px-3 py-6 sm:px-5 sm:py-8 lg:px-6 xl:px-8">
-          <header className="mb-10 border-b border-white/[0.04] pb-8 sm:mb-12 sm:pb-10">
+          <header className="sleep-tracker-header mb-10 border-b border-white/[0.04] pb-8 sm:mb-12 sm:pb-10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <div className="flex items-center gap-3">
                   <Moon
-                    className="h-7 w-7 text-violet-300/90 sm:h-8 sm:w-8"
+                    className="h-7 w-7 text-violet-300/90 sm:h-8 sm:w-8 [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:text-[#7c3aed]"
                     fill="currentColor"
                     fillOpacity={0.28}
                     strokeWidth={1.35}
                     aria-hidden
                   />
-                  <h1 className="font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
+                  <h1 className="sleep-tracker-page-title font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
                     Sleep Tracker
                   </h1>
                 </div>
-                <p className="mt-4 max-w-2xl text-[15px] leading-relaxed tracking-[-0.01em] text-[var(--solace-muted)] sm:text-[1.05rem] sm:leading-[1.75]">
+                <p className="sleep-tracker-page-lead mt-4 max-w-2xl text-[15px] leading-relaxed tracking-[-0.01em] sm:text-[1.05rem] sm:leading-[1.75]">
                   Understand your sleep, embrace your rest, and wake up to a better you.
                 </p>
               </div>
@@ -992,7 +992,7 @@ export function SleepTracker() {
               >
                 <div
                   className={cn(
-                    "relative isolate min-h-[min(380px,42vh)] w-full max-h-[400px] overflow-hidden rounded-[28px]",
+                    "sleep-tracker-hero relative isolate min-h-[min(380px,42vh)] w-full max-h-[400px] overflow-hidden rounded-[28px]",
                     "border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)]",
                     "shadow-[var(--solace-ds-shadow-cinematic)]"
                   )}
@@ -1000,33 +1000,30 @@ export function SleepTracker() {
                   <img
                     src={SLEEP_TRACKER_IMAGES.hero}
                     alt="Moonlit lake at night with a wooden pier and glowing lantern"
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                    className="sleep-tracker-hero-img pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
                     loading="eager"
                     decoding="async"
                     width={1600}
                     height={900}
                   />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/62 via-[#0a0c14]/28 to-transparent"
-                    aria-hidden
-                  />
+                  <div className="sleep-tracker-hero-scrim pointer-events-none absolute inset-0 z-[1]" aria-hidden />
                   <HeroParticles reduced={prefersReducedMotion} />
                   <div className="relative z-10 flex h-full min-h-[min(380px,42vh)] max-h-[400px] flex-col justify-end p-6 sm:p-8 lg:p-10">
                     <div className="max-w-2xl space-y-4">
-                      <h2 className="font-serif text-[clamp(2.1rem,4.2vw,3.5rem)] font-light leading-[1.06] tracking-tight text-white [text-shadow:0_2px_48px_rgba(0,0,0,0.65)]">
-                        Your{" "}
-                        <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
+                      <h2 className="sleep-tracker-hero-title font-serif text-[clamp(2.1rem,4.2vw,3.5rem)] font-light leading-[1.06] tracking-tight text-white [text-shadow:0_2px_48px_rgba(0,0,0,0.65)]">
+                        <span className="sleep-tracker-hero-title-your">Your </span>
+                        <span className="sleep-tracker-hero-title-accent bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
                           Sleep Journey
                         </span>
                       </h2>
-                      <p className="max-w-xl text-[15px] leading-relaxed text-zinc-200/95 sm:text-base">
+                      <p className="sleep-tracker-hero-lead max-w-xl text-[15px] leading-relaxed text-zinc-200/95 sm:text-base">
                         Understand your sleep, embrace your rest,
                         <br className="hidden sm:block" /> and wake up to a better you.
                       </p>
-                      <blockquote className="max-w-lg border-l-2 border-amber-400/35 pl-4 text-sm italic leading-relaxed text-zinc-300/95">
+                      <blockquote className="sleep-tracker-hero-quote max-w-lg border-l-2 border-amber-400/35 pl-4 text-sm italic leading-relaxed text-zinc-300/95">
                         &ldquo;Sleep is the golden chain that ties
                         <br className="hidden sm:block" /> health and our bodies together.&rdquo;
-                        <span className="mt-2 block text-xs not-italic text-zinc-500">— Thomas Dekker</span>
+                        <cite className="mt-2 block text-xs not-italic text-zinc-500">— Thomas Dekker</cite>
                       </blockquote>
                     </div>
                   </div>
@@ -1040,7 +1037,7 @@ export function SleepTracker() {
                 transition={{ delay: 0.05, duration: 0.5 }}
                 className="w-full"
               >
-                <div className="flex w-full min-w-0 overflow-x-auto rounded-[24px] border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-ds-surface)_92%,transparent)] shadow-[0_0_48px_-24px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="sleep-tracker-stats-strip flex w-full min-w-0 overflow-x-auto rounded-[24px] border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-ds-surface)_92%,transparent)] shadow-[0_0_48px_-24px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {(
                     [
                       {
@@ -1108,9 +1105,9 @@ export function SleepTracker() {
                         >
                           <SegIcon className={cn("size-6", seg.iconClass)} aria-hidden />
                         </div>
-                        <p className="mt-3 font-serif text-2xl font-light tabular-nums tracking-tight text-white">{seg.value}</p>
-                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{seg.label}</p>
-                        <p className="mt-2 text-center text-[11px] leading-snug text-zinc-500">{seg.trend}</p>
+                        <p className="sleep-tracker-stat-value mt-3 font-serif text-2xl font-light tabular-nums tracking-tight text-white">{seg.value}</p>
+                        <p className="sleep-tracker-stat-label mt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{seg.label}</p>
+                        <p className="sleep-tracker-stat-meta mt-2 text-center text-[11px] leading-snug text-zinc-500">{seg.trend}</p>
                       </div>
                     );
                   })}
@@ -1127,8 +1124,8 @@ export function SleepTracker() {
                 <SolaceGlassCard className="flex min-h-[360px] flex-col p-5 sm:min-h-[380px] sm:p-7">
                   <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-serif text-xl font-light text-white sm:text-2xl">Sleep Duration</h3>
-                      <p className="mt-1 text-sm text-zinc-500">Hours of sleep each night</p>
+                      <h3 className="sleep-tracker-section-title font-serif text-xl font-light text-white sm:text-2xl">Sleep Duration</h3>
+                      <p className="sleep-tracker-section-sub mt-1 text-sm text-zinc-500">Hours of sleep each night</p>
                     </div>
                     <Select value={chartRange} onValueChange={(v) => setChartRange(v as "week")}>
                       <SelectTrigger
@@ -1173,8 +1170,8 @@ export function SleepTracker() {
                 <SolaceGlassCard className="flex min-h-[360px] flex-col p-5 sm:min-h-[380px] sm:p-7">
                   <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-serif text-xl font-light text-white sm:text-2xl">Sleep Quality Trend</h3>
-                      <p className="mt-1 text-sm text-zinc-500">Quality score each night</p>
+                      <h3 className="sleep-tracker-section-title font-serif text-xl font-light text-white sm:text-2xl">Sleep Quality Trend</h3>
+                      <p className="sleep-tracker-section-sub mt-1 text-sm text-zinc-500">Quality score each night</p>
                     </div>
                     <Select value={chartRange} onValueChange={(v) => setChartRange(v as "week")}>
                       <SelectTrigger
@@ -1224,14 +1221,14 @@ export function SleepTracker() {
               >
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Sleep History</h3>
-                    <p className="mt-1 text-sm text-zinc-500">Your recent sleep logs</p>
+                    <h3 className="sleep-tracker-section-title font-serif text-xl font-light text-zinc-50 sm:text-2xl">Sleep History</h3>
+                    <p className="sleep-tracker-section-sub mt-1 text-sm text-zinc-500">Your recent sleep logs</p>
                   </div>
                   {sleepEntries.length > 0 ? (
                     <button
                       type="button"
                       onClick={scrollToHistory}
-                      className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-violet-300 transition-colors hover:text-violet-200"
+                      className="sleep-tracker-link inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-violet-300 transition-colors hover:text-violet-200"
                     >
                       View All Logs
                       <ChevronRight className="size-4" aria-hidden />
@@ -1391,26 +1388,17 @@ export function SleepTracker() {
                 className="w-full space-y-4 pb-2"
               >
                 <p className="text-sm text-zinc-500">Small steps create better nights.</p>
-                <div className="relative min-h-[220px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0614] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:min-h-[240px]">
+                <div className="sleep-tracker-journey relative min-h-[220px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0614] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:min-h-[240px]">
                   <img
                     src={SLEEP_TRACKER_IMAGES.starfieldAccent}
                     alt=""
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.38]"
+                    className="sleep-tracker-journey-img pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.38]"
                     loading="lazy"
                     decoding="async"
                   />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a0614]/75 via-[#0a0614]/35 to-[#0a0614]/80"
-                    aria-hidden
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_50%,rgba(6,4,14,0.45),transparent_65%)]"
-                    aria-hidden
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_100%,rgba(88,28,135,0.28),transparent_55%)]"
-                    aria-hidden
-                  />
+                  <div className="sleep-tracker-journey-scrim pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a0614]/75 via-[#0a0614]/35 to-[#0a0614]/80" aria-hidden />
+                  <div className="sleep-tracker-journey-scrim pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_50%,rgba(6,4,14,0.45),transparent_65%)]" aria-hidden />
+                  <div className="sleep-tracker-journey-scrim pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_100%,rgba(88,28,135,0.28),transparent_55%)]" aria-hidden />
                   <div className="relative z-10 w-full overflow-x-auto px-4 py-8 sm:px-8 sm:py-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="relative grid w-full min-w-[640px] grid-cols-5">
                       {JOURNEY_STAGES.map((stage, idx) => {
@@ -1445,12 +1433,12 @@ export function SleepTracker() {
                             <p
                               className={cn(
                                 "mt-4 text-[10px] font-semibold uppercase tracking-wider sm:text-xs",
-                                active ? "text-violet-200" : "text-zinc-500"
+                                active ? "sleep-tracker-journey-stage-label--active text-violet-200" : "text-zinc-500"
                               )}
                             >
                               {stage.label}
                             </p>
-                            <p className="mt-2 text-[10px] leading-snug text-zinc-500 sm:text-[11px]">{stage.sub}</p>
+                            <p className="sleep-tracker-journey-stage-sub mt-2 text-[10px] leading-snug text-zinc-500 sm:text-[11px]">{stage.sub}</p>
                           </div>
                         );
                       })}
@@ -1462,7 +1450,7 @@ export function SleepTracker() {
 
             {/* Right rail — nighttime companion */}
             <aside className="flex w-full min-w-0 flex-col gap-6 xl:sticky xl:top-4 xl:max-w-[min(100%,380px)]">
-              <SolaceRightRailCard className="p-6">
+              <SolaceRightRailCard className="sleep-tracker-rail-card light-theme-card light-theme-card-hover p-6">
                 <h2 className="font-serif text-lg font-light text-white">Sleep Recovery</h2>
                 <div className="mt-5 flex flex-col items-center">
                   <div className="mb-4 h-[72px] w-[72px] overflow-hidden rounded-full border border-white/[0.1] bg-black/40 shadow-[0_0_36px_-6px_rgba(168,85,247,0.5)]">
@@ -1480,12 +1468,12 @@ export function SleepTracker() {
                   >
                     <SolaceProgressRing value={stats.recoveryLevel} size={140} strokeWidth={10}>
                       <div className="flex flex-col items-center px-2">
-                        <span className="text-3xl font-light tabular-nums text-white">{stats.recoveryLevel}%</span>
-                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">Recovered</span>
+                        <span className="sleep-tracker-rail-stat text-3xl font-light tabular-nums text-white">{stats.recoveryLevel}%</span>
+                        <span className="sleep-tracker-rail-muted text-[10px] font-medium uppercase tracking-wider text-zinc-400">Recovered</span>
                       </div>
                     </SolaceProgressRing>
                   </motion.div>
-                  <p className="mt-5 text-center text-sm leading-relaxed text-zinc-400">
+                  <p className="sleep-tracker-rail-muted mt-5 text-center text-sm leading-relaxed text-zinc-400">
                     {stats.recoveryLevel >= 75
                       ? "You are recovering with room to soften into rest."
                       : stats.recoveryLevel >= 55
@@ -1495,15 +1483,15 @@ export function SleepTracker() {
                 </div>
               </SolaceRightRailCard>
 
-              <SolaceRightRailCard className="p-6">
+              <SolaceRightRailCard className="sleep-tracker-rail-card light-theme-card light-theme-card-hover p-6">
                 <h2 className="font-serif text-lg font-light text-white">Next Bedtime</h2>
                 {avgBed ? (
                   <>
-                    <p className="mt-1 text-xs font-medium uppercase tracking-wider text-violet-300/90">
+                    <p className="sleep-tracker-rail-accent mt-1 text-xs font-medium uppercase tracking-wider text-violet-300/90">
                       {nextBedtimeLabel ?? "Suggested"}
                     </p>
-                    <p className="mt-2 font-serif text-2xl font-light tabular-nums text-white">{format(avgBed, "h:mm a")}</p>
-                    <p className="mt-1 text-xs text-zinc-500">From your recent average bedtime</p>
+                    <p className="sleep-tracker-rail-stat mt-2 font-serif text-2xl font-light tabular-nums text-white">{format(avgBed, "h:mm a")}</p>
+                    <p className="sleep-tracker-rail-muted mt-1 text-xs text-zinc-500">From your recent average bedtime</p>
                     {bedtimeProgress != null ? (
                       <div className="mt-5 space-y-2">
                         <div className="flex justify-between text-[11px] text-zinc-500">
@@ -1518,12 +1506,12 @@ export function SleepTracker() {
                         </div>
                       </div>
                     ) : null}
-                    <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/35 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-300/90">Wind-down</p>
-                      <p className="mt-1 text-sm text-zinc-200">
+                    <div className="sleep-tracker-rail-inset mt-5 rounded-2xl border border-white/[0.07] bg-black/35 px-4 py-3">
+                      <p className="sleep-tracker-rail-accent text-[11px] font-semibold uppercase tracking-wider text-violet-300/90">Wind-down</p>
+                      <p className="sleep-tracker-rail-stat mt-1 text-sm text-zinc-200">
                         {windDownAt ? format(windDownAt, "h:mm a") : "—"} suggested start
                       </p>
-                      <p className="mt-2 text-xs text-zinc-500">
+                      <p className="sleep-tracker-rail-muted mt-2 text-xs text-zinc-500">
                         {windDownRemainingMs != null
                           ? windDownRemainingMs > 0
                             ? `${formatCountdown(windDownRemainingMs)} until wind-down`
@@ -1533,13 +1521,13 @@ export function SleepTracker() {
                     </div>
                   </>
                 ) : (
-                  <p className="mt-4 text-sm leading-relaxed text-zinc-500">
+                  <p className="sleep-tracker-rail-muted mt-4 text-sm leading-relaxed text-zinc-500">
                     Log a few nights and a gentle bedtime rhythm will appear here—no pressure to be perfect.
                   </p>
                 )}
               </SolaceRightRailCard>
 
-              <SolaceRightRailCard className="p-6">
+              <SolaceRightRailCard className="sleep-tracker-rail-card light-theme-card light-theme-card-hover p-6">
                 <h2 className="font-serif text-lg font-light text-white">Wind Down Tip</h2>
                 <div className="mt-4 flex gap-4">
                   <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-violet-400/25 bg-black/40 shadow-[0_0_28px_rgba(168,85,247,0.35)]">
@@ -1552,13 +1540,13 @@ export function SleepTracker() {
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm leading-relaxed text-zinc-300">
+                    <p className="sleep-tracker-rail-muted text-sm leading-relaxed text-zinc-300">
                       Inhale for four, exhale for six—let the longer exhale tell your body the day can wait.
                     </p>
                     <Button
                       asChild
                       variant="outline"
-                      className="mt-4 min-h-[44px] border-white/15 bg-white/[0.04] text-zinc-100 hover:bg-white/[0.08]"
+                      className="sleep-tracker-rail-btn mt-4 min-h-[44px] border-white/15 bg-white/[0.04] text-zinc-100 hover:bg-white/[0.08] [html[data-ezri-theme=light]_&]:border-[color:var(--button-secondary-border,#d8c7f7)] [html[data-ezri-theme=light]_&]:bg-[var(--button-secondary-bg,#f6f0ff)] [html[data-ezri-theme=light]_&]:text-[color:var(--button-secondary-text,#5b21b6)] [html[data-theme=light]_&]:border-[color:var(--button-secondary-border,#d8c7f7)] [html[data-theme=light]_&]:bg-[var(--button-secondary-bg,#f6f0ff)] [html[data-theme=light]_&]:text-[color:var(--button-secondary-text,#5b21b6)]"
                     >
                       <Link to="/app/wellness-tools">Explore Tools</Link>
                     </Button>
@@ -1566,7 +1554,7 @@ export function SleepTracker() {
                 </div>
               </SolaceRightRailCard>
 
-              <SolaceRightRailCard className="overflow-hidden p-0">
+              <SolaceRightRailCard className="sleep-tracker-rail-card light-theme-card overflow-hidden p-0">
                 <div className="relative min-h-[200px] bg-gradient-to-br from-amber-950/50 via-violet-950/80 to-black p-6">
                   <img
                     src={SLEEP_TRACKER_IMAGES.starfieldAccent}

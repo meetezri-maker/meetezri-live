@@ -35,6 +35,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "sonner";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { cn } from "../../components/ui/utils";
+import { modalSecondaryButton } from "@/lib/modalTheme";
 import { moodCheckInImageForValue } from "@/lib/solace/moodCheckInImages";
 import {
   MOOD_CHECKIN_CARDS,
@@ -1109,7 +1110,7 @@ export function Journal() {
 
   return (
     <>
-      <div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-14 solace-canvas-bg">
+      <div className="journal-page relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-14 solace-canvas-bg">
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[min(44vh,380px)] bg-[radial-gradient(ellipse_90%_100%_at_50%_0%,rgba(92,106,172,0.14)_0%,transparent_72%)]"
           aria-hidden
@@ -1207,14 +1208,14 @@ export function Journal() {
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-[#0a0a12]/90 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92),0_0_48px_-24px_rgba(139,92,246,0.28)] ring-1 ring-inset ring-white/[0.045]"
+                  className="journal-recent-entry overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-[#0a0a12]/90 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92),0_0_48px_-24px_rgba(139,92,246,0.28)] ring-1 ring-inset ring-white/[0.045] [html[data-ezri-theme=light]_&]:border-[color:var(--border)] [html[data-ezri-theme=light]_&]:bg-[var(--card-solid,#ffffff)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:border-[color:var(--border)] [html[data-theme=light]_&]:bg-[var(--card-solid,#ffffff)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-[minmax(0,40%)_1fr]">
                     <JournalHeroBackdrop moodTag={recentEntry.mood_tags?.[0]} />
 
                     <div className="flex flex-1 flex-col justify-between gap-6 p-6 sm:p-7">
                       <div className="space-y-4">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-violet-300/80">
+                        <p className="journal-recent-eyebrow text-[11px] font-medium uppercase tracking-wider text-violet-300/80">
                           Recent entry
                         </p>
                         {recentEntry.mood_tags?.[0] ? (
@@ -1230,15 +1231,15 @@ export function Journal() {
                             {getMoodLabel(recentEntry.mood_tags[0])}
                           </span>
                         ) : null}
-                        <h2 className="text-balance text-xl font-semibold leading-snug tracking-tight text-zinc-50 sm:text-2xl">
+                        <h2 className="journal-recent-title text-balance text-xl font-semibold leading-snug tracking-tight text-zinc-50 sm:text-2xl">
                           {recentEntry.title || "Untitled reflection"}
                         </h2>
                         {recentEntry.preview ? (
-                          <p className="max-w-xl text-sm leading-relaxed text-zinc-400 line-clamp-3 sm:line-clamp-2">
+                          <p className="journal-recent-preview max-w-xl text-sm leading-relaxed text-zinc-400 line-clamp-3 sm:line-clamp-2">
                             {recentEntry.preview}
                           </p>
                         ) : null}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
+                        <div className="journal-recent-meta flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
                           <span className="inline-flex items-center gap-1.5">
                             <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
                             {new Date(recentEntry.created_at).toLocaleDateString("en-US", {
@@ -1257,11 +1258,15 @@ export function Journal() {
                       <div className="flex md:justify-end">
                         <Button
                           type="button"
+                          variant="outline"
                           onClick={() => handleEditEntry(recentEntry.id)}
-                          className="min-h-11 w-full border border-violet-500/35 bg-zinc-950/60 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.18)] hover:bg-violet-950/50 md:w-auto"
+                          className={cn(
+                            modalSecondaryButton,
+                            "journal-recent-open-btn min-h-11 h-11 w-full rounded-xl md:w-auto"
+                          )}
                         >
                           Open
-                          <ChevronRight className="ml-1 h-4 w-4" />
+                          <ChevronRight className="ml-1 h-4 w-4 shrink-0" aria-hidden />
                         </Button>
                       </div>
                     </div>

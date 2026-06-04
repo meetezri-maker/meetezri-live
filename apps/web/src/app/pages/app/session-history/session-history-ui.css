@@ -1,0 +1,384 @@
+/**
+ * Talk It Out / Session History — light theme.
+ */
+
+/* Hero scrim (avoid from-slate-950 global remaps) */
+.solace-app .session-history-hero-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(2, 6, 23, 0.92) 0%,
+    rgba(15, 23, 42, 0.78) 45%,
+    rgba(15, 23, 42, 0.28) 100%
+  );
+}
+
+.solace-app .session-history-hero-scrim-v {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(2, 6, 23, 0.65) 100%
+  );
+}
+
+/* Mood pills — dark default */
+.solace-app .session-history-mood-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.solace-app .session-history-mood-pill--amber {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+.solace-app .session-history-mood-pill--emerald {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+.solace-app .session-history-mood-pill--pink {
+  background: rgba(236, 72, 153, 0.2);
+  color: #f472b6;
+}
+.solace-app .session-history-mood-pill--purple {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+.solace-app .session-history-mood-pill--cyan {
+  background: rgba(34, 211, 238, 0.2);
+  color: #22d3ee;
+}
+.solace-app .session-history-mood-pill--blue {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+.solace-app .session-history-mood-pill--green {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+.solace-app .session-history-mood-pill--red {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+/* Page shell */
+html[data-ezri-theme="light"] .solace-app .session-history-page,
+html[data-theme="light"] .solace-app .session-history-page {
+  background: var(--solace-page-bg, var(--bg-gradient, #fbf8ff)) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Header */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-page-title,
+html[data-theme="light"] .solace-app .session-history-page .session-history-page-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-page-lead,
+html[data-theme="light"] .solace-app .session-history-page .session-history-page-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-header-icon-wrap,
+html[data-theme="light"] .solace-app .session-history-page .session-history-header-icon-wrap {
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  background: #ede9fe !important;
+}
+
+/* Hero */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-hero,
+html[data-theme="light"] .solace-app .session-history-page .session-history-hero {
+  border-color: var(--border, #e7ddfb) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-hero .session-history-hero-scrim,
+html[data-theme="light"] .solace-app .session-history-page .session-history-hero .session-history-hero-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(251, 248, 255, 0.52) 48%,
+    transparent 72%
+  ) !important;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(251, 248, 255, 0.52) 48%,
+    transparent 72%
+  ) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-hero .session-history-hero-scrim-v,
+html[data-theme="light"] .solace-app .session-history-page .session-history-hero .session-history-hero-scrim-v {
+  background: linear-gradient(180deg, transparent 0%, rgba(251, 248, 255, 0.35) 100%) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-hero-title,
+html[data-theme="light"] .solace-app .session-history-page .session-history-hero-title {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-hero-lead,
+html[data-theme="light"] .solace-app .session-history-page .session-history-hero-lead {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none !important;
+}
+
+/* Stat cards & panels */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-stat-card,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-panel,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-empty,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-pagination,
+html[data-theme="light"] .solace-app .session-history-page .session-history-stat-card,
+html[data-theme="light"] .solace-app .session-history-page .session-history-panel,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row,
+html[data-theme="light"] .solace-app .session-history-page .session-history-empty,
+html[data-theme="light"] .solace-app .session-history-page .session-history-pagination {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-stat-label,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-stat-meta,
+html[data-theme="light"] .solace-app .session-history-page .session-history-stat-label,
+html[data-theme="light"] .solace-app .session-history-page .session-history-stat-meta {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-stat-value,
+html[data-theme="light"] .solace-app .session-history-page .session-history-stat-value {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-panel-title,
+html[data-theme="light"] .solace-app .session-history-page .session-history-panel-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-panel-lead,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-journey-sub,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-journey-hint,
+html[data-theme="light"] .solace-app .session-history-page .session-history-panel-lead,
+html[data-theme="light"] .solace-app .session-history-page .session-history-journey-sub,
+html[data-theme="light"] .solace-app .session-history-page .session-history-journey-hint {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-journey-count,
+html[data-theme="light"] .solace-app .session-history-page .session-history-journey-count {
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Filter tabs */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-filter-btn--active,
+html[data-theme="light"] .solace-app .session-history-page .session-history-filter-btn--active {
+  background: linear-gradient(to right, #7c3aed, #c026d3) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px -8px rgba(88, 28, 135, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-filter-btn--inactive,
+html[data-theme="light"] .solace-app .session-history-page .session-history-filter-btn--inactive {
+  background: var(--card-muted, #f8f3ff) !important;
+  color: var(--text-secondary, #475467) !important;
+  border: 1px solid var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-filter-btn--inactive:hover,
+html[data-theme="light"] .solace-app .session-history-page .session-history-filter-btn--inactive:hover {
+  background: var(--surface-lavender, #f5eeff) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Search */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-search,
+html[data-theme="light"] .solace-app .session-history-page .session-history-search {
+  background: var(--card-solid, #ffffff) !important;
+  border-color: var(--border, #e7ddfb) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-search::placeholder,
+html[data-theme="light"] .solace-app .session-history-page .session-history-search::placeholder {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* Session rows */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row-title,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row-preview,
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row-meta,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row-preview,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row-meta {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-type-pill,
+html[data-theme="light"] .solace-app .session-history-page .session-history-type-pill {
+  background: var(--surface-lavender, #f5eeff) !important;
+  color: var(--text-secondary, #475467) !important;
+  border: 1px solid var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row-action,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row-action {
+  background: var(--card-muted, #f8f3ff) !important;
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-row-action:hover,
+html[data-theme="light"] .solace-app .session-history-page .session-history-row-action:hover {
+  background: var(--surface-lavender, #f5eeff) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Mood pills light */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--amber,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--amber {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--emerald,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--emerald {
+  background: #d1fae5 !important;
+  color: #047857 !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--pink,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--pink {
+  background: #fce7f3 !important;
+  color: #be185d !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--purple,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--purple {
+  background: #ede9fe !important;
+  color: #5b21b6 !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--cyan,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--cyan {
+  background: #cffafe !important;
+  color: #0e7490 !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--blue,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--blue {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--green,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--green {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+}
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-pill--red,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-pill--red {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+/* Mood distribution */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-row-label,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-row-label {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-mood-row-value,
+html[data-theme="light"] .solace-app .session-history-page .session-history-mood-row-value {
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Streak panel */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-streak-panel,
+html[data-theme="light"] .solace-app .session-history-page .session-history-streak-panel {
+  border-color: rgba(249, 115, 22, 0.35) !important;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-streak-value,
+html[data-theme="light"] .solace-app .session-history-page .session-history-streak-value {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-streak-day--inactive,
+html[data-theme="light"] .solace-app .session-history-page .session-history-streak-day--inactive {
+  background: var(--card-muted, #f8f3ff) !important;
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-streak-day-label,
+html[data-theme="light"] .solace-app .session-history-page .session-history-streak-day-label {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* Gate & skeleton */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-gate-card,
+html[data-theme="light"] .solace-app .session-history-page .session-history-gate-card {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-gate-title,
+html[data-theme="light"] .solace-app .session-history-page .session-history-gate-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-gate-lead,
+html[data-theme="light"] .solace-app .session-history-page .session-history-gate-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-skeleton,
+html[data-theme="light"] .solace-app .session-history-page .session-history-skeleton {
+  background: #e7ddfb !important;
+}
+
+/* CTAs */
+html[data-ezri-theme="light"] .solace-app .session-history-page .session-history-btn-primary,
+html[data-ezri-theme="light"] .solace-app .session-history-page button.session-history-btn-primary,
+html[data-theme="light"] .solace-app .session-history-page .session-history-btn-primary,
+html[data-theme="light"] .solace-app .session-history-page button.session-history-btn-primary {
+  background: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(124, 58, 237, 0.35) !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 24px -8px rgba(88, 28, 135, 0.35) !important;
+}
+
+/* Transcript bubbles in detail modal */
+html[data-ezri-theme="light"] .solace-app .session-history-transcript-user,
+html[data-theme="light"] .solace-app .session-history-transcript-user {
+  background: #ede9fe !important;
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-transcript-assistant,
+html[data-theme="light"] .solace-app .session-history-transcript-assistant {
+  background: var(--card-muted, #f8f3ff) !important;
+  color: var(--text-secondary, #475467) !important;
+  border: 1px solid var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-transcript-avatar-user,
+html[data-theme="light"] .solace-app .session-history-transcript-avatar-user {
+  background: linear-gradient(to bottom right, #7c3aed, #c026d3) !important;
+  color: #ffffff !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .session-history-transcript-avatar-assistant,
+html[data-theme="light"] .solace-app .session-history-transcript-avatar-assistant {
+  background: var(--surface-lavender, #f5eeff) !important;
+  color: #5b21b6 !important;
+  border: 1px solid var(--border, #e7ddfb) !important;
+}

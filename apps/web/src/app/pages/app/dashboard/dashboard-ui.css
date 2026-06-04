@@ -1,0 +1,20 @@
+/**
+ * Dashboard home hero — preserve gradient CTA inside .solace-image-card (light theme).
+ * Global hero scrims remap [class*="bg-gradient-to-r"] and .text-white otherwise hide the button.
+ */
+
+html[data-ezri-theme="light"] .solace-app .solace-image-card a.dashboard-continue-cta,
+html[data-ezri-theme="light"] .solace-app .solace-image-card a.solace-cta-gradient.dashboard-continue-cta,
+html[data-theme="light"] .solace-app .solace-image-card a.dashboard-continue-cta,
+html[data-theme="light"] .solace-app .solace-image-card a.solace-cta-gradient.dashboard-continue-cta {
+  background: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  opacity: 1 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(124, 58, 237, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-image-card a.dashboard-continue-cta svg,
+html[data-theme="light"] .solace-app .solace-image-card a.dashboard-continue-cta svg {
+  color: #ffffff !important;
+}

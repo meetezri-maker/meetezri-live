@@ -204,19 +204,19 @@ export function MoodCheckIn() {
   }
 
   return (
-    <div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-14 solace-canvas-bg">
+    <div className="mood-check-in-page relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-14 solace-canvas-bg">
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[min(44vh,380px)] bg-[radial-gradient(ellipse_90%_100%_at_50%_0%,rgba(92,106,172,0.14)_0%,transparent_72%)]"
           aria-hidden
         />
         <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
           {/* Header */}
-          <header className="mb-12 border-b border-white/[0.04] pb-10">
+          <header className="mood-check-in-header mb-12 border-b border-white/[0.04] pb-10 [html[data-ezri-theme=light]_&]:border-[color:var(--border)] [html[data-theme=light]_&]:border-[color:var(--border)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <div className="flex items-center gap-3">
-                  <Heart className="h-7 w-7 text-rose-300/85 sm:h-8 sm:w-8" fill="currentColor" fillOpacity={0.35} strokeWidth={1.35} />
-                  <h1 className="font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
+                  <Heart className="h-7 w-7 text-rose-300/85 sm:h-8 sm:w-8 [html[data-ezri-theme=light]_&]:text-rose-500 [html[data-theme=light]_&]:text-rose-500" fill="currentColor" fillOpacity={0.35} strokeWidth={1.35} />
+                  <h1 className="mood-check-in-page-title font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
                     Mood Check-In
                   </h1>
                 </div>
@@ -235,7 +235,7 @@ export function MoodCheckIn() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
-                  "solace-hero-media solace-image-card solace-on-dark relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
+                  "mood-check-in-hero solace-hero-media solace-image-card solace-on-dark relative overflow-hidden rounded-[2rem] border border-white/[0.038]",
                   "shadow-[0_48px_120px_-58px_rgba(0,0,0,0.92)] sm:rounded-[2.1rem]",
                   "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
                   "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
@@ -250,18 +250,15 @@ export function MoodCheckIn() {
                 />
                 <div className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block" aria-hidden />
                 {/* Light left scrim only — keeps the lake/lotus vivid like the reference */}
-                <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/55 via-[#0a0c14]/18 to-transparent"
-                  aria-hidden
-                />
+                <div className="mood-check-in-hero-side-scrim pointer-events-none absolute inset-0 z-[1]" aria-hidden />
                 <div className="solace-hero-content relative z-[2] flex min-h-[368px] flex-col justify-center px-8 py-12 sm:min-h-[400px] sm:px-12 sm:py-14 lg:min-h-[430px] lg:px-14 lg:py-14">
                   <div className="relative z-[3] max-w-2xl">
-                    <h2 className="font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50 [text-shadow:0_2px_24px_rgba(0,0,0,0.65)]">
+                    <h2 className="mood-check-in-hero-title font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50 [text-shadow:0_2px_24px_rgba(0,0,0,0.65)]">
                       Let&apos;s check in with
                       <br />
                       your mood today 
                     </h2>
-                    <p className="mt-6 max-w-xl text-[15px] leading-[1.82] tracking-[-0.01em] text-zinc-100/95 sm:text-[1.0625rem] [text-shadow:0_1px_16px_rgba(0,0,0,0.55)]">
+                    <p className="mood-check-in-hero-lead mt-6 max-w-xl text-[15px] leading-[1.82] tracking-[-0.01em] text-zinc-100/95 sm:text-[1.0625rem] [text-shadow:0_1px_16px_rgba(0,0,0,0.55)]">
                       There&apos;s no right or wrong way to feel.
                       <br />
                       We&apos;re here for you, always.
@@ -274,11 +271,11 @@ export function MoodCheckIn() {
               <section aria-label="Mood selection">
                 <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2 text-[17px] font-medium tracking-[-0.015em] text-zinc-100 sm:text-[1.125rem]">
-                      <Clock className="h-4 w-4 text-violet-300/80 sm:h-[1.125rem] sm:w-[1.125rem]" strokeWidth={1.75} />
+                    <div className="mood-check-in-section-heading flex items-center gap-2 text-[17px] font-medium tracking-[-0.015em] text-zinc-100 sm:text-[1.125rem]">
+                      <Clock className="h-4 w-4 text-violet-300/80 sm:h-[1.125rem] sm:w-[1.125rem] [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:text-[#7c3aed]" strokeWidth={1.75} />
                       What's your current mood?
                     </div>
-                    <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-[var(--solace-muted)] sm:text-[14px]">
+                    <p className="mood-check-in-section-lead mt-3 max-w-2xl text-[13px] leading-relaxed sm:text-[14px]">
                       Choose the mood that best fits you right now.
                     </p>
                   </div>
@@ -295,27 +292,27 @@ export function MoodCheckIn() {
                           setIntensityTier(2);
                         }}
                         className={cn(
-                          "group relative min-h-[148px] overflow-hidden rounded-[1.35rem] border text-left transition-[transform,box-shadow,border-color] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:min-h-[162px] sm:rounded-3xl lg:aspect-[8/13] lg:min-h-[200px]",
+                          "mood-check-in-mood-card group relative min-h-[148px] overflow-hidden rounded-[1.35rem] border text-left transition-[transform,box-shadow,border-color] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:min-h-[162px] sm:rounded-3xl lg:aspect-[8/13] lg:min-h-[200px]",
                           active
-                            ? "scale-[1.02] border-violet-400/45 shadow-[0_28px_72px_-28px_rgba(76,29,149,0.58),inset_0_0_0_1px_rgba(167,139,250,0.28)] ring-1 ring-violet-400/22"
+                            ? "mood-check-in-mood-card--active scale-[1.02] border-violet-400/45 shadow-[0_28px_72px_-28px_rgba(76,29,149,0.58),inset_0_0_0_1px_rgba(167,139,250,0.28)] ring-1 ring-violet-400/22"
                             : "border-white/[0.07] hover:border-white/[0.14] hover:shadow-[0_26px_64px_-30px_rgba(76,29,149,0.38)]"
                         )}
                       >
                         <img
                           src={m.image}
                           alt=""
-                          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.97] transition-transform duration-700 group-hover:scale-[1.06]"
+                          className="mood-check-in-mood-card-img pointer-events-none absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
                         />
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/[0.12]" />
-                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_50%_100%,rgba(139,92,246,0.12),transparent_55%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                        <div className="mood-check-in-mood-card-scrim pointer-events-none absolute inset-0" aria-hidden />
+                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_50%_100%,rgba(139,92,246,0.12),transparent_55%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100 [html[data-ezri-theme=light]_&]:opacity-0" />
                         <div className="relative z-[1] flex h-full min-h-[148px] flex-col justify-end p-4 sm:min-h-[162px] sm:p-5 lg:min-h-0 lg:flex-1 lg:justify-end lg:pb-6">
                           {active ? (
-                            <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-violet-300/40 bg-black/48 text-violet-200 shadow-[0_0_24px_rgba(139,92,246,0.4)] sm:right-3.5 sm:top-3.5">
+                            <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-violet-300/40 bg-black/48 text-violet-200 shadow-[0_0_24px_rgba(139,92,246,0.4)] sm:right-3.5 sm:top-3.5 [html[data-ezri-theme=light]_&]:border-violet-400/45 [html[data-ezri-theme=light]_&]:bg-white [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:border-violet-400/45 [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:text-[#7c3aed]">
                               <Check className="h-4 w-4" strokeWidth={2.5} />
                             </span>
                           ) : null}
-                          <p className="text-[15px] font-medium tracking-[-0.01em] text-zinc-50 sm:text-[1.05rem]">{m.label}</p>
-                          <p className="mt-2 text-[11.5px] leading-snug text-zinc-300/95 sm:text-xs">{m.micro}</p>
+                          <p className="mood-check-in-mood-card-title text-[15px] font-medium tracking-[-0.01em] text-zinc-50 sm:text-[1.05rem]">{m.label}</p>
+                          <p className="mood-check-in-mood-card-body mt-2 text-[11.5px] leading-snug text-zinc-300/95 sm:text-xs">{m.micro}</p>
                         </div>
                       </button>
                     );

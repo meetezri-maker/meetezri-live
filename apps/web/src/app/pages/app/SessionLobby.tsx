@@ -57,6 +57,7 @@ import {
   modalPanel,
   modalPanelBody,
   modalPanelHeader,
+  modalPanelLg,
   modalPrimaryButton,
   modalSecondaryButton,
   modalSectionTitle,
@@ -1095,53 +1096,56 @@ export function SessionLobby() {
         {/* Customize Modal */}
         <AnimatePresence>
           {showCustomizeModal && (
-            <>
-              {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCustomizeModal(false)}
+              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
+            >
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setShowCustomizeModal(false)}
-                className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(modalPanelLg, "flex max-h-[85vh] flex-col rounded-[1.25rem]")}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="customize-voice-avatar-title"
               >
-                {/* Modal */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex max-h-[85vh] w-full max-w-2xl flex-col"
-                >
-                  <Card className="flex max-h-[85vh] flex-col overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
-                    {/* Header - Fixed */}
-                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] bg-black/35 px-6 py-5">
-                      <div>
-                        <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-50">
-                          Customize Voice & Avatar
-                        </h2>
-                        <p className="mt-1 text-sm text-[var(--solace-muted)]">
-                          Personalize your talking experience
-                        </p>
-                      </div>
-                      <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setShowCustomizeModal(false)}
-                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200"
-                        aria-label="Close"
-                      >
-                        <X className="h-5 w-5" />
-                      </motion.button>
-                    </div>
+                <div className={cn(modalPanelHeader, "flex shrink-0 items-center justify-between")}>
+                  <div>
+                    <h2
+                      id="customize-voice-avatar-title"
+                      className={cn(modalTitle, "font-serif text-[1.35rem] font-normal tracking-tight")}
+                    >
+                      Customize Voice & Avatar
+                    </h2>
+                    <p className={modalSubtitle}>Personalize your talking experience</p>
+                  </div>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowCustomizeModal(false)}
+                    className={cn(modalCloseButton, "rounded-full p-2")}
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" aria-hidden />
+                  </motion.button>
+                </div>
 
-                    {/* Scrollable Content */}
-                    <div className="solace-scroll overflow-y-auto p-6">
+                <div className={cn(modalPanelBody, "solace-scroll min-h-0 flex-1 overflow-y-auto")}>
                       {/* Voice Selection */}
                       <div ref={voiceSectionRef} className="mb-8 scroll-mt-4">
                         <div className="mb-4 flex items-center gap-2">
-                          <Volume2 className="h-5 w-5 text-violet-300" aria-hidden />
-                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Voice Selection</h3>
+                          <Volume2
+                            className="h-5 w-5 shrink-0 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:text-[#7c3aed]"
+                            aria-hidden
+                          />
+                          <h3 className={cn(modalSectionTitle, "text-[17px] tracking-tight")}>
+                            Voice Selection
+                          </h3>
                         </div>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           {voices.map((voice, index) => (
@@ -1160,12 +1164,12 @@ export function SessionLobby() {
                               onClick={() => void handleVoiceSelect(voice.name, voice.gender, voice.demoFile)}
                               disabled={isDisabled}
                               className={cn(
-                                "relative rounded-[1.1rem] border p-4 text-left transition-all",
+                                "rounded-[1.1rem]",
                                 isDisabled
-                                  ? "cursor-not-allowed border-white/[0.05] bg-black/20 opacity-45"
+                                  ? modalOptionCardDisabled
                                   : isSelected
-                                    ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_28px_rgba(139,92,246,0.22)]"
-                                    : "border-white/[0.08] bg-black/28 hover:border-violet-400/28"
+                                    ? modalOptionCardSelected
+                                    : modalOptionCard
                               )}
                             >
                               {isSelected && (
@@ -1174,18 +1178,21 @@ export function SessionLobby() {
                                   animate={{ scale: 1 }}
                                   className="absolute right-2.5 top-2.5 rounded-full bg-violet-500 p-1 shadow-[0_0_12px_rgba(139,92,246,0.45)]"
                                 >
-                                  <Check className="h-3 w-3 text-white" aria-hidden />
+                                  <Check
+                                    className="h-3 w-3 text-[#ffffff] [html[data-ezri-theme=light]_&]:text-[#ffffff]"
+                                    aria-hidden
+                                  />
                                 </motion.div>
                               )}
-                              <div className="font-medium text-zinc-100">{voice.name}</div>
-                              <div className="mb-2 mt-1 text-sm text-[var(--solace-muted)]">
+                              <div className={modalEmphasisText}>{voice.name}</div>
+                              <div className={cn(modalMutedText, "mb-2 mt-1 text-sm")}>
                                 {voice.description}
                               </div>
-                              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                                <span className="inline-block h-2 w-2 rounded-full bg-violet-400/80" />
+                              <div className={cn(modalOptionCardMeta, "flex items-center gap-1.5")}>
+                                <span className="inline-block h-2 w-2 rounded-full bg-violet-400/80 [html[data-ezri-theme=light]_&]:bg-[#7c3aed]" />
                                 {voice.gender}
                               </div>
-                              <div className="mt-2 text-xs text-zinc-500">
+                              <div className={modalOptionCardMeta}>
                                 {isDisabled
                                   ? "Disabled for selected avatar"
                                   : playingVoiceName === voice.name
@@ -1202,8 +1209,13 @@ export function SessionLobby() {
                       {/* Avatar Selection */}
                       <div ref={avatarSectionRef} className="mb-8 scroll-mt-4">
                         <div className="mb-4 flex items-center gap-2">
-                          <User className="h-5 w-5 text-violet-300" aria-hidden />
-                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Avatar Selection</h3>
+                          <User
+                            className="h-5 w-5 shrink-0 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:text-[#7c3aed]"
+                            aria-hidden
+                          />
+                          <h3 className={cn(modalSectionTitle, "text-[17px] tracking-tight")}>
+                            Avatar Selection
+                          </h3>
                         </div>
                         <div className="grid grid-cols-2 items-stretch gap-3">
                           {avatars.map((avatar, index) => {
@@ -1229,12 +1241,12 @@ export function SessionLobby() {
                               aria-pressed={isSelected}
                               aria-disabled={comingSoon}
                               className={cn(
-                                "group relative flex h-full w-full flex-col overflow-hidden rounded-[1rem] border p-0 text-left transition-[border-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                                "group relative flex h-full w-full flex-col overflow-hidden rounded-[1rem] p-0 text-left transition-[border-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                                 comingSoon
-                                  ? "cursor-not-allowed border-white/[0.06] bg-black/30 opacity-90"
+                                  ? cn(modalOptionCardDisabled, "opacity-90")
                                   : isSelected
-                                  ? "border-violet-400/55 shadow-[0_0_28px_rgba(139,92,246,0.28)] ring-1 ring-violet-400/25"
-                                  : "border-white/[0.08] bg-black/22 hover:border-violet-400/28"
+                                    ? cn(modalOptionCardSelected, "ring-1 ring-violet-400/25")
+                                    : modalOptionCard
                               )}
                             >
                               {comingSoon ? <ComingSoonOverlay /> : null}
@@ -1249,7 +1261,10 @@ export function SessionLobby() {
                                   />
                                 ) : (
                                   <span className="flex h-full w-full items-center justify-center">
-                                    <User className="h-10 w-10 text-zinc-600" aria-hidden />
+                                    <User
+                                      className="h-10 w-10 text-zinc-600 [html[data-ezri-theme=light]_&]:text-[var(--text-muted)]"
+                                      aria-hidden
+                                    />
                                   </span>
                                 )}
                                 {isSelected ? (
@@ -1258,13 +1273,28 @@ export function SessionLobby() {
                                     animate={{ scale: 1 }}
                                     className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.5)]"
                                   >
-                                    <Check className="h-3 w-3 text-white" strokeWidth={2.5} aria-hidden />
+                                    <Check
+                                      className="h-3 w-3 text-[#ffffff]"
+                                      strokeWidth={2.5}
+                                      aria-hidden
+                                    />
                                   </motion.span>
                                 ) : null}
                               </span>
-                              <span className="flex min-h-[4.5rem] flex-col justify-center border-t border-white/[0.06] bg-black/40 px-3 py-2.5">
-                                <p className="text-[13px] font-medium leading-tight text-zinc-50">{avatar.name}</p>
-                                <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-zinc-400/95">
+                              <span
+                                className={cn(
+                                  "flex min-h-[4.5rem] flex-col justify-center border-t px-3 py-2.5",
+                                  "border-white/[0.06] bg-black/40",
+                                  "[html[data-ezri-theme=light]_&]:border-[color:var(--border)]",
+                                  "[html[data-ezri-theme=light]_&]:bg-[var(--card-muted,#f8f3ff)]",
+                                  "[html[data-theme=light]_&]:border-[color:var(--border)]",
+                                  "[html[data-theme=light]_&]:bg-[var(--card-muted,#f8f3ff)]"
+                                )}
+                              >
+                                <p className={cn(modalEmphasisText, "text-[13px] leading-tight")}>
+                                  {avatar.name}
+                                </p>
+                                <p className={cn(modalMutedText, "mt-1 line-clamp-2 text-[10.5px] leading-snug")}>
                                   {traits}
                                 </p>
                               </span>
@@ -1277,10 +1307,15 @@ export function SessionLobby() {
                       {/* Session background (environment) */}
                       <div ref={environmentSectionRef} className="mb-2 scroll-mt-4">
                         <div className="mb-4 flex items-center gap-2">
-                          <Palette className="h-5 w-5 text-violet-300" aria-hidden />
-                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Talking Background</h3>
+                          <Palette
+                            className="h-5 w-5 shrink-0 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed] [html[data-theme=light]_&]:text-[#7c3aed]"
+                            aria-hidden
+                          />
+                          <h3 className={cn(modalSectionTitle, "text-[17px] tracking-tight")}>
+                            Talking Background
+                          </h3>
                         </div>
-                        <p className="mb-4 text-sm text-[var(--solace-muted)]">
+                        <p className={cn(modalMutedText, "mb-4 text-sm")}>
                           Choose a calming background for your video sessions
                         </p>
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1303,12 +1338,12 @@ export function SessionLobby() {
                               aria-pressed={isSelected}
                               aria-disabled={comingSoon}
                               className={cn(
-                                "relative overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                                "relative overflow-hidden rounded-xl p-0 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                                 comingSoon
-                                  ? "cursor-not-allowed border-white/[0.06] opacity-90"
+                                  ? cn(modalOptionCardDisabled, "opacity-90")
                                   : isSelected
-                                  ? "border-violet-400/55 ring-1 ring-violet-400/25"
-                                  : "border-white/[0.08] hover:border-violet-400/30"
+                                    ? cn(modalOptionCardSelected, "ring-1 ring-violet-400/25")
+                                    : modalOptionCard
                               )}
                             >
                               {comingSoon ? <ComingSoonOverlay /> : null}
@@ -1322,54 +1357,62 @@ export function SessionLobby() {
                                   <FluentEmoji emoji={env.emoji} size={36} />
                                 </span>
                               </div>
-                              <div className="border-t border-white/[0.06] bg-black/35 px-2.5 py-2">
-                                <p className="text-sm font-medium text-zinc-200">{env.label}</p>
+                              <div
+                                className={cn(
+                                  "border-t px-2.5 py-2",
+                                  "border-white/[0.06] bg-black/35",
+                                  "[html[data-ezri-theme=light]_&]:border-[color:var(--border)]",
+                                  "[html[data-ezri-theme=light]_&]:bg-[var(--card-muted,#f8f3ff)]",
+                                  "[html[data-theme=light]_&]:border-[color:var(--border)]",
+                                  "[html[data-theme=light]_&]:bg-[var(--card-muted,#f8f3ff)]"
+                                )}
+                              >
+                                <p className={cn(modalEmphasisText, "text-sm")}>{env.label}</p>
                               </div>
                             </motion.button>
                             );
                           })}
                         </div>
                       </div>
-                    </div>
+                </div>
 
-                    {/* Footer Buttons - Fixed */}
-                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/[0.06] bg-black/35 p-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={isSavingCustomize}
-                        onClick={() => setShowCustomizeModal(false)}
-                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        disabled={isSavingCustomize}
-                        aria-busy={isSavingCustomize}
-                        className="min-w-[148px] bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
-                        onClick={() => void handleSaveCustomize()}
-                      >
-                        {isSavingCustomize ? (
-                          <>
-                            <Loader2
-                              className="w-4 h-4 mr-2 animate-spin shrink-0"
-                              aria-hidden
-                            />
-                            Saving…
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4 mr-2 shrink-0" />
-                            Save Changes
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </Card>
-                </motion.div>
+                <div
+                  className={cn(
+                    modalPanelHeader,
+                    "flex shrink-0 items-center justify-end gap-3 border-b-0 border-t"
+                  )}
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSavingCustomize}
+                    onClick={() => setShowCustomizeModal(false)}
+                    className={cn(modalSecondaryButton, "flex-none")}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isSavingCustomize}
+                    aria-busy={isSavingCustomize}
+                    className={cn(modalPrimaryButton, "min-w-[148px]")}
+                    onClick={() => void handleSaveCustomize()}
+                  >
+                    {isSavingCustomize ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Check className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </div>
               </motion.div>
-            </>
+            </motion.div>
           )}
         </AnimatePresence>
 

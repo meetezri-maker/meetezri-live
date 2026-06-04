@@ -1,0 +1,42 @@
+/**
+ * Journal — light theme fixes (recent entry Open CTA).
+ */
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-open-btn,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-open-btn {
+  background: var(--button-secondary-bg, #f6f0ff) !important;
+  background-color: var(--button-secondary-bg, #f6f0ff) !important;
+  color: var(--button-secondary-text, #5b21b6) !important;
+  border-color: var(--button-secondary-border, #d8c7f7) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-open-btn:hover,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-open-btn:hover {
+  background: var(--surface-lavender, #f5eeff) !important;
+  background-color: var(--surface-lavender, #f5eeff) !important;
+  color: var(--button-secondary-text, #5b21b6) !important;
+  border-color: var(--border-strong, #d8c7f7) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-open-btn svg,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-open-btn svg {
+  color: currentColor !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-eyebrow,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-eyebrow {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-title,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-preview,
+html[data-ezri-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-meta,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-preview,
+html[data-theme="light"] .solace-app .journal-page .journal-recent-entry .journal-recent-meta {
+  color: var(--text-secondary, #475467) !important;
+}

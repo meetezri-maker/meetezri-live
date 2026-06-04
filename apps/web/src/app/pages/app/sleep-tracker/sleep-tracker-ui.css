@@ -1,0 +1,229 @@
+/**
+ * Sleep Tracker — light theme (ambient shell, hero, stats, rails, journey).
+ */
+
+/* Default scrims (avoid from-black / from-[#…] global remaps) */
+.solace-app .sleep-tracker-hero-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(10, 12, 20, 0.62) 0%,
+    rgba(10, 12, 20, 0.28) 48%,
+    transparent 100%
+  );
+}
+
+/* Page shell — drop dark sanctuary stacks in light theme */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page,
+html[data-theme="light"] .solace-app .sleep-tracker-page {
+  background: var(--solace-page-bg, var(--bg-gradient, #fbf8ff)) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page > [aria-hidden],
+html[data-theme="light"] .solace-app .sleep-tracker-page > [aria-hidden] {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-vignette,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-vignette {
+  display: none !important;
+}
+
+/* Header */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-header,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-header {
+  border-color: var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-title,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-lead,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-page-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+/* Hero */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero .sleep-tracker-hero-img,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero .sleep-tracker-hero-img {
+  filter: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero .sleep-tracker-hero-scrim,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero .sleep-tracker-hero-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(251, 248, 255, 0.42) 45%,
+    transparent 72%
+  ) !important;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(251, 248, 255, 0.42) 45%,
+    transparent 72%
+  ) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title,
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title-your,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title-your {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title-accent,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-title-accent {
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #db2777) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-lead,
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-lead,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote cite,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote cite {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-hero-quote {
+  border-color: rgba(251, 191, 36, 0.45) !important;
+}
+
+/* Stats strip */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-value,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-value {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-label,
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-meta,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-label,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip .sleep-tracker-stat-meta {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip > div,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-stats-strip > div {
+  border-color: var(--border, #e7ddfb) !important;
+}
+
+/* Glass chart cards — titles inside already use light-theme-card */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card h3,
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card .sleep-tracker-section-title,
+html[data-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card h3,
+html[data-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card .sleep-tracker-section-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card .sleep-tracker-section-sub,
+html[data-theme="light"] .solace-app .sleep-tracker-page .solace-glass-card .sleep-tracker-section-sub {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-section-title,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-section-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-section-sub,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-section-sub {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-link,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-link {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-link:hover,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-link:hover {
+  color: #5b21b6 !important;
+}
+
+/* Right rail */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card h2,
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-stat,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card h2,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-stat {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-muted,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-muted {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-accent,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-card .sleep-tracker-rail-accent {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-inset,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-rail-inset {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-muted, #f8f3ff) !important;
+}
+
+/* Journey timeline */
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-scrim,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-scrim {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey-img,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey-img {
+  opacity: 0.22 !important;
+  filter: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-stage-label--active,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-stage-label--active {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-stage-sub,
+html[data-theme="light"] .solace-app .sleep-tracker-page .sleep-tracker-journey .sleep-tracker-journey-stage-sub {
+  color: var(--text-muted, #667085) !important;
+}
