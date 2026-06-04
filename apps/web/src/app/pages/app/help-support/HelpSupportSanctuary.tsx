@@ -48,7 +48,7 @@ const FOREST_IMG = "/community/scene-forest.jpg";
 const STARS_IMG = "/community/scene-stars.jpg";
 
 const actionCardShell = cn(
-  "group relative isolate flex min-h-[210px] flex-col overflow-hidden rounded-[24px]",
+  "help-support-action-card group relative isolate flex min-h-[210px] flex-col overflow-hidden rounded-[24px]",
   "border border-white/[0.09]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(168,85,247,0.1),0_24px_64px_-32px_rgba(0,0,0,0.88),0_0_40px_-24px_rgba(109,40,217,0.22)]",
   "transition-all duration-500 hover:-translate-y-0.5"
@@ -56,7 +56,7 @@ const actionCardShell = cn(
 
 /** Premium glass surface — translucent, glowing edges, depth */
 export const glassPanel = cn(
-  "relative overflow-hidden rounded-[24px]",
+  "help-support-glass-panel relative overflow-hidden rounded-[24px]",
   "border border-white/[0.09]",
   "bg-[linear-gradient(160deg,rgba(22,24,38,0.88)_0%,rgba(10,12,22,0.82)_55%,rgba(8,10,18,0.9)_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(168,85,247,0.1),0_32px_90px_-36px_rgba(0,0,0,0.88),0_0_56px_-28px_rgba(109,40,217,0.28)]",
@@ -90,7 +90,7 @@ interface FaqItem {
 function FloatingParticles() {
   const dots = Array.from({ length: 24 }, (_, i) => i);
   return (
-    <div className="pointer-events-none fixed inset-0 z-[1] overflow-hidden" aria-hidden>
+    <div className="help-support-particles pointer-events-none fixed inset-0 z-[1] overflow-hidden" aria-hidden>
       {dots.map((i) => (
         <motion.span
           key={i}
@@ -138,7 +138,7 @@ function SupportOrb() {
         transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="relative flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full border border-white/15 bg-gradient-to-br from-violet-500/50 via-fuchsia-600/35 to-violet-900/55 text-center shadow-[0_0_64px_rgba(139,92,246,0.55),0_0_120px_rgba(168,85,247,0.25),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md"
+        className="help-support-orb-inner relative flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full border border-white/15 bg-gradient-to-br from-violet-500/50 via-fuchsia-600/35 to-violet-900/55 text-center shadow-[0_0_64px_rgba(139,92,246,0.55),0_0_120px_rgba(168,85,247,0.25),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md"
         animate={{
           boxShadow: [
             "0 0 64px rgba(139,92,246,0.45), 0 0 100px rgba(168,85,247,0.2), inset 0 1px 0 rgba(255,255,255,0.12)",
@@ -149,8 +149,8 @@ function SupportOrb() {
         transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
       >
         <Heart className="mb-2 h-8 w-8 text-violet-50 drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]" aria-hidden />
-        <p className="px-4 text-[15px] font-medium leading-snug text-white">We&apos;re here for you</p>
-        <p className="mt-1.5 px-3 text-[11px] leading-relaxed text-violet-100/85">
+        <p className="help-support-orb-title px-4 text-[15px] font-medium leading-snug text-white">We&apos;re here for you</p>
+        <p className="help-support-orb-lead mt-1.5 px-3 text-[11px] leading-relaxed text-violet-100/85">
           Average response within 24 hours
         </p>
       </motion.div>
@@ -164,19 +164,20 @@ function getStatusMeta(status: string | null) {
     return {
       label: "In Progress",
       className:
-        "border-violet-400/40 bg-violet-500/18 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.28)]",
+        "help-support-status help-support-status--progress border-violet-400/40 bg-violet-500/18 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.28)]",
     };
   }
   if (s === "resolved" || s === "closed") {
     return {
       label: "Resolved",
       className:
-        "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 shadow-[0_0_20px_rgba(52,211,153,0.2)]",
+        "help-support-status help-support-status--resolved border-emerald-400/35 bg-emerald-500/15 text-emerald-100 shadow-[0_0_20px_rgba(52,211,153,0.2)]",
     };
   }
   return {
     label: "Under Review",
-    className: "border-cyan-400/35 bg-cyan-500/14 text-cyan-50 shadow-[0_0_20px_rgba(34,211,238,0.18)]",
+    className:
+      "help-support-status help-support-status--review border-cyan-400/35 bg-cyan-500/14 text-cyan-50 shadow-[0_0_20px_rgba(34,211,238,0.18)]",
   };
 }
 
@@ -357,7 +358,7 @@ export function SupportActionCards({
 
   return (
     <section className="space-y-5">
-      <h2 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">
+      <h2 className="help-support-section-title font-serif text-xl font-light text-zinc-50 sm:text-2xl">
         How can we help you today?
       </h2>
       <motion.div
@@ -404,8 +405,8 @@ export function SupportActionCards({
                 >
                   <card.Icon className="h-5 w-5" aria-hidden />
                 </motion.div>
-                <h3 className="mt-5 text-sm font-semibold leading-snug text-zinc-50">{card.title}</h3>
-                <p className="mt-2 flex-1 text-xs leading-relaxed text-zinc-300/90">{card.description}</p>
+                <h3 className="help-support-action-card-title mt-5 text-sm font-semibold leading-snug text-zinc-50">{card.title}</h3>
+                <p className="help-support-action-card-desc mt-2 flex-1 text-xs leading-relaxed text-zinc-300/90">{card.description}</p>
                 <span
                   className={cn(
                     "absolute bottom-4 right-4 flex h-8 w-8 items-center justify-center rounded-full",
@@ -460,16 +461,16 @@ export function SupportConversations({
       <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">
+            <h2 className="help-support-section-title font-serif text-xl font-light text-zinc-50 sm:text-2xl">
               Your support conversations
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">Recent messages with our caring support team</p>
+            <p className="help-support-section-lead mt-1 text-sm text-zinc-500">Recent messages with our caring support team</p>
           </div>
           <button
             type="button"
             onClick={onRefresh}
             disabled={ticketsLoading}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-300 transition hover:text-violet-100 disabled:opacity-50"
+            className="help-support-link-action inline-flex items-center gap-1.5 text-sm font-medium text-violet-300 transition hover:text-violet-100 disabled:opacity-50"
           >
             View all tickets
             <ArrowRight className="h-4 w-4" aria-hidden />
@@ -515,7 +516,7 @@ export function SupportConversations({
                   key={t.id}
                   type="button"
                   onClick={() => onOpenTicket(t.id)}
-                  className="group flex w-full items-center gap-4 rounded-xl px-3 py-4 text-left transition-all duration-300 hover:bg-white/[0.03] hover:shadow-[inset_0_0_32px_rgba(139,92,246,0.06)] sm:px-4"
+                  className="help-support-ticket-row group flex w-full items-center gap-4 rounded-xl px-3 py-4 text-left transition-all duration-300 hover:bg-white/[0.03] hover:shadow-[inset_0_0_32px_rgba(139,92,246,0.06)] sm:px-4"
                 >
                   <div
                     className={cn(
@@ -527,8 +528,8 @@ export function SupportConversations({
                     <Icon className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-zinc-100">{t.subject}</p>
-                    <p className="mt-0.5 line-clamp-1 text-sm text-zinc-500">
+                    <p className="help-support-ticket-title font-medium text-zinc-100">{t.subject}</p>
+                    <p className="help-support-ticket-snippet mt-0.5 line-clamp-1 text-sm text-zinc-500">
                       {snippet || "Your message is with our team — we'll respond with care."}
                     </p>
                     <p className="mt-1.5 text-xs text-zinc-600">
@@ -579,8 +580,8 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Guided comfort topics</h2>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h2 className="help-support-section-title font-serif text-xl font-light text-zinc-50 sm:text-2xl">Guided comfort topics</h2>
+        <p className="help-support-section-lead mt-1 text-sm text-zinc-500">
           Gentle answers to questions you might have — at your own pace
         </p>
       </div>
@@ -613,7 +614,7 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
                   >
                     <Icon className="h-4 w-4" aria-hidden />
                   </span>
-                  <span className="flex-1 text-sm font-medium leading-snug text-zinc-100">{faq.question}</span>
+                  <span className="help-support-faq-question flex-1 text-sm font-medium leading-snug text-zinc-100">{faq.question}</span>
                   <ChevronDown
                     className={cn(
                       "h-5 w-5 shrink-0 text-zinc-500 transition-transform duration-300",
@@ -632,7 +633,7 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
                       className="overflow-hidden"
                     >
                       <div className="border-t border-white/[0.06] px-4 py-4 pl-[3.35rem]">
-                        <p className="text-sm leading-relaxed text-zinc-400">{faq.answer}</p>
+                        <p className="help-support-faq-answer text-sm leading-relaxed text-zinc-400">{faq.answer}</p>
                       </div>
                     </motion.div>
                   ) : null}
@@ -644,7 +645,7 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
         <div
           className={cn(
             glassPanel,
-            "relative min-h-[300px] overflow-hidden p-0 lg:min-h-full"
+            "help-support-comfort-visual relative min-h-[300px] overflow-hidden p-0 lg:min-h-full"
           )}
         >
           <img
@@ -658,8 +659,8 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
           <div className="absolute inset-0 bg-gradient-to-t from-[#05060c] via-[#05060c]/35 to-[#1a1030]/25" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_30%,rgba(251,146,60,0.15),transparent_55%)]" />
           <div className="relative z-10 flex h-full min-h-[300px] flex-col justify-end p-7">
-            <p className="font-serif text-xl font-light text-white">A quiet place for answers</p>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+            <p className="help-support-comfort-title font-serif text-xl font-light text-white">A quiet place for answers</p>
+            <p className="help-support-comfort-lead mt-2 text-sm leading-relaxed text-zinc-400">
               Take your time. We&apos;re here when you&apos;re ready.
             </p>
           </div>
@@ -671,34 +672,34 @@ export function GuidedComfortTopics({ faqs, openIndex, onToggle }: GuidedComfort
 
 export function SupportBottomBanner() {
   return (
-    <section className="relative min-h-[160px] overflow-hidden rounded-[24px] border border-white/[0.09] shadow-[0_40px_100px_-48px_rgba(76,29,149,0.45),0_0_60px_-30px_rgba(109,40,217,0.25)] sm:min-h-[180px]">
+    <section className="help-support-bottom-banner relative min-h-[160px] overflow-hidden rounded-[24px] border border-white/[0.09] shadow-[0_40px_100px_-48px_rgba(76,29,149,0.45),0_0_60px_-30px_rgba(109,40,217,0.25)] sm:min-h-[180px]">
       <img
         src={BANNER_IMG}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover object-center"
+        className="help-support-bottom-banner-img absolute inset-0 h-full w-full object-cover object-center"
         width={1600}
         height={480}
         loading="lazy"
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#05060c]/96 via-[#05060c]/75 to-[#05060c]/50" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_75%_50%,rgba(168,85,247,0.18),transparent_55%)]" />
+      <div className="help-support-bottom-overlays absolute inset-0 bg-gradient-to-r from-[#05060c]/96 via-[#05060c]/75 to-[#05060c]/50" />
+      <div className="help-support-bottom-overlays absolute inset-0 bg-[radial-gradient(ellipse_at_75%_50%,rgba(168,85,247,0.18),transparent_55%)]" />
       <motion.div
-        className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_100%,rgba(251,146,60,0.1),transparent_50%)]"
+        className="help-support-bottom-overlays absolute inset-0 bg-[radial-gradient(ellipse_at_20%_100%,rgba(251,146,60,0.1),transparent_50%)]"
         aria-hidden
       />
       <div className="relative z-10 flex flex-col gap-6 p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9">
         <div className="max-w-lg space-y-2.5">
-          <h2 className="font-serif text-[clamp(1.5rem,3vw,1.85rem)] font-light leading-snug text-white">
+          <h2 className="help-support-bottom-banner-title font-serif text-[clamp(1.5rem,3vw,1.85rem)] font-light leading-snug text-white">
             We&apos;re here, whenever you need us
           </h2>
-          <p className="text-sm leading-relaxed text-zinc-400">
+          <p className="help-support-bottom-banner-lead text-sm leading-relaxed text-zinc-400">
             Our support team is available around the clock. Reach out anytime — you deserve to be heard.
           </p>
         </div>
         <div className="space-y-3 sm:text-right">
           <a
             href="mailto:support@solace.app"
-            className="flex items-center gap-2.5 text-sm text-zinc-200 transition hover:text-violet-200 sm:justify-end"
+            className="help-support-bottom-contact flex items-center gap-2.5 text-sm text-zinc-200 transition hover:text-violet-200 sm:justify-end"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] shadow-[0_0_12px_rgba(139,92,246,0.15)]">
               <Mail className="h-4 w-4 text-violet-300" aria-hidden />
@@ -707,7 +708,7 @@ export function SupportBottomBanner() {
           </a>
           <a
             href="tel:18007652223"
-            className="flex items-center gap-2.5 text-sm text-zinc-200 transition hover:text-violet-200 sm:justify-end"
+            className="help-support-bottom-contact flex items-center gap-2.5 text-sm text-zinc-200 transition hover:text-violet-200 sm:justify-end"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] shadow-[0_0_12px_rgba(139,92,246,0.15)]">
               <Phone className="h-4 w-4 text-violet-300" aria-hidden />
@@ -763,7 +764,7 @@ export function SupportRightRail() {
   return (
     <aside className="w-full shrink-0 space-y-4 xl:w-[320px] xl:sticky xl:top-4 xl:self-start">
       <RailCard glow="hover:border-emerald-400/15">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">
+        <p className="help-support-rail-body text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">
           Support Availability
         </p>
         <div className="mt-4 flex items-center gap-3">
@@ -773,9 +774,9 @@ export function SupportRightRail() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.7)]" />
               </span>
-              <p className="text-sm font-medium text-emerald-200">We&apos;re available</p>
+              <p className="help-support-rail-availability text-sm font-medium text-emerald-200">We&apos;re available</p>
             </div>
-            <p className="mt-2 font-serif text-3xl font-light text-white">24/7</p>
+            <p className="help-support-rail-title mt-2 font-serif text-3xl font-light text-white">24/7</p>
             <p className="text-xs text-zinc-500">Support Team</p>
           </div>
           <div className="relative flex h-16 w-16 items-center justify-center">
@@ -786,13 +787,13 @@ export function SupportRightRail() {
       </RailCard>
 
       <RailCard glow="hover:border-fuchsia-400/20">
-        <p className="text-sm font-medium text-zinc-100">Need urgent help?</p>
-        <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
+        <p className="help-support-rail-title text-sm font-medium text-zinc-100">Need urgent help?</p>
+        <p className="help-support-rail-body mt-1.5 text-xs leading-relaxed text-zinc-500">
           If you&apos;re in crisis, please reach out immediately. You matter, and help is available.
         </p>
         <Link
           to="/app/emergency-resources"
-          className="mt-4 flex w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 py-3.5 text-sm font-semibold text-white shadow-[0_0_32px_rgba(139,92,246,0.4),0_0_48px_-8px_rgba(236,72,153,0.3)] transition hover:shadow-[0_0_40px_rgba(168,85,247,0.5)]"
+          className="help-support-rail-cta-primary solace-cta-gradient mt-4 flex w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 py-3.5 text-sm font-semibold text-white shadow-[0_0_32px_rgba(139,92,246,0.4),0_0_48px_-8px_rgba(236,72,153,0.3)] transition hover:shadow-[0_0_40px_rgba(168,85,247,0.5)]"
         >
          Emergency Resources
         </Link>
@@ -805,14 +806,14 @@ export function SupportRightRail() {
       </RailCard>
 
       <RailCard className="text-center" glow="hover:border-violet-400/20">
-        <p className="text-sm font-medium text-zinc-100">Take a breath</p>
-        <p className="mt-1 text-xs text-zinc-500">A moment of calm, just for you</p>
+        <p className="help-support-rail-title text-sm font-medium text-zinc-100">Take a breath</p>
+        <p className="help-support-rail-body mt-1 text-xs text-zinc-500">A moment of calm, just for you</p>
         <div className="my-5">
           <BreathingRings />
         </div>
         <Link
           to="/app/wellness-tools"
-          className="inline-flex w-full items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/12 py-3 text-sm font-medium text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-violet-500/20 hover:shadow-[0_0_24px_rgba(139,92,246,0.2)]"
+          className="help-support-rail-cta-secondary inline-flex w-full items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/12 py-3 text-sm font-medium text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-violet-500/20 hover:shadow-[0_0_24px_rgba(139,92,246,0.2)]"
         >
           Start Breathing
         </Link>
@@ -831,9 +832,9 @@ export function SupportRightRail() {
         <div className="p-5">
           <div className="flex items-center gap-2">
             <Heart className="h-4 w-4 text-fuchsia-300" aria-hidden />
-            <p className="text-sm font-medium text-zinc-100">You are not alone</p>
+            <p className="help-support-rail-title text-sm font-medium text-zinc-100">You are not alone</p>
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+          <p className="help-support-rail-body mt-2 text-xs leading-relaxed text-zinc-500">
             Whatever you&apos;re feeling right now is valid. Our community and support team are here to walk
             beside you.
           </p>
@@ -846,8 +847,8 @@ export function SupportRightRail() {
             <ShieldCheck className="h-5 w-5 text-violet-300" aria-hidden />
           </div>
           <div>
-            <p className="text-sm font-medium text-zinc-100">Support Promise</p>
-            <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+            <p className="help-support-rail-title text-sm font-medium text-zinc-100">Support Promise</p>
+            <p className="help-support-rail-body mt-2 text-xs leading-relaxed text-zinc-500">
               Every conversation is private, empathetic, and confidential. We treat your wellbeing with the
               care it deserves — always.
             </p>
@@ -864,7 +865,7 @@ interface SanctuaryPageShellProps {
 
 export function SanctuaryPageShell({ children }: SanctuaryPageShellProps) {
   return (
-    <div className="relative min-h-full overflow-x-hidden bg-[#05060c] text-zinc-200">
+    <div className="help-support-page relative min-h-full overflow-x-hidden bg-[#05060c] text-zinc-200">
       <div className="pointer-events-none fixed inset-0 bg-[#05060c]" />
       <div
         className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-5%,rgba(109,40,217,0.2),transparent_58%)]"
@@ -892,7 +893,7 @@ export function BackToSettingsLink() {
   return (
     <Link
       to="/app/settings"
-      className="inline-flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200"
+      className="help-support-back-link inline-flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden />
       Back to Settings

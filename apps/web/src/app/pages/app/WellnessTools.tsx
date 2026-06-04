@@ -1062,7 +1062,7 @@ export function WellnessTools() {
                     <button
                       type="button"
                       onClick={scrollToFeatured}
-                      className="w-fit rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_40px_rgba(236,72,153,0.55),0_16px_48px_-12px_rgba(139,92,246,0.35)] ring-1 ring-white/25 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-300/50"
+                      className="wellness-tools-hero-cta solace-cta-gradient w-fit rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_40px_rgba(236,72,153,0.55),0_16px_48px_-12px_rgba(139,92,246,0.35)] ring-1 ring-white/25 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-300/50"
                     >
                       Find Your Tool &gt;
                     </button>

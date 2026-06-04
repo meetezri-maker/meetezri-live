@@ -1,0 +1,249 @@
+/**
+ * Help & Support (/app/settings/help-support) — light theme.
+ */
+
+/* Page shell */
+html[data-ezri-theme="light"] .solace-app .help-support-page,
+html[data-theme="light"] .solace-app .help-support-page {
+  background: var(--solace-page-bg, var(--bg-gradient, #fbf8ff)) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page > .pointer-events-none,
+html[data-theme="light"] .solace-app .help-support-page > .pointer-events-none {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-particles,
+html[data-theme="light"] .solace-app .help-support-page .help-support-particles {
+  display: none !important;
+}
+
+/* Glass panels */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-glass-panel,
+html[data-theme="light"] .solace-app .help-support-page .help-support-glass-panel {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+  background-image: none !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-glass-panel::before,
+html[data-theme="light"] .solace-app .help-support-page .help-support-glass-panel::before {
+  display: none !important;
+}
+
+/* Section headings */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-section-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-section-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-section-lead,
+html[data-theme="light"] .solace-app .help-support-page .help-support-section-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+/* Hero orb — readable on light lavender page */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-orb-inner,
+html[data-theme="light"] .solace-app .help-support-page .help-support-orb-inner {
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  background: linear-gradient(135deg, #ede9fe 0%, #fae8ff 55%, #e0e7ff 100%) !important;
+  box-shadow: 0 12px 40px -12px rgba(124, 58, 237, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-orb-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-orb-title {
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-orb-lead,
+html[data-theme="light"] .solace-app .help-support-page .help-support-orb-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-orb-inner svg,
+html[data-theme="light"] .solace-app .help-support-page .help-support-orb-inner svg {
+  color: #7c3aed !important;
+}
+
+/* Action cards — moonlit copy on imagery */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-action-card,
+html[data-theme="light"] .solace-app .help-support-page .help-support-action-card {
+  border-color: var(--border, #e7ddfb) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-action-card .help-support-action-card-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-action-card .help-support-action-card-title {
+  color: #fafafa !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-action-card .help-support-action-card-desc,
+html[data-theme="light"] .solace-app .help-support-page .help-support-action-card .help-support-action-card-desc {
+  color: rgba(244, 244, 245, 0.92) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Tickets list */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-ticket-row:hover,
+html[data-theme="light"] .solace-app .help-support-page .help-support-ticket-row:hover {
+  background: var(--surface-lavender, #f5eeff) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-ticket-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-ticket-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-ticket-snippet,
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-ticket-snippet {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-link-action,
+html[data-theme="light"] .solace-app .help-support-page .help-support-link-action {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-link-action:hover,
+html[data-theme="light"] .solace-app .help-support-page .help-support-link-action:hover {
+  color: #5b21b6 !important;
+}
+
+/* FAQ accordion */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-faq-question,
+html[data-theme="light"] .solace-app .help-support-page .help-support-faq-question {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-faq-answer,
+html[data-theme="light"] .solace-app .help-support-page .help-support-faq-answer {
+  color: var(--text-secondary, #475467) !important;
+}
+
+/* Comfort image panel — moonlit */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-comfort-visual .help-support-comfort-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-comfort-visual .help-support-comfort-title {
+  color: #fafafa !important;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-comfort-visual .help-support-comfort-lead,
+html[data-theme="light"] .solace-app .help-support-page .help-support-comfort-visual .help-support-comfort-lead {
+  color: rgba(244, 244, 245, 0.9) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Bottom banner — pastel card */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 48%, #fce7f3 100%) !important;
+  border-color: var(--border, #e7ddfb) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-img,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-img {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner .help-support-bottom-overlays,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner .help-support-bottom-overlays,
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner [class*="from-[#05060c"],
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner [class*="bg-gradient-to-r"],
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner .help-support-bottom-overlays,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner [class*="from-[#05060c"],
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner [class*="bg-gradient-to-r"] {
+  display: none !important;
+  opacity: 0 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-lead,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-banner-lead {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-contact,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-contact {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-bottom-contact:hover,
+html[data-theme="light"] .solace-app .help-support-page .help-support-bottom-contact:hover {
+  color: #7c3aed !important;
+}
+
+/* Right rail */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-rail-title,
+html[data-theme="light"] .solace-app .help-support-page .help-support-rail-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-rail-body,
+html[data-theme="light"] .solace-app .help-support-page .help-support-rail-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-rail-availability,
+html[data-theme="light"] .solace-app .help-support-page .help-support-rail-availability {
+  color: #047857 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-rail-cta-primary,
+html[data-theme="light"] .solace-app .help-support-page .help-support-rail-cta-primary {
+  background: linear-gradient(to right, #7c3aed, #c026d3, #db2777) !important;
+  background-image: linear-gradient(to right, #7c3aed, #c026d3, #db2777) !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-rail-cta-secondary,
+html[data-theme="light"] .solace-app .help-support-page .help-support-rail-cta-secondary {
+  background: var(--button-secondary-bg, #f6f0ff) !important;
+  color: var(--button-secondary-text, #5b21b6) !important;
+  border-color: var(--button-secondary-border, #d8c7f7) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-back-link,
+html[data-theme="light"] .solace-app .help-support-page .help-support-back-link {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-back-link:hover,
+html[data-theme="light"] .solace-app .help-support-page .help-support-back-link:hover {
+  color: var(--text-primary, #101828) !important;
+}
+
+/* Status pills — light variants */
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-status--review,
+html[data-theme="light"] .solace-app .help-support-page .help-support-status--review {
+  background: #ecfeff !important;
+  border-color: rgba(6, 182, 212, 0.35) !important;
+  color: #0e7490 !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-status--progress,
+html[data-theme="light"] .solace-app .help-support-page .help-support-status--progress {
+  background: #ede9fe !important;
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  color: #5b21b6 !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .help-support-page .help-support-status--resolved,
+html[data-theme="light"] .solace-app .help-support-page .help-support-status--resolved {
+  background: #dcfce7 !important;
+  border-color: rgba(22, 163, 74, 0.35) !important;
+  color: #15803d !important;
+  box-shadow: none !important;
+}

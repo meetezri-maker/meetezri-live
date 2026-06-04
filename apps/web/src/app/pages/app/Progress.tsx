@@ -138,7 +138,7 @@ function CircularProgress({ value, size = 120, strokeWidth = 8, className }: Cir
         </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{value}%</span>
+        <span className="progress-ring-value text-3xl font-bold text-white">{value}%</span>
       </div>
     </div>
   );
@@ -157,11 +157,11 @@ function ProgressBar({ label, value, color, icon }: ProgressBarProps) {
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">
           {icon}
-          <span className="text-slate-300">{label}</span>
+          <span className="progress-bar-label text-slate-300">{label}</span>
         </div>
-        <span className="text-slate-400">{value}%</span>
+        <span className="progress-bar-pct text-slate-400">{value}%</span>
       </div>
-      <div className="h-2 rounded-full bg-slate-800/60 overflow-hidden">
+      <div className="progress-bar-track h-2 rounded-full bg-slate-800/60 overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${value}%` }}
@@ -188,7 +188,7 @@ function TimelineItem({ icon, title, description, date, pill, pillColor, isLast 
   return (
     <div className="flex gap-4">
       <div className="flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/50 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/10">
+        <div className="progress-timeline-icon w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/50 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/10">
           {icon}
         </div>
         {!isLast && (
@@ -198,9 +198,9 @@ function TimelineItem({ icon, title, description, date, pill, pillColor, isLast 
       <div className="flex-1 pb-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h4 className="font-semibold text-white mb-1">{title}</h4>
-            <p className="text-sm text-slate-400 mb-2">{description}</p>
-            <p className="text-xs text-slate-500">{date}</p>
+            <h4 className="progress-timeline-title font-semibold text-white mb-1">{title}</h4>
+            <p className="progress-timeline-desc text-sm text-slate-400 mb-2">{description}</p>
+            <p className="progress-timeline-date text-xs text-slate-500">{date}</p>
           </div>
           <span className={cn(
             "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap",
@@ -562,26 +562,26 @@ export function Progress() {
 
   if (profile?.subscription_plan === "trial") {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <div className="progress-page flex min-h-[60vh] items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
+          className="progress-gate-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
           <div className="relative">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
               <Lock className="w-8 h-8 text-purple-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-3">
+            <h2 className="progress-gate-title text-2xl font-bold text-white mb-3">
               Progress Tracking is a Core Feature
             </h2>
-            <p className="text-slate-400 mb-8">
+            <p className="progress-gate-lead text-slate-400 mb-8">
               Upgrade to Core or Pro to unlock your wellness journey insights, analytics, and exports.
             </p>
             <Button
               onClick={() => navigate("/app/billing")}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
+              className="progress-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
             >
               View Plans
             </Button>
@@ -593,28 +593,28 @@ export function Progress() {
 
   if (isLoadingWellness) {
     return (
-      <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+      <div className="progress-page min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between">
           <div className="space-y-2">
-            <div className="h-8 w-48 rounded-lg bg-slate-800/50 animate-pulse" />
-            <div className="h-4 w-72 rounded-lg bg-slate-800/30 animate-pulse" />
+            <div className="progress-skeleton h-8 w-48 rounded-lg bg-slate-800/50 animate-pulse" />
+            <div className="progress-skeleton h-4 w-72 rounded-lg bg-slate-800/30 animate-pulse" />
           </div>
-          <div className="h-10 w-32 rounded-lg bg-slate-800/50 animate-pulse hidden sm:block" />
+          <div className="progress-skeleton h-10 w-32 rounded-lg bg-slate-800/50 animate-pulse hidden sm:block" />
         </div>
-        <div className="h-48 w-full rounded-2xl bg-slate-800/30 animate-pulse mb-8" />
+        <div className="progress-skeleton h-48 w-full rounded-2xl bg-slate-800/30 animate-pulse mb-8" />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-32 rounded-xl bg-slate-800/30 animate-pulse" />
+            <div key={i} className="progress-skeleton h-32 rounded-xl bg-slate-800/30 animate-pulse" />
           ))}
         </div>
         <div className="flex flex-col xl:flex-row gap-6">
           <div className="flex-1 min-w-0 space-y-6">
-            <div className="h-96 rounded-2xl bg-slate-800/30 animate-pulse" />
-            <div className="h-64 rounded-2xl bg-slate-800/30 animate-pulse" />
+            <div className="progress-skeleton h-96 rounded-2xl bg-slate-800/30 animate-pulse" />
+            <div className="progress-skeleton h-64 rounded-2xl bg-slate-800/30 animate-pulse" />
           </div>
           <div className="w-full xl:w-80 2xl:w-96 flex-shrink-0 space-y-4">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-48 rounded-xl bg-slate-800/30 animate-pulse" />
+              <div key={i} className="progress-skeleton h-48 rounded-xl bg-slate-800/30 animate-pulse" />
             ))}
           </div>
         </div>
@@ -624,26 +624,26 @@ export function Progress() {
 
   if (loadError) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <div className="progress-page flex min-h-[60vh] items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
+          className="progress-gate-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-pink-500/5" />
           <div className="relative">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-500/20 to-pink-500/20 flex items-center justify-center">
               <Heart className="w-8 h-8 text-amber-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-3">
+            <h2 className="progress-gate-title text-2xl font-bold text-white mb-3">
               Your journey is just beginning.
             </h2>
-            <p className="text-slate-400 mb-8">
+            <p className="progress-gate-lead text-slate-400 mb-8">
               We couldn't load your progress data right now. Your growth matters to us—let's try again.
             </p>
             <Button
               onClick={loadWellness}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
+              className="progress-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
             >
               Try Again
             </Button>
@@ -728,7 +728,7 @@ export function Progress() {
   const canShowGrowthToolsNext = growthToolsPage < growthToolsPageCount - 1;
 
   return (
-    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+    <div className="progress-page min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -738,13 +738,13 @@ export function Progress() {
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full blur-lg opacity-50" />
-              <div className="relative w-10 h-10 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+              <div className="progress-header-icon-wrap relative w-10 h-10 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
                 <TrendingUp className="w-5 h-5 text-purple-400" />
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Your Progress</h1>
-              <p className="text-sm text-slate-400">
+              <h1 className="progress-page-title text-2xl font-bold text-white">Your Progress</h1>
+              <p className="progress-page-lead text-sm text-slate-400">
                 Track your wellness journey and celebrate your growth.
               </p>
             </div>
@@ -754,7 +754,7 @@ export function Progress() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleExportReport}
-            className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/20"
+            className="progress-btn-primary hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/20"
             aria-label="Export progress report as CSV"
           >
             <Download className="w-4 h-4" />
@@ -767,7 +767,7 @@ export function Progress() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="relative overflow-hidden rounded-2xl mb-8 min-h-[220px]"
+          className="progress-hero relative overflow-hidden rounded-2xl mb-8 min-h-[220px]"
         >
           <img
             src={PROGRESS_IMAGES.hero}
@@ -776,15 +776,15 @@ export function Progress() {
             loading="eager"
             decoding="async"
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/72 via-[#0a0c14]/42 to-transparent" />
+          <div className="progress-hero-scrim pointer-events-none absolute inset-0" />
           
           <div className="relative px-8 py-10 md:py-14 flex items-center min-h-[220px]">
             <div className="max-w-md">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
+              <h2 className="progress-hero-title text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
                 You're showing up for yourself. And that matters.{" "}
                 <span className="inline-block">💜</span>
               </h2>
-              <p className="text-slate-300 mb-6 text-sm md:text-base">
+              <p className="progress-hero-lead text-slate-300 mb-6 text-sm md:text-base">
                 Every conversation, every reflection, every small step is building a stronger you.
               </p>
               {/* <Button
@@ -807,70 +807,70 @@ export function Progress() {
         className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6"
       >
         {/* Talk It Out */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="progress-stat-card relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
               <MessageCircle className="w-4 h-4 text-cyan-400" />
-              <span className="text-xs text-slate-400">Talk It Out</span>
+              <span className="progress-stat-label text-xs text-slate-400">Talk It Out</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{rangeTalks}</p>
-            <p className="text-xs text-slate-500 mb-2">Talks in period</p>
+            <p className="progress-stat-value text-2xl font-bold text-white mb-1">{rangeTalks}</p>
+            <p className="progress-stat-meta text-xs text-slate-500 mb-2">Talks in period</p>
             <Sparkline data={sparklineData.talks} color="#22d3ee" height={36} />
           </div>
         </div>
 
         {/* Mood Check-ups */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="progress-stat-card relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-transparent" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-pink-400" />
-              <span className="text-xs text-slate-400">Mood Check-ups</span>
+              <span className="progress-stat-label text-xs text-slate-400">Mood Check-ups</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{rangeMoodCheckins}</p>
-            <p className="text-xs text-slate-500 mb-2">Check-ins in period</p>
+            <p className="progress-stat-value text-2xl font-bold text-white mb-1">{rangeMoodCheckins}</p>
+            <p className="progress-stat-meta text-xs text-slate-500 mb-2">Check-ins in period</p>
             <Sparkline data={sparklineData.mood} color="#ec4899" height={36} />
           </div>
         </div>
 
         {/* Journal Entries */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="progress-stat-card relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
               <BookOpen className="w-4 h-4 text-purple-400" />
-              <span className="text-xs text-slate-400">Journal Entries</span>
+              <span className="progress-stat-label text-xs text-slate-400">Journal Entries</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{rangeJournals}</p>
-            <p className="text-xs text-slate-500 mb-2">Entries in period</p>
+            <p className="progress-stat-value text-2xl font-bold text-white mb-1">{rangeJournals}</p>
+            <p className="progress-stat-meta text-xs text-slate-500 mb-2">Entries in period</p>
             <Sparkline data={sparklineData.journal} color="#a855f7" height={36} />
           </div>
         </div>
 
         {/* Wellness Exercises */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="progress-stat-card relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
               <Wind className="w-4 h-4 text-green-400" />
-              <span className="text-xs text-slate-400">Wellness Exercises</span>
+              <span className="progress-stat-label text-xs text-slate-400">Wellness Exercises</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{wellnessCountInRange}</p>
-            <p className="text-xs text-slate-500 mb-2">Completions in period</p>
+            <p className="progress-stat-value text-2xl font-bold text-white mb-1">{wellnessCountInRange}</p>
+            <p className="progress-stat-meta text-xs text-slate-500 mb-2">Completions in period</p>
             <Sparkline data={sparklineData.wellness} color="#4ade80" height={36} />
           </div>
         </div>
 
         {/* Current Streak */}
-        <div className="relative overflow-hidden rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-amber-500/5 backdrop-blur-sm p-4">
+        <div className="progress-stat-card progress-stat-card--streak relative overflow-hidden rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-amber-500/5 backdrop-blur-sm p-4">
           <div className="relative flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Flame className="w-4 h-4 text-orange-400" />
-                <span className="text-xs text-slate-400">Current Streak</span>
+                <span className="progress-stat-label text-xs text-slate-400">Current Streak</span>
               </div>
-              <p className="text-2xl font-bold text-white mb-1">{currentStreak} days</p>
+              <p className="progress-stat-value text-2xl font-bold text-white mb-1">{currentStreak} days</p>
               <p className="text-xs text-orange-400/80">Keep going! 🔥</p>
             </div>
             <div className="relative w-14 h-14 flex-shrink-0">
@@ -915,14 +915,14 @@ export function Progress() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
+            className="progress-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
           >
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Your Journey Timeline</h3>
-                    <p className="text-sm text-slate-400">Key moments from your wellness journey</p>
+                    <h3 className="progress-panel-title text-lg font-semibold text-white mb-1">Your Journey Timeline</h3>
+                    <p className="progress-panel-lead text-sm text-slate-400">Key moments from your wellness journey</p>
                   </div>
                   <ProgressRangeSelect
                     value={timelineRange}
@@ -933,7 +933,7 @@ export function Progress() {
 
                 <div className="space-y-0">
                   {journeyMilestones.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-slate-400">
+                    <p className="progress-empty-hint py-10 text-center text-sm text-slate-400">
                       No milestones in this period yet. Keep showing up — your next win will appear here.
                     </p>
                   ) : null}
@@ -952,7 +952,7 @@ export function Progress() {
                 </div>
 
                 {/* Quote Panel */}
-                <div className="relative mt-6 min-h-[120px] overflow-hidden rounded-xl border border-slate-700/30">
+                <div className="progress-quote-panel relative mt-6 min-h-[120px] overflow-hidden rounded-xl border border-slate-700/30">
                   <img
                     src={PROGRESS_IMAGES.quoteLandscape}
                     alt=""
@@ -960,10 +960,10 @@ export function Progress() {
                     loading="lazy"
                     decoding="async"
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/75 via-[#0a0c14]/45 to-[#0a0c14]/25]" />
+                  <div className="progress-quote-scrim pointer-events-none absolute inset-0" />
                   <div className="relative flex gap-3 p-4">
                     <Quote className="mt-0.5 h-5 w-5 shrink-0 text-purple-300" />
-                    <p className="text-sm italic text-slate-100 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]">
+                    <p className="progress-quote-text text-sm italic text-slate-100 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]">
                       &ldquo;Growth is not always loud. Sometimes it&apos;s just choosing yourself, quietly, every day.&rdquo;
                     </p>
                   </div>
@@ -976,7 +976,7 @@ export function Progress() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm"
+              className="progress-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm"
             >
               <div className="relative grid grid-cols-1 md:grid-cols-2">
                 {/* Visual Side - Lanterns, candle, book scene */}
@@ -989,37 +989,37 @@ export function Progress() {
                     decoding="async"
                   />
                   {/* Right fade for seamless blend */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-slate-900/95" />
+                  <div className="progress-reflection-visual-fade absolute inset-0" />
                 </div>
 
                 {/* Content Side */}
-                <div className="p-6 flex flex-col justify-center bg-gradient-to-l from-slate-900/80 to-transparent">
-                  <h3 className="text-lg font-semibold text-white mb-2">This Month's Reflection</h3>
-                  <p className="text-sm text-slate-400 mb-6">
+                <div className="progress-reflection-content p-6 flex flex-col justify-center bg-gradient-to-l from-slate-900/80 to-transparent">
+                  <h3 className="progress-panel-title text-lg font-semibold text-white mb-2">This Month's Reflection</h3>
+                  <p className="progress-panel-lead text-sm text-slate-400 mb-6">
                     You've been more consistent and mindful. Your daily choices are creating lasting change.
                   </p>
 
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
+                    <div className="progress-reflection-stat p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
                       <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-purple-500/20 flex items-center justify-center">
                         <Star className="w-5 h-5 text-purple-400" />
                       </div>
-                      <p className="text-xs text-slate-400 mb-1">Most Active Day</p>
-                      <p className="text-sm font-semibold text-white">April 28</p>
+                      <p className="progress-reflection-stat-label text-xs text-slate-400 mb-1">Most Active Day</p>
+                      <p className="progress-reflection-stat-value text-sm font-semibold text-white">April 28</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
+                    <div className="progress-reflection-stat p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
                       <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-orange-500/20 flex items-center justify-center">
                         <Flame className="w-5 h-5 text-orange-400" />
                       </div>
-                      <p className="text-xs text-slate-400 mb-1">Longest Streak</p>
-                      <p className="text-sm font-semibold text-white">{Math.max(currentStreak, 12)} days</p>
+                      <p className="progress-reflection-stat-label text-xs text-slate-400 mb-1">Longest Streak</p>
+                      <p className="progress-reflection-stat-value text-sm font-semibold text-white">{Math.max(currentStreak, 12)} days</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
+                    <div className="progress-reflection-stat p-3 rounded-xl bg-slate-800/60 border border-slate-700/30 text-center backdrop-blur-sm">
                       <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-cyan-500/20 flex items-center justify-center">
                         <Heart className="w-5 h-5 text-cyan-400" />
                       </div>
-                      <p className="text-xs text-slate-400 mb-1">Best Mood</p>
-                      <p className="text-sm font-semibold text-white">Calm 😌</p>
+                      <p className="progress-reflection-stat-label text-xs text-slate-400 mb-1">Best Mood</p>
+                      <p className="progress-reflection-stat-value text-sm font-semibold text-white">Calm 😌</p>
                     </div>
                   </div>
                 </div>
@@ -1031,7 +1031,7 @@ export function Progress() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50"
+              className="progress-tools-banner relative overflow-hidden rounded-2xl border border-slate-800/50"
             >
               <img
                 src={DASHBOARD_IMAGES.quoteDecor}
@@ -1040,11 +1040,11 @@ export function Progress() {
                 loading="lazy"
                 decoding="async"
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#0a0c14]/82 via-[#0a0c14]/72 to-purple-950/55" />
+              <div className="progress-tools-scrim pointer-events-none absolute inset-0" />
               <div className="relative space-y-4 p-5 sm:p-6">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-1">Tools that support your growth</h3>
-                <p className="text-sm text-slate-400">Keep using what helps you feel better.</p>
+                <h3 className="progress-panel-title text-lg font-semibold text-white mb-1">Tools that support your growth</h3>
+                <p className="progress-panel-lead text-sm text-slate-400">Keep using what helps you feel better.</p>
               </div>
 
               <div className="flex items-stretch gap-3">
@@ -1053,7 +1053,7 @@ export function Progress() {
                     type="button"
                     aria-label="Show previous growth tools"
                     onClick={() => setGrowthToolsPage((p) => Math.max(0, p - 1))}
-                    className="flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
+                    className="progress-carousel-btn flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
                   >
                     <ChevronLeft className="h-5 w-5" aria-hidden />
                   </button>
@@ -1071,25 +1071,25 @@ export function Progress() {
                     <motion.div
                       key={tool.title}
                       whileHover={{ y: -2 }}
-                      className="relative min-w-0 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 backdrop-blur-sm"
+                      className="progress-tool-card relative min-w-0 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 backdrop-blur-sm"
                     >
                       <div className={cn("absolute inset-0 bg-gradient-to-br opacity-50", tool.color)} />
                       <div className="relative">
                         <div
                           className={cn(
-                            "mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/80",
+                            "progress-tool-icon-wrap mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/80",
                             tool.iconColor
                           )}
                         >
                           {tool.icon}
                         </div>
-                        <h4 className="mb-1 text-sm font-semibold text-white">{tool.title}</h4>
-                        <p className="mb-3 text-xs text-slate-400">{tool.description}</p>
+                        <h4 className="progress-tool-card-title mb-1 text-sm font-semibold text-white">{tool.title}</h4>
+                        <p className="progress-tool-card-desc mb-3 text-xs text-slate-400">{tool.description}</p>
                         <Button
                           onClick={() => navigate(tool.route)}
                           variant="ghost"
                           size="sm"
-                          className="w-full rounded-lg bg-slate-800/50 text-xs text-white hover:bg-slate-700/50"
+                          className="progress-tool-cta w-full rounded-lg bg-slate-800/50 text-xs text-white hover:bg-slate-700/50"
                         >
                           {tool.cta}
                         </Button>
@@ -1105,7 +1105,7 @@ export function Progress() {
                     onClick={() =>
                       setGrowthToolsPage((p) => Math.min(growthToolsPageCount - 1, p + 1))
                     }
-                    className="flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
+                    className="progress-carousel-btn flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
                   >
                     <ChevronRight className="h-5 w-5" aria-hidden />
                   </button>
@@ -1119,7 +1119,7 @@ export function Progress() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="relative min-h-[168px] overflow-hidden rounded-2xl sm:min-h-[180px]"
+              className="progress-celebrate relative min-h-[168px] overflow-hidden rounded-2xl sm:min-h-[180px]"
             >
               <img
                 src={PROGRESS_IMAGES.celebrateBanner}
@@ -1128,24 +1128,24 @@ export function Progress() {
                 loading="lazy"
                 decoding="async"
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/75 via-purple-900/50 to-fuchsia-900/40" />
+              <div className="progress-celebrate-scrim pointer-events-none absolute inset-0" />
               <div className="relative px-6 py-8 md:px-8 md:py-10 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <div className="progress-celebrate-icon w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
                     <Trophy className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="progress-celebrate-title text-xl font-bold text-white flex items-center gap-2">
                       You're doing amazing! <Sparkles className="w-5 h-5" />
                     </h3>
-                    <p className="text-sm text-white/80">
+                    <p className="progress-celebrate-lead text-sm text-white/80">
                       This month you showed up for yourself in so many ways. Keep going. Your future self is grateful.
                     </p>
                   </div>
                 </div>
                 <Button
                   onClick={() => navigate("/app/settings/achievements")}
-                  className="bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-full px-6 whitespace-nowrap"
+                  className="progress-btn-secondary bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-full px-6 whitespace-nowrap"
                 >
                   Celebrate You
                 </Button>
@@ -1160,12 +1160,12 @@ export function Progress() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
+              className="progress-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white">Growth Overview</h3>
+                  <h3 className="progress-panel-title font-semibold text-white">Growth Overview</h3>
                   <ProgressRangeSelect
                     value={timelineRange}
                     onValueChange={setTimelineRange}
@@ -1183,8 +1183,8 @@ export function Progress() {
                   >
                     <span className="text-base">🌱</span>
                   </motion.div>
-                  <p className="mt-4 text-sm font-medium text-white">Overall Growth</p>
-                  <p className="text-xs text-slate-400">You're making beautiful progress.</p>
+                  <p className="progress-ring-caption mt-4 text-sm font-medium text-white">Overall Growth</p>
+                  <p className="progress-ring-sub text-xs text-slate-400">You're making beautiful progress.</p>
                 </div>
               </div>
             </motion.div>
@@ -1194,12 +1194,12 @@ export function Progress() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
+              className="progress-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white">Emotional Balance</h3>
+                  <h3 className="progress-panel-title font-semibold text-white">Emotional Balance</h3>
                   <ProgressRangeSelect
                     value={timelineRange}
                     onValueChange={setTimelineRange}
@@ -1209,7 +1209,7 @@ export function Progress() {
 
                 <div className="h-[140px] mb-4">
                   {emotionalBalanceData.length === 0 ? (
-                    <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                    <div className="progress-chart-empty flex h-full items-center justify-center text-xs text-slate-500">
                       No mood check-ins in this period yet.
                     </div>
                   ) : (
@@ -1245,29 +1245,29 @@ export function Progress() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <div className="w-2 h-2 rounded-full bg-green-400" />
-                      <span className="text-lg font-bold text-white">
+                      <span className="progress-balance-stat text-lg font-bold text-white">
                         {emotionalBalanceData.reduce((sum, d) => sum + d.positive, 0)}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Positive</p>
+                    <p className="progress-balance-label text-xs text-slate-400">Positive</p>
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <div className="w-2 h-2 rounded-full bg-purple-400" />
-                      <span className="text-lg font-bold text-white">
+                      <span className="progress-balance-stat text-lg font-bold text-white">
                         {emotionalBalanceData.reduce((sum, d) => sum + d.neutral, 0)}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Neutral</p>
+                    <p className="progress-balance-label text-xs text-slate-400">Neutral</p>
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <div className="w-2 h-2 rounded-full bg-pink-400" />
-                      <span className="text-lg font-bold text-white">
+                      <span className="progress-balance-stat text-lg font-bold text-white">
                         {emotionalBalanceData.reduce((sum, d) => sum + d.difficult, 0)}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Difficult</p>
+                    <p className="progress-balance-label text-xs text-slate-400">Difficult</p>
                   </div>
                 </div>
               </div>
@@ -1278,12 +1278,12 @@ export function Progress() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
+              className="progress-panel relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-green-500/5" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white">Top Areas of Growth</h3>
+                  <h3 className="progress-panel-title font-semibold text-white">Top Areas of Growth</h3>
                   <ProgressRangeSelect
                     value={timelineRange}
                     onValueChange={setTimelineRange}
@@ -1321,14 +1321,14 @@ export function Progress() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
-              className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-900/30 via-slate-900/80 to-slate-900/90 backdrop-blur-sm p-6"
+              className="progress-personal-note relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-900/30 via-slate-900/80 to-slate-900/90 backdrop-blur-sm p-6"
             >
               {/* Warm ambient glow */}
               <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-radial from-amber-500/20 via-amber-500/5 to-transparent rounded-full blur-xl" />
               
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white">Personal Note</h3>
+                  <h3 className="progress-panel-title font-semibold text-white">Personal Note</h3>
                   <Heart className="w-4 h-4 text-pink-400 fill-pink-400/30" />
                 </div>
 
@@ -1342,7 +1342,7 @@ export function Progress() {
                       decoding="async"
                     />
                   </div>
-                  <p className="text-slate-300 text-sm leading-relaxed pb-2">
+                  <p className="progress-personal-note-copy text-slate-300 text-sm leading-relaxed pb-2">
                     You've come so far. Be proud of your progress.
                   </p>
                 </div>

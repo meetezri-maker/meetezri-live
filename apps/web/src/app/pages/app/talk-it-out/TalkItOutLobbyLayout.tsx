@@ -202,7 +202,7 @@ export function TalkItOutLobbyLayout({
 
   return (
     <>
-      <motion.div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
+      <motion.div className="talk-it-out-page relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
         <div className="relative z-[1] mx-auto max-w-[1680px] px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8 lg:pt-10">
           <header className="mb-8 border-b border-white/[0.05] pb-8">
             <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-[var(--solace-text)] sm:text-[2rem]">
@@ -239,7 +239,7 @@ export function TalkItOutLobbyLayout({
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
                   solaceHeroMediaShell,
-                  "rounded-[1.75rem] border border-white/[0.07]",
+                  "talk-it-out-hero rounded-[1.75rem] border border-white/[0.07]",
                   "shadow-[0_56px_120px_-58px_rgba(0,0,0,0.92),0_0_0_1px_rgba(139,92,246,0.1)]",
                   "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
                   "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
@@ -285,16 +285,18 @@ export function TalkItOutLobbyLayout({
                         />
                       </div>
                     </div>
-                    <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-violet-200/88">
+                    <p className="talk-it-out-hero-pill mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-violet-200/88">
                       <Sparkles className="h-3.5 w-3.5 text-violet-300" aria-hidden />
                       {companionPill}
                     </p>
-                    <h2 className="font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-[var(--solace-text)] sm:text-[1.95rem]">
+                    <h2 className="talk-it-out-hero-title font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-[var(--solace-text)] sm:text-[1.95rem]">
                       {heroMessageLine1}
                       <br />
                       {heroMessageLine2}
                     </h2>
-                    <p className="mt-5 max-w-md text-[14.5px] leading-[1.65] text-[var(--solace-muted)]">{heroSupporting}</p>
+                    <p className="talk-it-out-hero-supporting mt-5 max-w-md text-[14.5px] leading-[1.65] text-[var(--solace-muted)]">
+                      {heroSupporting}
+                    </p>
                     <div className="mt-9 flex w-full max-w-sm flex-col items-center gap-4">
                       <button
                         type="button"
@@ -303,7 +305,7 @@ export function TalkItOutLobbyLayout({
                           setShowMinutesPicker(true);
                         }}
                         disabled={isStarting || minutesAvailable <= 0}
-                        className="solace-cta-gradient group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full border border-violet-400/35 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 px-8 py-3.5 text-[15px] font-medium text-white shadow-[0_14px_40px_-12px_rgba(109,40,217,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300/65 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-600 hover:shadow-[0_20px_50px_-14px_rgba(139,92,246,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="talk-it-out-hero-cta solace-cta-gradient group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full border border-violet-400/35 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 px-8 py-3.5 text-[15px] font-medium shadow-[0_14px_40px_-12px_rgba(109,40,217,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300/65 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-600 hover:shadow-[0_20px_50px_-14px_rgba(139,92,246,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {isStarting ? (
                           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -313,7 +315,7 @@ export function TalkItOutLobbyLayout({
                         Let&apos;s Talk Now
                         <Waves className="h-4 w-4 opacity-90" aria-hidden />
                       </button>
-                      <p className="flex items-center gap-2 text-[12px] text-zinc-500">
+                      <p className="talk-it-out-hero-trust flex items-center gap-2 text-[12px] text-zinc-500">
                         <Shield className="h-3.5 w-3.5 text-cyan-400/80" aria-hidden />
                         Private · Secure · Judgement-free
                       </p>
@@ -332,7 +334,7 @@ export function TalkItOutLobbyLayout({
                       onClick={onClick}
                       className={cn(
                         mattePanelClass(
-                          "group min-h-[44px] w-full overflow-hidden p-0 text-left transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 hover:shadow-[0_24px_64px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                          "talk-it-out-start-card group min-h-[44px] w-full overflow-hidden p-0 text-left transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 hover:shadow-[0_24px_64px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
                         )
                       )}
                     >
@@ -347,8 +349,10 @@ export function TalkItOutLobbyLayout({
                         <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/10" />
                       </span>
                       <span className="block px-4 py-4">
-                        <p className="font-medium text-[var(--solace-text)]">{title}</p>
-                        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
+                        <p className="talk-it-out-start-card-title font-medium">{title}</p>
+                        <p className="talk-it-out-start-card-body mt-2 text-[12.5px] leading-relaxed">
+                          {body}
+                        </p>
                       </span>
                     </button>
                   ))}
@@ -500,7 +504,7 @@ export function TalkItOutLobbyLayout({
             {/* Right rail */}
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-[5.5rem] xl:self-start">
               <div className={mattePanelClass("p-5")}>
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                <p className="talk-it-out-rail-label text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Session mode
                 </p>
                 <p className="mt-1 text-[12px] text-[var(--solace-muted)]">Choose how you want to connect</p>
@@ -517,8 +521,8 @@ export function TalkItOutLobbyLayout({
                         className={cn(
                           "flex min-h-[68px] min-w-[44px] flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-[9.5px] font-medium uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/38",
                           active
-                            ? "solace-rail-toggle--active border-violet-400/42 bg-violet-500/[0.12] text-violet-100 shadow-[0_0_28px_rgba(139,92,246,0.25)]"
-                            : "border-[color:var(--border)] bg-[var(--card-muted,#f8f3ff)] text-[var(--text-muted)] hover:border-[color:var(--border-strong)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25 [html[data-ezri-theme=dark]_&]:text-zinc-500"
+                            ? "talk-it-out-pill--active solace-rail-toggle--active border-violet-400/42 bg-violet-500/[0.12] text-violet-100 shadow-[0_0_28px_rgba(139,92,246,0.25)]"
+                            : "talk-it-out-pill--inactive border-[color:var(--border)] bg-[var(--card-muted,#f8f3ff)] text-[var(--text-muted)] hover:border-[color:var(--border-strong)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/25 [html[data-ezri-theme=dark]_&]:text-zinc-500"
                         )}
                       >
                         <Icon className="h-5 w-5 opacity-95" aria-hidden strokeWidth={1.5} />
@@ -613,7 +617,7 @@ export function TalkItOutLobbyLayout({
               </div>
 
               <div className={mattePanelClass("p-5")}>
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                <p className="talk-it-out-rail-label text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Conversation Energy
                 </p>
                 <p className="mt-1 text-[12px] text-[var(--solace-muted)]">
@@ -631,8 +635,8 @@ export function TalkItOutLobbyLayout({
                         className={cn(
                           "min-h-[40px] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
                           active
-                            ? "border-violet-400/42 bg-violet-500/[0.16] text-violet-50 shadow-[0_0_20px_rgba(139,92,246,0.2)]"
-                            : "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                            ? "talk-it-out-pill--active border-violet-400/42 bg-violet-500/[0.16] text-violet-50 shadow-[0_0_20px_rgba(139,92,246,0.2)]"
+                            : "talk-it-out-pill--inactive border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
                         )}
                       >
                         {label}
@@ -643,7 +647,7 @@ export function TalkItOutLobbyLayout({
               </div>
 
               <div className={mattePanelClass("p-5")}>
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                <p className="talk-it-out-rail-label text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Session Length
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -664,8 +668,9 @@ export function TalkItOutLobbyLayout({
                           "min-h-[42px] min-w-[4.75rem] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
                           dis && "cursor-not-allowed opacity-35",
                           active
-                            ? "border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
-                            : !dis && "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                            ? "talk-it-out-pill--active border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
+                            : !dis &&
+                              "talk-it-out-pill--inactive border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
                         )}
                       >
                         {d} min
@@ -683,8 +688,8 @@ export function TalkItOutLobbyLayout({
                     className={cn(
                       "min-h-[42px] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 disabled:opacity-35",
                       isFreeFlowActive
-                        ? "border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
-                        : "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                        ? "talk-it-out-pill--active border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
+                        : "talk-it-out-pill--inactive border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
                     )}
                   >
                     Free flow

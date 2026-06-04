@@ -14,5 +14,16 @@
 @import '../app/pages/app/resources-library/resources-library-ui.css';
 @import '../app/pages/app/emergency-contacts/emergency-contacts-ui.css';
 @import '../app/pages/app/wellness-plan-settings/wellness-plan-ui.css';
+@import '../app/pages/app/dashboard/dashboard-ui.css';
+@import '../app/pages/app/talk-it-out/talk-it-out-ui.css';
+@import '../app/pages/app/mood-check-in/mood-check-in-ui.css';
+@import '../app/pages/app/journal/journal-ui.css';
+@import '../app/pages/app/sleep-tracker/sleep-tracker-ui.css';
+@import '../app/pages/app/brain-health/brain-health-ui.css';
+@import '../app/pages/app/progress/progress-ui.css';
+@import '../app/pages/app/session-history/session-history-ui.css';
+@import '../app/pages/app/wellness-tools/wellness-tools-ui.css';
+@import '../app/pages/app/billing/billing-ui.css';
+@import '../app/pages/app/help-support/help-support-ui.css';
 @import '../app/pages/app/appearance-settings/appearanceTheme.css';
 @import '../app/landing/landing-tokens.css';

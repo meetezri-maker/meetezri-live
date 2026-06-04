@@ -34,6 +34,7 @@ export const billingCard = cn(
 export const billingRailCard = cn(solaceRailCard, "rounded-3xl p-5 sm:p-6");
 
 export const billingHeroSection = cn(
+  "billing-hero-section",
   solaceHeroMediaShell,
   solaceHeroSection,
   "min-h-[220px] rounded-3xl border-white/[0.09] sm:min-h-[240px]",
@@ -80,6 +81,22 @@ export const billingPageSubtitle = cn(
 
 export const billingBtnPrimary = solaceBtnPrimary;
 export const billingBtnSecondary = solaceBtnSecondary;
+
+/** Hero CTAs — beat image-card scrim + global .text-white remap in light theme */
+export const billingHeroBtnPrimary = cn(
+  "billing-hero-btn-primary solace-cta-gradient",
+  "h-11 min-h-[44px] rounded-full border-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-7 text-white shadow-[0_0_28px_rgba(139,92,246,0.35)]"
+);
+
+export const billingHeroBtnSecondary = cn(
+  "billing-hero-btn-secondary",
+  "h-11 min-h-[44px] rounded-full border-white/20 bg-black/35 text-zinc-100 backdrop-blur-sm hover:bg-black/50"
+);
+
+export const billingHeroStatChip = cn(
+  "billing-hero-stat",
+  "rounded-2xl border border-white/10 bg-black/45 px-3 py-3 backdrop-blur-md sm:py-3.5"
+);
 
 export const billingGhostBtn = cn(
   "inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border px-5 text-sm transition",

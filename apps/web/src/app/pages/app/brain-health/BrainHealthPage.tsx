@@ -1054,7 +1054,7 @@ export function BrainHealthPage() {
                     onClick={handleWizardBack}
                     disabled={reflectionStep <= 0}
                     className={cn(
-                      "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
+                      "brain-health-btn-secondary inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
                       "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-cyan-400/35 hover:bg-[var(--card-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35 [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-black/35 [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-cyan-400/25 [html[data-ezri-theme=dark]_&]:hover:bg-black/45",
                       reflectionStep <= 0 && "pointer-events-none opacity-35"
                     )}
@@ -1107,11 +1107,11 @@ export function BrainHealthPage() {
                     disabled={nextBubbleDisabled}
                     aria-label={isLastReflectionStep ? "View your live mental state result" : "Go to next reflection step"}
                     className={cn(
-                      "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
+                      "brain-health-wizard-next inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
                       isLastReflectionStep &&
-                        "border-violet-500/35 bg-gradient-to-r from-violet-100 to-indigo-100 text-violet-900 hover:border-violet-400/50 hover:shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/35 [html[data-ezri-theme=dark]_&]:from-violet-950/40 [html[data-ezri-theme=dark]_&]:to-indigo-950/30 [html[data-ezri-theme=dark]_&]:text-violet-100 [html[data-ezri-theme=dark]_&]:hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
+                        "brain-health-wizard-next--result border-violet-500/35 bg-gradient-to-r from-violet-100 to-indigo-100 text-violet-900 hover:border-violet-400/50 hover:shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/35 [html[data-ezri-theme=dark]_&]:from-violet-950/40 [html[data-ezri-theme=dark]_&]:to-indigo-950/30 [html[data-ezri-theme=dark]_&]:text-violet-100 [html[data-ezri-theme=dark]_&]:hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
                       !isLastReflectionStep &&
-                        "border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-violet-400/35 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-black/35 [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:bg-violet-950/30",
+                        "brain-health-btn-secondary border-[color:var(--border)] bg-[var(--card)] text-[var(--solace-text)] hover:border-violet-400/35 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.08] [html[data-ezri-theme=dark]_&]:bg-black/35 [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:bg-violet-950/30",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                       nextBubbleDisabled && "pointer-events-none opacity-35"
                     )}
@@ -1180,7 +1180,7 @@ export function BrainHealthPage() {
               id="live-mental-state"
               className={cn(
                 solaceHeroMediaShell,
-                "light-theme-card relative scroll-mt-24 overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] p-5 shadow-[var(--solace-card-shadow)] sm:rounded-[1.5rem] sm:p-7",
+                "brain-health-live-hero light-theme-card relative scroll-mt-24 overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] p-5 shadow-[var(--solace-card-shadow)] sm:rounded-[1.5rem] sm:p-7",
                 "[html[data-ezri-theme=dark]_&]:border-white/[0.07] [html[data-ezri-theme=dark]_&]:bg-gradient-to-br [html[data-ezri-theme=dark]_&]:from-[#070916] [html[data-ezri-theme=dark]_&]:via-[#05060d] [html[data-ezri-theme=dark]_&]:to-[#0c0612] [html[data-ezri-theme=dark]_&]:shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)]"
               )}
               aria-labelledby="live-state-heading"
@@ -1192,7 +1192,7 @@ export function BrainHealthPage() {
                 loading="lazy"
                 decoding="async"
               />
-              <div className={cn(solaceHeroOverlayReadability, "opacity-90")} aria-hidden />
+              <div className={cn(solaceHeroOverlayReadability, "brain-health-live-overlay opacity-90 [html[data-ezri-theme=light]_&]:opacity-100")} aria-hidden />
               <div
                 className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block"
                 aria-hidden
@@ -1202,7 +1202,7 @@ export function BrainHealthPage() {
                 <div>
                   <p
                     id="live-state-heading"
-                    className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600/90 [html[data-ezri-theme=dark]_&]:text-rose-200/70"
+                    className="brain-health-live-eyebrow text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600/90 [html[data-ezri-theme=dark]_&]:text-rose-200/70"
                   >
                     Your mental state (live)
                   </p>
@@ -1211,15 +1211,30 @@ export function BrainHealthPage() {
                     <h3 className="text-xl font-semibold tracking-tight text-[var(--solace-text)] sm:text-2xl">{liveMental.title}</h3>
                   </div>
                   <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--solace-muted)]">{liveMental.body}</p>
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div className="brain-health-live-tags mt-5 flex flex-wrap gap-2">
                     {liveMental.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-violet-400/30 bg-violet-100/80 px-3 py-1 text-[11px] font-medium text-violet-800 [html[data-ezri-theme=dark]_&]:border-violet-400/20 [html[data-ezri-theme=dark]_&]:bg-violet-950/35 [html[data-ezri-theme=dark]_&]:text-violet-100/90"
-                      >
+                      <span key={tag} className="brain-health-live-tag">
                         {tag}
                       </span>
                     ))}
+                  </div>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById("help-now-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      className="brain-health-btn-primary inline-flex min-h-11 items-center rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-700/85 px-6 py-2.5 text-sm font-medium shadow-[0_0_24px_rgba(76,29,149,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50"
+                    >
+                      What may help
+                    </button>
+                    <button
+                      type="button"
+                      onClick={showReturnLine}
+                      className="brain-health-btn-secondary inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 [html[data-ezri-theme=dark]_&]:border-white/[0.1] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-300"
+                    >
+                      Return later
+                    </button>
                   </div>
                 </div>
                 <div className="relative mx-auto flex h-[200px] w-[200px] items-center justify-center" aria-hidden>
@@ -1277,7 +1292,7 @@ export function BrainHealthPage() {
                     <Link
                       to={tool.to}
                       onClick={() => handleSelectPath(tool.pathId)}
-                      className="mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 transition-colors hover:border-violet-400/35 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 [html[data-ezri-theme=dark]_&]:border-white/10 [html[data-ezri-theme=dark]_&]:bg-white/[0.06] [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-violet-400/30 [html[data-ezri-theme=dark]_&]:hover:bg-violet-500/15 [html[data-ezri-theme=dark]_&]:hover:text-white sm:mt-0 sm:self-center"
+                      className="brain-health-play-btn mt-4 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-end rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] text-violet-700 transition-colors hover:border-violet-400/35 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 [html[data-ezri-theme=dark]_&]:border-white/10 [html[data-ezri-theme=dark]_&]:bg-white/[0.06] [html[data-ezri-theme=dark]_&]:text-zinc-200 [html[data-ezri-theme=dark]_&]:hover:border-violet-400/30 [html[data-ezri-theme=dark]_&]:hover:bg-violet-500/15 [html[data-ezri-theme=dark]_&]:hover:text-white sm:mt-0 sm:self-center"
                       aria-label={`Start ${tool.title}`}
                     >
                       <Play className="ml-0.5 h-4 w-4" fill="currentColor" aria-hidden />
@@ -1325,7 +1340,7 @@ export function BrainHealthPage() {
                   whileHover={reducedMotion ? undefined : { scale: 1.02 }}
                   whileTap={reducedMotion ? undefined : { scale: 0.98 }}
                   onClick={() => handleSelectPath("slow_down")}
-                  className="inline-flex min-h-11 items-center rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-700/85 px-6 py-2.5 text-sm font-medium text-white shadow-[0_0_24px_rgba(76,29,149,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50"
+                  className="brain-health-btn-primary inline-flex min-h-11 items-center rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-700/85 px-6 py-2.5 text-sm font-medium shadow-[0_0_24px_rgba(76,29,149,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50"
                 >
                   Stay in this space
                 </motion.button>
@@ -1334,7 +1349,7 @@ export function BrainHealthPage() {
                   whileHover={reducedMotion ? undefined : { scale: 1.02 }}
                   whileTap={reducedMotion ? undefined : { scale: 0.98 }}
                   onClick={showReturnLine}
-                  className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 [html[data-ezri-theme=dark]_&]:border-white/[0.1] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-300"
+                  className="brain-health-btn-secondary inline-flex min-h-11 items-center rounded-full border border-[color:var(--border)] bg-[var(--card-soft)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 [html[data-ezri-theme=dark]_&]:border-white/[0.1] [html[data-ezri-theme=dark]_&]:bg-white/[0.04] [html[data-ezri-theme=dark]_&]:text-zinc-300"
                 >
                   Return later
                 </motion.button>

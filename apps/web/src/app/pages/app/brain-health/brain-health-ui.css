@@ -1,0 +1,114 @@
+/**
+ * Brain Health — light theme CTAs and live mental state hero.
+ */
+
+/* Primary CTA — beat .text-white remap + .solace-image-card gradient scrim */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-primary,
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page button.brain-health-btn-primary,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-primary,
+html[data-theme="light"] .solace-app .solace-brain-health-page button.brain-health-btn-primary {
+  background: linear-gradient(to right, #7c3aed, #4f46e5, #4338ca) !important;
+  background-image: linear-gradient(to right, #7c3aed, #4f46e5, #4338ca) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(124, 58, 237, 0.35) !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 24px -8px rgba(88, 28, 135, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-primary svg,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-primary svg {
+  color: #ffffff !important;
+}
+
+/* Secondary outline CTA */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-secondary,
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page button.brain-health-btn-secondary,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-secondary,
+html[data-theme="light"] .solace-app .solace-brain-health-page button.brain-health-btn-secondary {
+  background: var(--button-secondary-bg, #f6f0ff) !important;
+  background-color: var(--button-secondary-bg, #f6f0ff) !important;
+  color: var(--button-secondary-text, #5b21b6) !important;
+  border-color: var(--button-secondary-border, #d8c7f7) !important;
+  box-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-secondary:hover,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-btn-secondary:hover {
+  background: var(--surface-lavender, #f5eeff) !important;
+  background-color: var(--surface-lavender, #f5eeff) !important;
+}
+
+/* Wizard “Result” pill — keep purple tint readable */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-wizard-next--result,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-wizard-next--result {
+  background: linear-gradient(to right, #ede9fe, #e0e7ff) !important;
+  background-image: linear-gradient(to right, #ede9fe, #e0e7ff) !important;
+  color: #5b21b6 !important;
+  border-color: rgba(124, 58, 237, 0.35) !important;
+}
+
+/* Live mental state hero */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.brain-health-live-hero,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.brain-health-live-hero {
+  border-color: var(--border, #e7ddfb) !important;
+  background: var(--card-solid, #ffffff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-overlay,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-overlay {
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state > img,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state > img {
+  opacity: 0.32 !important;
+  filter: none !important;
+}
+
+/* Mood tags — no text-violet-* in class names (dark variant strings trigger global remaps) */
+.solace-app .brain-health-live-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  background: rgba(76, 29, 149, 0.35);
+  padding: 0.25rem 0.75rem;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(237, 233, 254, 0.95);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-tags .brain-health-live-tag,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-tags .brain-health-live-tag,
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-live-tag,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-live-tag {
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  background: #ede9fe !important;
+  background-color: #ede9fe !important;
+  color: #5b21b6 !important;
+  text-shadow: none !important;
+}
+
+/* Beat moonlit copy rules on .solace-on-dark:has(img) */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.solace-on-dark .brain-health-live-tag,
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.solace-image-card .brain-health-live-tag,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.solace-on-dark .brain-health-live-tag,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state.solace-image-card .brain-health-live-tag {
+  color: #5b21b6 !important;
+  background: #ede9fe !important;
+  background-color: #ede9fe !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-eyebrow,
+html[data-theme="light"] .solace-app .solace-brain-health-page #live-mental-state .brain-health-live-eyebrow {
+  color: #be123c !important;
+}
+
+/* Help card play control */
+html[data-ezri-theme="light"] .solace-app .solace-brain-health-page .brain-health-play-btn,
+html[data-theme="light"] .solace-app .solace-brain-health-page .brain-health-play-btn {
+  background: var(--button-secondary-bg, #f6f0ff) !important;
+  color: #7c3aed !important;
+  border-color: var(--border, #e7ddfb) !important;
+}

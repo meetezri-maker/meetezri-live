@@ -41,6 +41,9 @@ import {
   billingCurrentBadge,
   billingFeatureCheck,
   billingGhostBtn,
+  billingHeroBtnPrimary,
+  billingHeroBtnSecondary,
+  billingHeroStatChip,
   billingHeroContent,
   billingHeroEyebrow,
   billingHeroImage,
@@ -753,7 +756,7 @@ export function Billing() {
                         onClick={handleManageBilling}
                         isLoading={processingAction === "manage_billing"}
                         disabled={isActionLocked}
-                        className="h-11 min-h-[44px] rounded-full border-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-7 text-white shadow-[0_0_28px_rgba(139,92,246,0.35)]"
+                        className={billingHeroBtnPrimary}
                       >
                         Manage Plan
                       </Button>
@@ -763,7 +766,7 @@ export function Billing() {
                           variant="outline"
                           onClick={handleCancelSubscription}
                           disabled={isActionLocked}
-                          className="h-11 min-h-[44px] rounded-full border-white/20 bg-black/35 text-zinc-100 backdrop-blur-sm hover:bg-black/50"
+                          className={billingHeroBtnSecondary}
                         >
                           Cancel plan
                         </Button>
@@ -780,7 +783,7 @@ export function Billing() {
                     ].map((chip) => (
                       <div
                         key={chip.k}
-                        className="rounded-2xl border border-white/10 bg-black/45 px-3 py-3 backdrop-blur-md sm:py-3.5"
+                        className={billingHeroStatChip}
                       >
                         <dt className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{chip.k}</dt>
                         <dd className="mt-1.5 text-sm font-medium text-zinc-100">{chip.v}</dd>
