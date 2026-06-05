@@ -72,27 +72,18 @@ html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-mood-car
     inset 0 0 0 1px rgba(167, 139, 250, 0.28) !important;
 }
 
-/* Arrival hero — keep photo vivid, moonlit copy */
+/* Arrival hero — full-vivid photo, no scrim wash in light theme */
 html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero > img,
 html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero > img {
   filter: none !important;
+  opacity: 1 !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-side-scrim,
-html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-side-scrim {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(251, 248, 255, 0.35) 42%,
-    transparent 72%
-  ) !important;
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(251, 248, 255, 0.35) 42%,
-    transparent 72%
-  ) !important;
-  opacity: 1 !important;
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-side-scrim,
+html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .solace-hero-light-scrim {
+  display: none !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .mood-check-in-page .mood-check-in-hero .mood-check-in-hero-title,

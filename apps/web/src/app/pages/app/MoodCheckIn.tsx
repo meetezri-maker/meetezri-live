@@ -248,8 +248,7 @@ export function MoodCheckIn() {
                   loading="eager"
                   decoding="async"
                 />
-                <div className="solace-hero-light-scrim pointer-events-none absolute inset-0 z-[1] hidden [html[data-ezri-theme=light]_&]:block [html[data-theme=light]_&]:block" aria-hidden />
-                {/* Light left scrim only — keeps the lake/lotus vivid like the reference */}
+                {/* Side scrim — dark theme only (hidden in light via mood-check-in-ui.css) */}
                 <div className="mood-check-in-hero-side-scrim pointer-events-none absolute inset-0 z-[1]" aria-hidden />
                 <div className="solace-hero-content relative z-[2] flex min-h-[368px] flex-col justify-center px-8 py-12 sm:min-h-[400px] sm:px-12 sm:py-14 lg:min-h-[430px] lg:px-14 lg:py-14">
                   <div className="relative z-[3] max-w-2xl">
