@@ -8,14 +8,14 @@ const FEMALE_COMPANION_IDS = new Set(["maya", "sarah"]);
 /**
  * Ezri TTS `voice` for WebSocket and REST.
  * Primary source: selected voice label from Session Lobby ("Voice 1"..."Voice 4").
- * - Female labels (Voice 1/3 or contains "female") -> `VITE_EZRI_VOICE_FEMALE` (default `af_sky`)
- * - Male labels (Voice 2/4 or contains "male") -> `VITE_EZRI_VOICE_MALE` (default `am_echo`)
+ * - Female labels (Voice 1/3 or contains "female") -> `VITE_EZRI_VOICE_FEMALE` (default `eponine`, Pocket TTS)
+ * - Male labels (Voice 2/4 or contains "male") -> `VITE_EZRI_VOICE_MALE` (default `marius`, Pocket TTS)
  *
  * Fallback source: avatar if voice label is missing.
  * - Female avatars (Maya, Sarah) -> female voice
  * - Male avatars (Alex, Jordan) -> male voice
  *
- * Final fallback: `VITE_DEFAULT_EZRI_VOICE` (default `af_sky`)
+ * Final fallback: `VITE_DEFAULT_EZRI_VOICE` (default `eponine`)
  *
  * Override presets: `VITE_EZRI_VOICE_MALE`, `VITE_EZRI_VOICE_FEMALE`.
  */
@@ -25,13 +25,13 @@ export function resolveEzriWsVoiceForCompanion(
 ): string {
   const maleVoice =
     (import.meta.env.VITE_EZRI_VOICE_MALE as string | undefined)?.trim() ||
-    "am_echo";
+    "marius";
   const femaleVoice =
     (import.meta.env.VITE_EZRI_VOICE_FEMALE as string | undefined)?.trim() ||
-    "af_sky";
+    "eponine";
   const fallbackVoice =
     (import.meta.env.VITE_DEFAULT_EZRI_VOICE as string | undefined)?.trim() ||
-    "af_sky";
+    "eponine";
 
   const selected = (selectedVoiceLabel ?? "").trim().toLowerCase();
   if (selected) {
