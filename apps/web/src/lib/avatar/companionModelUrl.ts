@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_MODEL_URL, getVitePublicBaseUrl } from "./avatarModelUrl";
+import { SARA_V2_MODEL_URL } from "./configs/saraV2Config";
 
 /**
  * Use DB `image_url` only when it is a real URL or path to an image file.
@@ -66,7 +67,7 @@ export function portraitUrlFromAvatarsFolderFile(
 
 /**
  * Companions that use a 3D GLB in the live session (`ActiveSession`).
- * Sarah uses the legacy GLB path; Jordan/RFv2 uses morph-only GLB mode.
+ * Sarah uses the Sara V2 GLB path; Jordan/RFv2 uses morph-only GLB mode.
  */
 export function companionSessionUses3dModel(
   avatarLabel: string | null | undefined
@@ -147,7 +148,7 @@ export function resolveCompanionModelUrl(
     case "alex":
       return avatarAssetFile("Alex.glb");
     case "sarah":
-      return "/avatars/Sara%20Mitchell-.glb";
+      return SARA_V2_MODEL_URL;
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":

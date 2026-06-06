@@ -5,6 +5,10 @@ import {
   PHONEME_TO_JORDAN_VISEME,
   type JordanMorphName,
 } from "./jordanRfv2Config";
+import {
+  type SaraMorphName,
+} from "./configs/saraConfig";
+import { SARA_V2_PHONEME_TO_VISEME } from "./configs/saraV2Config";
 
 export function normalizeMorphName(name: string): string {
   return name.toLowerCase().replace(/[\s-]+/g, "_").trim();
@@ -212,6 +216,25 @@ export function findActiveJordanPhoneme(
       return {
         ...current,
         viseme: PHONEME_TO_JORDAN_VISEME[current.phoneme] ?? null,
+      };
+    }
+  }
+  return null;
+}
+
+export function findActiveSaraPhoneme(
+  timeline: AvatarPhonemeTimeline | null,
+  speechTime: number
+): (AvatarPhoneme & { viseme: SaraMorphName | null }) | null {
+  if (!timeline || timeline.phonemes.length === 0) return null;
+  for (let i = 0; i < timeline.phonemes.length; i += 1) {
+    const current = timeline.phonemes[i];
+    const next = timeline.phonemes[i + 1];
+    const end = current.end ?? next?.start ?? current.start + 0.14;
+    if (speechTime >= current.start && speechTime < end) {
+      return {
+        ...current,
+        viseme: SARA_V2_PHONEME_TO_VISEME[current.phoneme] ?? "viseme_rest",
       };
     }
   }

@@ -34,6 +34,7 @@ const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => 
 const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
 const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
 const Pricing              = lazy(() => import('@/app/pages/Pricing').then(m => ({ default: m.Pricing })));
+const SaraAvatarLab        = lazy(() => import('@/app/pages/dev/SaraAvatarLab').then(m => ({ default: m.SaraAvatarLab })));
 
 // ─── Auth Pages ──────────────────────────────────────────────────────────────
 const Login                = lazy(() => import('@/app/pages/Login').then(m => ({ default: m.Login })));
@@ -417,6 +418,9 @@ export default function App() {
             <Route path="/error/permission-denied" element={<PermissionDenied />} />
             <Route path="/error/no-device-access" element={<NoDeviceAccess />} />
             <Route path="/error/trial-expired" element={<TrialExpired />} />
+            {import.meta.env.DEV ? (
+              <Route path="/dev/sara-avatar-lab" element={<SaraAvatarLab />} />
+            ) : null}
           </Route>
 
           {/* ── Boundary 2: Auth Routes ───────────────────────────────────── */}

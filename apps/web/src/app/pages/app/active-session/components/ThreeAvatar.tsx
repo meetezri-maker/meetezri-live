@@ -48,6 +48,7 @@ import {
 } from "@/lib/avatar/jordanBehaviorTimingScheduler";
 import {
   findActiveJordanPhoneme,
+  findActiveSaraPhoneme,
   hasInvalidJordanPhonemeTimestamps,
   normalizeAvatarPhonemeTimeline,
   normalizeMorphName,
@@ -77,6 +78,8 @@ import type {
   Vector3Config,
 } from "@/lib/avatar/avatarConfigTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
+import { SARA_V2_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraV2Config";
+import { prepareSaraV2Scene } from "@/lib/avatar/saraV2Runtime";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getSpeechOpennessAt } from "../utils/speech";
@@ -88,7 +91,7 @@ export type FixedAvatarViewportConfig = {
   gltfTransform: AvatarGltfTransformConfig;
 };
 
-const DEBUG_SARA_FRAMING = true;
+const DEBUG_SARA_FRAMING = false;
 const SARA_VISUAL_ANCHOR_MESH_NAMES = new Set([
   "Face",
   "Character",
@@ -473,6 +476,93 @@ const MOUTH_KEYWORDS = [
   "ih",
   "uh",
 ];
+
+function classifySaraV2MouthSource(name: string): string {
+  const lower = name.toLowerCase();
+  if (isSaraV2MouthInteriorMorph(name)) return "mouthInterior";
+  if (lower.includes("viseme")) return "viseme";
+  if (lower.includes("jaw") || lower.includes("open")) return "jaw/open";
+  if (lower.includes("smile") || lower.includes("frown")) return "smile/frown";
+  if (lower.includes("mouth")) return "mouth";
+  return "other";
+}
+
+function normalizeSaraV2MorphName(name: string): string {
+  return name.trim().replace(/[._\s-]/g, "").toLowerCase();
+}
+
+function isSaraV2JawOpenMorph(name: string): boolean {
+  return normalizeSaraV2MorphName(name) === "jawopen";
+}
+
+function isSaraV2VisemeMorph(name: string): boolean {
+  return name.trim().toLowerCase().startsWith("viseme");
+}
+
+const SARA_V2_ALLOWED_PHONEME_MORPHS = [
+  "viseme_rest",
+  "viseme_AA",
+  "viseme_IH",
+  "viseme_E",
+  "viseme_O",
+  "viseme_PP",
+  "viseme_CH",
+  "viseme_S",
+  "jawOpen",
+] as const;
+
+const SARA_V2_ALLOWED_PHONEME_MORPH_SET = new Set(
+  SARA_V2_ALLOWED_PHONEME_MORPHS.map((name) => normalizeSaraV2MorphName(name))
+);
+
+function isSaraV2AllowedPhonemeMorph(name: string): boolean {
+  return SARA_V2_ALLOWED_PHONEME_MORPH_SET.has(normalizeSaraV2MorphName(name));
+}
+
+function isSaraV2VisemeAAMorph(name: string): boolean {
+  return normalizeSaraV2MorphName(name) === "visemeaa";
+}
+
+function isSaraV2GenericOpenMorph(name: string): boolean {
+  const normalized = normalizeSaraV2MorphName(name);
+  return (
+    normalized === "mouth" ||
+    normalized === "mouthopen" ||
+    (normalized.includes("open") && normalized !== "jawopen")
+  );
+}
+
+function isSaraV2SmileFrownMorph(name: string): boolean {
+  const normalized = normalizeSaraV2MorphName(name);
+  return normalized.includes("mouthsmile") || normalized.includes("mouthfrown");
+}
+
+function isSaraV2MouthInteriorMorph(name: string): boolean {
+  const normalized = normalizeSaraV2MorphName(name);
+  return (
+    normalized.includes("teeth") ||
+    normalized.includes("tooth") ||
+    normalized.includes("tongue") ||
+    normalized.includes("mouthinterior")
+  );
+}
+
+function saraV2MouthCapFor(name: string, speaking: boolean): number {
+  if (isSaraV2MouthInteriorMorph(name)) return 0.02;
+  if (isSaraV2VisemeAAMorph(name)) return 0.1;
+  if (isSaraV2VisemeMorph(name)) return 0.1;
+  if (isSaraV2SmileFrownMorph(name) && speaking) return 0.04;
+  if (isSaraV2JawOpenMorph(name)) return 0.04;
+  if (isSaraV2GenericOpenMorph(name)) return 0.08;
+  return 0.06;
+}
+
+function saraV2OpenDriverKind(name: string): "viseme" | "jawOpen" | "genericOpen" | "other" {
+  if (isSaraV2VisemeMorph(name)) return "viseme";
+  if (isSaraV2JawOpenMorph(name)) return "jawOpen";
+  if (isSaraV2GenericOpenMorph(name)) return "genericOpen";
+  return "other";
+}
 
 function isBlinkName(name: string): boolean {
   const lower = name.toLowerCase().trim();
@@ -1720,6 +1810,11 @@ function ThreeAvatarComponent({
   const baseScaleRef = useRef(1);
   const mouthDriveMultRef = useRef(viewTuning.mouthDriveMultiplier);
   const avatarMode: AvatarRenderMode = useRfv2Morphs ? "rfv2Morph" : "legacyHybrid";
+  const isSaraV2Viewport =
+    isSaraFixedViewportConfig(fixedViewportConfig) &&
+    fixedViewportConfig.camera.mode === "fixed" &&
+    !useRfv2Morphs &&
+    modelUrl === SARA_V2_AVATAR_DEFINITION.model.url;
   mouthDriveMultRef.current = viewTuning.mouthDriveMultiplier;
 
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
@@ -1728,6 +1823,8 @@ function ThreeAvatarComponent({
   // const jawDefaultRotXRef = useRef<number | null>(null);
   const jordanMorphBindingsRef = useRef<Map<JordanMorphName, MorphBinding[]>>(new Map());
   const jordanMorphValuesRef = useRef<Map<JordanMorphName, number>>(new Map());
+  const saraV2PhonemeMorphValuesRef = useRef<Map<string, number>>(new Map());
+  const loggedMissingSaraV2PhonemeMorphsRef = useRef<Set<string>>(new Set());
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
   const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
@@ -1751,6 +1848,7 @@ function ThreeAvatarComponent({
   const lastJordanDiagnosticVisemeRef = useRef<string>("");
   const lastJordanActiveVisemeRef = useRef<JordanMorphName | null>(null);
   const lastJordanMorphInfluenceRef = useRef<number>(0);
+  const lastSaraV2MouthDiagnosticsLogRef = useRef(0);
   const loggedJordanTimelineKeyRef = useRef<string>("");
   const jordanPresenceStateRef = useRef<JordanPresenceState>("idle");
   const jordanBehaviorTimingStateRef = useRef<JordanBehaviorTimingState>(
@@ -2221,9 +2319,14 @@ function ThreeAvatarComponent({
         if (cancelled) return;
         const gltfScene = gltf.scene;
         modelRef.current = gltfScene;
+        const fixedCameraConfig = fixedViewportConfig?.camera;
+        const fixedGltfTransform = fixedViewportConfig?.gltfTransform;
+        const fixedViewportDebugLabel =
+          fixedViewportConfig?.debugLabel ?? "fixedViewport";
         const hasFixedViewportConfig =
-          !useRfv2Morphs && fixedViewportConfig?.camera.mode === "fixed";
+          !useRfv2Morphs && fixedCameraConfig?.mode === "fixed";
         const isSaraViewport = isSaraFixedViewportConfig(fixedViewportConfig);
+        const useSaraLabAlignedViewport = hasFixedViewportConfig && isSaraViewport;
         console.info("[Avatar Runtime Config]", {
           activeAvatarId,
           fixedConfigAvatarId: fixedViewportConfig?.avatarId ?? null,
@@ -2233,18 +2336,22 @@ function ThreeAvatarComponent({
           cameraConfig: fixedViewportConfig?.camera ?? null,
           gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
         });
-        if (hasFixedViewportConfig) {
-          applyVector3Config(gltfScene.position, fixedViewportConfig.gltfTransform.position, [
+        if (hasFixedViewportConfig && !isSaraViewport && fixedGltfTransform) {
+          applyVector3Config(gltfScene.position, fixedGltfTransform.position, [
             0,
             0,
             0,
           ]);
-          applyVector3Config(gltfScene.rotation, fixedViewportConfig.gltfTransform.rotation, [
+          applyVector3Config(gltfScene.rotation, fixedGltfTransform.rotation, [
             0,
             0,
             0,
           ]);
-          applyScaleConfig(gltfScene, fixedViewportConfig.gltfTransform.scale, 1);
+          applyScaleConfig(gltfScene, fixedGltfTransform.scale, 1);
+        } else if (useSaraLabAlignedViewport) {
+          gltfScene.position.set(0, 0, 0);
+          gltfScene.rotation.set(0, 0, 0);
+          gltfScene.scale.set(1, 1, 1);
         } else if (useRfv2Morphs) {
           gltfScene.position.set(0, -1.65, 0); // move avatar down shaz
           gltfScene.rotation.set(0, 0, 0);
@@ -2255,12 +2362,14 @@ function ThreeAvatarComponent({
           gltfScene.scale.set(1, 1, 1);
         }
         gltfScene.updateMatrixWorld(true);
-        gltfScene.traverse((child: any) => {
-          if (child.isSkinnedMesh && child.skeleton) {
-            child.skeleton.pose();
-          }
-        });
-        gltfScene.updateMatrixWorld(true);
+        if (!isSaraViewport) {
+          gltfScene.traverse((child: any) => {
+            if (child.isSkinnedMesh && child.skeleton) {
+              child.skeleton.pose();
+            }
+          });
+          gltfScene.updateMatrixWorld(true);
+        }
         // const model = gltf.scene;
         // modelRef.current = model;
 
@@ -2274,6 +2383,18 @@ function ThreeAvatarComponent({
         const diagnosticHiddenMeshes: string[] = [];
         const activeMorphTargets = new Set<string>();
         const transformCorrections: string[] = [];
+        if (isSaraViewport) {
+          const saraV2Diagnostics = prepareSaraV2Scene(gltfScene, {
+            modelUrl,
+            definition: SARA_V2_AVATAR_DEFINITION,
+          });
+          transformCorrections.push(
+            `saraV2.bodyCandidate:${saraV2Diagnostics.bodyCandidateUsed ?? "missing"}`
+          );
+          if (saraV2Diagnostics.warnings.length > 0) {
+            console.warn("[Sara V2 Runtime] diagnostics warnings", saraV2Diagnostics.warnings);
+          }
+        }
         const bodyMeshes: THREE.SkinnedMesh[] = [];
         const saraMeshDiagnostics: Array<Record<string, unknown>> = [];
         let rfv2MorphPrimitiveIndex = 0;
@@ -2696,17 +2817,53 @@ function ThreeAvatarComponent({
           transformCorrections.push("jordan.camera.fixedDemoView");
         } else if (hasFixedViewportConfig) {
           baseScaleRef.current = 1;
-          const fixedCamera = fixedViewportConfig.camera;
-          const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.6, 3.2]);
-          const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.7, 0]);
-          camera.fov = fixedCamera.fov ?? 14;
-          camera.near = 0.01;
-          camera.far = 100;
-          camera.position.copy(cameraPosition);
-          camera.lookAt(cameraLookAt);
-          camera.userData.fixedLookAt = cameraLookAt.toArray();
-          transformCorrections.push(`${fixedViewportConfig.debugLabel}.gltf.fixedTransform`);
-          transformCorrections.push(`${fixedViewportConfig.debugLabel}.camera.fixedView`);
+          const fixedCamera = fixedCameraConfig ?? {};
+          if (useSaraLabAlignedViewport) {
+            gltfScene.updateMatrixWorld(true);
+            avatarRoot.updateMatrixWorld(true);
+            const saraCameraPosition = vector3FromConfig(
+              fixedCamera.position,
+              [0, 1.35, 4.2]
+            );
+            const saraCameraLookAt = vector3FromConfig(
+              fixedCamera.lookAt,
+              [0, 1.15, 0]
+            );
+            const saraFov = fixedCamera.fov ?? 22;
+            camera.fov = saraFov;
+            camera.near = 0.01;
+            camera.far = 100;
+            camera.position.copy(saraCameraPosition);
+            camera.lookAt(saraCameraLookAt);
+            camera.userData.fixedLookAt = saraCameraLookAt.toArray();
+            if (typeof window !== "undefined") {
+              const existingSaraDiagnostics = (window as any).saraLiveV2Diagnostics ?? {};
+              (window as any).saraLiveV2Diagnostics = {
+                ...existingSaraDiagnostics,
+                cameraConfig: {
+                  mode: fixedCamera.mode ?? "fixed",
+                  fov: saraFov,
+                  position: saraCameraPosition.toArray(),
+                  lookAt: saraCameraLookAt.toArray(),
+                  near: camera.near,
+                  far: camera.far,
+                },
+              };
+            }
+            transformCorrections.push("sara.labAlignedIdentityTransform");
+            transformCorrections.push("sara.configCamera");
+          } else {
+            const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.6, 3.2]);
+            const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.7, 0]);
+            camera.fov = fixedCamera.fov ?? 14;
+            camera.near = 0.01;
+            camera.far = 100;
+            camera.position.copy(cameraPosition);
+            camera.lookAt(cameraLookAt);
+            camera.userData.fixedLookAt = cameraLookAt.toArray();
+            transformCorrections.push(`${fixedViewportDebugLabel}.gltf.fixedTransform`);
+            transformCorrections.push(`${fixedViewportDebugLabel}.camera.fixedView`);
+          }
           if (isSaraViewport && DEBUG_SARA_FRAMING) {
             gltfScene.updateMatrixWorld(true);
             avatarRoot.updateMatrixWorld(true);
@@ -3079,29 +3236,29 @@ function ThreeAvatarComponent({
           console.log("[Avatar] final camera fixed Jordan view:", useRfv2Morphs);
           console.log("[Avatar] final camera position:", camera.position.toArray());
           if (hasFixedViewportConfig) {
-            console.group(`[${fixedViewportConfig.debugLabel}] Fixed viewport debug`);
-            console.log(`[${fixedViewportConfig.debugLabel}] loaded model URL:`, modelUrl);
+            console.group(`[${fixedViewportDebugLabel}] Fixed viewport debug`);
+            console.log(`[${fixedViewportDebugLabel}] loaded model URL:`, modelUrl);
             console.log(
-              `[${fixedViewportConfig.debugLabel}] gltfScene bounding box:`,
+              `[${fixedViewportDebugLabel}] gltfScene bounding box:`,
               describeBox(gltfScene)
             );
             console.log(
-              `[${fixedViewportConfig.debugLabel}] avatarRoot bounding box:`,
+              `[${fixedViewportDebugLabel}] avatarRoot bounding box:`,
               describeBox(avatarRoot)
             );
-            console.log(`[${fixedViewportConfig.debugLabel}] root position:`, gltfScene.position.toArray());
-            console.log(`[${fixedViewportConfig.debugLabel}] root rotation:`, [
+            console.log(`[${fixedViewportDebugLabel}] root position:`, gltfScene.position.toArray());
+            console.log(`[${fixedViewportDebugLabel}] root rotation:`, [
               gltfScene.rotation.x,
               gltfScene.rotation.y,
               gltfScene.rotation.z,
             ]);
-            console.log(`[${fixedViewportConfig.debugLabel}] root scale:`, gltfScene.scale.toArray());
-            console.log(`[${fixedViewportConfig.debugLabel}] camera position:`, camera.position.toArray());
+            console.log(`[${fixedViewportDebugLabel}] root scale:`, gltfScene.scale.toArray());
+            console.log(`[${fixedViewportDebugLabel}] camera position:`, camera.position.toArray());
             console.log(
-              `[${fixedViewportConfig.debugLabel}] camera lookAt:`,
+              `[${fixedViewportDebugLabel}] camera lookAt:`,
               camera.userData.fixedLookAt ?? null
             );
-            console.log(`[${fixedViewportConfig.debugLabel}] camera fov:`, camera.fov);
+            console.log(`[${fixedViewportDebugLabel}] camera fov:`, camera.fov);
             console.groupEnd();
           }
           console.log("[Avatar] visible meshes:", diagnosticVisibleMeshes);
@@ -3297,6 +3454,29 @@ function ThreeAvatarComponent({
           const mouthAdj = THREE.MathUtils.clamp(mouth * mdm, 0, 1.35);
           const jawOpenAdj = THREE.MathUtils.clamp(jawOpen * mdm, 0, 1.35);
           const lipFollowAdj = THREE.MathUtils.clamp(lipFollow * mdm, 0, 1.35);
+          const saraV2VisemeCaps = SARA_V2_AVATAR_DEFINITION.visemes.caps;
+          const saraV2Timeline = isSaraV2Viewport ? avatarPhonemeTimelineRef.current : null;
+          const saraV2TimelineLength = saraV2Timeline?.phonemes.length ?? 0;
+          const saraV2ValidTimeline =
+            isSaraV2Viewport &&
+            !!saraV2Timeline &&
+            saraV2TimelineLength > 0 &&
+            !hasInvalidJordanPhonemeTimestamps(saraV2Timeline);
+          const saraV2AudioCurrentTime = isSaraV2Viewport
+            ? avatarAudioCurrentTimeRef.current
+            : 0;
+          const saraV2LookAheadSeconds = saraV2VisemeCaps?.lookAheadSeconds ?? 0.04;
+          const saraV2SpeechTime = saraV2AudioCurrentTime + saraV2LookAheadSeconds;
+          const saraV2ActivePhoneme =
+            isSaraV2Viewport && speaking && saraV2ValidTimeline
+              ? findActiveSaraPhoneme(saraV2Timeline, saraV2SpeechTime)
+              : null;
+          const saraV2ActiveViseme =
+            saraV2ActivePhoneme?.viseme ?? (saraV2ValidTimeline ? "viseme_rest" : null);
+          const saraV2PhonemeDriverActive =
+            isSaraV2Viewport && speaking && saraV2ValidTimeline;
+          const saraV2FallbackMouthDriverActive =
+            isSaraV2Viewport && speaking && !saraV2PhonemeDriverActive;
 
           if (useRfv2Morphs) {
                   const timeline = avatarPhonemeTimelineRef.current;
@@ -5187,6 +5367,77 @@ function ThreeAvatarComponent({
                     });
                   }
                 }
+          const saraV2MouthMorphBindings = isSaraV2Viewport
+            ? mouthBindingsRef.current.map(({ mesh, index, name }) => ({
+                morphName: name,
+                meshName: mesh.name || "(unnamed mesh)",
+                index,
+                currentInfluence: mesh.morphTargetInfluences?.[index] ?? null,
+                sourceClassification: classifySaraV2MouthSource(name),
+              }))
+            : [];
+          const saraV2MouthMorphFrame: Array<{
+            morphName: string;
+            meshName: string;
+            index: number;
+            sourceClassification: string;
+            beforeInfluence: number;
+            rawTarget: number;
+            shapedValue: number;
+            gain: number;
+            max: number;
+            preCapValue: number;
+            postCapValue: number;
+            cap: number;
+            capApplied: boolean;
+            primaryOpenDriver: string;
+            phonemeDriverActive: boolean;
+            activeSaraViseme: string | null;
+            finalAppliedInfluence: number;
+          }> = [];
+          const saraV2AppliedVisemeValues: Record<string, number> = {};
+          const saraV2MouthOpenDriverKinds = isSaraV2Viewport
+            ? mouthBindingsRef.current.map(({ name }) => saraV2OpenDriverKind(name))
+            : [];
+          const saraV2HasMouthActivity =
+            isSaraV2Viewport &&
+            speaking &&
+            (saraV2PhonemeDriverActive || Math.max(mouthAdj, jawOpenAdj, lipFollowAdj) > 0.001);
+          const saraV2PrimaryOpenDriver = !saraV2HasMouthActivity
+            ? "none"
+            : saraV2PhonemeDriverActive
+              ? "saraPhoneme"
+            : saraV2MouthOpenDriverKinds.includes("viseme")
+              ? "viseme_*"
+              : saraV2MouthOpenDriverKinds.includes("jawOpen")
+                ? "jawOpen"
+                : saraV2MouthOpenDriverKinds.includes("genericOpen")
+                  ? "genericOpen"
+                  : "none";
+          if (saraV2PhonemeDriverActive) {
+            const presentMorphs = new Set(
+              saraV2MouthMorphBindings.map((entry) => normalizeSaraV2MorphName(entry.morphName))
+            );
+            const expectedMorphs = new Set<string>([
+              ...((SARA_V2_AVATAR_DEFINITION.visemes.names ?? []) as readonly string[]),
+              saraV2ActiveViseme ?? "viseme_rest",
+            ]);
+            expectedMorphs.forEach((morphName) => {
+              const normalized = normalizeSaraV2MorphName(morphName);
+              if (
+                !presentMorphs.has(normalized) &&
+                !loggedMissingSaraV2PhonemeMorphsRef.current.has(normalized)
+              ) {
+                loggedMissingSaraV2PhonemeMorphsRef.current.add(normalized);
+                console.warn("[Sara V2 phoneme lip-sync] missing viseme morph", {
+                  morphName,
+                  activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
+                  activeSaraViseme: saraV2ActiveViseme,
+                });
+              }
+            });
+          }
+
           // Apply mouth morphs — conservative ranges to avoid extreme deformation.
           // Also avoid any targets that look like full head/neck controls.
           if (!useRfv2Morphs && mouthBindingsRef.current.length > 0) {
@@ -5218,7 +5469,45 @@ function ThreeAvatarComponent({
                 lower.includes("lowlip");
 
               let strength = mouthAdj;
-              if (
+              if (saraV2PhonemeDriverActive) {
+                const normalizedMorphName = normalizeSaraV2MorphName(name);
+                const activeVisemeNormalized = normalizeSaraV2MorphName(
+                  saraV2ActiveViseme ?? "viseme_rest"
+                );
+                const isAllowedSaraPhonemeMorph = isSaraV2AllowedPhonemeMorph(name);
+                const visemeMaxStrength = saraV2VisemeCaps?.visemeMaxStrength ?? 0.1;
+                const jawOpenMax = saraV2VisemeCaps?.jawOpenMax ?? 0.04;
+                const restStrength = saraV2VisemeCaps?.restStrength ?? 0.02;
+                let targetStrength = 0;
+                if (isAllowedSaraPhonemeMorph && isSaraV2VisemeMorph(name)) {
+                  targetStrength =
+                    normalizedMorphName === activeVisemeNormalized
+                      ? visemeMaxStrength
+                      : normalizedMorphName === normalizeSaraV2MorphName("viseme_rest")
+                        ? restStrength
+                        : 0;
+                } else if (isAllowedSaraPhonemeMorph && isSaraV2JawOpenMorph(name)) {
+                  const openViseme =
+                    saraV2ActiveViseme === "viseme_AA" ||
+                    saraV2ActiveViseme === "viseme_O" ||
+                    saraV2ActiveViseme === "viseme_IH" ||
+                    saraV2ActiveViseme === "viseme_E";
+                  targetStrength = openViseme ? Math.min(jawOpenMax, visemeMaxStrength * 0.36) : 0;
+                }
+                const previousStrength =
+                  saraV2PhonemeMorphValuesRef.current.get(normalizedMorphName) ?? 0;
+                const nextStrength = THREE.MathUtils.damp(
+                  previousStrength,
+                  targetStrength,
+                  targetStrength > previousStrength ? 14 : 10,
+                  dt
+                );
+                saraV2PhonemeMorphValuesRef.current.set(normalizedMorphName, nextStrength);
+                strength = nextStrength;
+                if (isAllowedSaraPhonemeMorph) {
+                  saraV2AppliedVisemeValues[name] = nextStrength;
+                }
+              } else if (
                 lower.includes("jaw") ||
                 lower.includes("open") ||
                 lower.includes("mouth") ||
@@ -5249,7 +5538,33 @@ function ThreeAvatarComponent({
                 strength = mouthAdj * 0.78;
               }
 
-              const shaped = Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
+              const saraV2DriverKind = saraV2OpenDriverKind(name);
+              if (isSaraV2Viewport && saraV2PhonemeDriverActive) {
+                if (!isSaraV2AllowedPhonemeMorph(name)) {
+                  strength = 0;
+                }
+              } else if (isSaraV2Viewport && saraV2HasMouthActivity) {
+                if (
+                  saraV2PrimaryOpenDriver === "viseme_*" &&
+                  (saraV2DriverKind === "jawOpen" || saraV2DriverKind === "genericOpen")
+                ) {
+                  strength = 0;
+                } else if (
+                  saraV2PrimaryOpenDriver === "jawOpen" &&
+                  saraV2DriverKind === "genericOpen"
+                ) {
+                  strength *= 0.15;
+                } else if (
+                  saraV2PrimaryOpenDriver === "genericOpen" &&
+                  saraV2DriverKind === "jawOpen"
+                ) {
+                  strength = 0;
+                }
+              }
+
+              const shaped = saraV2PhonemeDriverActive
+                ? THREE.MathUtils.clamp(strength, 0, 1.5)
+                : Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
 
               const isJawLike =
                 lower.includes("jaw") ||
@@ -5269,7 +5584,10 @@ function ThreeAvatarComponent({
                 lower.includes("roll");
 
               const isOpenTarget = isJawLike || isTeethLike;
-              const gain = isOpenTarget
+              const saraV2Cap = isSaraV2Viewport ? saraV2MouthCapFor(name, speaking) : null;
+              const gain = isSaraV2Viewport
+                ? 1
+                : isOpenTarget
                 ? isTeethLike
                   ? JAW_GAIN * 1.12
                   : JAW_GAIN
@@ -5278,7 +5596,7 @@ function ThreeAvatarComponent({
                   : isRiskyLipShape
                     ? OTHER_MOUTH_GAIN * 0.35
                     : OTHER_MOUTH_GAIN;
-              const max = isOpenTarget
+              const max = saraV2Cap ?? (isOpenTarget
                 ? isTeethLike
                   ? JAW_MAX * 1.42
                   : JAW_MAX
@@ -5286,9 +5604,32 @@ function ThreeAvatarComponent({
                   ? MOUTH_MAX
                   : isRiskyLipShape
                     ? OTHER_MOUTH_MAX * 0.45
-                    : OTHER_MOUTH_MAX;
+                    : OTHER_MOUTH_MAX);
 
-              influences[index] = THREE.MathUtils.clamp(shaped * gain, 0, max);
+              const preCapInfluence = shaped * gain;
+              const finalAppliedInfluence = THREE.MathUtils.clamp(preCapInfluence, 0, max);
+              if (isSaraV2Viewport) {
+                saraV2MouthMorphFrame.push({
+                  morphName: name,
+                  meshName: mesh.name || "(unnamed mesh)",
+                  index,
+                  sourceClassification: classifySaraV2MouthSource(name),
+                  beforeInfluence: influences[index] ?? 0,
+                  rawTarget: strength,
+                  shapedValue: shaped,
+                  gain,
+                  max,
+                  preCapValue: preCapInfluence,
+                  postCapValue: finalAppliedInfluence,
+                  cap: max,
+                  capApplied: preCapInfluence !== finalAppliedInfluence,
+                  primaryOpenDriver: saraV2PrimaryOpenDriver,
+                  phonemeDriverActive: saraV2PhonemeDriverActive,
+                  activeSaraViseme: saraV2ActiveViseme,
+                  finalAppliedInfluence,
+                });
+              }
+              influences[index] = finalAppliedInfluence;
             });
           }
 
@@ -5314,11 +5655,15 @@ function ThreeAvatarComponent({
                 if (lower.includes("puff") || lower.includes("cheek")) k = 1;
                 if (lower.includes("nasolabial")) k = 0.72;
                 if (lower.includes("smile")) k = 0.78;
-                influences[index] = THREE.MathUtils.clamp(
+                const cheekInfluence = THREE.MathUtils.clamp(
                   initialInfluence + cheekDriver * k * 0.95,
                   0,
                   0.42
                 );
+                influences[index] =
+                  isSaraV2Viewport && speaking && isSaraV2SmileFrownMorph(name)
+                    ? THREE.MathUtils.clamp(cheekInfluence, 0, 0.04)
+                    : cheekInfluence;
               }
             );
           }
@@ -5356,53 +5701,240 @@ if (!useRfv2Morphs) {
             0.93
           );
 
-          const applyFaceBoneX = (bone: THREE.Bone, delta: number) => {
+          const saraV2BoneMovementFrame: Array<{
+            boneName: string;
+            group: string;
+            delta: number;
+            beforeRotationX: number;
+            afterRotationX: number;
+          }> = [];
+
+          const applyFaceBoneX = (bone: THREE.Bone, delta: number, group = "mouth") => {
             const d = faceBoneDefaultsRef.current.get(bone.uuid);
             if (!d) return;
+            const beforeRotationX = bone.rotation.x;
             bone.rotation.x = d.x + delta;
+            if (isSaraV2Viewport) {
+              saraV2BoneMovementFrame.push({
+                boneName: bone.name || "(unnamed bone)",
+                group,
+                delta,
+                beforeRotationX,
+                afterRotationX: bone.rotation.x,
+              });
+            }
+          };
+          const resetFaceBoneX = (bone: THREE.Bone) => {
+            const d = faceBoneDefaultsRef.current.get(bone.uuid);
+            if (!d) return;
+            bone.rotation.x = d.x;
           };
 
-if (!useRfv2Morphs) {
-          jawBonesRef.current.forEach((bone) => {
-            if (!isMainMandibleBoneName(bone.name)) return;
-            applyFaceBoneX(bone, mouthForJaw * 0.26);
-          });
+          const saraV2MouthBoneDriverDisabled = isSaraV2Viewport && speaking;
+
+          if (saraV2MouthBoneDriverDisabled) {
+            jawBonesRef.current.forEach(resetFaceBoneX);
+            lipBonesUpperRef.current.forEach(resetFaceBoneX);
+            lipBonesLowerRef.current.forEach(resetFaceBoneX);
+            chinBonesRef.current.forEach(resetFaceBoneX);
+            jawlineBonesRef.current.forEach(resetFaceBoneX);
+            mouthInteriorBonesRef.current.forEach(resetFaceBoneX);
+            underChinBonesRef.current.forEach(resetFaceBoneX);
+          }
+
+if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
+	          jawBonesRef.current.forEach((bone) => {
+	            if (!isMainMandibleBoneName(bone.name)) return;
+	            applyFaceBoneX(bone, mouthForJaw * 0.26, "jaw");
+	          });
 
           lipBonesUpperRef.current.forEach((bone) => {
-            const center = isCenterLipBoneName(bone.name);
-            const mult = center ? 0.115 : 0.038;
-            applyFaceBoneX(bone, -mouthForLips * mult);
-          });
+	            const center = isCenterLipBoneName(bone.name);
+	            const mult = center ? 0.115 : 0.038;
+	            applyFaceBoneX(bone, -mouthForLips * mult, "upperLip");
+	          });
 
           lipBonesLowerRef.current.forEach((bone) => {
-            const center = isCenterLipBoneName(bone.name);
-            const mult = center ? 0.145 : 0.046;
-            applyFaceBoneX(bone, mouthForLips * mult);
-          });
+	            const center = isCenterLipBoneName(bone.name);
+	            const mult = center ? 0.145 : 0.046;
+	            applyFaceBoneX(bone, mouthForLips * mult, "lowerLip");
+	          });
 
           chinBonesRef.current.forEach((bone) => {
             if (!isPrimaryChinBoneName(bone.name)) return;
-            const n = (bone.name || "").toLowerCase();
-            const main = n === "facial_c_chin" || n === "facial_c_chin1";
-            applyFaceBoneX(bone, mouthForJaw * (main ? 0.06 : 0.032));
-          });
+	            const n = (bone.name || "").toLowerCase();
+	            const main = n === "facial_c_chin" || n === "facial_c_chin1";
+	            applyFaceBoneX(bone, mouthForJaw * (main ? 0.06 : 0.032), "chin");
+	          });
 
-          jawlineBonesRef.current.forEach((bone) => {
-            applyFaceBoneX(bone, mouthForJaw * 0.028);
-          });
+	          jawlineBonesRef.current.forEach((bone) => {
+	            applyFaceBoneX(bone, mouthForJaw * 0.028, "jawline");
+	          });
 
-          mouthInteriorBonesRef.current.forEach((bone) => {
-            applyFaceBoneX(bone, mouthForJaw * 0.022);
-          });
+	          mouthInteriorBonesRef.current.forEach((bone) => {
+	            applyFaceBoneX(bone, mouthForJaw * 0.022, "mouthInterior");
+	          });
 
-          underChinBonesRef.current.forEach((bone) => {
-            applyFaceBoneX(bone, mouthForJaw * 0.022);
-          });
-        }
+	          underChinBonesRef.current.forEach((bone) => {
+	            applyFaceBoneX(bone, mouthForJaw * 0.022, "underChin");
+	          });
+	        }
 
-          if (avatarRoot) {
-        avatarRoot.scale.setScalar(baseScaleRef.current);
-      }
+          if (
+            isSaraV2Viewport &&
+            speaking &&
+            typeof window !== "undefined" &&
+            now - lastSaraV2MouthDiagnosticsLogRef.current >= 400
+          ) {
+            lastSaraV2MouthDiagnosticsLogRef.current = now;
+            const topMorphInfluences = [...saraV2MouthMorphFrame].sort(
+              (a, b) => b.finalAppliedInfluence - a.finalAppliedInfluence
+            );
+            const cappedMorphs = saraV2MouthMorphFrame
+              .filter((entry) => entry.capApplied)
+              .map((entry) => ({
+                morphName: entry.morphName,
+                meshName: entry.meshName,
+                sourceClassification: entry.sourceClassification,
+                primaryOpenDriver: entry.primaryOpenDriver,
+                preCapValue: entry.preCapValue,
+                postCapValue: entry.postCapValue,
+                cap: entry.cap,
+              }));
+            const maxFinalInfluence = topMorphInfluences.reduce(
+              (max, entry) => Math.max(max, entry.finalAppliedInfluence),
+              0
+            );
+            const dangerousMorphs = topMorphInfluences
+              .filter((entry) => entry.finalAppliedInfluence > 1)
+              .map((entry) => ({
+                ...entry,
+                over1: entry.finalAppliedInfluence > 1,
+                over5: entry.finalAppliedInfluence > 5,
+                over20: entry.finalAppliedInfluence > 20,
+              }));
+            const activeMorphNames = new Set(
+              topMorphInfluences
+                .filter((entry) => entry.finalAppliedInfluence > 0.001)
+                .map((entry) => entry.morphName.toLowerCase())
+            );
+            const hasVisemeAA = [...activeMorphNames].some((name) =>
+              name.includes("viseme_aa")
+            );
+            const hasJawOpen = [...activeMorphNames].some((name) =>
+              name.includes("jawopen") || name === "jaw_open"
+            );
+            const hasMouthOpen = [...activeMorphNames].some(
+              (name) => name === "mouth" || name.includes("mouthopen")
+            );
+            const hasTeethMorph = [...activeMorphNames].some(
+              (name) => name.includes("teeth") || name.includes("tooth")
+            );
+            const hasBoneMovement = saraV2BoneMovementFrame.some(
+              (entry) => Math.abs(entry.delta) > 0.0001
+            );
+            const stackingSignals = [
+              hasVisemeAA,
+              hasJawOpen,
+              hasMouthOpen,
+              hasTeethMorph,
+              hasBoneMovement,
+            ].filter(Boolean).length;
+            const maxRotationDelta = saraV2BoneMovementFrame.reduce(
+              (max, entry) => Math.max(max, Math.abs(entry.delta)),
+              0
+            );
+            const boneDiagnostics = {
+              jawBonesFound: jawBonesRef.current.length,
+              lipBonesFound:
+                lipBonesUpperRef.current.length + lipBonesLowerRef.current.length,
+              chinBonesFound: chinBonesRef.current.length,
+              jawlineBonesFound: jawlineBonesRef.current.length,
+              mouthInteriorBonesFound: mouthInteriorBonesRef.current.length,
+              underChinBonesFound: underChinBonesRef.current.length,
+              boneNames: {
+                jaw: jawBonesRef.current.map((bone) => bone.name),
+                upperLip: lipBonesUpperRef.current.map((bone) => bone.name),
+                lowerLip: lipBonesLowerRef.current.map((bone) => bone.name),
+                chin: chinBonesRef.current.map((bone) => bone.name),
+                jawline: jawlineBonesRef.current.map((bone) => bone.name),
+                mouthInterior: mouthInteriorBonesRef.current.map((bone) => bone.name),
+                underChin: underChinBonesRef.current.map((bone) => bone.name),
+              },
+              rotationDeltasApplied: saraV2BoneMovementFrame,
+              maxRotationDelta,
+            };
+            const diagnostics = {
+              runtimeMode: avatarModeLabel(avatarMode),
+              useRfv2Morphs,
+              isSaraV2Viewport,
+              phonemeDriverActive: saraV2PhonemeDriverActive,
+              activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
+              activeSaraViseme: saraV2ActiveViseme,
+              timelineLength: saraV2TimelineLength,
+              speechTime: saraV2SpeechTime,
+              audioCurrentTime: saraV2AudioCurrentTime,
+              validTimeline: saraV2ValidTimeline,
+              fallbackMouthDriverActive: saraV2FallbackMouthDriverActive,
+              appliedVisemeValues: saraV2AppliedVisemeValues,
+              saraCapsApplied: true,
+              boneDriverDisabledForSara: saraV2MouthBoneDriverDisabled,
+              primaryOpenDriver: saraV2PrimaryOpenDriver,
+              speaking,
+              audioNorm,
+              mouthAdj,
+              jawOpenAdj,
+              lipFollowAdj,
+              morphBindings: saraV2MouthMorphBindings,
+              appliedMorphs: topMorphInfluences,
+              topMorphInfluences: topMorphInfluences.slice(0, 10),
+              cappedMorphs,
+              dangerousMorphs,
+              maxFinalInfluence,
+              stacking: {
+                hasVisemeAA,
+                hasJawOpen,
+                hasMouthOpen,
+                hasTeethMorph,
+                hasBoneMovement,
+              },
+              stackingDetected: stackingSignals >= 2,
+              bones: boneDiagnostics,
+              recommendationHint:
+                "Sara is using legacy mouth driver; values above 1 indicate overdrive.",
+            };
+            (window as any).saraV2MouthDiagnostics = diagnostics;
+            if (maxFinalInfluence > 1) {
+              console.warn("[Sara V2 Mouth Safety] influence still above 1", {
+                maxFinalInfluence,
+                dangerousMorphs,
+              });
+            }
+            console.group("[Sara V2 Mouth Diagnostics]");
+            console.log("top 10 highest morph influences", diagnostics.topMorphInfluences);
+            console.log("primaryOpenDriver", saraV2PrimaryOpenDriver);
+            console.log("phonemeDriver", {
+              active: saraV2PhonemeDriverActive,
+              activePhoneme: diagnostics.activePhoneme,
+              activeSaraViseme: saraV2ActiveViseme,
+              timelineLength: saraV2TimelineLength,
+              speechTime: saraV2SpeechTime,
+              audioCurrentTime: saraV2AudioCurrentTime,
+              validTimeline: saraV2ValidTimeline,
+              fallbackMouthDriverActive: saraV2FallbackMouthDriverActive,
+              appliedVisemeValues: saraV2AppliedVisemeValues,
+            });
+            console.log("cappedMorphs", cappedMorphs);
+            console.log("dangerousMorphs", dangerousMorphs);
+            console.log("active bone movement", boneDiagnostics);
+            console.log("stackingDetected", diagnostics.stackingDetected, diagnostics.stacking);
+            console.log("recommendation hint", diagnostics.recommendationHint);
+            console.groupEnd();
+          }
+	
+	          if (avatarRoot) {
+	        avatarRoot.scale.setScalar(baseScaleRef.current);
+	      }
 
           renderer.render(scene, camera);
         };

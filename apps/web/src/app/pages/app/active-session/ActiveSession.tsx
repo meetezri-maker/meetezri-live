@@ -45,7 +45,7 @@ import {
   getCompanionViewTuning,
   type CompanionViewTuning,
 } from "@/lib/avatar/companionViewTuning";
-import { SARA_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraConfig";
+import { SARA_V2_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraV2Config";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import { normalizeAvatarPhonemeTimeline } from "@/lib/avatar/phonemeToViseme";
 import * as THREE from "three";
@@ -147,9 +147,9 @@ export function ActiveSession() {
       companionCanonicalId === "sarah"
         ? {
             debugLabel: "Sara",
-            avatarId: SARA_AVATAR_DEFINITION.id,
-            camera: SARA_AVATAR_DEFINITION.camera,
-            gltfTransform: SARA_AVATAR_DEFINITION.gltfTransform,
+            avatarId: SARA_V2_AVATAR_DEFINITION.id,
+            camera: SARA_V2_AVATAR_DEFINITION.camera,
+            gltfTransform: SARA_V2_AVATAR_DEFINITION.gltfTransform,
           }
         : null,
     [companionCanonicalId]
@@ -2952,33 +2952,51 @@ export function ActiveSession() {
           // Drop audio belonging to old in-flight responses.
           if (dropOldResponsesRef.current > 0) return;
 
-          const buffered = wsAssistantBufferRef.current.trim();
-          const sentence =
-            avatarPendingDataRef.current?.sentence?.trim() ?? "";
-          const subtitle =
-            sentence ||
-            buffered ||
-            wsLastFinalTextRef.current.trim() ||
-            wsPendingFallbackTextRef.current.trim() ||
-            "…";
-          const chunk = {
-            subtitle,
-            audio,
-            avatarData: avatarPendingDataRef.current,
-          };
-          avatarPendingDataRef.current = null;
+          const enqueueAudioWithPendingAvatarData = () => {
+            if (suppressIncomingAudioRef.current) return;
+            if (dropOldResponsesRef.current > 0) return;
 
-          if (!permissionsGrantedRef.current) {
-            prePermissionAudioQueueRef.current.push(chunk);
+            const buffered = wsAssistantBufferRef.current.trim();
+            const sentence =
+              avatarPendingDataRef.current?.sentence?.trim() ?? "";
+            const subtitle =
+              sentence ||
+              buffered ||
+              wsLastFinalTextRef.current.trim() ||
+              wsPendingFallbackTextRef.current.trim() ||
+              "…";
+            const chunk = {
+              subtitle,
+              audio,
+              avatarData: avatarPendingDataRef.current,
+            };
+            avatarPendingDataRef.current = null;
+
+            if (!chunk.avatarData && !permissionsGrantedRef.current) {
+              console.warn(
+                "[Ezri] greeting audio queued without avatar_data after 100ms pairing wait; phonemes unavailable for this clip."
+              );
+            }
+
+            if (!permissionsGrantedRef.current) {
+              prePermissionAudioQueueRef.current.push(chunk);
+              return;
+            }
+
+            clearSpeakFallbackTimer();
+            wsAudioQueueRef.current.push(chunk);
+            flushWsAudioQueueRef.current();
+            setIsEzriThinking(false);
+            isEzriThinkingRef.current = false;
+            pendingUserTextRef.current = "";
+          };
+
+          if (!permissionsGrantedRef.current && !avatarPendingDataRef.current) {
+            window.setTimeout(enqueueAudioWithPendingAvatarData, 100);
             return;
           }
 
-          clearSpeakFallbackTimer();
-          wsAudioQueueRef.current.push(chunk);
-          flushWsAudioQueueRef.current();
-          setIsEzriThinking(false);
-          isEzriThinkingRef.current = false;
-          pendingUserTextRef.current = "";
+          enqueueAudioWithPendingAvatarData();
         },
         onError: (err, ctx) => {
           console.error("Solace WS error:", err, ctx);

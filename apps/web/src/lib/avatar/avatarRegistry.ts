@@ -4,7 +4,7 @@ import type {
   AvatarPersonalityTimingConfig,
 } from "./avatarConfigTypes";
 import { JORDAN_AVATAR_DEFINITION } from "./configs/jordanConfig";
-import { SARA_AVATAR_DEFINITION } from "./configs/saraConfig";
+import { SARA_V2_AVATAR_DEFINITION } from "./configs/saraV2Config";
 
 /**
  * Preparation-only avatar registry for future multi-avatar support.
@@ -14,7 +14,7 @@ import { SARA_AVATAR_DEFINITION } from "./configs/saraConfig";
  */
 export const AVATAR_REGISTRY = {
   jordan: JORDAN_AVATAR_DEFINITION,
-  sara: SARA_AVATAR_DEFINITION,
+  sara: SARA_V2_AVATAR_DEFINITION,
 } as const satisfies Record<AvatarId, AvatarDefinition>;
 
 export function getAvatarDefinition(id: AvatarId): AvatarDefinition {

@@ -38,6 +38,18 @@ export type AvatarGltfTransformConfig = {
   readonly notes?: string;
 };
 
+export type AvatarRootPartAlignmentConfig = {
+  readonly names: readonly string[];
+  readonly offset: Vector3Config;
+  readonly scale?: number | Vector3Config;
+};
+
+export type AvatarRootAlignmentConfig = {
+  readonly face: AvatarRootPartAlignmentConfig;
+  readonly hair: AvatarRootPartAlignmentConfig;
+  readonly body: AvatarRootPartAlignmentConfig;
+};
+
 export type AvatarMorphConfig = {
   readonly names?: readonly string[];
   readonly nameSet?: ReadonlySet<string>;
@@ -89,6 +101,13 @@ export type AvatarHeadPresenceConfig = {
 export type AvatarVisemeConfig = {
   readonly names?: readonly string[];
   readonly phonemeToViseme?: Readonly<Record<string, string>>;
+  readonly visemeMap?: Readonly<Record<string, string>>;
+  readonly caps?: {
+    readonly visemeMaxStrength?: number;
+    readonly jawOpenMax?: number;
+    readonly restStrength?: number;
+    readonly lookAheadSeconds?: number;
+  };
 };
 
 export type AvatarPersonalityTimingConfig = {
@@ -122,6 +141,8 @@ export type AvatarDefinition = {
   readonly eyeFocus: AvatarEyeFocusConfig;
   readonly headPresence: AvatarHeadPresenceConfig;
   readonly visemes: AvatarVisemeConfig;
+  readonly rootAlignment?: AvatarRootAlignmentConfig;
+  readonly debug?: Readonly<Record<string, boolean>>;
   readonly personalityTiming?: AvatarPersonalityTimingConfig;
   readonly notes?: string;
 };
