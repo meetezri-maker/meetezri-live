@@ -53,10 +53,32 @@ export const SARA_V2_ALIGNMENT_OPTIONS = {
 } as const;
 
 export const SARA_V2_VISEME_CAPS = {
-  visemeMaxStrength: 0.18,
-  jawOpenMax: 0.07,
+  visemeMaxStrength: 0.24,
+  jawOpenMax: 0.1,
   restStrength: 0.02,
   lookAheadSeconds: 0.04,
+  attackSpeed: 18,
+  releaseSpeed: 22,
+  jawReleaseSpeed: 26,
+  restReleaseSpeed: 28,
+  opennessMultipliers: {
+    viseme_AA: 1,
+    viseme_O: 0.75,
+    viseme_IH: 0.45,
+    viseme_E: 0.45,
+    viseme_CH: 0.55,
+    viseme_PP: 0.15,
+    viseme_rest: 0,
+  },
+  jawSupport: {
+    viseme_AA: 0.1,
+    viseme_O: 0.06,
+    viseme_IH: 0.035,
+    viseme_E: 0.035,
+    viseme_CH: 0.04,
+    viseme_PP: 0,
+    viseme_rest: 0,
+  },
 } as const;
 
 export const SARA_V2_PHONEME_TO_VISEME = {

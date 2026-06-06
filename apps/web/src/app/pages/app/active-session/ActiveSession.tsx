@@ -75,6 +75,37 @@ import {
 } from "./utils/pcmStream";
 import { usePipDrag } from "./hooks/usePipDrag";
 
+type SaraGreetingSyncState = {
+  id: number;
+  sentence: string;
+  audioReceived: number;
+  avatarDataReceived: number | null;
+};
+
+type WsAudioQueueItem = {
+  subtitle: string;
+  audio: unknown;
+  avatarData: EzriAvatarData | null;
+  saraGreetingSync?: SaraGreetingSyncState;
+};
+
+type SaraGreetingDiagnostics = {
+  greetingSentence: string;
+  audioReceived: number | null;
+  avatarDataReceived: number | null;
+  timelineAttached: boolean;
+  phonemeCount: number;
+  firstPhoneme: {
+    phoneme: string;
+    start: number;
+    end: number | null;
+  } | null;
+  firstViseme: string | null;
+  playbackStart: number | null;
+  firstVisemeTime: number | null;
+  deltaMs: number | null;
+};
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -230,9 +261,7 @@ export function ActiveSession() {
   const [isUploading, setIsUploading] = useState(false);
   const ezriWarmupReadyRef = useRef(false);
   const pendingMediaEntryRef = useRef(false);
-  const prePermissionAudioQueueRef = useRef<
-    { subtitle: string; audio: unknown; avatarData: EzriAvatarData | null }[]
-  >([]);
+  const prePermissionAudioQueueRef = useRef<WsAudioQueueItem[]>([]);
   const prePermissionTranscriptRef = useRef<
     { role: "user" | "assistant"; content: string }[]
   >([]);
@@ -505,9 +534,7 @@ export function ActiveSession() {
   /** Single source for ThreeAvatar RMS: updated every RAF (TTS tap or mic), never React state. */
   const mouthAudioLevelRef = useRef(0);
   /** WS TTS queue (declared early for sound-off / stop handlers). */
-  const wsAudioQueueRef = useRef<
-    { subtitle: string; audio: unknown; avatarData: EzriAvatarData | null }[]
-  >([]);
+  const wsAudioQueueRef = useRef<WsAudioQueueItem[]>([]);
   const wsIsPlaybackActiveRef = useRef(false);
   /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
   const wsTtsStreamingRef = useRef(false);
@@ -706,8 +733,34 @@ export function ActiveSession() {
   /** Bumped on interrupt/pause â€” invalidates awaited work inside `playEzriAudio`. */
   const audioPlaySeqRef = useRef<number>(0);
   const avatarPendingDataRef = useRef<EzriAvatarData | null>(null);
+  const avatarPendingDataReceivedAtRef = useRef<number | null>(null);
   const avatarPhonemeTimelineRef = useRef<AvatarPhonemeTimeline | null>(null);
   const avatarAudioCurrentTimeRef = useRef(0);
+  const saraGreetingSyncSeqRef = useRef(0);
+  const updateSaraGreetingDiagnostics = useCallback(
+    (patch: Partial<SaraGreetingDiagnostics>) => {
+      if (typeof window === "undefined") return;
+      const current =
+        ((window as any).saraGreetingDiagnostics as SaraGreetingDiagnostics | undefined) ??
+        {
+          greetingSentence: "",
+          audioReceived: null,
+          avatarDataReceived: null,
+          timelineAttached: false,
+          phonemeCount: 0,
+          firstPhoneme: null,
+          firstViseme: null,
+          playbackStart: null,
+          firstVisemeTime: null,
+          deltaMs: null,
+        };
+      (window as any).saraGreetingDiagnostics = {
+        ...current,
+        ...patch,
+      } satisfies SaraGreetingDiagnostics;
+    },
+    []
+  );
   // Tracks the in-flight REST request so it can be aborted on interruption.
   const restAbortControllerRef = useRef<AbortController | null>(null);
   // When true, ALL incoming WS audio/text from the server is dropped.
@@ -851,6 +904,7 @@ export function ActiveSession() {
     avatarAudioCurrentTimeRef.current = 0;
     avatarPhonemeTimelineRef.current = null;
     avatarPendingDataRef.current = null;
+    avatarPendingDataReceivedAtRef.current = null;
     if (speechDriverIntervalRef.current) {
       window.clearInterval(speechDriverIntervalRef.current);
       speechDriverIntervalRef.current = null;
@@ -984,6 +1038,7 @@ export function ActiveSession() {
       /** When true, do not resume STT until all WS chunks played and server sent `tts_done`. */
       partOfWsStreamingTurn?: boolean;
       avatarData?: EzriAvatarData | null;
+      saraGreetingSync?: SaraGreetingSyncState;
     }
   ) => {
     if (typeof window === "undefined") return;
@@ -1047,9 +1102,47 @@ export function ActiveSession() {
     audio.preload = "auto";
     audio.src = url;
     avatarAudioCurrentTimeRef.current = 0;
-    avatarPhonemeTimelineRef.current = normalizeAvatarPhonemeTimeline(
+    const initialPhonemeTimeline = normalizeAvatarPhonemeTimeline(
       opts?.avatarData ?? null
     );
+    avatarPhonemeTimelineRef.current = initialPhonemeTimeline;
+    if (opts?.saraGreetingSync) {
+      const firstPhoneme = initialPhonemeTimeline?.phonemes[0] ?? null;
+      updateSaraGreetingDiagnostics({
+        greetingSentence:
+          initialPhonemeTimeline?.sentence ||
+          opts.saraGreetingSync.sentence ||
+          text,
+        audioReceived: opts.saraGreetingSync.audioReceived,
+        avatarDataReceived: opts.saraGreetingSync.avatarDataReceived,
+        timelineAttached: !!initialPhonemeTimeline?.phonemes.length,
+        phonemeCount: initialPhonemeTimeline?.phonemes.length ?? 0,
+        firstPhoneme: firstPhoneme
+          ? {
+              phoneme: firstPhoneme.phoneme,
+              start: firstPhoneme.start,
+              end: firstPhoneme.end ?? null,
+            }
+          : null,
+        firstViseme: null,
+        playbackStart: null,
+        firstVisemeTime: null,
+        deltaMs: null,
+      });
+      console.log("[Sara Greeting Sync]", {
+        greetingSentence:
+          initialPhonemeTimeline?.sentence ||
+          opts.saraGreetingSync.sentence ||
+          text,
+        audioReceived: opts.saraGreetingSync.audioReceived,
+        avatarDataReceived: opts.saraGreetingSync.avatarDataReceived,
+        phonemeCount: initialPhonemeTimeline?.phonemes.length ?? 0,
+        firstPhonemeStart: firstPhoneme?.start ?? null,
+        playbackStart: null,
+        firstVisemeApplied: null,
+        timelineAttached: !!initialPhonemeTimeline?.phonemes.length,
+      });
+    }
     if (ttsAudioClockRafRef.current) {
       cancelAnimationFrame(ttsAudioClockRafRef.current);
       ttsAudioClockRafRef.current = null;
@@ -1129,10 +1222,25 @@ export function ActiveSession() {
     audio.onloadedmetadata = () => {
       if (seq !== audioPlaySeqRef.current) return;
       const ms = Number.isFinite(audio.duration) ? Math.max(800, audio.duration * 1000) : 3500;
-      avatarPhonemeTimelineRef.current = normalizeAvatarPhonemeTimeline(
+      const metadataPhonemeTimeline = normalizeAvatarPhonemeTimeline(
         opts?.avatarData ?? null,
         Number.isFinite(audio.duration) ? audio.duration : undefined
       );
+      avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      if (opts?.saraGreetingSync) {
+        const firstPhoneme = metadataPhonemeTimeline?.phonemes[0] ?? null;
+        updateSaraGreetingDiagnostics({
+          timelineAttached: !!metadataPhonemeTimeline?.phonemes.length,
+          phonemeCount: metadataPhonemeTimeline?.phonemes.length ?? 0,
+          firstPhoneme: firstPhoneme
+            ? {
+                phoneme: firstPhoneme.phoneme,
+                start: firstPhoneme.start,
+                end: firstPhoneme.end ?? null,
+              }
+            : null,
+        });
+      }
       driveSpeechAnimationForText(text, ms);
 
       // Firefox sometimes never fires `onended` for blob WAV — force queue advance + playback_done.
@@ -1200,6 +1308,21 @@ export function ActiveSession() {
 
     try {
       await audio.play();
+      if (seq === audioPlaySeqRef.current && opts?.saraGreetingSync) {
+        const playbackStart = performance.now();
+        updateSaraGreetingDiagnostics({ playbackStart });
+        console.log("[Sara Greeting Sync]", {
+          greetingSentence: opts.saraGreetingSync.sentence || text,
+          audioReceived: opts.saraGreetingSync.audioReceived,
+          avatarDataReceived: opts.saraGreetingSync.avatarDataReceived,
+          phonemeCount: avatarPhonemeTimelineRef.current?.phonemes.length ?? 0,
+          firstPhonemeStart: avatarPhonemeTimelineRef.current?.phonemes[0]?.start ?? null,
+          playbackStart,
+          firstVisemeApplied:
+            ((window as any).saraGreetingDiagnostics as SaraGreetingDiagnostics | undefined)
+              ?.firstViseme ?? null,
+        });
+      }
     } catch (e: any) {
       if (seq !== audioPlaySeqRef.current) return;
       if (e?.name === "AbortError") return;
@@ -1440,6 +1563,7 @@ export function ActiveSession() {
     void playEzriAudio(next.subtitle, next.audio, {
       partOfWsStreamingTurn: true,
       avatarData: next.avatarData,
+      saraGreetingSync: next.saraGreetingSync,
       onDone: () => {
         wsIsPlaybackActiveRef.current = false;
         playNextWsQueue();
@@ -2894,7 +3018,60 @@ export function ActiveSession() {
         },
         onAvatarData: (data) => {
           // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
-          avatarPendingDataRef.current = data;
+          const avatarDataReceived = performance.now();
+          const queuedGreetingWithoutData =
+            companionCanonicalId === "sarah" &&
+            !permissionsGrantedRef.current
+              ? prePermissionAudioQueueRef.current.find(
+                  (item) => item.saraGreetingSync && !item.avatarData
+                )
+              : undefined;
+          if (queuedGreetingWithoutData?.saraGreetingSync) {
+            queuedGreetingWithoutData.avatarData = data;
+            queuedGreetingWithoutData.subtitle =
+              data.sentence?.trim() || queuedGreetingWithoutData.subtitle;
+            queuedGreetingWithoutData.saraGreetingSync = {
+              ...queuedGreetingWithoutData.saraGreetingSync,
+              sentence:
+                data.sentence?.trim() ||
+                queuedGreetingWithoutData.saraGreetingSync.sentence,
+              avatarDataReceived,
+            };
+            const timeline = normalizeAvatarPhonemeTimeline(data);
+            const firstPhoneme = timeline?.phonemes[0] ?? null;
+            updateSaraGreetingDiagnostics({
+              greetingSentence:
+                data.sentence?.trim() ||
+                queuedGreetingWithoutData.saraGreetingSync.sentence,
+              avatarDataReceived,
+              timelineAttached: !!timeline?.phonemes.length,
+              phonemeCount: timeline?.phonemes.length ?? 0,
+              firstPhoneme: firstPhoneme
+                ? {
+                    phoneme: firstPhoneme.phoneme,
+                    start: firstPhoneme.start,
+                    end: firstPhoneme.end ?? null,
+                  }
+                : null,
+            });
+            console.log("[Sara Greeting Sync]", {
+              greetingSentence:
+                data.sentence?.trim() ||
+                queuedGreetingWithoutData.saraGreetingSync.sentence,
+              audioReceived: queuedGreetingWithoutData.saraGreetingSync.audioReceived,
+              avatarDataReceived,
+              phonemeCount: timeline?.phonemes.length ?? 0,
+              firstPhonemeStart: firstPhoneme?.start ?? null,
+              playbackStart: null,
+              firstVisemeApplied: null,
+              repairedLateAvatarData: true,
+            });
+            avatarPendingDataRef.current = null;
+            avatarPendingDataReceivedAtRef.current = null;
+          } else {
+            avatarPendingDataRef.current = data;
+            avatarPendingDataReceivedAtRef.current = avatarDataReceived;
+          }
           latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
           sentimentCompoundRef.current = extractJordanSentimentCompound(data.sentiment);
           if (process.env.NODE_ENV === "development") {
@@ -2951,6 +3128,7 @@ export function ActiveSession() {
           if (suppressIncomingAudioRef.current) return;
           // Drop audio belonging to old in-flight responses.
           if (dropOldResponsesRef.current > 0) return;
+          const audioReceived = performance.now();
 
           const enqueueAudioWithPendingAvatarData = () => {
             if (suppressIncomingAudioRef.current) return;
@@ -2965,16 +3143,61 @@ export function ActiveSession() {
               wsLastFinalTextRef.current.trim() ||
               wsPendingFallbackTextRef.current.trim() ||
               "…";
-            const chunk = {
+            const isSaraGreetingAudio =
+              companionCanonicalId === "sarah" && !permissionsGrantedRef.current;
+            const saraGreetingSync = isSaraGreetingAudio
+              ? {
+                  id: ++saraGreetingSyncSeqRef.current,
+                  sentence: sentence || subtitle,
+                  audioReceived,
+                  avatarDataReceived: avatarPendingDataReceivedAtRef.current,
+                }
+              : undefined;
+            const chunk: WsAudioQueueItem = {
               subtitle,
               audio,
               avatarData: avatarPendingDataRef.current,
+              saraGreetingSync,
             };
             avatarPendingDataRef.current = null;
+            avatarPendingDataReceivedAtRef.current = null;
+
+            if (saraGreetingSync) {
+              const timeline = normalizeAvatarPhonemeTimeline(chunk.avatarData);
+              const firstPhoneme = timeline?.phonemes[0] ?? null;
+              updateSaraGreetingDiagnostics({
+                greetingSentence: timeline?.sentence || saraGreetingSync.sentence,
+                audioReceived,
+                avatarDataReceived: saraGreetingSync.avatarDataReceived,
+                timelineAttached: !!timeline?.phonemes.length,
+                phonemeCount: timeline?.phonemes.length ?? 0,
+                firstPhoneme: firstPhoneme
+                  ? {
+                      phoneme: firstPhoneme.phoneme,
+                      start: firstPhoneme.start,
+                      end: firstPhoneme.end ?? null,
+                    }
+                  : null,
+                firstViseme: null,
+                playbackStart: null,
+                firstVisemeTime: null,
+                deltaMs: null,
+              });
+              console.log("[Sara Greeting Sync]", {
+                greetingSentence: timeline?.sentence || saraGreetingSync.sentence,
+                audioReceived,
+                avatarDataReceived: saraGreetingSync.avatarDataReceived,
+                phonemeCount: timeline?.phonemes.length ?? 0,
+                firstPhonemeStart: firstPhoneme?.start ?? null,
+                playbackStart: null,
+                firstVisemeApplied: null,
+                queuedPrePermission: true,
+              });
+            }
 
             if (!chunk.avatarData && !permissionsGrantedRef.current) {
               console.warn(
-                "[Ezri] greeting audio queued without avatar_data after 100ms pairing wait; phonemes unavailable for this clip."
+                "[Ezri] greeting audio queued without avatar_data after 300ms pairing wait; will attach late avatar_data before playback if it arrives."
               );
             }
 
@@ -2992,7 +3215,7 @@ export function ActiveSession() {
           };
 
           if (!permissionsGrantedRef.current && !avatarPendingDataRef.current) {
-            window.setTimeout(enqueueAudioWithPendingAvatarData, 100);
+            window.setTimeout(enqueueAudioWithPendingAvatarData, 300);
             return;
           }
 
@@ -3062,7 +3285,9 @@ export function ActiveSession() {
     sessionId,
     hasSessionEnded,
     companionAvatarLabel,
+    companionCanonicalId,
     ezriTtsVoiceId,
+    updateSaraGreetingDiagnostics,
   ]);
 
   // â”€â”€ WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) â”€â”€
