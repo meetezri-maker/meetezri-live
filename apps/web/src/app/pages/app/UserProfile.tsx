@@ -10,7 +10,13 @@ import {
   profilePill,
 } from "./profile/profileUi";
 import { ProfileSanctuaryLayout } from "./profile/ProfileSanctuaryLayout";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useSafetyConsent } from "@/app/contexts/SafetyContext";
+import {
+  getPaidOnboardingChecklistStatus,
+  isPaidPlanUser,
+  type PaidOnboardingStepAction,
+} from "@/lib/onboarding/paidOnboardingSteps";
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -241,6 +247,7 @@ export function UserProfile() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut, user, refreshProfile } = useAuth();
+  const { consent } = useSafetyConsent();
   const [isEditing, setIsEditing] = useState(false);
   const [showVerifiedAlert, setShowVerifiedAlert] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -296,7 +303,9 @@ export function UserProfile() {
   const [rawProfile, setRawProfile] = useState<any | null>(null);
   const avatarPrivacySaveRef = useRef(0);
 
-  useEffect(() => { if (user) loadProfile(); }, [user]);
+  useEffect(() => {
+    if (user) loadProfile();
+  }, [user, location.pathname, location.key]);
 
   const loadProfile = async () => {
     try {
@@ -655,6 +664,20 @@ export function UserProfile() {
     (user as any)?.user_metadata?.signup_type === "trial";
   const showTrialIncompleteBanner = isTrialUser && !profileCompletion.isComplete;
 
+  const paidOnboardingChecklist = useMemo(() => {
+    if (!rawProfile || isTrialUser || !isPaidPlanUser(rawProfile)) return null;
+    return getPaidOnboardingChecklistStatus(rawProfile, {
+      safetyConsentAgreed: consent.agreedToSafetyNotice,
+    });
+  }, [rawProfile, isTrialUser, consent.agreedToSafetyNotice]);
+
+  const handlePaidOnboardingStepAction = useCallback(
+    (action: PaidOnboardingStepAction) => {
+      navigate(action.path);
+    },
+    [navigate],
+  );
+
   const personalBio = typeof rawProfile?.bio === "string" ? rawProfile.bio : null;
 
   /* ─── loading skeleton ─── */
@@ -690,6 +713,8 @@ export function UserProfile() {
         form={form}
         effectiveNeedsVerification={effectiveNeedsVerification}
         showTrialIncompleteBanner={showTrialIncompleteBanner}
+        paidOnboardingChecklist={paidOnboardingChecklist}
+        onPaidOnboardingStepAction={handlePaidOnboardingStepAction}
         profileCompletion={profileCompletion}
         resending={resending}
         handleResendVerification={handleResendVerification}

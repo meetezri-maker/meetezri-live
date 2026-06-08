@@ -67,6 +67,8 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import Cropper, { type Area } from "react-easy-crop";
+import type { PaidOnboardingChecklistResult, PaidOnboardingStepAction } from "@/lib/onboarding/paidOnboardingSteps";
+import { PaidOnboardingChecklist } from "./PaidOnboardingChecklist";
 import {
   PROFILE_HERO_IMG,
   PROFILE_EMERGENCY_BG,
@@ -167,6 +169,8 @@ interface ProfileSanctuaryLayoutProps {
   form: UseFormReturn<any>;
   effectiveNeedsVerification: boolean;
   showTrialIncompleteBanner: boolean;
+  paidOnboardingChecklist: PaidOnboardingChecklistResult | null;
+  onPaidOnboardingStepAction: (action: PaidOnboardingStepAction) => void;
   profileCompletion: { percent: number; missingFields: { label: string; key: string }[]; isComplete: boolean };
   resending: boolean;
   handleResendVerification: () => void;
@@ -233,6 +237,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
     form,
     effectiveNeedsVerification,
     showTrialIncompleteBanner,
+    paidOnboardingChecklist,
+    onPaidOnboardingStepAction,
     profileCompletion,
     resending,
     handleResendVerification,
@@ -333,6 +339,13 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
               {resending ? "Sending…" : "Resend link"}
             </button>
           </motion.div>
+        )}
+
+        {paidOnboardingChecklist?.hasIncomplete && (
+          <PaidOnboardingChecklist
+            checklist={paidOnboardingChecklist}
+            onStepAction={onPaidOnboardingStepAction}
+          />
         )}
 
         {showTrialIncompleteBanner && (

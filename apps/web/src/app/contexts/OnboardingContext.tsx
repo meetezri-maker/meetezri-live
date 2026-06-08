@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/contexts/AuthContext';
+import {
+  isOnboardingResumeMode,
+  profileToOnboardingData,
+} from '@/lib/onboarding/onboardingResume';
 import {
   DEFAULT_SELECTABLE_COMPANION_NAME,
   resolveCompanionForProfileSave,
@@ -62,6 +67,8 @@ function getDefaultOnboardingData(userId?: string, signupType?: 'trial' | 'plan'
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuth();
+  const location = useLocation();
+  const resumeHydratedRef = React.useRef(false);
   
   const [data, setData] = useState<OnboardingData>(() => {
     try {
@@ -120,6 +127,21 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setData(getDefaultOnboardingData(user.id, profile?.signup_type ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan')));
     }
   }, [user?.id, profile?.signup_type, profile?.subscription_plan]); // Only re-run on identity/flow changes
+
+  React.useEffect(() => {
+    if (!user || !profile) return;
+    if (!isOnboardingResumeMode(location.search)) {
+      resumeHydratedRef.current = false;
+      return;
+    }
+    if (resumeHydratedRef.current) return;
+    resumeHydratedRef.current = true;
+    setData((prev) => ({
+      ...prev,
+      ...profileToOnboardingData(profile as Record<string, any>, user.id),
+    }));
+  }, [user, profile, location.search]);
+
   const [isLoading, setIsLoading] = useState(false);
 
   // Save to localStorage whenever data changes

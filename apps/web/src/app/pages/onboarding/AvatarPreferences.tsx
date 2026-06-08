@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useMemo, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useMemo, useEffect, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
 import {
@@ -16,6 +16,10 @@ import {
   Circle,
 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -37,6 +41,7 @@ import {
   isCompanionComingSoon,
   isSessionEnvironmentComingSoon,
   resolveCompanionForProfileSave,
+  resolveEnvironmentForProfileSave,
 } from "@/lib/avatar/companionAvailability";
 import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { cn } from "@/lib/utils";
@@ -474,8 +479,9 @@ function SectionHeading({ icon, title, subtitle }: SectionHeadingProps) {
 }
 
 export function OnboardingAvatarPreferences() {
-  const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const { profile } = useAuth();
+  const { resume, finishStep, goBack } = useOnboardingResume();
 
   const form = useForm<AvatarPreferencesValues>({
     resolver: zodResolver(avatarPreferencesSchema),
@@ -484,6 +490,14 @@ export function OnboardingAvatarPreferences() {
       selectedEnvironment: data.selectedEnvironment || "",
     },
   });
+
+  useEffect(() => {
+    if (!resume || !profile) return;
+    form.reset({
+      selectedAvatar: normalizeOnboardingAvatarName(profile.selected_avatar || data.selectedAvatar),
+      selectedEnvironment: profile.selected_environment || data.selectedEnvironment || "",
+    });
+  }, [resume, profile, data.selectedAvatar, data.selectedEnvironment, form]);
 
   const aiAvatars: AIAvatar[] = useMemo(
     () =>
@@ -504,21 +518,35 @@ export function OnboardingAvatarPreferences() {
 
   const selectedAvatar = form.watch("selectedAvatar");
 
-  const onSubmit = (values: AvatarPreferencesValues) => {
+  const onSubmit = async (values: AvatarPreferencesValues) => {
     const selectedAvatar = resolveCompanionForProfileSave(
       values.selectedAvatar,
       normalizeOnboardingAvatarName(data.selectedAvatar) ||
         DEFAULT_SELECTABLE_COMPANION_NAME,
     );
-    updateData({
-      ...values,
-      selectedAvatar,
-      selectedEnvironment: values.selectedEnvironment || "",
-    });
-    navigate("/onboarding/safety-consent");
+    const selectedEnvironment = resolveEnvironmentForProfileSave(
+      values.selectedEnvironment || "",
+      "minimal",
+    );
+    try {
+      if (resume) {
+        await api.updateProfile({
+          selected_avatar: selectedAvatar,
+          selected_environment: selectedEnvironment,
+        });
+      }
+      updateData({
+        ...values,
+        selectedAvatar,
+        selectedEnvironment: values.selectedEnvironment || "",
+      });
+      finishStep("/onboarding/safety-consent");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save — try again");
+    }
   };
 
-  const handleTopBack = () => navigate("/onboarding/health-background");
+  const handleTopBack = () => goBack("/onboarding/health-background");
 
   return (
     <motion.div

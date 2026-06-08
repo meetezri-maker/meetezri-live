@@ -4,7 +4,6 @@
  */
 
 import { type ReactNode } from "react";
-import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   ShieldCheck,
@@ -27,6 +26,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -338,9 +338,9 @@ function GlowingOrb({ children, glowClass, size = "md" }: GlowingOrbProps) {
 }
 
 export function OnboardingSafetyConsent() {
-  const navigate = useNavigate();
   const { updateConsent } = useSafetyConsent();
   const { updateData } = useOnboarding();
+  const { finishStep, goBack } = useOnboardingResume();
 
   const form = useForm<SafetyConsentValues>({
     resolver: zodResolver(safetyConsentSchema),
@@ -360,10 +360,10 @@ export function OnboardingSafetyConsent() {
 
     updateData({ agreedToSafety: true });
 
-    navigate("/onboarding/emergency-contact");
+    finishStep("/onboarding/emergency-contact");
   };
 
-  const handleTopBack = () => navigate("/onboarding/avatar-preferences");
+  const handleTopBack = () => goBack("/onboarding/avatar-preferences");
 
   return (
     <motion.div

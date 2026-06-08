@@ -13,6 +13,8 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
+import { isOnboardingResumeMode } from '@/lib/onboarding/onboardingResume';
+import { isPaidPlanUser, isTrialPlanUser } from '@/lib/onboarding/paidOnboardingSteps';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,6 +28,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const location = useLocation();
   const navigate = useNavigate();
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const onboardingResume = isOnboardingResumeMode(location.search);
+  const isPaidUserForResume =
+    !!profile && isPaidPlanUser(profile) && !isTrialPlanUser(profile);
   const [isCancelling, setIsCancelling] = useState(false);
   const [activationEmailSending, setActivationEmailSending] = useState(false);
 
@@ -223,9 +228,14 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to={onboardingStartRoute} replace />;
   }
 
-  // Never allow re-entering onboarding after completion.
-  if (isOnboardingRoute && onboardingCompleted) {
+  // Never allow re-entering onboarding after completion unless a paid user
+  // is resuming a specific step from their profile checklist.
+  if (isOnboardingRoute && onboardingCompleted && !(onboardingResume && isPaidUserForResume)) {
     return <Navigate to="/app/dashboard" replace />;
+  }
+
+  if (isOnboardingRoute && onboardingResume && !isPaidUserForResume) {
+    return <Navigate to="/app/user-profile" replace />;
   }
 
   // Never allow paid onboarding steps until email is verified.
