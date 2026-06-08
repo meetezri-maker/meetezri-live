@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { isOnboardingResumeMode, ONBOARDING_PROFILE_RETURN } from "@/lib/onboarding/onboardingResume";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
@@ -404,13 +405,20 @@ function QuickTipIconCapsule({
 
 export function OnboardingComplete() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { completeOnboarding, isLoading } = useOnboarding();
   const { profile } = useAuth();
   const hasAutoRedirectedRef = useRef(false);
+  const resume = isOnboardingResumeMode(location.search);
 
   // Plan buyer regression fix:
   // When we land on `/onboarding/complete`, persist completion and redirect to dashboard.
   useEffect(() => {
+    if (resume) {
+      hasAutoRedirectedRef.current = true;
+      navigate(ONBOARDING_PROFILE_RETURN, { replace: true });
+      return;
+    }
     if (hasAutoRedirectedRef.current) return;
     if (!profile) return;
     const signupTypeEffective =
@@ -428,7 +436,7 @@ export function OnboardingComplete() {
       hasAutoRedirectedRef.current = true;
       completeOnboarding("/app/dashboard");
     }
-  }, [profile, isLoading, completeOnboarding]);
+  }, [profile, isLoading, completeOnboarding, resume, navigate]);
 
   const handleBack = () => navigate("/onboarding/permissions");
 

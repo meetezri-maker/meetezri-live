@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { type ReactNode, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -17,6 +17,10 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -412,8 +416,9 @@ function CinematicToggle({ checked, onChange, id, "aria-label": ariaLabel }: Cin
 }
 
 export function OnboardingPermissions() {
-  const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const { profile } = useAuth();
+  const { resume, finishStep, goBack } = useOnboardingResume();
 
   const form = useForm<PermissionsValues>({
     resolver: zodResolver(permissionsSchema),
@@ -432,17 +437,47 @@ export function OnboardingPermissions() {
     },
   });
 
-  const onSubmit = (values: PermissionsValues) => {
-    updateData({
-      permissions: values.permissions,
-      notificationPreferences: values.notificationPreferences,
+  useEffect(() => {
+    if (!resume || !profile) return;
+    const permissions = (profile.permissions as Record<string, boolean> | null) ?? {};
+    const notificationPreferences =
+      (profile.notification_preferences as Record<string, boolean> | null) ?? {};
+    form.reset({
+      permissions: {
+        camera: permissions.camera ?? false,
+        microphone: permissions.microphone ?? false,
+        notifications: permissions.notifications ?? false,
+      },
+      notificationPreferences: {
+        dailyCheckIn: notificationPreferences.dailyCheckIn ?? true,
+        sessionReminders: notificationPreferences.sessionReminders ?? true,
+        wellnessTips: notificationPreferences.wellnessTips ?? true,
+        weeklyProgress: notificationPreferences.weeklyProgress ?? false,
+      },
     });
-    navigate("/onboarding/complete");
+  }, [resume, profile, form]);
+
+  const onSubmit = async (values: PermissionsValues) => {
+    try {
+      if (resume) {
+        await api.updateProfile({
+          permissions: values.permissions,
+          notification_preferences: values.notificationPreferences,
+        });
+      }
+      updateData({
+        permissions: values.permissions,
+        notificationPreferences: values.notificationPreferences,
+      });
+      finishStep("/onboarding/complete");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save — try again");
+    }
   };
 
   const permissions = form.watch("permissions");
 
-  const handleTopBack = () => navigate("/onboarding/emergency-contact");
+  const handleTopBack = () => goBack("/onboarding/emergency-contact");
 
   return (
     <motion.div

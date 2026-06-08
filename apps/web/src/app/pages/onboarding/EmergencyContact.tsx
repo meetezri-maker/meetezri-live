@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
@@ -17,8 +17,11 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -433,8 +436,9 @@ function GlowingOrb({ children, glowClass, size = "md" }: GlowingOrbProps) {
 }
 
 export function OnboardingEmergencyContact() {
-  const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const { profile } = useAuth();
+  const { resume, finishStep, goBack } = useOnboardingResume();
   const [isLoading, setIsLoading] = useState(false);
 
   const [isSafetyPlanOpen, setIsSafetyPlanOpen] = useState(false);
@@ -463,16 +467,39 @@ export function OnboardingEmergencyContact() {
   const relationshipChoice = form.watch("emergencyRelationship");
   form.watch(["emergencyName", "emergencyPhone", "emergencyRelationship", "emergencyRelationshipCustom"]);
 
-  const onSubmit = (values: EmergencyContactValues) => {
+  useEffect(() => {
+    if (!resume || !profile) return;
+    const saved = parseSavedRelationship(profile.emergency_contact_relationship || "");
+    form.reset({
+      emergencyName: profile.emergency_contact_name || "",
+      emergencyPhone: normalizeStoredPhoneForInput(profile.emergency_contact_phone || ""),
+      emergencyRelationship: saved.emergencyRelationship,
+      emergencyRelationshipCustom: saved.emergencyRelationshipCustom,
+    });
+  }, [resume, profile, form]);
+
+  const onSubmit = async (values: EmergencyContactValues) => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const relationship = resolveRelationshipForSave(values);
+      if (resume) {
+        await api.updateProfile({
+          emergency_contact_name: values.emergencyName,
+          emergency_contact_phone: values.emergencyPhone,
+          emergency_contact_relationship: relationship,
+        });
+      }
       updateData({
         emergencyContactName: values.emergencyName,
         emergencyContactPhone: values.emergencyPhone,
-        emergencyContactRelationship: resolveRelationshipForSave(values),
+        emergencyContactRelationship: relationship,
       });
-      navigate("/onboarding/permissions");
-    }, 500);
+      finishStep("/onboarding/permissions");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save — try again");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveSafetyPlan = () => {
@@ -488,7 +515,7 @@ export function OnboardingEmergencyContact() {
     toast.success("Safety plan saved successfully");
   };
 
-  const handleTopBack = () => navigate("/onboarding/avatar-preferences");
+  const handleTopBack = () => goBack("/onboarding/avatar-preferences");
 
   return (
     <motion.div

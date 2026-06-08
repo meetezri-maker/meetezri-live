@@ -1,4 +1,3 @@
-import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -24,18 +23,20 @@ import {
   GitBranch,
   Bell,
   ShieldCheck,
+  Stethoscope,
   UsersRound,
   Check,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Form,
   FormControl,
@@ -70,6 +71,17 @@ const glassCardClass = cn(
 const therapyOptions = [
   { value: "yes", label: "Yes", subtext: "I am", icon: Heart },
   { value: "no", label: "No", subtext: "I am not", icon: User },
+  {
+    value: "prefer-not-to-say",
+    label: "Prefer Not To Say",
+    subtext: "I'd rather not share",
+    icon: Leaf,
+  },
+] as const;
+
+const medicationOptions = [
+  { value: "yes", label: "Yes", subtext: "I am", icon: Stethoscope },
+  { value: "no", label: "No", subtext: "I am not", icon: ShieldCheck },
   {
     value: "prefer-not-to-say",
     label: "Prefer Not To Say",
@@ -398,7 +410,7 @@ function HealthBackgroundTopBar({ progressPercent, onBack }: HealthBackgroundTop
 }
 
 interface TherapyOptionButtonProps {
-  option: (typeof therapyOptions)[number];
+  option: (typeof therapyOptions)[number] | (typeof medicationOptions)[number];
   isSelected: boolean;
   onSelect: () => void;
 }
@@ -497,9 +509,9 @@ function ChallengeChip({ trigger, isSelected, onToggle }: ChallengeChipProps) {
 }
 
 export function OnboardingHealthBackground() {
-  const navigate = useNavigate();
-  const { refreshProfile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { data, updateData } = useOnboarding();
+  const { resume, finishStep, goBack } = useOnboardingResume();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<HealthBackgroundValues>({
@@ -511,6 +523,20 @@ export function OnboardingHealthBackground() {
     },
   });
 
+  useEffect(() => {
+    if (!resume || !profile) return;
+    const triggers = Array.isArray(profile.selected_triggers)
+      ? profile.selected_triggers
+      : typeof profile.selected_triggers === "string"
+        ? profile.selected_triggers.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : data.selectedTriggers || [];
+    form.reset({
+      inTherapy: profile.in_therapy && profile.in_therapy !== "Not specified" ? profile.in_therapy : "",
+      onMedication: profile.on_medication || "",
+      selectedTriggers: triggers,
+    });
+  }, [resume, profile, data.selectedTriggers, form]);
+
   const onSubmit = async (values: HealthBackgroundValues) => {
     setIsLoading(true);
     try {
@@ -520,8 +546,12 @@ export function OnboardingHealthBackground() {
         ...(values.onMedication?.trim() ? { on_medication: values.onMedication.trim() } : {}),
       });
       await refreshProfile();
-      updateData(values);
-      navigate("/onboarding/avatar-preferences");
+      updateData({
+        inTherapy: values.inTherapy,
+        onMedication: values.onMedication,
+        selectedTriggers: values.selectedTriggers,
+      });
+      finishStep("/onboarding/avatar-preferences");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Couldn't save — try again";
       toast.error(message);
@@ -530,7 +560,7 @@ export function OnboardingHealthBackground() {
     }
   };
 
-  const handleTopBack = () => navigate("/onboarding/wellness-baseline");
+  const handleTopBack = () => goBack("/onboarding/wellness-baseline");
 
   return (
     <motion.div
@@ -658,6 +688,40 @@ export function OnboardingHealthBackground() {
                 className="w-full"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.13, duration: 0.55, ease: "easeOut" }}
+              >
+                <div className={cn(glassCardClass, "px-5 py-7 sm:px-9 sm:py-9")}>
+                  <FormField
+                    control={form.control}
+                    name="onMedication"
+                    render={({ field }) => (
+                      <FormItem className="space-y-0">
+                        <p className="mb-5 text-center text-[clamp(1rem,2vw,1.12rem)] font-medium text-white/90 sm:text-left">
+                          Are you currently taking any medication?
+                        </p>
+                        <FormControl>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
+                            {medicationOptions.map((option) => (
+                              <TherapyOptionButton
+                                key={option.value}
+                                option={option}
+                                isSelected={field.value === option.value}
+                                onSelect={() => field.onChange(option.value)}
+                              />
+                            ))}
+                          </div>
+                        </FormControl>
+                        <FormMessage className="mt-3 text-center text-[13px] text-[#ff8ab8] sm:text-left" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </motion.section>
+
+              <motion.section
+                className="w-full"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.16, duration: 0.55, ease: "easeOut" }}
               >
                 <motion.div className={cn(glassCardClass, "px-5 py-7 sm:px-9 sm:py-9")}>
@@ -717,22 +781,21 @@ export function OnboardingHealthBackground() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.24, duration: 0.5 }}
               >
-                <Link to="/onboarding/wellness-baseline" className="w-full">
-                  <motion.button
-                    type="button"
-                    whileHover={{ y: -1 }}
-                    whileTap={{ scale: 0.99 }}
-                    className={cn(
-                      "flex h-[58px] w-full items-center justify-center gap-2 rounded-[18px] border border-white/10",
-                      "bg-[#0b0c20]/55 px-6 text-[15px] font-medium text-white/88 backdrop-blur-md",
-                      "transition-[border-color,box-shadow] duration-200",
-                      "hover:border-violet-400/30 hover:bg-[#12132e]/65",
-                    )}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </motion.button>
-                </Link>
+                <motion.button
+                  type="button"
+                  onClick={() => goBack("/onboarding/wellness-baseline")}
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={cn(
+                    "flex h-[58px] w-full items-center justify-center gap-2 rounded-[18px] border border-white/10",
+                    "bg-[#0b0c20]/55 px-6 text-[15px] font-medium text-white/88 backdrop-blur-md",
+                    "transition-[border-color,box-shadow] duration-200",
+                    "hover:border-violet-400/30 hover:bg-[#12132e]/65",
+                  )}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </motion.button>
 
                 <motion.button
                   type="submit"

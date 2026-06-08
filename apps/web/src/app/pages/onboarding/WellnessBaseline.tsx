@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -25,10 +25,14 @@ import {
   Activity,
 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Form,
   FormControl,
@@ -538,8 +542,9 @@ function FocusAreaCard({ area, isSelected, onToggle, delay = 0 }: FocusAreaCardP
 }
 
 export function OnboardingWellnessBaseline() {
-  const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const { profile } = useAuth();
+  const { resume, finishStep, goBack } = useOnboardingResume();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<WellnessBaselineValues>({
@@ -550,15 +555,38 @@ export function OnboardingWellnessBaseline() {
     },
   });
 
-  const onSubmit = (values: WellnessBaselineValues) => {
+  useEffect(() => {
+    if (!resume || !profile) return;
+    const goals = Array.isArray(profile.selected_goals)
+      ? profile.selected_goals
+      : typeof profile.selected_goals === "string"
+        ? profile.selected_goals.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : data.selectedGoals || [];
+    form.reset({
+      currentMood: profile.current_mood || data.currentMood || "",
+      selectedGoals: goals,
+    });
+  }, [resume, profile, data.currentMood, data.selectedGoals, form]);
+
+  const onSubmit = async (values: WellnessBaselineValues) => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      if (resume) {
+        await api.updateProfile({
+          selected_goals: values.selectedGoals,
+          ...(values.currentMood?.trim() ? { current_mood: values.currentMood.trim() } : {}),
+        });
+      }
       updateData(values);
-      navigate("/onboarding/health-background");
-    }, 500);
+      finishStep("/onboarding/health-background");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save — try again");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleTopBack = () => navigate("/onboarding/subscription");
+  const handleTopBack = () => goBack("/onboarding/subscription");
 
   return (
     <motion.div

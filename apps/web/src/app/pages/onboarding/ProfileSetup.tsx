@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
@@ -261,9 +262,9 @@ function ProfileSetupTopBar({ progressPercent }: ProfileSetupTopBarProps) {
 }
 
 export function OnboardingProfileSetup() {
-  const navigate = useNavigate();
   const { data, updateData, completeOnboarding } = useOnboarding();
   const { user, profile } = useAuth();
+  const { resume, finishStep } = useOnboardingResume();
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf("timeZone"));
@@ -419,15 +420,21 @@ export function OnboardingProfileSetup() {
         return;
       }
 
+      if (resume) {
+        finishStep("/onboarding/wellness-baseline");
+        setIsLoading(false);
+        return;
+      }
+
       const planPurchased =
         typeof window !== "undefined"
           ? window.localStorage.getItem("planPurchased") === "1"
           : false;
 
       if (planPurchased) {
-        navigate("/onboarding/wellness-baseline");
+        finishStep("/onboarding/wellness-baseline");
       } else {
-        navigate("/onboarding/subscription");
+        finishStep("/onboarding/subscription");
       }
     } catch (error) {
       console.error("Profile update error:", error);
