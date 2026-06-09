@@ -106,6 +106,11 @@ type SaraGreetingDiagnostics = {
   deltaMs: number | null;
 };
 
+type SaraLiveAvatarMode = "hybrid" | "rfv2";
+
+const SARA_LIVE_RFV2_MODEL_URL = "/avatars/sara.glb";
+const isDevSaraLiveRfv2PreviewAllowed = () => import.meta.env.DEV === true;
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -158,9 +163,32 @@ export function ActiveSession() {
     [companionAvatarLabel]
   );
 
+  const [saraLiveAvatarMode, setSaraLiveAvatarMode] =
+    useState<SaraLiveAvatarMode>(() => {
+      if (!isDevSaraLiveRfv2PreviewAllowed()) return "hybrid";
+      if (typeof window === "undefined") return "hybrid";
+      return new URLSearchParams(window.location.search).get("saraMode") === "rfv2"
+        ? "rfv2"
+        : "hybrid";
+    });
+
+  const showSaraLiveRfv2ModeSwitch =
+    isDevSaraLiveRfv2PreviewAllowed() && companionCanonicalId === "sarah";
+  const saraLiveRfv2PreviewEnabled =
+    showSaraLiveRfv2ModeSwitch && saraLiveAvatarMode === "rfv2";
+
+  useEffect(() => {
+    if (companionCanonicalId !== "sarah" && saraLiveAvatarMode !== "hybrid") {
+      setSaraLiveAvatarMode("hybrid");
+    }
+  }, [companionCanonicalId, saraLiveAvatarMode]);
+
   const companionModelUrl = useMemo(
-    () => resolveCompanionModelUrl(companionAvatarLabel),
-    [companionAvatarLabel]
+    () =>
+      saraLiveRfv2PreviewEnabled
+        ? SARA_LIVE_RFV2_MODEL_URL
+        : resolveCompanionModelUrl(companionAvatarLabel),
+    [companionAvatarLabel, saraLiveRfv2PreviewEnabled]
   );
 
   const companionPortraitUrl = useMemo(
@@ -195,6 +223,8 @@ export function ActiveSession() {
       modelUrl: companionModelUrl,
       uses3d: sessionUsesCompanion3d,
       useRfv2Morphs: sessionUsesRfv2Morphs,
+      saraLiveAvatarMode,
+      saraLiveRfv2PreviewEnabled,
       hasFixedViewportConfig: Boolean(companionFixedViewportConfig),
       cameraConfig: companionFixedViewportConfig?.camera ?? null,
       gltfTransformConfig: companionFixedViewportConfig?.gltfTransform ?? null,
@@ -204,9 +234,46 @@ export function ActiveSession() {
     companionCanonicalId,
     companionFixedViewportConfig,
     companionModelUrl,
+    saraLiveAvatarMode,
+    saraLiveRfv2PreviewEnabled,
     sessionUsesCompanion3d,
     sessionUsesRfv2Morphs,
   ]);
+
+  const handleSaraLiveAvatarModeChange = useCallback(
+    (mode: SaraLiveAvatarMode) => {
+      if (!showSaraLiveRfv2ModeSwitch) return;
+      setSaraLiveAvatarMode(mode);
+    },
+    [showSaraLiveRfv2ModeSwitch]
+  );
+
+  const handleSaraLiveRfv2Fallback = useCallback((reason: string) => {
+    setSaraLiveAvatarMode("hybrid");
+    toast.warning(`Sara RFv2 Preview fell back to Current Hybrid: ${reason}`);
+  }, []);
+
+  useEffect(() => {
+    if (!isDevSaraLiveRfv2PreviewAllowed() || companionCanonicalId !== "sarah") {
+      return;
+    }
+    if (typeof window === "undefined" || saraLiveRfv2PreviewEnabled) return;
+    (window as any).saraLiveRfv2Diagnostics = {
+      mode: "Current Hybrid",
+      modelPath: companionModelUrl,
+      rfv2Enabled: false,
+      faceBound: false,
+      boundMeshes: [],
+      activePhoneme: null,
+      activeViseme: null,
+      rawTargets: {},
+      smoothedTargets: {},
+      appliedMorphs: {},
+      missingMorphs: [],
+      blockedMorphs: [],
+      fallbackReason: null,
+    };
+  }, [companionCanonicalId, companionModelUrl, saraLiveRfv2PreviewEnabled]);
 
   /** Same id as WebSocket `voice=` â€” must be sent on REST speak/chat too or TTS often defaults to one (female) voice. */
   const ezriTtsVoiceId = useMemo(
@@ -3941,6 +4008,11 @@ export function ActiveSession() {
       companionViewTuning={companionViewTuning}
       companionFixedViewportConfig={companionFixedViewportConfig}
       sessionUsesRfv2Morphs={sessionUsesRfv2Morphs}
+      showSaraLiveRfv2ModeSwitch={showSaraLiveRfv2ModeSwitch}
+      saraLiveAvatarMode={saraLiveAvatarMode}
+      saraLiveRfv2PreviewEnabled={saraLiveRfv2PreviewEnabled}
+      onSaraLiveAvatarModeChange={handleSaraLiveAvatarModeChange}
+      onSaraLiveRfv2Fallback={handleSaraLiveRfv2Fallback}
       isListening={isListening}
       isEzriThinking={isEzriThinking}
       mouthAudioLevelRef={mouthAudioLevelRef}

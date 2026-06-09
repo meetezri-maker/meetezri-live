@@ -44,6 +44,11 @@ export interface ActiveSessionViewProps {
   companionViewTuning: CompanionViewTuning;
   companionFixedViewportConfig: FixedAvatarViewportConfig | null;
   sessionUsesRfv2Morphs: boolean;
+  showSaraLiveRfv2ModeSwitch: boolean;
+  saraLiveAvatarMode: "hybrid" | "rfv2";
+  saraLiveRfv2PreviewEnabled: boolean;
+  onSaraLiveAvatarModeChange: (mode: "hybrid" | "rfv2") => void;
+  onSaraLiveRfv2Fallback: (reason: string) => void;
   isListening: boolean;
   isEzriThinking: boolean;
   mouthAudioLevelRef: MutableRefObject<number>;
@@ -160,6 +165,11 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     companionViewTuning,
     companionFixedViewportConfig,
     sessionUsesRfv2Morphs,
+    showSaraLiveRfv2ModeSwitch,
+    saraLiveAvatarMode,
+    saraLiveRfv2PreviewEnabled,
+    onSaraLiveAvatarModeChange,
+    onSaraLiveRfv2Fallback,
     isListening,
     isEzriThinking,
     mouthAudioLevelRef,
@@ -287,6 +297,8 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             companionViewTuning={companionViewTuning}
             companionFixedViewportConfig={companionFixedViewportConfig}
             sessionUsesRfv2Morphs={sessionUsesRfv2Morphs}
+            saraLiveRfv2PreviewEnabled={saraLiveRfv2PreviewEnabled}
+            onSaraLiveRfv2Fallback={onSaraLiveRfv2Fallback}
             isListening={isListening}
             isEzriThinking={isEzriThinking}
             mouthAudioLevelRef={mouthAudioLevelRef}
@@ -304,6 +316,33 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             sentimentCompoundRef={sentimentCompoundRef}
             companionPortraitUrl={companionPortraitUrl}
           />
+
+          {showSaraLiveRfv2ModeSwitch && (
+            <div className="absolute left-1/2 top-3 z-[5] flex -translate-x-1/2 overflow-hidden rounded-md border border-white/15 bg-black/55 p-1 text-xs font-medium text-white shadow-lg backdrop-blur-md">
+              <button
+                type="button"
+                className={`rounded px-3 py-1.5 transition ${
+                  saraLiveAvatarMode === "hybrid"
+                    ? "bg-white text-zinc-950"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
+                }`}
+                onClick={() => onSaraLiveAvatarModeChange("hybrid")}
+              >
+                Current Hybrid
+              </button>
+              <button
+                type="button"
+                className={`rounded px-3 py-1.5 transition ${
+                  saraLiveAvatarMode === "rfv2"
+                    ? "bg-white text-zinc-950"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
+                }`}
+                onClick={() => onSaraLiveAvatarModeChange("rfv2")}
+              >
+                Sara RFv2 Preview
+              </button>
+            </div>
+          )}
 
           <SessionLeftRail
             stageSidePanelInsetL={stageSidePanelInsetL}

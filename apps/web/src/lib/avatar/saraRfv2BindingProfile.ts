@@ -1,0 +1,45 @@
+export const SARA_RFV2_BINDING_PROFILE = {
+  assetPath: "/avatars/sara.glb",
+  face: {
+    rootCandidates: ["Face Rig", "Face_Rig"],
+    groupName: "Face",
+    meshName: "Face",
+    descendantMeshNamePrefix: "Face_",
+    requiredMorphs: ["viseme_AA", "eyeBlinkLeft", "mouthSmileLeft"],
+    allowedMorphs: [
+      "viseme_rest",
+      "viseme_AA",
+      "viseme_IH",
+      "viseme_E",
+      "viseme_O",
+      "viseme_PP",
+      "viseme_CH",
+      "jawOpen",
+      "eyeBlinkLeft",
+      "eyeBlinkRight",
+      "mouthSmileLeft",
+      "mouthSmileRight",
+      "mouthFrownLeft",
+      "mouthFrownRight",
+      "cheekSquintLeft",
+      "cheekSquintRight",
+      "eyeLookUpLeft",
+      "eyeLookUpRight",
+      "eyeLookDownLeft",
+      "eyeLookDownRight",
+      "smile",
+      "sad",
+      "eyebrows",
+    ],
+  },
+  body: {
+    rootCandidates: ["Character"],
+    forbiddenMeshNames: ["Character", "Character.002"],
+    forbiddenMorphs: ["Mouth", "Eyes"],
+  },
+  hair: {
+    rootCandidates: ["Sketchfab_model", "Hair_mush"],
+  },
+} as const;
+
+export type SaraRfv2BindingProfile = typeof SARA_RFV2_BINDING_PROFILE;
