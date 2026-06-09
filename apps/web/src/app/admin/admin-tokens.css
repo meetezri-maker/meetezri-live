@@ -1,0 +1,77 @@
+/**
+ * Solace Admin OS — locked design tokens.
+ * Scoped to .solace-admin and html[data-solace-admin] (portals).
+ */
+
+.solace-admin,
+html[data-solace-admin] {
+  /* Locked palette */
+  --admin-primary: #4ecdc4;
+  --admin-secondary: #a78bfa;
+  --admin-accent: #fbbf24;
+  --admin-bg: #0a0f1e;
+  --admin-surface: #0d1428;
+  --admin-surface-elevated: #111a32;
+  --admin-surface-hover: #141e38;
+  --admin-white: #ffffff;
+
+  /* Typography */
+  --admin-text: rgba(255, 255, 255, 0.94);
+  --admin-text-secondary: rgba(203, 213, 225, 0.78);
+  --admin-text-muted: rgba(148, 163, 184, 0.72);
+
+  /* Borders & edge lighting */
+  --admin-border: rgba(255, 255, 255, 0.06);
+  --admin-border-glow: rgba(167, 139, 250, 0.18);
+  --admin-border-glow-teal: rgba(78, 205, 196, 0.14);
+  --admin-edge-highlight: rgba(255, 255, 255, 0.055);
+
+  /* Depth */
+  --admin-shadow-panel: 0 0 0 1px rgba(167, 139, 250, 0.1),
+    0 24px 64px -32px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 var(--admin-edge-highlight);
+  --admin-shadow-panel-hover: 0 0 0 1px rgba(167, 139, 250, 0.22),
+    0 28px 72px -28px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --admin-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85),
+    0 0 48px -20px rgba(88, 28, 135, 0.28);
+
+  /* Environmental glows */
+  --admin-glow-violet: rgba(167, 139, 250, 0.14);
+  --admin-glow-teal: rgba(78, 205, 196, 0.1);
+  --admin-glow-amber: rgba(251, 191, 36, 0.08);
+
+  /* Page atmosphere */
+  --admin-page-bg: linear-gradient(
+    165deg,
+    #0a0f1e 0%,
+    #0b1124 38%,
+    #0a0f1e 72%,
+    #0c1022 100%
+  );
+
+  /* shadcn bridge — admin always dark cosmos */
+  --background: var(--admin-bg);
+  --foreground: var(--admin-text);
+  --card: var(--admin-surface);
+  --card-foreground: var(--admin-text);
+  --popover: var(--admin-surface-elevated);
+  --popover-foreground: var(--admin-text);
+  --primary: var(--admin-primary);
+  --primary-foreground: #041018;
+  --secondary: var(--admin-secondary);
+  --secondary-foreground: var(--admin-white);
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: var(--admin-text-muted);
+  --accent: var(--admin-secondary);
+  --accent-foreground: var(--admin-white);
+  --destructive: #f87171;
+  --destructive-foreground: var(--admin-white);
+  --border: var(--admin-border);
+  --input: rgba(255, 255, 255, 0.06);
+  --input-background: rgba(255, 255, 255, 0.03);
+  --ring: rgba(78, 205, 196, 0.35);
+  --radius: 0.875rem;
+
+  color: var(--admin-text);
+}

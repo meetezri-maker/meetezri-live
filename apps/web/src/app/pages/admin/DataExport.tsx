@@ -1,6 +1,14 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
+  adminCard,
+  adminBtnPrimary,
+  adminBtnSecondary,
+  adminInput,
+  adminPageTitle,
+} from "@/app/admin/adminPageChrome";
+import { cn } from "@/lib/utils";
+import {
   Download,
   Calendar,
   Database,
@@ -396,8 +404,8 @@ export function DataExport() {
           className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
         >
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Data Export Center</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className={adminPageTitle}>Data Export Center</h1>
+            <p className="text-[var(--admin-text-secondary)] mt-1">
               Create aggregate metadata exports and download JSON audit records
             </p>
           </div>
@@ -409,7 +417,7 @@ export function DataExport() {
               whileTap={{ scale: 0.98 }}
               onClick={() => void loadDashboard()}
               disabled={loading}
-              className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-800 flex items-center gap-2 shadow-sm disabled:opacity-50"
+              className={cn(adminBtnSecondary, "px-4 py-2 rounded-xl flex items-center gap-2 disabled:opacity-50")}
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -435,15 +443,15 @@ export function DataExport() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+            className={cn(adminCard, "p-6")}
           >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
                 <CheckCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Completed</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+                <p className="text-[var(--admin-text-secondary)] text-sm">Completed</p>
+                <p className="text-2xl font-bold text-[var(--admin-text)]">{stats.completed}</p>
               </div>
             </div>
           </motion.div>
@@ -452,15 +460,15 @@ export function DataExport() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+            className={cn(adminCard, "p-6")}
           >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
                 <Clock className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Processing</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.processing}</p>
+                <p className="text-[var(--admin-text-secondary)] text-sm">Processing</p>
+                <p className="text-2xl font-bold text-[var(--admin-text)]">{stats.processing}</p>
               </div>
             </div>
           </motion.div>
@@ -469,15 +477,15 @@ export function DataExport() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+            className={cn(adminCard, "p-6")}
           >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-600">
                 <Calendar className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Host backups</p>
-                <p className="text-sm font-medium text-gray-700 leading-snug">
+                <p className="text-[var(--admin-text-secondary)] text-sm">Host backups</p>
+                <p className="text-sm font-medium text-[var(--admin-text-secondary)] leading-snug">
                   Use DB host for full DB backup / PITR
                 </p>
               </div>
@@ -488,15 +496,15 @@ export function DataExport() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+            className={cn(adminCard, "p-6")}
           >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600">
                 <Database className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Export JSON size (sum)</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalSize}</p>
+                <p className="text-[var(--admin-text-secondary)] text-sm">Export JSON size (sum)</p>
+                <p className="text-2xl font-bold text-[var(--admin-text)]">{stats.totalSize}</p>
               </div>
             </div>
           </motion.div>
@@ -506,9 +514,9 @@ export function DataExport() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+          className={cn(adminCard, "p-6")}
         >
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Select scope</h2>
+          <h2 className="text-xl font-bold text-[var(--admin-text)] mb-6">Select scope</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {exportTypes.map((type, index) => {
@@ -524,19 +532,20 @@ export function DataExport() {
                   onClick={() => setSelectedType(type.id)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`border-2 rounded-xl p-5 cursor-pointer transition-all ${
+                  className={cn(
+                    "rounded-xl p-5 cursor-pointer transition-all border-2",
                     isSelected
-                      ? "border-blue-500 bg-blue-50 shadow-md"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
+                      ? "border-[color:rgba(78,205,196,0.45)] bg-[color-mix(in_srgb,var(--admin-primary)_14%,var(--admin-surface))] shadow-[var(--admin-shadow-panel)]"
+                      : "border-[color:var(--admin-border)] hover:border-[color:var(--admin-border-glow)] hover:bg-white/[0.04]"
+                  )}
                 >
                   <div className={`p-3 rounded-xl bg-gradient-to-br ${type.color} w-fit mb-3`}>
                     <Icon className="w-6 h-6 text-white" />
                   </div>
 
-                  <h3 className="font-bold text-gray-900 mb-1">{type.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{type.description}</p>
-                  <p className="text-xs text-gray-500">{type.estimatedLabel}</p>
+                  <h3 className="font-bold text-[var(--admin-text)] mb-1">{type.name}</h3>
+                  <p className="text-sm text-[var(--admin-text-secondary)] mb-2">{type.description}</p>
+                  <p className="text-xs text-[var(--admin-text-muted)]">{type.estimatedLabel}</p>
                 </motion.div>
               );
             })}
@@ -547,21 +556,21 @@ export function DataExport() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+          className={cn(adminCard, "p-6")}
         >
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Export configuration</h2>
-          <p className="text-sm text-gray-600 mb-6">
+          <h2 className="text-xl font-bold text-[var(--admin-text)] mb-2">Export configuration</h2>
+          <p className="text-sm text-[var(--admin-text-secondary)] mb-6">
             The downloadable file is always JSON metadata (aggregate counts). Format and compression
             choices are stored on the export record for your audit trail.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Format (audit label)</label>
+              <label className="block text-sm font-medium text-[var(--admin-text-secondary)] mb-2">Format (audit label)</label>
               <select
                 value={selectedFormat}
                 onChange={(e) => setSelectedFormat(e.target.value)}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                className={cn(adminInput, "w-full")}
               >
                 <option value="json">JSON (actual download)</option>
                 <option value="csv">CSV (label only)</option>
@@ -571,11 +580,11 @@ export function DataExport() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date range (audit label)</label>
+              <label className="block text-sm font-medium text-[var(--admin-text-secondary)] mb-2">Date range (audit label)</label>
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                className={cn(adminInput, "w-full")}
               >
                 <option value="7d">Last 7 days</option>
                 <option value="30d">Last 30 days</option>
@@ -586,11 +595,11 @@ export function DataExport() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Compression (audit label)</label>
+              <label className="block text-sm font-medium text-[var(--admin-text-secondary)] mb-2">Compression (audit label)</label>
               <select
                 value={compression}
                 onChange={(e) => setCompression(e.target.value)}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                className={cn(adminInput, "w-full")}
               >
                 <option value="none">None</option>
                 <option value="zip">ZIP</option>
@@ -606,7 +615,7 @@ export function DataExport() {
               whileTap={{ scale: 0.98 }}
               onClick={() => void handleStartExport()}
               disabled={exporting || loading}
-              className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+              className={cn(adminBtnPrimary, "flex-1 px-6 py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-60")}
             >
               {exporting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -621,7 +630,7 @@ export function DataExport() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleExportSettings}
-              className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+              className={cn(adminBtnSecondary, "px-6 py-3 font-medium")}
               title="What gets exported?"
             >
               <Settings className="w-5 h-5" />
@@ -633,17 +642,17 @@ export function DataExport() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+          className={cn(adminCard, "p-6")}
         >
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Export history</h2>
+          <h2 className="text-xl font-bold text-[var(--admin-text)] mb-6">Export history</h2>
 
           {loading && !dashboard ? (
-            <div className="flex items-center justify-center py-16 text-gray-500 gap-2">
+            <div className="flex items-center justify-center py-16 text-[var(--admin-text-muted)] gap-2">
               <Loader2 className="w-6 h-6 animate-spin" />
               Loading…
             </div>
           ) : exportJobs.length === 0 ? (
-            <p className="text-gray-600 py-8 text-center">
+            <p className="text-[var(--admin-text-secondary)] py-8 text-center">
               No exports yet. Choose a scope and click Start export.
             </p>
           ) : (
@@ -657,22 +666,22 @@ export function DataExport() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.8 + index * 0.05 }}
-                    className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+                    className="border border-[color:var(--admin-border)] rounded-xl p-4 hover:bg-white/[0.03] transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <StatusIcon
                         className={`w-5 h-5 shrink-0 ${
                           job.status === "completed"
-                            ? "text-green-600"
+                            ? "text-green-400"
                             : job.status === "processing"
-                              ? "text-blue-600"
-                              : "text-red-600"
+                              ? "text-[var(--admin-primary)]"
+                              : "text-red-400"
                         }`}
                       />
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h3 className="font-bold text-gray-900 truncate">{job.name}</h3>
+                          <h3 className="font-bold text-[var(--admin-text)] truncate">{job.name}</h3>
                           <span
                             className={`px-2 py-1 rounded-lg text-xs font-medium uppercase ${getStatusColor(job.status)}`}
                           >
@@ -683,7 +692,7 @@ export function DataExport() {
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--admin-text-secondary)]">
                           <span>By {job.requestedBy}</span>
                           <span>•</span>
                           <span>{job.createdAt.toLocaleString()}</span>
@@ -765,10 +774,10 @@ export function DataExport() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+              className="w-full max-w-md p-6 rounded-3xl border border-[color:var(--admin-border)] bg-[var(--admin-surface)] shadow-2xl"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Scheduling & retention</h3>
-              <p className="text-sm text-gray-600 mb-6">
+              <h3 className="text-2xl font-bold text-[var(--admin-text)] mb-2">Scheduling & retention</h3>
+              <p className="text-sm text-[var(--admin-text-secondary)] mb-6">
                 This app does not run cron-based data exports. For automated database backups and
                 point-in-time recovery, configure your hosting provider (for example Supabase backups).
                 You can still run manual exports from this page whenever needed.
@@ -780,7 +789,7 @@ export function DataExport() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowScheduleModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                  className={cn(adminBtnSecondary, "flex-1 px-4 py-2 font-medium")}
                 >
                   Close
                 </motion.button>
@@ -790,7 +799,7 @@ export function DataExport() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleScheduleExport}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  className={cn(adminBtnPrimary, "flex-1 px-4 py-2 font-medium")}
                 >
                   OK
                 </motion.button>

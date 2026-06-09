@@ -1,6 +1,15 @@
 import fp from 'fastify-plugin';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../lib/prisma';
+import { verifySupabaseAccessToken } from '../lib/verifySupabaseToken';
+
+function extractBearerToken(request: FastifyRequest): string | null {
+  const auth = request.headers.authorization;
+  if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
+    return auth.slice(7);
+  }
+  return null;
+}
 
 // Simple in-memory cache for user roles/permissions to reduce DB calls
 // Map<userId, { role, permissions, onboardingCompleted, timestamp }>
@@ -182,13 +191,36 @@ export default fp(async (fastify: FastifyInstance) => {
         allowedAlgorithms.unshift('HS256');
       }
 
-      const tokenAuth = await request.jwtVerify({
-        allowedAlgorithms,
-      } as any);
+      try {
+        await request.jwtVerify({
+          allowedAlgorithms,
+        } as any);
+      } catch (jwtErr: any) {
+        const token = extractBearerToken(request);
+        const isExpired =
+          jwtErr?.code === 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED' ||
+          jwtErr?.message?.includes('expired');
+
+        if (!token || !isExpired) {
+          throw jwtErr;
+        }
+
+        const payload = await verifySupabaseAccessToken(token);
+        if (!payload) {
+          throw jwtErr;
+        }
+
+        request.user = payload as any;
+        request.log.info(
+          { url: request.url, via: 'supabase-auth' },
+          'JWT verified via Supabase (local clock skew tolerance)'
+        );
+      }
+
       request.log.info(
         {
           url: request.url,
-          tokenVerified: !!tokenAuth,
+          tokenVerified: !!request.user,
         },
         'JWT verification succeeded'
       );

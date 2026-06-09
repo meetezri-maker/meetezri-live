@@ -1,6 +1,8 @@
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { adminCard, adminBtnSecondary } from "@/app/admin/adminPageChrome";
+import { cn } from "@/lib/utils";
 import { api } from "../../../lib/api";
 import { motion } from "motion/react";
 import {
@@ -1788,11 +1790,11 @@ export function SuperAdminDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.1 }}
         >
-          <Card className="p-6">
+          <Card className={cn(adminCard, "p-6")}>
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-bold text-xl flex items-center gap-2">
-                  <Smile className="w-5 h-5 text-purple-500" />
+                <h2 className="font-bold text-xl flex items-center gap-2 text-[var(--admin-text)]">
+                  <Smile className="w-5 h-5 text-[var(--admin-secondary)]" />
                   Recent Mood Check-ins
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -1842,15 +1844,15 @@ export function SuperAdminDashboard() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 1.2 + index * 0.1 }}
-                    className="p-4 bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 hover:shadow-lg transition-all cursor-pointer group"
+                    className={cn(adminCard, "admin-card-hover p-4 cursor-pointer transition-all group")}
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                      <div className="w-10 h-10 bg-gradient-to-br from-[var(--admin-primary)] to-[var(--admin-secondary)] rounded-full flex items-center justify-center text-[#041018] font-bold text-lg shadow-md">
                         <Smile className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{mood.profiles?.full_name || 'Anonymous'}</p>
-                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium capitalize">
+                        <p className="font-semibold text-sm truncate text-[var(--admin-text)]">{mood.profiles?.full_name || 'Anonymous'}</p>
+                        <span className="px-2 py-0.5 rounded text-xs font-medium capitalize bg-[color-mix(in_srgb,var(--admin-secondary)_18%,transparent)] text-[var(--admin-secondary)]">
                           {mood.mood}
                         </span>
                       </div>
@@ -1889,43 +1891,43 @@ export function SuperAdminDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.2 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
-            <h2 className="font-bold text-xl mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-purple-500" />
+          <Card className={cn(adminCard, "p-6")}>
+            <h2 className="font-bold text-xl mb-4 flex items-center gap-2 text-[var(--admin-text)]">
+              <Zap className="w-5 h-5 text-[var(--admin-secondary)]" />
               Quick Actions
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <Link to="/admin/system-settings-enhanced">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
+                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
                   <Settings className="w-4 h-4" />
                   Settings
                 </Button>
               </Link>
               <Link to="/admin/analytics">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
+                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
                   <TrendingUp className="w-4 h-4" />
                   Analytics
                 </Button>
               </Link>
               <Link to="/admin/feature-flags">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
+                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
                   <Globe className="w-4 h-4" />
                   Features
                 </Button>
               </Link>
               <Link to="/admin/billing">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
+                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
                   <DollarSign className="w-4 h-4" />
                   Billing
                 </Button>
               </Link>
               <Link to="/admin/user-management">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className={adminBtnSecondary}>
                   View All Users
                 </Button>
               </Link>
               <Link to="/admin/support-tickets">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
+                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
                   <MessageSquare className="w-4 h-4" />
                   Support
                 </Button>

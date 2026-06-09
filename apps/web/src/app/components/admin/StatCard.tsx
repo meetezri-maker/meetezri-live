@@ -1,6 +1,7 @@
-import { motion } from "motion/react";
 import { LucideIcon } from "lucide-react";
-import { Card } from "../ui/card";
+import { AdminCard } from "./AdminCard";
+import { cn } from "@/lib/utils";
+import { adminStatValue } from "@/app/admin/adminPageChrome";
 
 interface StatCardProps {
   title: string;
@@ -13,49 +14,37 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon: Icon, change, changeType = "neutral", subtitle }: StatCardProps) {
   const changeColors = {
-    positive: "text-green-600 bg-green-50",
-    negative: "text-red-600 bg-red-50",
-    neutral: "text-gray-600 bg-gray-50"
+    positive: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
+    negative: "text-rose-300 bg-rose-500/10 border-rose-500/20",
+    neutral: "text-[var(--admin-text-muted)] bg-white/[0.04] border-[color:var(--admin-border)]",
   };
 
   return (
-    <motion.div
-      whileHover={{ y: -4, scale: 1.02 }}
-      transition={{ duration: 0.2 }}
-    >
-      <Card className="p-6 shadow-md hover:shadow-xl transition-shadow bg-white/80 backdrop-blur-sm">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-            <motion.p
-              initial={{ scale: 0.5 }}
-              animate={{ scale: 1 }}
-              className="text-3xl font-bold text-gray-900 mb-1"
+    <AdminCard className="p-6">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="mb-1 text-sm font-medium text-[var(--admin-text-muted)]">{title}</p>
+          <p className={cn(adminStatValue, "mb-1")}>{value}</p>
+          {subtitle && (
+            <p className="text-xs text-[var(--admin-text-muted)]">{subtitle}</p>
+          )}
+          {change && (
+            <span
+              className={cn(
+                "mt-2 inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium",
+                changeColors[changeType]
+              )}
             >
-              {value}
-            </motion.p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
-            )}
-            {change && (
-              <motion.span
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${changeColors[changeType]}`}
-              >
-                {change}
-              </motion.span>
-            )}
-          </div>
-          <motion.div
-            whileHover={{ rotate: 360, scale: 1.1 }}
-            transition={{ duration: 0.5 }}
-            className="p-3 bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl"
-          >
-            <Icon className="w-6 h-6 text-primary" />
-          </motion.div>
+              {change}
+            </span>
+          )}
         </div>
-      </Card>
-    </motion.div>
+        <div
+          className="rounded-xl border border-[color:var(--admin-border-glow-teal)] bg-[color-mix(in_srgb,var(--admin-primary)_10%,transparent)] p-3"
+        >
+          <Icon className="h-6 w-6 text-[var(--admin-primary)]" />
+        </div>
+      </div>
+    </AdminCard>
   );
 }

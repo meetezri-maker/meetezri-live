@@ -246,7 +246,8 @@ const secretProvider = async (reqOrHeader: any, tokenOrPayload: any) => {
 app.register(jwt, {
   secret: secretProvider as any,
   verify: {
-      allowedIss: process.env.SUPABASE_URL ? [process.env.SUPABASE_URL + '/auth/v1'] : undefined, // Optional: Verify Issuer
+      allowedIss: process.env.SUPABASE_URL ? [process.env.SUPABASE_URL + '/auth/v1'] : undefined,
+      clockTolerance: 60,
       extractToken: (req) => {
           // Standard Bearer token extraction
           if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {

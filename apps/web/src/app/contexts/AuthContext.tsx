@@ -3,6 +3,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
+import { isSupabaseSessionExpiredLocally } from '@/lib/jwtUtils';
 
 interface AuthContextType {
   user: User | null;
@@ -88,17 +90,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     // Hydrate session once; profile load is driven by onAuthStateChange only so we do not double-fetch /users/me.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.expires_at && isSupabaseSessionExpiredLocally(session.expires_at)) {
+        await supabase.auth.signOut({ scope: 'local' });
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
         lastUserIdRef.current = session.user.id;
-        setIsLoading(true);
         if (window.location.hash && window.location.hash.includes('error=')) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
+        // Login pages run their own post-auth flow; avoid racing /users/me with stale JWTs.
+        if (typeof window !== 'undefined' && isPublicAuthPath(window.location.pathname)) {
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(true);
         maybeClearEmailVerificationRequired(session.user).finally(() => {
           void fetchProfile();
         });
@@ -124,6 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const shouldLoadProfile = event === 'SIGNED_IN' || event === 'USER_UPDATED';
 
         if (shouldLoadProfile) {
+          if (typeof window !== 'undefined' && isPublicAuthPath(window.location.pathname)) {
+            setIsLoading(false);
+            return;
+          }
           if (!isSameUser || !profileRef.current) {
             setIsLoading(true);
           }
