@@ -1375,6 +1375,10 @@ export function ActiveSession() {
 
     try {
       await audio.play();
+      console.log(
+  "[PHONEME TIMELINE BEFORE PLAY]",
+  avatarPhonemeTimelineRef.current
+);
       if (seq === audioPlaySeqRef.current && opts?.saraGreetingSync) {
         const playbackStart = performance.now();
         updateSaraGreetingDiagnostics({ playbackStart });

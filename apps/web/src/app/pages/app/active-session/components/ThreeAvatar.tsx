@@ -1490,11 +1490,12 @@ function isSaraV2MouthInteriorMorph(name: string): boolean {
 
 function saraV2MouthCapFor(name: string, speaking: boolean): number {
   if (isSaraV2MouthInteriorMorph(name)) return 0.02;
-  if (isSaraV2VisemeAAMorph(name)) return 0.24;
-  if (isSaraV2VisemeMorph(name)) return 0.24;
   if (isSaraV2SmileFrownMorph(name) && speaking) return 0.04;
-  if (isSaraV2JawOpenMorph(name)) return 0.1;
-  if (isSaraV2GenericOpenMorph(name)) return 0.04;
+
+  if (isSaraV2VisemeAAMorph(name)) return 0.65;
+  if (isSaraV2VisemeMorph(name)) return 0.55;
+  if (isSaraV2JawOpenMorph(name)) return 0.35;
+  if (isSaraV2GenericOpenMorph(name)) return 0.18;
   return 0.06;
 }
 
@@ -4702,47 +4703,47 @@ function ThreeAvatarComponent({
           const jawOpenAdj = THREE.MathUtils.clamp(jawOpen * mdm, 0, 1.35);
           const lipFollowAdj = THREE.MathUtils.clamp(lipFollow * mdm, 0, 1.35);
           const saraV2VisemeCaps = SARA_V2_AVATAR_DEFINITION.visemes.caps;
-          const saraV2Timeline = isSaraV2Viewport ? avatarPhonemeTimelineRef.current : null;
+          const saraV2Timeline = isSaraHybrid ? avatarPhonemeTimelineRef.current : null;
           const saraV2TimelineLength = saraV2Timeline?.phonemes.length ?? 0;
           const saraV2ValidTimeline =
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             !!saraV2Timeline &&
             saraV2TimelineLength > 0 &&
             !hasInvalidJordanPhonemeTimestamps(saraV2Timeline);
-          const saraV2AudioCurrentTime = isSaraV2Viewport
+          const saraV2AudioCurrentTime = isSaraHybrid
             ? avatarAudioCurrentTimeRef.current
             : 0;
           const saraV2LookAheadSeconds = saraV2VisemeCaps?.lookAheadSeconds ?? 0.04;
           const saraV2SpeechTime = saraV2AudioCurrentTime + saraV2LookAheadSeconds;
           const saraV2ActivePhoneme =
-            isSaraV2Viewport && speaking && saraV2ValidTimeline
+            isSaraHybrid && speaking && saraV2ValidTimeline
               ? findActiveSaraPhoneme(saraV2Timeline, saraV2SpeechTime)
               : null;
           const saraV2ActiveViseme =
             saraV2ActivePhoneme?.viseme ?? (saraV2ValidTimeline ? "viseme_rest" : null);
           const saraV2PhonemeDriverActive =
             isSaraV2Viewport && speaking && saraV2ValidTimeline;
-          if (isSaraV2Viewport && speaking && saraV2ValidTimeline) {
+          if (isSaraHybrid && speaking && saraV2ValidTimeline) {
             saraV2ClipHasValidPhonemeTimelineRef.current = true;
           }
-          if (isSaraV2Viewport && speaking) {
+          if (isSaraHybrid && speaking) {
             saraV2WasSpeakingRef.current = true;
             saraV2LastSpeechEndMsRef.current = null;
-          } else if (isSaraV2Viewport && saraV2WasSpeakingRef.current) {
+          } else if (isSaraHybrid && saraV2WasSpeakingRef.current) {
             saraV2WasSpeakingRef.current = false;
             saraV2LastSpeechEndMsRef.current = now;
           }
           const saraV2HasValidPhonemeTimeline =
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             (saraV2ValidTimeline || saraV2ClipHasValidPhonemeTimelineRef.current);
           const saraV2PostSpeechElapsedMs =
-            isSaraV2Viewport && !speaking && saraV2LastSpeechEndMsRef.current !== null
+            isSaraHybrid && !speaking && saraV2LastSpeechEndMsRef.current !== null
               ? now - saraV2LastSpeechEndMsRef.current
               : null;
           const saraV2PostSpeechReleaseActive =
             saraV2HasValidPhonemeTimeline && !speaking;
           const saraV2FallbackMouthDriverActive =
-            isSaraV2Viewport && speaking && !saraV2HasValidPhonemeTimeline;
+            isSaraHybrid && speaking && !saraV2HasValidPhonemeTimeline;
           const saraV2VisemeOpennessMultipliers =
             saraV2VisemeCaps?.opennessMultipliers as Readonly<Record<string, number>> | undefined;
           const saraV2JawSupportMap =
