@@ -172,6 +172,14 @@ type SaraV2BlinkTestState = {
   updatedAtMs: number | null;
 };
 
+type SaraV2RecentActivePhonemeDiagnostic = {
+  time: number;
+  audioCurrentTime: number;
+  speechTime: number;
+  phoneme: string | null;
+  viseme: string | null;
+};
+
 function clampSaraV2BlinkTestValue(value: unknown): number {
   const numericValue = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numericValue)) return 0;
@@ -2824,6 +2832,8 @@ function ThreeAvatarComponent({
   const saraV2LastSpeechEndMsRef = useRef<number | null>(null);
   const loggedMissingSaraV2PhonemeMorphsRef = useRef<Set<string>>(new Set());
   const saraGreetingFirstVisemeLoggedRef = useRef(false);
+  const saraV2RecentActivePhonemesRef = useRef<SaraV2RecentActivePhonemeDiagnostic[]>([]);
+  const saraV2LastRecentPhonemeKeyRef = useRef("");
   const saraRfv2BindingsRef = useRef<readonly SaraRfv2FaceMorphBinding[]>([]);
   const saraRfv2ApplierStateRef = useRef<SaraRfv2MorphApplierState>(
     createSaraRfv2MorphApplierState()
@@ -3326,6 +3336,8 @@ function ThreeAvatarComponent({
       lastCommand: null,
       updatedAtMs: null,
     };
+    saraV2RecentActivePhonemesRef.current = [];
+    saraV2LastRecentPhonemeKeyRef.current = "";
     saraV2PresenceStateRef.current = createSaraV2PresenceState();
     jordanMorphBindingsRef.current = new Map();
     jordanMorphValuesRef.current = new Map(
@@ -4703,6 +4715,24 @@ function ThreeAvatarComponent({
           const jawOpenAdj = THREE.MathUtils.clamp(jawOpen * mdm, 0, 1.35);
           const lipFollowAdj = THREE.MathUtils.clamp(lipFollow * mdm, 0, 1.35);
           const saraV2VisemeCaps = SARA_V2_AVATAR_DEFINITION.visemes.caps;
+          const saraAudioFallbackConfig = saraV2VisemeCaps?.audioDrivenMouthFallback;
+          const saraUseAudioDrivenMouth =
+            isSaraHybrid &&
+            speaking &&
+            Boolean(saraAudioFallbackConfig?.enabled);
+          const saraAudioNormGain = saraAudioFallbackConfig?.audioNormGain ?? 0.85;
+          const saraMouthAdjGain = saraAudioFallbackConfig?.mouthAdjGain ?? 0.25;
+          const saraAudioMouthOpen = saraUseAudioDrivenMouth
+            ? THREE.MathUtils.clamp(
+                audioNorm * saraAudioNormGain + mouthAdj * saraMouthAdjGain,
+                0,
+                1
+              )
+            : 0;
+          const saraAudioJawOpenTarget =
+            saraAudioMouthOpen * (saraAudioFallbackConfig?.jawOpenMax ?? 0.28);
+          const saraAudioVisemeAATarget =
+            saraAudioMouthOpen * (saraAudioFallbackConfig?.visemeAAMax ?? 0.25);
           const saraV2Timeline = isSaraHybrid ? avatarPhonemeTimelineRef.current : null;
           const saraV2TimelineLength = saraV2Timeline?.phonemes.length ?? 0;
           const saraV2ValidTimeline =
@@ -4714,7 +4744,14 @@ function ThreeAvatarComponent({
             ? avatarAudioCurrentTimeRef.current
             : 0;
           const saraV2LookAheadSeconds = saraV2VisemeCaps?.lookAheadSeconds ?? 0.04;
-          const saraV2SpeechTime = saraV2AudioCurrentTime + saraV2LookAheadSeconds;
+          const saraAudioSyncOffsetSeconds =
+            saraV2VisemeCaps?.saraAudioSyncOffsetSeconds ?? 0;
+          const saraV2SpeechTime = Math.max(
+            0,
+            saraV2AudioCurrentTime +
+              saraV2LookAheadSeconds +
+              saraAudioSyncOffsetSeconds
+          );
           const saraV2ActivePhoneme =
             isSaraHybrid && speaking && saraV2ValidTimeline
               ? findActiveSaraPhoneme(saraV2Timeline, saraV2SpeechTime)
@@ -4722,7 +4759,12 @@ function ThreeAvatarComponent({
           const saraV2ActiveViseme =
             saraV2ActivePhoneme?.viseme ?? (saraV2ValidTimeline ? "viseme_rest" : null);
           const saraV2PhonemeDriverActive =
-            isSaraV2Viewport && speaking && saraV2ValidTimeline;
+            isSaraHybrid &&
+            speaking &&
+            saraV2ValidTimeline &&
+            !saraUseAudioDrivenMouth;
+          const saraV2PhonemeDriverBypassedForAudioFallback =
+            saraUseAudioDrivenMouth && saraV2ValidTimeline;
           if (isSaraHybrid && speaking && saraV2ValidTimeline) {
             saraV2ClipHasValidPhonemeTimelineRef.current = true;
           }
@@ -4743,7 +4785,10 @@ function ThreeAvatarComponent({
           const saraV2PostSpeechReleaseActive =
             saraV2HasValidPhonemeTimeline && !speaking;
           const saraV2FallbackMouthDriverActive =
-            isSaraHybrid && speaking && !saraV2HasValidPhonemeTimeline;
+            isSaraHybrid &&
+            speaking &&
+            !saraV2HasValidPhonemeTimeline &&
+            !saraUseAudioDrivenMouth;
           const saraV2VisemeOpennessMultipliers =
             saraV2VisemeCaps?.opennessMultipliers as Readonly<Record<string, number>> | undefined;
           const saraV2JawSupportMap =
@@ -4757,6 +4802,33 @@ function ThreeAvatarComponent({
           const saraV2PreviousViseme = previousSaraV2VisemeRef.current;
           const saraV2VisemeChanged =
             saraV2PhonemeDriverActive && saraV2PreviousViseme !== saraV2ActiveViseme;
+          const saraV2RecentPhonemeKey =
+            saraV2PhonemeDriverActive && saraV2ActivePhoneme
+              ? [
+                  saraV2ActivePhoneme.phoneme,
+                  saraV2ActiveViseme,
+                  saraV2ActivePhoneme.start.toFixed(3),
+                  (saraV2ActivePhoneme.end ?? -1).toFixed(3),
+                ].join(":")
+              : "";
+          if (
+            saraV2RecentPhonemeKey &&
+            saraV2RecentPhonemeKey !== saraV2LastRecentPhonemeKeyRef.current
+          ) {
+            saraV2LastRecentPhonemeKeyRef.current = saraV2RecentPhonemeKey;
+            saraV2RecentActivePhonemesRef.current = [
+              ...saraV2RecentActivePhonemesRef.current,
+              {
+                time: now,
+                audioCurrentTime: saraV2AudioCurrentTime,
+                speechTime: saraV2SpeechTime,
+                phoneme: saraV2ActivePhoneme.phoneme,
+                viseme: saraV2ActiveViseme,
+              },
+            ].slice(-20);
+          } else if (!saraV2PhonemeDriverActive) {
+            saraV2LastRecentPhonemeKeyRef.current = "";
+          }
           const saraV2RestFrameDetected =
             saraV2PhonemeDriverActive &&
             (!saraV2ActivePhoneme || saraV2ActiveViseme === "viseme_rest");
@@ -7017,19 +7089,29 @@ function ThreeAvatarComponent({
               const isSaraV2GenericReleaseTarget = isSaraV2GenericMouthReleaseTarget(name);
 
               let strength = mouthAdj;
-              if (saraV2HasValidPhonemeTimeline && isSaraV2Viewport) {
+              if ((saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth) && isSaraHybrid) {
                 const activeVisemeNormalized = normalizeSaraV2MorphName(
                   saraV2ActiveViseme ?? "viseme_rest"
                 );
                 const visemeMaxStrength = saraV2VisemeCaps?.visemeMaxStrength ?? 0.1;
                 const jawOpenMax = saraV2VisemeCaps?.jawOpenMax ?? 0.04;
-                const attackSpeed = saraV2VisemeCaps?.attackSpeed ?? 18;
-                const releaseSpeed = saraV2VisemeCaps?.releaseSpeed ?? 22;
+                const attackSpeed = saraUseAudioDrivenMouth
+                  ? saraAudioFallbackConfig?.attackSpeed ?? 22
+                  : saraV2VisemeCaps?.attackSpeed ?? 18;
+                const releaseSpeed = saraUseAudioDrivenMouth
+                  ? saraAudioFallbackConfig?.releaseSpeed ?? 18
+                  : saraV2VisemeCaps?.releaseSpeed ?? 22;
                 const jawReleaseSpeed = saraV2VisemeCaps?.jawReleaseSpeed ?? 26;
                 const restReleaseSpeed = saraV2VisemeCaps?.restReleaseSpeed ?? 28;
                 const restVisemeNormalized = normalizeSaraV2MorphName("viseme_rest");
                 let targetStrength = 0;
-                if (isAllowedSaraPhonemeMorph && isSaraV2VisemeMorph(name)) {
+                if (saraUseAudioDrivenMouth && isSaraV2JawOpenMorph(name)) {
+                  targetStrength = saraAudioJawOpenTarget;
+                } else if (saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)) {
+                  targetStrength = saraAudioVisemeAATarget;
+                } else if (saraUseAudioDrivenMouth && isAllowedSaraPhonemeMorph) {
+                  targetStrength = 0;
+                } else if (isAllowedSaraPhonemeMorph && isSaraV2VisemeMorph(name)) {
                   const isActiveOpenViseme =
                     saraV2PhonemeDriverActive &&
                     normalizedMorphName === activeVisemeNormalized &&
@@ -7085,6 +7167,9 @@ function ThreeAvatarComponent({
                 if (normalizedMorphName === activeVisemeNormalized && isSaraV2VisemeMorph(name)) {
                   saraV2AppliedVisemeStrength = nextStrength;
                 }
+                if (saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)) {
+                  saraV2AppliedVisemeStrength = nextStrength;
+                }
                 if (isSaraV2JawOpenMorph(name)) {
                   saraV2AppliedJawSupport = nextStrength;
                 }
@@ -7123,7 +7208,7 @@ function ThreeAvatarComponent({
               }
 
               const saraV2DriverKind = saraV2OpenDriverKind(name);
-              if (isSaraV2Viewport && saraV2HasValidPhonemeTimeline) {
+              if (isSaraV2Viewport && (saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth)) {
                 if (isSaraV2GenericReleaseTarget) {
                   saraV2GenericFallbackSuppressed = true;
                 }
@@ -7146,7 +7231,7 @@ function ThreeAvatarComponent({
                 }
               }
 
-              const shaped = saraV2HasValidPhonemeTimeline && isSaraV2Viewport
+              const shaped = (saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth) && isSaraHybrid
                 ? THREE.MathUtils.clamp(strength, 0, 1.5)
                 : Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
 
@@ -7168,7 +7253,14 @@ function ThreeAvatarComponent({
                 lower.includes("roll");
 
               const isOpenTarget = isJawLike || isTeethLike;
-              const saraV2Cap = isSaraV2Viewport ? saraV2MouthCapFor(name, speaking) : null;
+              const saraV2Cap =
+                isSaraV2Viewport && saraUseAudioDrivenMouth && isSaraV2JawOpenMorph(name)
+                  ? saraAudioFallbackConfig?.jawOpenMax ?? 0.28
+                  : isSaraV2Viewport && saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)
+                    ? saraAudioFallbackConfig?.visemeAAMax ?? 0.25
+                    : isSaraV2Viewport
+                      ? saraV2MouthCapFor(name, speaking)
+                      : null;
               const gain = isSaraV2Viewport
                 ? 1
                 : isOpenTarget
@@ -7406,7 +7498,7 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
 	        }
 
           if (
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             (speaking || saraV2HasValidPhonemeTimeline || saraV2PostSpeechReleaseActive) &&
             typeof window !== "undefined" &&
             now - lastSaraV2MouthDiagnosticsLogRef.current >= 400
@@ -7502,11 +7594,29 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
               rotationDeltasApplied: saraV2BoneMovementFrame,
               maxRotationDelta,
             };
+            const timelinePhonemes = saraV2Timeline?.phonemes ?? [];
+            const firstPhoneme = timelinePhonemes[0] ?? null;
+            const lastPhoneme = timelinePhonemes[timelinePhonemes.length - 1] ?? null;
+            const playbackDiagnostics =
+              typeof window !== "undefined"
+                ? (window as any).saraV2MouthDiagnostics ?? {}
+                : {};
             const diagnostics = {
+              ...playbackDiagnostics,
               runtimeMode: avatarModeLabel(avatarMode),
               useRfv2Morphs,
               isSaraV2Viewport,
               phonemeDriverActive: saraV2PhonemeDriverActive,
+              audioDrivenMouthFallbackActive: saraUseAudioDrivenMouth,
+              saraAudioMouthOpen,
+              audioNorm,
+              mouthAdj,
+              audioNormGain: saraAudioNormGain,
+              mouthAdjGain: saraMouthAdjGain,
+              jawOpenTarget: saraAudioJawOpenTarget,
+              visemeAATarget: saraAudioVisemeAATarget,
+              phonemeDriverBypassedForAudioFallback:
+                saraV2PhonemeDriverBypassedForAudioFallback,
               saraV2HasValidPhonemeTimeline,
               activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
               previousSaraViseme: saraV2PreviousViseme,
@@ -7529,6 +7639,14 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
               timelineLength: saraV2TimelineLength,
               speechTime: saraV2SpeechTime,
               audioCurrentTime: saraV2AudioCurrentTime,
+              lookAheadSeconds: saraV2LookAheadSeconds,
+              saraAudioSyncOffsetSeconds,
+              firstPhonemeStart: firstPhoneme?.start ?? null,
+              lastPhonemeEnd:
+                lastPhoneme?.end ??
+                lastPhoneme?.start ??
+                null,
+              recentActivePhonemes: saraV2RecentActivePhonemesRef.current,
               validTimeline: saraV2ValidTimeline,
               fallbackMouthDriverActive: saraV2FallbackMouthDriverActive,
               appliedVisemeValues: saraV2AppliedVisemeValues,
@@ -7536,8 +7654,6 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
               boneDriverDisabledForSara: saraV2MouthBoneDriverDisabled,
               primaryOpenDriver: saraV2PrimaryOpenDriver,
               speaking,
-              audioNorm,
-              mouthAdj,
               jawOpenAdj,
               lipFollowAdj,
               morphBindings: saraV2MouthMorphBindings,

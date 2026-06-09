@@ -55,8 +55,13 @@ export function normalizeAvatarPhonemeTimeline(
     const obj = item as Record<string, unknown>;
     return (
       typeof obj.phoneme === "string" &&
-      asNumber(obj.start) !== null &&
-      asNumber(obj.end) !== null
+      (
+        asNumber(obj.start) !== null ||
+        asNumber(obj.startTime) !== null ||
+        asNumber(obj.time) !== null ||
+        asNumber(obj.timestamp) !== null ||
+        asNumber(obj.t) !== null
+      )
     );
   });
   const isStringFallbackFormat = !isTimestampedFormat && source.every((item) => typeof item === "string");
@@ -135,7 +140,11 @@ export function normalizeAvatarPhonemeTimeline(
     }
     if (!label) return;
     const start = isTimestampedFormat
-      ? asNumber(obj.start)
+      ? asNumber(obj.start) ??
+        asNumber(obj.startTime) ??
+        asNumber(obj.time) ??
+        asNumber(obj.timestamp) ??
+        asNumber(obj.t)
       : asNumber(obj.start) ??
         asNumber(obj.startTime) ??
         asNumber(obj.time) ??
@@ -147,7 +156,7 @@ export function normalizeAvatarPhonemeTimeline(
         asNumber(obj.endTime) ??
         asNumber(obj.stop) ??
         asNumber(obj.offset);
-    if (isTimestampedFormat && (start === null || end === null || end < start)) {
+    if (isTimestampedFormat && (start === null || (end !== null && end < start))) {
       return;
     }
     const duration = isTimestampedFormat ? null : asNumber(obj.duration) ?? asNumber(obj.dur);
@@ -182,7 +191,13 @@ export function normalizeAvatarPhonemeTimeline(
   });
 
   phonemes.sort((a, b) => a.start - b.start);
-  if (!isTimestampedFormat && durationSeconds && phonemes.some((p) => p.start > durationSeconds * 2)) {
+  phonemes.forEach((phoneme, index) => {
+    const next = phonemes[index + 1];
+    if (phoneme.end == null && next && next.start > phoneme.start) {
+      phoneme.end = next.start;
+    }
+  });
+  if (durationSeconds && phonemes.some((p) => p.start > durationSeconds * 2)) {
     phonemes.forEach((p) => {
       p.start /= 1000;
       if (p.end != null) p.end /= 1000;

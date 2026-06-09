@@ -286,20 +286,20 @@ function baseTargetsForMode(
     return targets;
   }
 
-  if (mode === "speaking") {
-    targets.cheekSquintLeft = clamp(0.032 + energy * 0.04 + breath * 0.008, 0, 0.08);
-    targets.cheekSquintRight = clamp(0.034 + energy * 0.04 + breath * 0.008, 0, 0.08);
-    targets.eyebrows = clamp(0.022 + Math.pow(energy, 0.85) * 0.04, 0, 0.07);
-    if (sentiment.polarity === "negative") {
-      targets.mouthFrownLeft = clamp(0.012 + energy * 0.018, 0, 0.045);
-      targets.mouthFrownRight = clamp(0.012 + energy * 0.018, 0, 0.045);
-      targets.sad = clamp(0.012 + energy * 0.026, 0, 0.055);
-    } else {
-      targets.mouthSmileLeft = clamp((0.018 + energy * 0.022) * smileBias, 0, 0.06);
-      targets.mouthSmileRight = clamp((0.019 + energy * 0.022) * smileBias, 0, 0.06);
-    }
-    return targets;
-  }
+  // if (mode === "speaking") {
+  //   targets.cheekSquintLeft = clamp(0.032 + energy * 0.04 + breath * 0.008, 0, 0.08);
+  //   targets.cheekSquintRight = clamp(0.034 + energy * 0.04 + breath * 0.008, 0, 0.08);
+  //   targets.eyebrows = clamp(0.022 + Math.pow(energy, 0.85) * 0.04, 0, 0.07);
+  //   if (sentiment.polarity === "negative") {
+  //     targets.mouthFrownLeft = clamp(0.012 + energy * 0.018, 0, 0.045);
+  //     targets.mouthFrownRight = clamp(0.012 + energy * 0.018, 0, 0.045);
+  //     targets.sad = clamp(0.012 + energy * 0.026, 0, 0.055);
+  //   } else {
+  //     targets.mouthSmileLeft = clamp((0.018 + energy * 0.022) * smileBias, 0, 0.06);
+  //     targets.mouthSmileRight = clamp((0.019 + energy * 0.022) * smileBias, 0, 0.06);
+  //   }
+  //   return targets;
+  // }
 
   targets.mouthSmileLeft = clamp((0.042 + breath * 0.018) * smileBias, 0.03, 0.07);
   targets.mouthSmileRight = clamp((0.044 + breath * 0.018) * smileBias, 0.03, 0.07);
@@ -453,7 +453,7 @@ export function updateSaraV2Presence(args: UpdateSaraV2PresenceArgs): UpdateSara
     rawTargets.cheekSquintRight = 0;
     rawTargets.eyebrows = 0.5;
   }
-  
+
   if (peakBlinkActive) {
     rawTargets.mouthSmileLeft = 0;
     rawTargets.mouthSmileRight = 0;

@@ -158,7 +158,7 @@ export const PHONEME_TO_SARA_VISEME: Record<string, SaraMorphName> = {
 };
 
 export const SARA_FACE_TUNING = {
-  lookAheadSeconds: 0.04,
+  lookAheadSeconds: 0,
   speechLerpSpeed: 12,
   decayLerpSpeed: 7,
   jawLerpSpeed: 6,

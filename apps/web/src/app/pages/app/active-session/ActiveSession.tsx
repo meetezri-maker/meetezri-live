@@ -86,6 +86,8 @@ type WsAudioQueueItem = {
   subtitle: string;
   audio: unknown;
   avatarData: EzriAvatarData | null;
+  audioReceived: number | null;
+  avatarDataReceived: number | null;
   saraGreetingSync?: SaraGreetingSyncState;
 };
 
@@ -1105,6 +1107,8 @@ export function ActiveSession() {
       /** When true, do not resume STT until all WS chunks played and server sent `tts_done`. */
       partOfWsStreamingTurn?: boolean;
       avatarData?: EzriAvatarData | null;
+      audioReceived?: number | null;
+      avatarDataReceived?: number | null;
       saraGreetingSync?: SaraGreetingSyncState;
     }
   ) => {
@@ -1173,6 +1177,61 @@ export function ActiveSession() {
       opts?.avatarData ?? null
     );
     avatarPhonemeTimelineRef.current = initialPhonemeTimeline;
+    const isSaraHybridPlayback =
+      companionCanonicalId === "sarah" &&
+      saraLiveAvatarMode === "hybrid" &&
+      !saraLiveRfv2PreviewEnabled &&
+      !sessionUsesRfv2Morphs;
+    let currentAvatarDataReceivedAt =
+      opts?.avatarDataReceived ??
+      opts?.saraGreetingSync?.avatarDataReceived ??
+      null;
+    const currentAudioReceivedAt =
+      opts?.audioReceived ??
+      opts?.saraGreetingSync?.audioReceived ??
+      null;
+    const updateSaraMouthPlaybackDiagnostics = (
+      patch: Record<string, unknown>
+    ) => {
+      if (typeof window === "undefined" || !isSaraHybridPlayback) return;
+      (window as any).saraV2MouthDiagnostics = {
+        ...((window as any).saraV2MouthDiagnostics ?? {}),
+        ...patch,
+      };
+    };
+    const waitForSaraPhonemesBeforePlayback = async () => {
+      const waitStartedAt = performance.now();
+      let waitedForPhonemesBeforePlayback = false;
+      while (
+        seq === audioPlaySeqRef.current &&
+        performance.now() - waitStartedAt < 300 &&
+        !avatarPhonemeTimelineRef.current?.phonemes?.length
+      ) {
+        waitedForPhonemesBeforePlayback = true;
+        if (avatarPendingDataRef.current) {
+          const lateTimeline = normalizeAvatarPhonemeTimeline(
+            avatarPendingDataRef.current,
+            Number.isFinite(audio.duration) ? audio.duration : undefined
+          );
+          if (lateTimeline?.phonemes.length) {
+            avatarPhonemeTimelineRef.current = lateTimeline;
+            currentAvatarDataReceivedAt =
+              avatarPendingDataReceivedAtRef.current ?? performance.now();
+            avatarPendingDataRef.current = null;
+            avatarPendingDataReceivedAtRef.current = null;
+            break;
+          }
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 25));
+      }
+      const phonemeWaitMs = performance.now() - waitStartedAt;
+      return {
+        waitedForPhonemesBeforePlayback,
+        phonemeWaitMs,
+        timelineAttachedBeforeAudioPlay:
+          !!avatarPhonemeTimelineRef.current?.phonemes?.length,
+      };
+    };
     if (opts?.saraGreetingSync) {
       const firstPhoneme = initialPhonemeTimeline?.phonemes[0] ?? null;
       updateSaraGreetingDiagnostics({
@@ -1293,7 +1352,9 @@ export function ActiveSession() {
         opts?.avatarData ?? null,
         Number.isFinite(audio.duration) ? audio.duration : undefined
       );
-      avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      if (metadataPhonemeTimeline?.phonemes.length || opts?.avatarData) {
+        avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      }
       if (opts?.saraGreetingSync) {
         const firstPhoneme = metadataPhonemeTimeline?.phonemes[0] ?? null;
         updateSaraGreetingDiagnostics({
@@ -1374,13 +1435,40 @@ export function ActiveSession() {
     });
 
     try {
-      await audio.play();
+      const shouldWaitForSaraPhonemes =
+        isSaraHybridPlayback &&
+        Boolean(
+          opts?.partOfWsStreamingTurn ||
+            opts?.saraGreetingSync ||
+            opts?.avatarData ||
+            avatarPendingDataRef.current
+        );
+      const waitDiagnostics = shouldWaitForSaraPhonemes
+        ? await waitForSaraPhonemesBeforePlayback()
+        : {
+            waitedForPhonemesBeforePlayback: false,
+            phonemeWaitMs: 0,
+            timelineAttachedBeforeAudioPlay:
+              !!avatarPhonemeTimelineRef.current?.phonemes?.length,
+          };
+      const audioPlayStartedAtMs = performance.now();
+      updateSaraMouthPlaybackDiagnostics({
+        ...waitDiagnostics,
+        audioPlayStartedAtMs,
+        avatarDataReceivedAtMs: currentAvatarDataReceivedAt,
+        audioReceivedAtMs: currentAudioReceivedAt,
+        deltaAvatarDataToAudioPlayMs:
+          currentAvatarDataReceivedAt !== null
+            ? audioPlayStartedAtMs - currentAvatarDataReceivedAt
+            : null,
+      });
       console.log(
-  "[PHONEME TIMELINE BEFORE PLAY]",
-  avatarPhonemeTimelineRef.current
-);
+        "[PHONEME TIMELINE BEFORE PLAY]",
+        avatarPhonemeTimelineRef.current
+      );
+      await audio.play();
       if (seq === audioPlaySeqRef.current && opts?.saraGreetingSync) {
-        const playbackStart = performance.now();
+        const playbackStart = audioPlayStartedAtMs;
         updateSaraGreetingDiagnostics({ playbackStart });
         console.log("[Sara Greeting Sync]", {
           greetingSentence: opts.saraGreetingSync.sentence || text,
@@ -1634,6 +1722,8 @@ export function ActiveSession() {
     void playEzriAudio(next.subtitle, next.audio, {
       partOfWsStreamingTurn: true,
       avatarData: next.avatarData,
+      audioReceived: next.audioReceived,
+      avatarDataReceived: next.avatarDataReceived,
       saraGreetingSync: next.saraGreetingSync,
       onDone: () => {
         wsIsPlaybackActiveRef.current = false;
@@ -3228,6 +3318,8 @@ export function ActiveSession() {
               subtitle,
               audio,
               avatarData: avatarPendingDataRef.current,
+              audioReceived,
+              avatarDataReceived: avatarPendingDataReceivedAtRef.current,
               saraGreetingSync,
             };
             avatarPendingDataRef.current = null;
