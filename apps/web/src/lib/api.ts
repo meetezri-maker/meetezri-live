@@ -84,7 +84,16 @@ function formatApiErrorBody(
   return defaultErrorMessage;
 }
 
-async function handleResponse(res: Response, defaultErrorMessage: string) {
+type HandleResponseOptions = {
+  /** When true, do not call supabase.auth.signOut() on 401 (e.g. during login). */
+  skipSignOutOn401?: boolean;
+};
+
+async function handleResponse(
+  res: Response,
+  defaultErrorMessage: string,
+  options?: HandleResponseOptions
+) {
   if (res.status === 401) {
     const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
     const message = typeof errorData.message === 'string' ? errorData.message : '';
@@ -95,8 +104,9 @@ async function handleResponse(res: Response, defaultErrorMessage: string) {
       throw new Error(message);
     }
 
-    // Session is invalid/expired on the server side
-    await supabase.auth.signOut();
+    if (!options?.skipSignOutOn401) {
+      await supabase.auth.signOut();
+    }
     throw new Error('Session expired. Please login again.');
   }
 
@@ -108,7 +118,11 @@ async function handleResponse(res: Response, defaultErrorMessage: string) {
   return res.json();
 }
 
-async function handleResponseAllowEmpty(res: Response, defaultErrorMessage: string) {
+async function handleResponseAllowEmpty(
+  res: Response,
+  defaultErrorMessage: string,
+  options?: HandleResponseOptions
+) {
   if (res.status === 401) {
     const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
     const message = typeof errorData.message === 'string' ? errorData.message : '';
@@ -117,7 +131,9 @@ async function handleResponseAllowEmpty(res: Response, defaultErrorMessage: stri
       throw new Error(message);
     }
 
-    await supabase.auth.signOut();
+    if (!options?.skipSignOutOn401) {
+      await supabase.auth.signOut();
+    }
     throw new Error('Session expired. Please login again.');
   }
   if (!res.ok) {
@@ -209,8 +225,10 @@ async function getJsonCached<T>(
   return (await run) as T;
 }
 
+export type ApiRequestOptions = HandleResponseOptions;
+
 export const api = {
-  async getMe(accessToken?: string) {
+  async getMe(accessToken?: string, options?: ApiRequestOptions) {
     const run = async () => {
       const headers = await getHeaders(accessToken);
       const res = await fetch(`${API_URL}/users/me`, {
@@ -223,7 +241,7 @@ export const api = {
         throw new Error('Profile not found');
       }
 
-      return handleResponse(res, 'Failed to fetch user profile');
+      return handleResponse(res, 'Failed to fetch user profile', options);
     };
 
     if (accessToken) {
@@ -641,13 +659,13 @@ export const api = {
     return handleResponse(res, 'Failed to send email');
   },
 
-  async getSettings(accessToken?: string) {
+  async getSettings(accessToken?: string, options?: ApiRequestOptions) {
     const headers = await getHeaders(accessToken);
     const res = await fetch(`${API_URL}/system-settings`, {
       method: 'GET',
       headers,
     });
-    return handleResponse(res, 'Failed to fetch settings');
+    return handleResponse(res, 'Failed to fetch settings', options);
   },
 
   async getCredits(opts?: { bypassCache?: boolean }): Promise<any> {

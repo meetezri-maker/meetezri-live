@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/queries';
+import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
 
 export interface Notification {
   id: string;
@@ -48,12 +49,14 @@ export function normalizeNotifications(payload: unknown): Notification[] {
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const onPublicAuthPage =
+    typeof window !== 'undefined' && isPublicAuthPath(window.location.pathname);
 
   // Recent notifications for header / emergency history (first page only).
   const { data: notificationsRaw, isPending, isFetching } = useQuery({
     queryKey: queryKeys.notifications.byUser(user?.id),
     queryFn: () => api.notifications.getAll({ page: 1, limit: 100 }),
-    enabled: !!user,
+    enabled: !!user && !onPublicAuthPage,
     staleTime: 30_000,
     retry: 1,
   });
@@ -63,7 +66,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const { data: unreadCountRaw } = useQuery({
     queryKey: [...queryKeys.notifications.byUser(user?.id), 'unread-count'] as const,
     queryFn: () => api.notifications.getUnreadCount(),
-    enabled: !!user,
+    enabled: !!user && !onPublicAuthPage,
     staleTime: 10_000,
   });
 

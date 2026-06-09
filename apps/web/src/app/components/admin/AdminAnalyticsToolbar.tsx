@@ -1,6 +1,8 @@
 import { RefreshCw, Download } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { datesForPreset, type DashboardTimePreset } from '@/lib/adminAnalytics';
+import { adminBtnPrimary, adminInput } from '@/app/admin/adminPageChrome';
+import { cn } from '@/lib/utils';
 
 type Props = {
   chartPeriod: 'week' | 'month' | 'year';
@@ -46,12 +48,12 @@ export function AdminAnalyticsToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {showChartPeriod && (
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1 text-sm text-[var(--admin-text-muted)]">
           <span className="hidden sm:inline">Charts:</span>
           <select
             value={chartPeriod}
             onChange={(e) => onChartPeriodChange(e.target.value as 'week' | 'month' | 'year')}
-            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
+            className={cn(adminInput, "py-2")}
           >
             <option value="week">Week</option>
             <option value="month">Month</option>
@@ -62,7 +64,7 @@ export function AdminAnalyticsToolbar({
 
       {showRangePreset && (
         <div className="flex items-center gap-1">
-          <span className="hidden sm:inline text-sm text-muted-foreground">Range:</span>
+          <span className="hidden sm:inline text-sm text-[var(--admin-text-muted)]">Range:</span>
           <select
             value={useCustomRange ? 'custom' : rangePreset}
             onChange={(e) => {
@@ -77,7 +79,7 @@ export function AdminAnalyticsToolbar({
                 onDateToChange(d.dateTo);
               }
             }}
-            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
+            className={cn(adminInput, "py-2")}
           >
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
@@ -90,7 +92,7 @@ export function AdminAnalyticsToolbar({
 
       <div className="flex flex-wrap items-center gap-2">
         {!showRangePreset && (
-          <span className="hidden sm:inline text-sm text-muted-foreground">Period:</span>
+          <span className="hidden sm:inline text-sm text-[var(--admin-text-muted)]">Period:</span>
         )}
         <input
           type="date"
@@ -101,9 +103,9 @@ export function AdminAnalyticsToolbar({
             onUseCustomRangeChange(true);
             onDateFromChange(e.target.value);
           }}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+          className={cn(adminInput, "py-2")}
         />
-        <span className="text-muted-foreground">–</span>
+        <span className="text-[var(--admin-text-muted)]">–</span>
         <input
           type="date"
           value={dateTo}
@@ -113,7 +115,7 @@ export function AdminAnalyticsToolbar({
             onUseCustomRangeChange(true);
             onDateToChange(e.target.value);
           }}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+          className={cn(adminInput, "py-2")}
         />
       </div>
 
@@ -124,16 +126,16 @@ export function AdminAnalyticsToolbar({
         onClick={onRefresh}
         disabled={isLoading}
         title="Refresh"
-        className="shrink-0"
+        className="shrink-0 border-[color:var(--admin-border)] bg-white/[0.03] text-[var(--admin-text-secondary)] hover:bg-white/[0.06] hover:text-[var(--admin-text)]"
       >
         <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
       </Button>
 
       {showExport && onExport && (
-        <Button type="button" className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white" onClick={onExport}>
+        <button type="button" className={cn(adminBtnPrimary, "gap-2")} onClick={onExport}>
           <Download className="w-4 h-4" />
           {exportLabel}
-        </Button>
+        </button>
       )}
     </div>
   );

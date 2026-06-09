@@ -155,7 +155,7 @@ export function AdminCredentials() {
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
             className="flex items-center justify-center mx-auto mb-4"
           >
-            <BrandLogo heightClass="h-16" />
+            <BrandLogo heightClass="h-16" variant="onDark" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}

@@ -33,11 +33,27 @@ import {
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { Button } from "./ui/button";
 import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { modalDestructiveButton } from "@/lib/modalTheme";
+import { useAdminThemeScope } from "@/app/admin/useAdminThemeScope";
+import {
+  adminPageAtmosphere,
+  adminPageRoot,
+  adminPageGlowTop,
+  adminPageGlowTeal,
+  adminPageVignette,
+  adminSidebar,
+  adminTopBar,
+  adminNavSection,
+  adminNavSectionActive,
+  adminNavLink,
+  adminNavLinkActive,
+  adminRoleBadge,
+  adminBtnGhost,
+} from "@/app/admin/adminPageChrome";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -226,20 +242,20 @@ const NAVIGATION: NavSection[] = [
   },
 ];
 
-const roleInfo: Record<AdminRole, { name: string; gradient: string; icon: any }> = {
+const roleInfo: Record<AdminRole, { name: string; accent: string; icon: any }> = {
   super_admin: {
     name: "Super Admin",
-    gradient: "from-purple-500 to-pink-500",
+    accent: "var(--admin-secondary)",
     icon: Crown,
   },
   org_admin: {
     name: "Organization Admin",
-    gradient: "from-blue-500 to-cyan-500",
+    accent: "var(--admin-primary)",
     icon: Building2,
   },
   team_admin: {
     name: "Team Admin",
-    gradient: "from-green-500 to-emerald-500",
+    accent: "var(--admin-accent)",
     icon: Users,
   },
 };
@@ -323,10 +339,16 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
 
   // Fallback if roleInfo doesn't match adminRole (e.g. invalid role in DB)
   const currentRoleInfo = roleInfo[adminRole] || roleInfo["team_admin"];
-  const RoleIcon = currentRoleInfo.icon;
+
+  useAdminThemeScope(true);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/20 to-slate-50">
+    <div className={adminPageRoot}>
+      <div className={adminPageAtmosphere} aria-hidden>
+        <div className={adminPageGlowTop} />
+        <div className={adminPageGlowTeal} />
+        <div className={adminPageVignette} />
+      </div>
       {/* Mobile backdrop */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -341,16 +363,20 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         )}
       </AnimatePresence>
 
-      {/* SIDEBAR - Apple Style: Clean & Minimal */}
-      <aside className="fixed top-0 left-0 bottom-0 w-64 bg-gray-50/80 backdrop-blur-xl border-r border-gray-200/60 z-50 overflow-hidden">
-        <div className="flex flex-col h-full">
-          {/* Header - Compact */}
-          <div className="px-5 py-4 border-b border-gray-200/60">
+      {/* SIDEBAR — matte panel, environmental depth */}
+      <aside className={cn("fixed top-0 left-0 bottom-0 z-50 w-64 overflow-hidden", adminSidebar)}>
+        <div className="relative flex h-full flex-col">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(167,139,250,0.08),transparent_70%)]"
+            aria-hidden
+          />
+          {/* Header */}
+          <div className="relative border-b border-[color:var(--admin-border)] px-5 py-4">
             <Link to={`/admin/super-admin-dashboard`} className="flex items-center gap-2.5">
-              <BrandLogo heightClass="h-8" />
+              <BrandLogo heightClass="h-8" variant="onDark" />
               <div>
-                <h1 className="font-semibold text-sm">Solace Admin</h1>
-                <p className="text-xs text-gray-500">{currentRoleInfo.name}</p>
+                <h1 className="text-sm font-semibold tracking-tight text-[var(--admin-text)]">Solace Admin</h1>
+                <span className={adminRoleBadge}>{currentRoleInfo.name}</span>
               </div>
             </Link>
           </div>
@@ -360,7 +386,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
             <div className="space-y-0.5">
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-9 rounded-lg bg-gray-200/70 animate-pulse mx-0.5" />
+                  <div key={i} className="mx-0.5 h-9 animate-pulse rounded-lg bg-white/[0.06]" />
                 ))
               ) : filteredNav.map((section) => {
                 const isExpanded = expandedSection === section.name;
@@ -374,11 +400,10 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                     {/* Section Header - Minimal */}
                     <button
                       onClick={() => toggleSection(section.name)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium group ${
-                        hasActiveChild
-                          ? "bg-primary/10 text-primary"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
+                      className={cn(
+                        adminNavSection,
+                        hasActiveChild && adminNavSectionActive
+                      )}
                     >
                       <SectionIcon className="w-4 h-4 flex-shrink-0" />
                       <span className="flex-1 text-left">{section.name}</span>
@@ -399,11 +424,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                             <Link
                               key={page.href}
                               to={page.href}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-xs ${
-                                isActive
-                                  ? "bg-primary text-white font-medium"
-                                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                              }`}
+                              className={cn(adminNavLink, isActive && adminNavLinkActive)}
                             >
                               <span className="truncate">{page.name}</span>
                             </Link>
@@ -418,14 +439,17 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           </nav>
 
           {/* Footer - Minimal */}
-          <div className="px-3 py-3 border-t border-gray-200/60">
-            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg mb-2 border border-gray-200/60">
-              <div className={`w-7 h-7 bg-gradient-to-br ${currentRoleInfo.gradient} rounded-full flex items-center justify-center text-white font-semibold text-xs`}>
+          <div className="relative border-t border-[color:var(--admin-border)] px-3 py-3">
+            <div className="admin-card mb-2 flex items-center gap-2 rounded-xl px-3 py-2">
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[#041018]"
+                style={{ background: currentRoleInfo.accent }}
+              >
                 {adminEmail.charAt(0).toUpperCase()}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-xs truncate">Admin</p>
-                <p className="text-xs text-gray-500 truncate">{adminEmail}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-[var(--admin-text)]">Admin</p>
+                <p className="truncate text-xs text-[var(--admin-text-muted)]">{adminEmail}</p>
               </div>
             </div>
             
@@ -438,25 +462,23 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
               Exit to User App
             </Link> */}
             
-            <Button 
-              onClick={handleLogout} 
-              variant="ghost" 
-              size="sm"
-              className="w-full justify-start gap-2 text-xs h-8 text-gray-700 text:bg-gray-500"
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={cn(adminBtnGhost, "h-8 w-full justify-start")}
             >
               <LogOut className="w-3.5 h-3.5" />
               Logout
-            </Button>
+            </button>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="pl-64">
-        {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-lg border-b border-gray-200 shadow-sm">
+      <div className="relative min-h-screen w-full pl-64">
+        <header className={adminTopBar}>
           <div className="flex items-center justify-between px-8 py-4">
-            <h2 className="text-lg font-bold text-gray-800">Admin Portal</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-[var(--admin-text)]">Admin Portal</h2>
             {/* <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
               View User App →
             </Link> */}
@@ -464,7 +486,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="p-8">{children}</main>
+        <main className="relative p-8">{children}</main>
       </div>
 
       <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>

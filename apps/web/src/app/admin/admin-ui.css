@@ -1,0 +1,600 @@
+/**
+ * Solace Admin OS — component system, remaps, modals, tables, drawers.
+ */
+
+/* ── Matte card with environmental edge light ── */
+.solace-admin .admin-card,
+html[data-solace-admin] .admin-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: 1rem;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  box-shadow: var(--admin-shadow-panel);
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.solace-admin .admin-card::before,
+html[data-solace-admin] .admin-card::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    var(--admin-glow-violet),
+    transparent 55%
+  );
+  opacity: 0.85;
+  z-index: 0;
+}
+
+.solace-admin .admin-card > *,
+html[data-solace-admin] .admin-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.solace-admin .admin-card-hover:hover,
+html[data-solace-admin] .admin-card-hover:hover,
+.solace-admin a.admin-card:hover,
+html[data-solace-admin] a.admin-card:hover {
+  border-color: var(--admin-border-glow);
+  background: var(--admin-surface-hover);
+  box-shadow: var(--admin-shadow-panel-hover);
+}
+
+/* shadcn Card inside admin */
+.solace-admin [data-slot="card"],
+html[data-solace-admin] [data-slot="card"] {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-shadow-panel);
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.solace-admin [data-slot="card"]::before,
+html[data-solace-admin] [data-slot="card"]::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    var(--admin-glow-violet),
+    transparent 55%
+  );
+  opacity: 0.75;
+  z-index: 0;
+}
+
+.solace-admin [data-slot="card"]:hover,
+html[data-solace-admin] [data-slot="card"]:hover {
+  border-color: var(--admin-border-glow) !important;
+  background: var(--admin-surface-hover) !important;
+  box-shadow: var(--admin-shadow-panel-hover);
+}
+
+/* ── Tables — premium matte, not spreadsheet ── */
+.solace-admin .admin-table-wrap,
+html[data-solace-admin] .admin-table-wrap {
+  border-radius: 1rem;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-panel);
+  overflow: hidden;
+}
+
+.solace-admin [data-slot="table-container"],
+html[data-solace-admin] [data-slot="table-container"] {
+  border-radius: 0.875rem;
+}
+
+.solace-admin [data-slot="table-row"],
+html[data-solace-admin] [data-slot="table-row"] {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  transition: background-color 0.2s ease;
+}
+
+.solace-admin [data-slot="table-row"]:hover,
+html[data-solace-admin] [data-slot="table-row"]:hover {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.solace-admin [data-slot="table-head"],
+html[data-solace-admin] [data-slot="table-head"] {
+  color: var(--admin-text-muted) !important;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  height: 2.75rem;
+}
+
+/* ── Modals & dialogs (portaled) ── */
+html[data-solace-admin] [data-slot="alert-dialog-overlay"],
+html[data-solace-admin] [data-slot="dialog-overlay"] {
+  background: rgba(4, 8, 18, 0.82) !important;
+  backdrop-filter: blur(12px);
+}
+
+html[data-solace-admin] [data-slot="alert-dialog-content"],
+html[data-solace-admin] [data-slot="dialog-content"] {
+  border-color: var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-shadow-cinematic), inset 0 1px 0 var(--admin-edge-highlight) !important;
+}
+
+html[data-solace-admin] [data-slot="alert-dialog-title"],
+html[data-solace-admin] [data-slot="dialog-title"] {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin] [data-slot="alert-dialog-description"],
+html[data-solace-admin] [data-slot="dialog-description"] {
+  color: var(--admin-text-secondary) !important;
+}
+
+/* ── Drawers & sheets ── */
+html[data-solace-admin] [data-slot="sheet-overlay"],
+html[data-solace-admin] [data-slot="drawer-overlay"] {
+  background: rgba(4, 8, 18, 0.78) !important;
+  backdrop-filter: blur(10px);
+}
+
+html[data-solace-admin] [data-slot="sheet-content"],
+html[data-solace-admin] [data-slot="drawer-content"] {
+  border-color: var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-shadow-cinematic), inset 0 1px 0 var(--admin-edge-highlight) !important;
+}
+
+/* ── Popovers & dropdowns ── */
+html[data-solace-admin] [data-slot="popover-content"],
+html[data-solace-admin] [data-slot="dropdown-menu-content"],
+html[data-solace-admin] [data-slot="select-content"] {
+  border-color: var(--admin-border) !important;
+  background: var(--admin-surface-elevated) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-shadow-panel) !important;
+}
+
+/* ── Form controls ── */
+.solace-admin input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.solace-admin select,
+.solace-admin textarea,
+html[data-solace-admin] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-solace-admin] select,
+html[data-solace-admin] textarea {
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--admin-text);
+}
+
+.solace-admin input::placeholder,
+.solace-admin textarea::placeholder,
+html[data-solace-admin] input::placeholder,
+html[data-solace-admin] textarea::placeholder {
+  color: var(--admin-text-muted);
+}
+
+.solace-admin input:focus,
+.solace-admin select:focus,
+.solace-admin textarea:focus,
+html[data-solace-admin] input:focus,
+html[data-solace-admin] select:focus,
+html[data-solace-admin] textarea:focus {
+  border-color: rgba(78, 205, 196, 0.35);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.12);
+}
+
+/* ── Light-theme utility remaps (legacy admin pages) ── */
+.solace-admin .bg-white,
+.solace-admin .bg-white\/80,
+.solace-admin .bg-white\/90,
+html[data-solace-admin] .bg-white,
+html[data-solace-admin] .bg-white\/80,
+html[data-solace-admin] .bg-white\/90 {
+  background-color: var(--admin-surface) !important;
+}
+
+.solace-admin .bg-gray-50,
+.solace-admin .bg-gray-50\/80,
+.solace-admin .bg-slate-50,
+html[data-solace-admin] .bg-gray-50,
+html[data-solace-admin] .bg-gray-50\/80,
+html[data-solace-admin] .bg-slate-50 {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+.solace-admin .bg-gray-100,
+.solace-admin .bg-gray-200,
+.solace-admin .bg-gray-200\/70,
+html[data-solace-admin] .bg-gray-100,
+html[data-solace-admin] .bg-gray-200,
+html[data-solace-admin] .bg-gray-200\/70 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.solace-admin .hover\:bg-gray-50:hover,
+.solace-admin .hover\:bg-gray-100:hover,
+html[data-solace-admin] .hover\:bg-gray-50:hover,
+html[data-solace-admin] .hover\:bg-gray-100:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Light gradient cards → matte admin surface */
+.solace-admin [class*="from-gray-50"][class*="to-white"],
+.solace-admin [class*="from-purple-50"][class*="to-white"],
+.solace-admin [class*="from-cyan-50"][class*="to-white"],
+.solace-admin [class*="from-green-50"][class*="to-white"],
+.solace-admin [class*="from-red-50"][class*="to-white"],
+.solace-admin [class*="from-emerald-50"][class*="to-white"],
+.solace-admin [class*="from-purple-50"][class*="to-pink-50"],
+.solace-admin [class*="from-white"][class*="via-purple"],
+.solace-admin [class*="from-white"][class*="via-cyan"],
+.solace-admin [class*="from-white"][class*="via-emerald"],
+.solace-admin [class*="from-white"][class*="via-blue"],
+html[data-solace-admin] [class*="from-gray-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-purple-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-cyan-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-green-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-red-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-emerald-50"][class*="to-white"],
+html[data-solace-admin] [class*="from-purple-50"][class*="to-pink-50"],
+html[data-solace-admin] [class*="from-white"][class*="via-purple"],
+html[data-solace-admin] [class*="from-white"][class*="via-cyan"],
+html[data-solace-admin] [class*="from-white"][class*="via-emerald"],
+html[data-solace-admin] [class*="from-white"][class*="via-blue"] {
+  background-color: var(--admin-surface) !important;
+  background-image: none !important;
+}
+
+.solace-admin .border-purple-200,
+.solace-admin .border-purple-100\/70,
+.solace-admin .border-cyan-200,
+.solace-admin .border-cyan-100\/60,
+.solace-admin .border-green-200,
+.solace-admin .border-emerald-200,
+.solace-admin .border-emerald-100\/60,
+.solace-admin .border-red-300,
+.solace-admin .border-blue-100\/70,
+html[data-solace-admin] .border-purple-200,
+html[data-solace-admin] .border-purple-100\/70,
+html[data-solace-admin] .border-cyan-200,
+html[data-solace-admin] .border-cyan-100\/60,
+html[data-solace-admin] .border-green-200,
+html[data-solace-admin] .border-emerald-200,
+html[data-solace-admin] .border-emerald-100\/60,
+html[data-solace-admin] .border-red-300,
+html[data-solace-admin] .border-blue-100\/70 {
+  border-color: var(--admin-border) !important;
+}
+
+.solace-admin .bg-purple-100,
+html[data-solace-admin] .bg-purple-100 {
+  background-color: rgba(167, 139, 250, 0.14) !important;
+}
+
+.solace-admin .text-purple-700,
+html[data-solace-admin] .text-purple-700 {
+  color: #c4b5fd !important;
+}
+
+.solace-admin .bg-green-100,
+html[data-solace-admin] .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+
+.solace-admin .text-green-700,
+html[data-solace-admin] .text-green-700 {
+  color: #6ee7b7 !important;
+}
+
+.solace-admin .bg-red-100,
+html[data-solace-admin] .bg-red-100 {
+  background-color: rgba(248, 113, 113, 0.12) !important;
+}
+
+.solace-admin .text-red-700,
+html[data-solace-admin] .text-red-700 {
+  color: #fca5a5 !important;
+}
+
+.solace-admin .border-amber-200,
+html[data-solace-admin] .border-amber-200 {
+  border-color: rgba(251, 191, 36, 0.25) !important;
+}
+
+.solace-admin .bg-amber-50,
+html[data-solace-admin] .bg-amber-50 {
+  background-color: rgba(251, 191, 36, 0.08) !important;
+}
+
+.solace-admin .text-amber-800,
+html[data-solace-admin] .text-amber-800 {
+  color: #fcd34d !important;
+}
+
+.solace-admin .hover\:text-gray-700:hover,
+html[data-solace-admin] .hover\:text-gray-700:hover {
+  color: var(--admin-text) !important;
+}
+
+/* ── Pastel tile/card backgrounds (legacy admin pages) ──
+   Mirrors theme.css .dark pastel remaps, scoped to admin shell. */
+.solace-admin [class*="bg-red-50"],
+html[data-solace-admin] [class*="bg-red-50"] {
+  background-color: rgba(80, 10, 10, 0.55) !important;
+}
+
+.solace-admin [class*="bg-rose-50"],
+html[data-solace-admin] [class*="bg-rose-50"] {
+  background-color: rgba(80, 10, 30, 0.55) !important;
+}
+
+.solace-admin [class*="bg-pink-50"],
+html[data-solace-admin] [class*="bg-pink-50"] {
+  background-color: rgba(80, 10, 40, 0.55) !important;
+}
+
+.solace-admin [class*="bg-orange-50"],
+html[data-solace-admin] [class*="bg-orange-50"] {
+  background-color: rgba(90, 40, 5, 0.55) !important;
+}
+
+.solace-admin [class*="bg-yellow-50"],
+html[data-solace-admin] [class*="bg-yellow-50"] {
+  background-color: rgba(80, 60, 5, 0.55) !important;
+}
+
+.solace-admin [class*="bg-lime-50"],
+html[data-solace-admin] [class*="bg-lime-50"] {
+  background-color: rgba(40, 60, 5, 0.55) !important;
+}
+
+.solace-admin [class*="bg-emerald-50"],
+html[data-solace-admin] [class*="bg-emerald-50"] {
+  background-color: rgba(5, 60, 35, 0.55) !important;
+}
+
+.solace-admin [class*="bg-teal-50"],
+html[data-solace-admin] [class*="bg-teal-50"] {
+  background-color: rgba(5, 55, 55, 0.55) !important;
+}
+
+.solace-admin [class*="bg-sky-50"],
+html[data-solace-admin] [class*="bg-sky-50"] {
+  background-color: rgba(8, 50, 90, 0.55) !important;
+}
+
+.solace-admin [class*="bg-cyan-50"],
+html[data-solace-admin] [class*="bg-cyan-50"] {
+  background-color: rgba(5, 55, 80, 0.55) !important;
+}
+
+.solace-admin [class*="bg-indigo-50"],
+html[data-solace-admin] [class*="bg-indigo-50"] {
+  background-color: rgba(30, 20, 100, 0.55) !important;
+}
+
+.solace-admin [class*="bg-purple-50"],
+html[data-solace-admin] [class*="bg-purple-50"] {
+  background-color: rgba(55, 10, 100, 0.55) !important;
+}
+
+.solace-admin [class*="bg-violet-50"],
+html[data-solace-admin] [class*="bg-violet-50"] {
+  background-color: rgba(60, 10, 100, 0.55) !important;
+}
+
+.solace-admin [class*="bg-fuchsia-50"],
+html[data-solace-admin] [class*="bg-fuchsia-50"] {
+  background-color: rgba(80, 10, 90, 0.55) !important;
+}
+
+.solace-admin [class*="bg-red-100"],
+html[data-solace-admin] [class*="bg-red-100"] {
+  background-color: rgba(100, 15, 15, 0.6) !important;
+}
+
+.solace-admin [class*="bg-orange-100"],
+html[data-solace-admin] [class*="bg-orange-100"] {
+  background-color: rgba(110, 50, 8, 0.6) !important;
+}
+
+.solace-admin [class*="bg-yellow-100"],
+html[data-solace-admin] [class*="bg-yellow-100"] {
+  background-color: rgba(100, 75, 8, 0.6) !important;
+}
+
+.solace-admin [class*="bg-blue-100"],
+html[data-solace-admin] [class*="bg-blue-100"] {
+  background-color: rgba(15, 40, 110, 0.6) !important;
+}
+
+.solace-admin [class*="bg-indigo-100"],
+html[data-solace-admin] [class*="bg-indigo-100"] {
+  background-color: rgba(40, 25, 120, 0.6) !important;
+}
+
+/* Light gradient tiles (e.g. from-blue-50 to-purple-50) */
+.solace-admin [class*="from-blue-50"][class*="to-purple-50"],
+html[data-solace-admin] [class*="from-blue-50"][class*="to-purple-50"] {
+  background-color: var(--admin-surface) !important;
+  background-image: none !important;
+}
+
+/* Colored borders on admin */
+.solace-admin [class*="border-green-300"],
+.solace-admin [class*="border-yellow-300"],
+.solace-admin [class*="border-blue-300"],
+.solace-admin [class*="border-red-300"],
+.solace-admin [class*="border-purple-300"],
+.solace-admin [class*="border-orange-200"],
+.solace-admin [class*="border-blue-200"],
+html[data-solace-admin] [class*="border-green-300"],
+html[data-solace-admin] [class*="border-yellow-300"],
+html[data-solace-admin] [class*="border-blue-300"],
+html[data-solace-admin] [class*="border-red-300"],
+html[data-solace-admin] [class*="border-purple-300"],
+html[data-solace-admin] [class*="border-orange-200"],
+html[data-solace-admin] [class*="border-blue-200"] {
+  border-color: var(--admin-border) !important;
+}
+
+/* Colored text — readable on dark admin surfaces */
+.solace-admin [class*="text-blue-600"],
+.solace-admin [class*="text-blue-700"],
+html[data-solace-admin] [class*="text-blue-600"],
+html[data-solace-admin] [class*="text-blue-700"] {
+  color: #93c5fd !important;
+}
+
+.solace-admin [class*="text-purple-600"],
+.solace-admin [class*="text-purple-700"],
+html[data-solace-admin] [class*="text-purple-600"],
+html[data-solace-admin] [class*="text-purple-700"] {
+  color: #c4b5fd !important;
+}
+
+.solace-admin [class*="text-yellow-600"],
+.solace-admin [class*="text-yellow-700"],
+html[data-solace-admin] [class*="text-yellow-600"],
+html[data-solace-admin] [class*="text-yellow-700"] {
+  color: #fde047 !important;
+}
+
+.solace-admin [class*="text-orange-600"],
+.solace-admin [class*="text-orange-700"],
+html[data-solace-admin] [class*="text-orange-600"],
+html[data-solace-admin] [class*="text-orange-700"] {
+  color: #fdba74 !important;
+}
+
+.solace-admin .text-gray-900,
+.solace-admin .text-gray-800,
+.solace-admin .text-gray-700,
+html[data-solace-admin] .text-gray-900,
+html[data-solace-admin] .text-gray-800,
+html[data-solace-admin] .text-gray-700 {
+  color: var(--admin-text) !important;
+}
+
+.solace-admin .bg-blue-50,
+html[data-solace-admin] .bg-blue-50,
+.solace-admin [class*="bg-blue-50"],
+html[data-solace-admin] [class*="bg-blue-50"] {
+  background-color: rgba(10, 30, 90, 0.55) !important;
+}
+
+.solace-admin .border-blue-500,
+html[data-solace-admin] .border-blue-500 {
+  border-color: rgba(78, 205, 196, 0.45) !important;
+}
+
+.solace-admin .border-gray-100,
+html[data-solace-admin] .border-gray-100 {
+  border-color: var(--admin-border) !important;
+}
+
+.solace-admin .text-gray-600,
+.solace-admin .text-gray-500,
+html[data-solace-admin] .text-gray-600,
+html[data-solace-admin] .text-gray-500 {
+  color: var(--admin-text-secondary) !important;
+}
+
+.solace-admin .text-gray-400,
+html[data-solace-admin] .text-gray-400 {
+  color: var(--admin-text-muted) !important;
+}
+
+.solace-admin .border-gray-200,
+.solace-admin .border-gray-200\/60,
+.solace-admin .border-slate-200,
+html[data-solace-admin] .border-gray-200,
+html[data-solace-admin] .border-gray-200\/60,
+html[data-solace-admin] .border-slate-200 {
+  border-color: var(--admin-border) !important;
+}
+
+.solace-admin .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html[data-solace-admin] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Status badges — keep semantic color, matte not neon */
+.solace-admin .bg-green-50,
+html[data-solace-admin] .bg-green-50,
+.solace-admin [class*="bg-green-50"],
+html[data-solace-admin] [class*="bg-green-50"] {
+  background-color: rgba(5, 60, 30, 0.55) !important;
+}
+
+.solace-admin .text-green-600,
+html[data-solace-admin] .text-green-600 {
+  color: #6ee7b7 !important;
+}
+
+.solace-admin .bg-red-50,
+html[data-solace-admin] .bg-red-50,
+.solace-admin [class*="bg-red-50"],
+html[data-solace-admin] [class*="bg-red-50"] {
+  background-color: rgba(80, 10, 10, 0.55) !important;
+}
+
+.solace-admin .text-red-600,
+html[data-solace-admin] .text-red-600 {
+  color: #fca5a5 !important;
+}
+
+/* Skeleton pulse */
+.solace-admin .bg-gray-100.rounded,
+.solace-admin .bg-gray-200,
+html[data-solace-admin] .bg-gray-100.rounded,
+html[data-solace-admin] .bg-gray-200 {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Section labels */
+.solace-admin .admin-section-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--admin-text-muted);
+}
+
+.solace-admin .admin-page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--admin-text);
+}
+
+/* Scrollbar */
+.solace-admin ::-webkit-scrollbar,
+html[data-solace-admin] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.solace-admin ::-webkit-scrollbar-thumb,
+html[data-solace-admin] ::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.22);
+  border-radius: 999px;
+}
+
+.solace-admin ::-webkit-scrollbar-track,
+html[data-solace-admin] ::-webkit-scrollbar-track {
+  background: transparent;
+}

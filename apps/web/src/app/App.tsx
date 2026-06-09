@@ -1,6 +1,7 @@
 import { useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
 
 // Contexts
 import { AuthProvider } from '@/app/contexts/AuthContext';
@@ -194,14 +195,15 @@ const NoDeviceAccess  = lazy(() => import('@/app/pages/errors/NoDeviceAccess').t
  */
 function IdleTimeoutEnforcer() {
   const { user, signOut } = useAuth();
+  const location = useLocation();
   const timerRef = useRef<number | null>(null);
   const timeoutMsRef = useRef(30 * 60 * 1000); // default 30 min
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isPublicAuthPath(location.pathname)) return;
 
     // Load saved security settings to get configured timeout
-    api.getSettings().then((rows: unknown) => {
+    api.getSettings(undefined, { skipSignOutOn401: true }).then((rows: unknown) => {
       const list = Array.isArray(rows) ? rows : [];
       const row = list.find((r: { key?: string }) => r.key === 'admin_security_settings');
       const minutes = parseInt(String(row?.value?.sessionTimeout ?? '30'), 10);
@@ -225,7 +227,7 @@ function IdleTimeoutEnforcer() {
       if (timerRef.current) clearTimeout(timerRef.current);
       activityEvents.forEach((e) => window.removeEventListener(e, resetTimer));
     };
-  }, [user, signOut]);
+  }, [user, signOut, location.pathname]);
 
   return null;
 }

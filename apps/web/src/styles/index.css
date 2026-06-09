@@ -27,3 +27,5 @@
 @import '../app/pages/app/help-support/help-support-ui.css';
 @import '../app/pages/app/appearance-settings/appearanceTheme.css';
 @import '../app/landing/landing-tokens.css';
+@import '../app/admin/admin-tokens.css';
+@import '../app/admin/admin-ui.css';

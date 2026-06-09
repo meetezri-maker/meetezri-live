@@ -12,6 +12,7 @@ import {
   solaceSelectItemClass,
   solaceSelectTriggerDefault,
 } from "@/app/solace";
+import { adminBtnSecondary } from "@/app/admin/adminPageChrome";
 
 const DEFAULT_SIZES = [10, 25, 50, 100] as const;
 
@@ -28,6 +29,13 @@ export type AdminPaginationBarProps = {
   variant?: "admin" | "solace";
   className?: string;
 };
+
+const adminPageBtn = cn(
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed",
+  "border-[color:var(--admin-border)] bg-white/[0.03] text-[var(--admin-text-secondary)]",
+  "hover:border-[color:var(--admin-border-glow)] hover:bg-white/[0.06] hover:text-[var(--admin-text)]",
+  "disabled:border-transparent disabled:bg-white/[0.02] disabled:text-[var(--admin-text-muted)]"
+);
 
 export function AdminPaginationBar({
   total,
@@ -87,7 +95,7 @@ export function AdminPaginationBar({
           onPageSizeChange(Number(e.target.value));
           onPageChange(1);
         }}
-        className="cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-2 pr-9 text-sm font-medium text-blue-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+        className={cn(adminBtnSecondary, "min-w-[11rem] cursor-pointer py-2 pr-9 text-[var(--admin-primary)]")}
       >
         {pageSizeOptions.map((n) => (
           <option key={n} value={n}>
@@ -102,7 +110,7 @@ export function AdminPaginationBar({
     <div
       className={cn(
         "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
-        isSolace ? "px-4 py-3 sm:px-5" : "border-t px-4 py-3",
+        isSolace ? "px-4 py-3 sm:px-5" : "border-t border-[color:var(--admin-border)] px-4 py-3",
         className,
       )}
     >
@@ -113,19 +121,17 @@ export function AdminPaginationBar({
           aria-label="Previous page"
           onClick={() => onPageChange(Math.max(1, safePage - 1))}
           disabled={safePage <= 1}
-          className={cn(
+          className={isSolace ? cn(
             "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed",
-            isSolace
-              ? "border-white/10 bg-black/40 text-zinc-200 hover:bg-white/[0.08] disabled:border-white/[0.04] disabled:bg-black/20 disabled:text-zinc-600"
-              : "border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400",
-          )}
+            "border-white/10 bg-black/40 text-zinc-200 hover:bg-white/[0.08] disabled:border-white/[0.04] disabled:bg-black/20 disabled:text-zinc-600"
+          ) : adminPageBtn}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span
           className={cn(
             "min-w-[9rem] text-center text-sm tabular-nums",
-            isSolace ? "text-zinc-400" : "text-gray-600",
+            isSolace ? "text-zinc-400" : "text-[var(--admin-text-secondary)]",
           )}
         >
           {from} to {to} of {total}
@@ -135,12 +141,10 @@ export function AdminPaginationBar({
           aria-label="Next page"
           onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
           disabled={safePage >= totalPages}
-          className={cn(
+          className={isSolace ? cn(
             "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed",
-            isSolace
-              ? "border-white/10 bg-black/40 text-zinc-200 hover:bg-white/[0.08] disabled:border-white/[0.04] disabled:bg-black/20 disabled:text-zinc-600"
-              : "border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400",
-          )}
+            "border-white/10 bg-black/40 text-zinc-200 hover:bg-white/[0.08] disabled:border-white/[0.04] disabled:bg-black/20 disabled:text-zinc-600"
+          ) : adminPageBtn}
         >
           <ChevronRight className="h-4 w-4" />
         </button>

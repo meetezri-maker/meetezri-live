@@ -1,17 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight, Shield, Crown, Building2, Users, Home, ArrowLeft, Lock } from "lucide-react";
 import { BrandLogo } from "../../components/BrandLogo";
 import { Card } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { FloatingElement } from "../../components/FloatingElement";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "../../components/ui/input-otp";
+import { useAuth } from "../../contexts/AuthContext";
+import { useAdminThemeScope } from "@/app/admin/useAdminThemeScope";
+import {
+  adminPageRoot,
+  adminPageAtmosphere,
+  adminPageGlowTop,
+  adminPageGlowTeal,
+  adminPageVignette,
+  adminCard,
+  adminBtnPrimary,
+  adminBtnSecondary,
+  adminBtnGhost,
+  adminInput,
+} from "@/app/admin/adminPageChrome";
+import { cn } from "@/lib/utils";
+import { isSupabaseSessionExpiredLocally } from "@/lib/jwtUtils";
+
+/** Resolve bearer token from sign-in response or current session. */
+async function resolveAccessToken(preferred?: string | null): Promise<string> {
+  const token =
+    preferred ??
+    (await supabase.auth.getSession()).data.session?.access_token;
+  if (!token) {
+    throw new Error("No valid session token. Please sign in again.");
+  }
+  return token;
+}
 
 type AdminRole = "super_admin" | "org_admin" | "team_admin";
 
@@ -20,7 +45,7 @@ interface RoleOption {
   name: string;
   description: string;
   icon: typeof Crown;
-  gradient: string;
+  accent: string;
 }
 
 const roleOptions: RoleOption[] = [
@@ -29,26 +54,38 @@ const roleOptions: RoleOption[] = [
     name: "Super Admin",
     description: "Full platform access & system management",
     icon: Crown,
-    gradient: "from-purple-500 to-pink-500",
+    accent: "var(--admin-secondary)",
   },
   {
     id: "org_admin",
     name: "Organization Admin",
     description: "Manage organization users & settings",
     icon: Building2,
-    gradient: "from-blue-500 to-cyan-500",
+    accent: "var(--admin-primary)",
   },
   {
     id: "team_admin",
     name: "Team Admin",
     description: "Manage team members & activities",
     icon: Users,
-    gradient: "from-green-500 to-emerald-500",
+    accent: "var(--admin-accent)",
   },
 ];
 
 export function AdminLogin() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
+  useAdminThemeScope(true);
+
+  // Drop expired Supabase sessions so background API calls don't reuse stale JWTs.
+  useEffect(() => {
+    void (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.expires_at && isSupabaseSessionExpiredLocally(session.expires_at)) {
+        await supabase.auth.signOut({ scope: "local" });
+      }
+    })();
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState<RoleOption | null>(null);
@@ -72,7 +109,17 @@ export function AdminLogin() {
   const verifyRoleAndNavigate = async (accessToken?: string) => {
     if (!selectedRole) return;
 
-    const profile = await api.getMe(accessToken);
+    let token = await resolveAccessToken(accessToken);
+
+    let profile;
+    try {
+      profile = await api.getMe(token, { skipSignOutOn401: true });
+    } catch (firstErr) {
+      const { data: { session: refreshed }, error } = await supabase.auth.refreshSession();
+      if (error || !refreshed?.access_token) throw firstErr;
+      token = refreshed.access_token;
+      profile = await api.getMe(token, { skipSignOutOn401: true });
+    }
     
     // Strict role check: The user must have the exact role or be a super_admin
     // Exception: If the user is a super_admin in DB, they can login as any role they want (for testing/management)
@@ -86,6 +133,8 @@ export function AdminLogin() {
        await supabase.auth.signOut();
        throw new Error(`Access denied. You are not authorized as a ${selectedRole.name}.`);
     }
+
+    await refreshProfile();
 
     toast.success(`Welcome back, ${selectedRole.name}!`);
     
@@ -116,7 +165,7 @@ export function AdminLogin() {
     setIsLoading(true);
 
     try {
-      await supabase.auth.signOut({ scope: "local" });
+      await supabase.auth.signOut();
 
       const { data: { user, session }, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -132,10 +181,10 @@ export function AdminLogin() {
       if (factorsError) throw factorsError;
 
       const totpFactor = factors?.totp?.[0];
-      const accessToken = session?.access_token;
+      const accessToken = await resolveAccessToken(session?.access_token);
 
       try {
-        const settings = await api.getSettings(accessToken);
+        const settings = await api.getSettings(accessToken, { skipSignOutOn401: true });
         const require2FA = settings.find((s: any) => s.key === 'security.require_2fa');
         
         if (require2FA?.value === true && !totpFactor) {
@@ -201,7 +250,7 @@ export function AdminLogin() {
           const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
           if (factorsError) throw factorsError;
           const totpFactor = factors?.totp?.[0];
-          const accessToken = session?.access_token;
+          const accessToken = await resolveAccessToken(session?.access_token);
           if (totpFactor) {
             setMfaFactorId(totpFactor.id);
             setStep("mfa");
@@ -220,7 +269,11 @@ export function AdminLogin() {
       }
 
       setError(rawMsg);
-      toast.error(rawMsg);
+      const friendlyMsg =
+        rawMsg === "Session expired. Please login again."
+          ? "Your previous session expired. Please sign in again with your email and password."
+          : rawMsg;
+      toast.error(friendlyMsg);
       setIsLoading(false);
     }
   };
@@ -248,7 +301,8 @@ export function AdminLogin() {
 
       if (verifyError) throw verifyError;
 
-      await verifyRoleAndNavigate();
+      const accessToken = await resolveAccessToken();
+      await verifyRoleAndNavigate(accessToken);
 
     } catch (err: any) {
       console.error("MFA verification error:", err);
@@ -259,7 +313,12 @@ export function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 relative overflow-hidden flex items-center justify-center">
+    <div className={cn(adminPageRoot, "flex items-center justify-center")}>
+      <div className={adminPageAtmosphere} aria-hidden>
+        <div className={adminPageGlowTop} />
+        <div className={adminPageGlowTeal} />
+        <div className={adminPageVignette} />
+      </div>
       {/* Back to Home Button - Fixed Top Right */}
       <motion.div
         initial={{ opacity: 0, x: 20 }}
@@ -271,7 +330,7 @@ export function AdminLogin() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-lg border border-white/20 rounded-xl text-white font-medium transition-all shadow-lg"
+            className="flex items-center gap-2 rounded-xl border border-[color:var(--admin-border)] bg-white/[0.04] px-4 py-2 font-medium text-[var(--admin-text)] backdrop-blur-lg transition-all hover:border-[color:var(--admin-border-glow)] hover:bg-white/[0.07]"
           >
             <Home className="w-4 h-4" />
             <span className="hidden sm:inline">Back to Home</span>
@@ -282,10 +341,10 @@ export function AdminLogin() {
       {/* Floating background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <FloatingElement delay={0} duration={4}>
-          <div className="absolute top-20 left-10 w-32 h-32 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute top-20 left-10 h-32 w-32 rounded-full bg-[var(--admin-glow-violet)] blur-3xl" />
         </FloatingElement>
         <FloatingElement delay={1.5} duration={5}>
-          <div className="absolute bottom-40 right-20 w-40 h-40 bg-accent/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-40 right-20 h-40 w-40 rounded-full bg-[var(--admin-glow-teal)] blur-3xl" />
         </FloatingElement>
       </div>
 
@@ -302,7 +361,7 @@ export function AdminLogin() {
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
             className="flex items-center justify-center mx-auto mb-4"
           >
-            <BrandLogo heightClass="h-16" />
+            <BrandLogo heightClass="h-16" variant="onDark" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -310,8 +369,8 @@ export function AdminLogin() {
             transition={{ delay: 0.2 }}
             className="flex items-center justify-center gap-2 mb-2"
           >
-            <Shield className="w-6 h-6 text-primary" />
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
+            <Shield className="h-6 w-6 text-[var(--admin-primary)]" />
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--admin-text)] md:text-4xl">
               Admin Portal
             </h1>
           </motion.div>
@@ -319,7 +378,7 @@ export function AdminLogin() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-gray-300"
+            className="text-[var(--admin-text-secondary)]"
           >
             {step === "role" 
               ? "Select your administrative role"
@@ -335,14 +394,10 @@ export function AdminLogin() {
           animate={{ opacity: 1 }}
           className="flex items-center justify-center gap-2 mb-8"
         >
-          <div className={`h-2 w-16 rounded-full transition-all ${
-            step === "role" ? "bg-primary" : "bg-primary/50"
-          }`} />
-          <div className={`h-2 w-16 rounded-full transition-all ${
-            step === "credentials" ? "bg-primary" : step === "mfa" ? "bg-primary/50" : "bg-white/20"
-          }`} />
+          <div className={cn("h-2 w-16 rounded-full transition-all", step === "role" ? "bg-[var(--admin-primary)]" : "bg-[var(--admin-primary)]/40")} />
+          <div className={cn("h-2 w-16 rounded-full transition-all", step === "credentials" ? "bg-[var(--admin-primary)]" : step === "mfa" ? "bg-[var(--admin-primary)]/40" : "bg-white/10")} />
           {step === "mfa" && (
-            <div className="h-2 w-16 rounded-full bg-primary transition-all" />
+            <div className="h-2 w-16 rounded-full bg-[var(--admin-primary)] transition-all" />
           )}
         </motion.div>
 
@@ -359,29 +414,26 @@ export function AdminLogin() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.05, y: -5 }}
-                whileTap={{ scale: 0.98 }}
               >
                 <Card
                   onClick={() => handleRoleSelect(role)}
-                  className="p-6 cursor-pointer border-2 hover:border-primary transition-all bg-white/95 backdrop-blur-sm relative overflow-hidden group"
+                  className={cn(adminCard, "cursor-pointer p-6 transition-all duration-300")}
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${role.gradient} opacity-0 group-hover:opacity-10 transition-opacity`} />
-                  
-                  <div className="relative z-10">
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${role.gradient} flex items-center justify-center mb-4 shadow-lg`}>
-                      <role.icon className="w-7 h-7 text-white" />
-                    </div>
-                    
-                    <h3 className="font-bold text-lg mb-2">{role.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {role.description}
-                    </p>
+                  <div
+                    className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+                    style={{ background: role.accent }}
+                  >
+                    <role.icon className="h-7 w-7 text-[#041018]" />
+                  </div>
 
-                    <div className="flex items-center gap-2 text-sm font-medium text-primary group-hover:gap-3 transition-all">
-                      Select Role
-                      <ArrowRight className="w-4 h-4" />
-                    </div>
+                  <h3 className="mb-2 text-lg font-semibold text-[var(--admin-text)]">{role.name}</h3>
+                  <p className="mb-4 text-sm text-[var(--admin-text-muted)]">
+                    {role.description}
+                  </p>
+
+                  <div className="flex items-center gap-2 text-sm font-medium text-[var(--admin-primary)] transition-all group-hover:gap-3">
+                    Select Role
+                    <ArrowRight className="h-4 w-4" />
                   </div>
                 </Card>
               </motion.div>
@@ -393,7 +445,7 @@ export function AdminLogin() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.5 }}
           >
-            <Card className="p-6 md:p-8 shadow-2xl backdrop-blur-sm bg-white/95 max-w-md mx-auto">
+            <Card className={cn(adminCard, "mx-auto max-w-md p-6 md:p-8")}>
               <form onSubmit={handleCredentialsSubmit} className="space-y-6">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
@@ -406,7 +458,7 @@ export function AdminLogin() {
                     id="email"
                     type="email"
                     placeholder="Enter admin email"
-                    className="bg-input-background transition-all focus:scale-[1.02]"
+                    className={adminInput}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -426,7 +478,7 @@ export function AdminLogin() {
                     id="password"
                     type="password"
                     placeholder="Enter admin password"
-                    className="bg-input-background transition-all focus:scale-[1.02]"
+                    className={adminInput}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -441,7 +493,7 @@ export function AdminLogin() {
               >
                 <Link
                   to="/forgot-password?context=admin"
-                  className="text-sm text-primary hover:underline"
+                  className="text-sm text-[var(--admin-primary)] hover:underline"
                 >
                   Forgot admin password?
                 </Link>
@@ -452,13 +504,13 @@ export function AdminLogin() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.7 }}
                 >
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-all"
+                  <button
+                    type="submit"
+                    className={cn(adminBtnPrimary, "w-full disabled:opacity-50")}
                     disabled={isLoading}
                   >
                     {isLoading ? "Authenticating..." : "Login to Dashboard"}
-                  </Button>
+                  </button>
                 </motion.div>
 
                 <motion.div
@@ -466,15 +518,14 @@ export function AdminLogin() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.8 }}
                 >
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    className="w-full gap-2"
+                    className={cn(adminBtnGhost, "w-full gap-2")}
                     onClick={() => setStep("role")}
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="h-4 w-4" />
                     Back to Role Selection
-                  </Button>
+                  </button>
                 </motion.div>
               </form>
             </Card>
@@ -485,14 +536,14 @@ export function AdminLogin() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.5 }}
           >
-            <Card className="p-6 md:p-8 shadow-2xl backdrop-blur-sm bg-white/95 max-w-md mx-auto">
+            <Card className={cn(adminCard, "mx-auto max-w-md p-6 md:p-8")}>
               <form onSubmit={handleMfaSubmit} className="space-y-6">
-                <div className="text-center mb-6">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Lock className="w-6 h-6 text-blue-600" />
+                <div className="mb-6 text-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--admin-border-glow)] bg-[color-mix(in_srgb,var(--admin-secondary)_14%,transparent)]">
+                    <Lock className="h-6 w-6 text-[var(--admin-secondary)]" />
                   </div>
-                  <h3 className="text-lg font-bold">Two-Factor Authentication</h3>
-                  <p className="text-sm text-gray-500">
+                  <h3 className="text-lg font-semibold text-[var(--admin-text)]">Two-Factor Authentication</h3>
+                  <p className="text-sm text-[var(--admin-text-muted)]">
                     Enter the code from your authenticator app
                   </p>
                 </div>
@@ -514,23 +565,22 @@ export function AdminLogin() {
                   </InputOTP>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-all"
+                <button
+                  type="submit"
+                  className={cn(adminBtnPrimary, "w-full disabled:opacity-50")}
                   disabled={isLoading || mfaCode.length !== 6}
                 >
                   {isLoading ? "Verifying..." : "Verify Code"}
-                </Button>
+                </button>
 
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  className="w-full gap-2"
+                  className={cn(adminBtnGhost, "w-full gap-2")}
                   onClick={() => setStep("credentials")}
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="h-4 w-4" />
                   Back to Login
-                </Button>
+                </button>
               </form>
             </Card>
           </motion.div>
