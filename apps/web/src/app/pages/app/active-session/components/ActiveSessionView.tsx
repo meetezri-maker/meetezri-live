@@ -40,6 +40,7 @@ export interface ActiveSessionViewProps {
   sessionUsesCompanion3d: boolean;
   companionAvatarLabel: string | undefined;
   companionCanonicalId: string | null;
+  resolvedAvatarKey: string | null;
   companionModelUrl: string;
   companionViewTuning: CompanionViewTuning;
   companionFixedViewportConfig: FixedAvatarViewportConfig | null;
@@ -161,6 +162,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     sessionUsesCompanion3d,
     companionAvatarLabel,
     companionCanonicalId,
+    resolvedAvatarKey,
     companionModelUrl,
     companionViewTuning,
     companionFixedViewportConfig,
@@ -293,6 +295,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             sessionUsesCompanion3d={sessionUsesCompanion3d}
             companionAvatarLabel={companionAvatarLabel}
             companionCanonicalId={companionCanonicalId}
+            resolvedAvatarKey={resolvedAvatarKey}
             companionModelUrl={companionModelUrl}
             companionViewTuning={companionViewTuning}
             companionFixedViewportConfig={companionFixedViewportConfig}

@@ -108,6 +108,20 @@ import {
   smoothSaraRfv2Targets,
   type SaraRfv2SmoothingState,
 } from "@/lib/avatar/saraRfv2SmoothingLayer";
+import {
+  SARA_V3_AVATAR_DEFINITION,
+  applySaraV3Environment,
+  captureSaraV3EnvironmentComparison,
+  createSaraV3ModelController,
+  createSaraV3PresenceState,
+  createSaraV3VisemeDriverState,
+  runSaraV3RawRenderAudit,
+  updateSaraV3PresenceRuntime,
+  updateSaraV3VisemeDriver,
+  type SaraV3ControllerState,
+  type SaraV3PresenceState,
+  type SaraV3VisemeDriverState,
+} from "@/avatar/saraV3";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getSpeechOpennessAt } from "../utils/speech";
@@ -2786,8 +2800,12 @@ function ThreeAvatarComponent({
     activeAvatarId === "sarah" &&
     !useRfv2Morphs;
   const isSaraAvatar = SARA_HYBRID_AVATAR_IDS.has(activeAvatarId);
+    const isSaraV3Avatar = activeAvatarId === "saraV3";
+    const saraV3RawAuditMode =
+      isSaraV3Avatar && SARA_V3_AVATAR_DEFINITION.saraV3.rawRenderAuditMode;
   const modelMatchesSaraHybrid =
     modelUrl === SARA_V2_AVATAR_DEFINITION.model.url;
+  const modelMatchesSaraV3 = modelUrl === SARA_V3_AVATAR_DEFINITION.model.url;
   const isSaraV2Viewport =
     isSaraFixedViewportConfig(fixedViewportConfig) &&
     fixedViewportConfig.camera.mode === "fixed" &&
@@ -2853,6 +2871,13 @@ function ThreeAvatarComponent({
   );
   const saraRfv2BindingRetryCountRef = useRef(0);
   const saraRfv2FallbackTriggeredRef = useRef(false);
+  const saraV3ControllerRef = useRef<SaraV3ControllerState | null>(null);
+  const saraV3VisemeStateRef = useRef<SaraV3VisemeDriverState>(
+    createSaraV3VisemeDriverState()
+  );
+  const saraV3PresenceStateRef = useRef<SaraV3PresenceState>(
+    createSaraV3PresenceState()
+  );
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
   const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
@@ -3069,6 +3094,7 @@ function ThreeAvatarComponent({
     renderer.domElement.style.height = "100%";
 
     container.appendChild(renderer.domElement);
+    let saraV3EnvironmentHandle: ReturnType<typeof applySaraV3Environment> | null = null;
     const roomGroup = new THREE.Group();
     roomGroup.name = "AvatarVideoCallRoom";
     const floorMaterial = new THREE.MeshStandardMaterial({
@@ -3418,6 +3444,9 @@ function ThreeAvatarComponent({
       createEmptySaraRfv2PreviewAssetDiagnostics();
     saraRfv2BindingRetryCountRef.current = 0;
     saraRfv2FallbackTriggeredRef.current = false;
+    saraV3ControllerRef.current = null;
+    saraV3VisemeStateRef.current = createSaraV3VisemeDriverState();
+    saraV3PresenceStateRef.current = createSaraV3PresenceState();
     faceBoneDefaultsRef.current = new Map();
     jordanIdlePresenceBonesRef.current = [];
     avatarRootRef.current = null;
@@ -3437,6 +3466,79 @@ function ThreeAvatarComponent({
           !useRfv2Morphs && fixedCameraConfig?.mode === "fixed";
         const isSaraViewport = isSaraFixedViewportConfig(fixedViewportConfig);
         const useSaraLabAlignedViewport = hasFixedViewportConfig && isSaraViewport;
+        if (saraV3RawAuditMode) {
+          console.info("[SaraV3 raw audit] Loading untouched GLB scene", {
+            activeAvatarId,
+            modelUrl,
+          });
+          scene.add(gltfScene);
+          gltfScene.updateMatrixWorld(true);
+          const fixedCamera = fixedCameraConfig ?? {};
+          const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.55, 3.0]);
+          const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.65, 0]);
+          camera.fov = fixedCamera.fov ?? 11;
+          camera.near = 0.01;
+          camera.far = 100;
+          camera.position.copy(cameraPosition);
+          camera.lookAt(cameraLookAt);
+          camera.userData.fixedLookAt = cameraLookAt.toArray();
+          camera.updateProjectionMatrix();
+          renderer.render(scene, camera);
+          const saraV3EnvironmentComparison =
+            SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.captureComparisonDiagnostics
+              ? captureSaraV3EnvironmentComparison({
+                  root: gltfScene,
+                  scene,
+                  camera,
+                  renderer,
+                  applyEnvironment: () => {
+                    saraV3EnvironmentHandle = applySaraV3Environment({
+                      scene,
+                      renderer,
+                    });
+                    return saraV3EnvironmentHandle;
+                  },
+                })
+              : null;
+          if (!saraV3EnvironmentComparison) {
+            saraV3EnvironmentHandle = applySaraV3Environment({
+              scene,
+              renderer,
+            });
+            renderer.render(scene, camera);
+          }
+          if (typeof window !== "undefined") {
+            (window as any).saraV3EnvironmentDiagnostics = {
+              environmentEnabled: SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.enabled,
+              environmentSource: saraV3EnvironmentHandle?.source ?? null,
+              pmremGeneratorUsed: true,
+              sceneEnvironmentAssigned: Boolean(scene.environment),
+              sceneBackgroundChanged: false,
+              beforeAfterComparison: saraV3EnvironmentComparison,
+            };
+          }
+          runSaraV3RawRenderAudit({
+            root: gltfScene,
+            scene,
+            camera,
+            renderer,
+            modelUrl,
+            cameraAppliedInRawAudit: true,
+            cameraConfigSource: "fixedCameraConfig",
+            cameraLookAt,
+          });
+          if (!cancelled) {
+            setAvatarLoadState("ready");
+            setAvatarLoadProgress(1);
+          }
+          return;
+        }
+        if (isSaraV3Avatar && !saraV3EnvironmentHandle) {
+          saraV3EnvironmentHandle = applySaraV3Environment({
+            scene,
+            renderer,
+          });
+        }
         console.info("[Avatar Runtime Config]", {
           activeAvatarId,
           fixedConfigAvatarId: fixedViewportConfig?.avatarId ?? null,
@@ -3702,7 +3804,7 @@ function ThreeAvatarComponent({
 
               // Mouth bindings
               const mouthCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? false : isMouthName(name)
+                useRfv2Morphs || isSaraV3Avatar ? false : isMouthName(name)
               );
 
               mouthCandidates.forEach(([name, index]) => {
@@ -3717,7 +3819,11 @@ function ThreeAvatarComponent({
 
               // Blink bindings
               const blinkCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? isRfv2BlinkMorphName(name) : isBlinkName(name)
+                useRfv2Morphs
+                  ? isRfv2BlinkMorphName(name)
+                  : isSaraV3Avatar
+                    ? false
+                    : isBlinkName(name)
               );
 
               blinkCandidates.forEach(([name, index]) => {
@@ -3731,7 +3837,11 @@ function ThreeAvatarComponent({
               });
 
               const cheekCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? isRfv2ExpressionMorphName(name) : isCheekMorphName(name)
+                useRfv2Morphs
+                  ? isRfv2ExpressionMorphName(name)
+                  : isSaraV3Avatar
+                    ? false
+                    : isCheekMorphName(name)
               );
               cheekCandidates.forEach(([name, index]) => {
                 cheekBindingsRef.current.push({
@@ -3846,10 +3956,16 @@ function ThreeAvatarComponent({
           );
         }
 
-        if (process.env.NODE_ENV === "development") console.groupEnd();
-        console.groupEnd();
+	        if (process.env.NODE_ENV === "development") console.groupEnd();
+	        console.groupEnd();
+	        if (isSaraV3Avatar && modelMatchesSaraV3) {
+	          saraV3ControllerRef.current = createSaraV3ModelController({
+	            root: gltfScene,
+	            modelUrl,
+	          });
+	        }
 
-        console.log(
+	        console.log(
           "[Avatar] Summary — mouth bindings:",
           mouthBindingsRef.current.map((b) => `${b.mesh.name}:${b.name}`),
           "| blink bindings:",
@@ -4605,12 +4721,14 @@ function ThreeAvatarComponent({
           console.groupEnd();
         }
 
-        if (!cancelled) {
-          setAvatarLoadState("ready");
-          setAvatarLoadProgress(1);
-        }
-        startBlinkLoop();
-      },
+	        if (!cancelled) {
+	          setAvatarLoadState("ready");
+	          setAvatarLoadProgress(1);
+	        }
+	        if (!isSaraV3Avatar) {
+	          startBlinkLoop();
+	        }
+	      },
       undefined,
       (error) => {
         console.error("[Avatar] Failed to load GLB:", error);
@@ -6984,8 +7102,27 @@ function ThreeAvatarComponent({
                     });
                   }
                 }
-          const saraV2MouthMorphBindings = isSaraV2Viewport
-            ? mouthBindingsRef.current.map(({ mesh, index, name }) => ({
+	          if (!saraV3RawAuditMode && isSaraV3Avatar && saraV3ControllerRef.current) {
+	            updateSaraV3VisemeDriver({
+	              state: saraV3VisemeStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              timeline: avatarPhonemeTimelineRef.current,
+	              audioCurrentTime: avatarAudioCurrentTimeRef.current,
+	              isSpeaking: speaking,
+	              dt,
+	            });
+	            updateSaraV3PresenceRuntime({
+	              state: saraV3PresenceStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              nowMs: now,
+	              dt,
+	              isSpeaking: speaking,
+	              isListening: isListeningRef.current,
+	              isThinking: isThinkingRef.current,
+	            });
+	          }
+	          const saraV2MouthMorphBindings = isSaraV2Viewport
+	            ? mouthBindingsRef.current.map(({ mesh, index, name }) => ({
                 morphName: name,
                 meshName: mesh.name || "(unnamed mesh)",
                 index,
@@ -7019,9 +7156,13 @@ function ThreeAvatarComponent({
           const saraV2HasMouthActivity =
             isSaraV2Viewport &&
             speaking &&
-            (saraV2PhonemeDriverActive || Math.max(mouthAdj, jawOpenAdj, lipFollowAdj) > 0.001);
+            (saraUseAudioDrivenMouth ||
+              saraV2PhonemeDriverActive ||
+              Math.max(mouthAdj, jawOpenAdj, lipFollowAdj) > 0.001);
           const saraV2PrimaryOpenDriver = !saraV2HasMouthActivity
             ? "none"
+            : saraUseAudioDrivenMouth
+              ? "audioDrivenPrimary"
             : saraV2PhonemeDriverActive
               ? "saraPhoneme"
             : saraV2MouthOpenDriverKinds.includes("viseme")
@@ -7057,7 +7198,12 @@ function ThreeAvatarComponent({
 
           // Apply mouth morphs — conservative ranges to avoid extreme deformation.
           // Also avoid any targets that look like full head/neck controls.
-          if (!useRfv2Morphs && !saraRfv2PreviewActive && mouthBindingsRef.current.length > 0) {
+	          if (
+	            !useRfv2Morphs &&
+	            !saraRfv2PreviewActive &&
+	            !isSaraV3Avatar &&
+	            mouthBindingsRef.current.length > 0
+	          ) {
             mouthBindingsRef.current.forEach(({ mesh, index, name }) => {
               const influences = mesh.morphTargetInfluences;
               if (!influences || index >= influences.length) return;
@@ -7608,6 +7754,13 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
               isSaraV2Viewport,
               phonemeDriverActive: saraV2PhonemeDriverActive,
               audioDrivenMouthFallbackActive: saraUseAudioDrivenMouth,
+              saraMouthDriverMode: saraUseAudioDrivenMouth
+                ? "audioDrivenPrimary"
+                : saraV2PhonemeDriverActive
+                  ? "phonemeTimeline"
+                  : saraV2FallbackMouthDriverActive
+                    ? "legacyFallback"
+                    : "idle",
               saraAudioMouthOpen,
               audioNorm,
               mouthAdj,
@@ -8416,6 +8569,15 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
             } catch {
               /* noop */
             }
+          }
+
+          if (saraV3EnvironmentHandle) {
+            try {
+              saraV3EnvironmentHandle.dispose();
+            } catch {
+              /* noop */
+            }
+            saraV3EnvironmentHandle = null;
           }
 
           if (avatarRootRef.current && sceneRef.current) {

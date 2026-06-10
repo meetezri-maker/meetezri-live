@@ -19,6 +19,7 @@ export interface SessionStageProps {
   sessionUsesCompanion3d: boolean;
   companionAvatarLabel: string | undefined;
   companionCanonicalId: string | null;
+  resolvedAvatarKey: string | null;
   companionModelUrl: string;
   companionViewTuning: CompanionViewTuning;
   companionFixedViewportConfig: FixedAvatarViewportConfig | null | undefined;
@@ -50,6 +51,7 @@ export const SessionStage = memo(function SessionStage({
   sessionUsesCompanion3d,
   companionAvatarLabel,
   companionCanonicalId,
+  resolvedAvatarKey,
   companionModelUrl,
   companionViewTuning,
   companionFixedViewportConfig,
@@ -102,7 +104,7 @@ export const SessionStage = memo(function SessionStage({
             >
               <ThreeAvatar
                 rawAvatarLabel={companionAvatarLabel}
-                activeAvatarId={companionCanonicalId}
+                activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
                 modelUrl={companionModelUrl}
                 viewTuning={companionViewTuning}
                 fixedViewportConfig={companionFixedViewportConfig}
