@@ -46,6 +46,8 @@ export type EzriRealtimeClientHandlers = {
   onPipelineStep?: (status: "thinking" | "hearing", message?: string) => void;
   /** Backend-computed phonemes + sentiment for each TTS sentence. Useful for lip sync / expressions. */
   onAvatarData?: (data: EzriAvatarData) => void;
+  /** `{ type: "audio_start", format, sample_rate }` — WAV vs PCM for gapless scheduler. */
+  onAudioStart?: (info: { format: string; sampleRate: number }) => void;
   onError?: (error: unknown, context?: any) => void;
   onUnknownMessage?: (raw: unknown) => void;
 };
@@ -252,6 +254,15 @@ export class EzriRealtimeClient {
           this.handlers.onPipelineStep?.(stepStatus, stepMessage);
           return;
         }
+      }
+
+      if (errType === "audio_start") {
+        this.handlers.onAudioStart?.({
+          format: typeof msg.format === "string" ? msg.format : "wav",
+          sampleRate:
+            typeof msg.sample_rate === "number" ? msg.sample_rate : 24000,
+        });
+        return;
       }
 
       // avatar_data → per-sentence phonemes + sentiment for lip sync / expressions.

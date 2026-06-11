@@ -10,7 +10,6 @@ import {
   Download,
   Star,
   Lock,
-  MoreVertical,
   Flame,
   Plus,
 } from "lucide-react";
@@ -936,10 +935,17 @@ export function SessionHistory() {
                             <Clock className="w-4 h-4" />
                             <span>{sessionItem.duration}</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <MessageSquare className="w-4 h-4" />
-                            <span>{sessionItem.messagesCount}</span>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleExportSession(sessionItem);
+                            }}
+                            className="session-history-row-action flex items-center gap-1.5 rounded-lg p-1 text-slate-400 transition-all hover:bg-slate-700/50 hover:text-white"
+                            aria-label="Download transcript"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -956,15 +962,6 @@ export function SessionHistory() {
                           >
                             <Star className={cn("w-4 h-4", sessionItem.favorite && "fill-current")} />
                           </motion.button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleExportSession(sessionItem);
-                            }}
-                            className="session-history-row-action p-2 rounded-lg bg-slate-800/50 text-slate-500 hover:text-white hover:bg-slate-700/50 transition-all"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
                         </div>
                       </div>
                     </div>
