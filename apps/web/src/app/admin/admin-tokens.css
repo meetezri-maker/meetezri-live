@@ -1,6 +1,7 @@
 /**
- * Solace Admin OS — locked design tokens.
+ * Solace Admin OS — locked design tokens (material system).
  * Scoped to .solace-admin and html[data-solace-admin] (portals).
+ * Visual twin of user-side .solace-app tokens.
  */
 
 .solace-admin,
@@ -9,51 +10,114 @@ html[data-solace-admin] {
   --admin-primary: #4ecdc4;
   --admin-secondary: #a78bfa;
   --admin-accent: #fbbf24;
+  --admin-pink: #ec4899;
   --admin-bg: #0a0f1e;
+  --admin-bg-deep: #080b14;
   --admin-surface: #0d1428;
+  --admin-surface-raised: #10162a;
   --admin-surface-elevated: #111a32;
   --admin-surface-hover: #141e38;
   --admin-white: #ffffff;
 
-  /* Typography */
-  --admin-text: rgba(255, 255, 255, 0.94);
-  --admin-text-secondary: rgba(203, 213, 225, 0.78);
-  --admin-text-muted: rgba(148, 163, 184, 0.72);
+  /* Typography — locked */
+  --admin-text: #f8fafc;
+  --admin-text-secondary: #b8c0d4;
+  --admin-text-muted: #7b8499;
+
+  /* Matte card surface — user-side twin */
+  --admin-surface-gradient: linear-gradient(
+    145deg,
+    rgba(17, 22, 42, 0.96) 0%,
+    rgba(8, 12, 24, 0.98) 100%
+  );
+  --admin-surface-border-color: rgba(167, 139, 250, 0.18);
 
   /* Borders & edge lighting */
   --admin-border: rgba(255, 255, 255, 0.06);
-  --admin-border-glow: rgba(167, 139, 250, 0.18);
-  --admin-border-glow-teal: rgba(78, 205, 196, 0.14);
-  --admin-edge-highlight: rgba(255, 255, 255, 0.055);
+  --admin-border-glow: rgba(167, 139, 250, 0.38);
+  --admin-border-glow-soft: rgba(167, 139, 250, 0.18);
+  --admin-border-glow-teal: rgba(78, 205, 196, 0.22);
+  --admin-edge-highlight: rgba(255, 255, 255, 0.04);
 
-  /* Depth */
-  --admin-shadow-panel: 0 0 0 1px rgba(167, 139, 250, 0.1),
-    0 24px 64px -32px rgba(0, 0, 0, 0.75),
+  /* Depth — premium matte, environmental */
+  --admin-shadow-panel:
+    0 20px 60px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 var(--admin-edge-highlight);
-  --admin-shadow-panel-hover: 0 0 0 1px rgba(167, 139, 250, 0.22),
-    0 28px 72px -28px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --admin-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85),
+  --admin-shadow-panel-hover:
+    0 20px 56px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(167, 139, 250, 0.1),
+    0 0 28px rgba(78, 205, 196, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --admin-shadow-glow-violet: 0 0 28px rgba(167, 139, 250, 0.14);
+  --admin-shadow-glow-teal: 0 0 24px rgba(78, 205, 196, 0.08);
+  --admin-shadow-glow-brand:
+    0 0 22px rgba(167, 139, 250, 0.08),
+    0 0 30px rgba(78, 205, 196, 0.04);
+  --admin-shadow-cinematic:
+    0 40px 100px -48px rgba(0, 0, 0, 0.85),
     0 0 48px -20px rgba(88, 28, 135, 0.28);
 
-  /* Environmental glows */
+  /* Environmental glows — corner lighting */
   --admin-glow-violet: rgba(167, 139, 250, 0.14);
+  --admin-glow-violet-hover: rgba(167, 139, 250, 0.16);
   --admin-glow-teal: rgba(78, 205, 196, 0.1);
-  --admin-glow-amber: rgba(251, 191, 36, 0.08);
+  --admin-glow-teal-hover: rgba(78, 205, 196, 0.11);
+  --admin-glow-amber: rgba(251, 191, 36, 0.1);
+  --admin-glow-rose: rgba(236, 72, 153, 0.1);
+
+  /* Sidebar active — violet → teal brand gradient */
+  --admin-nav-active-bg: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.34) 0%,
+    rgba(120, 100, 220, 0.22) 42%,
+    rgba(78, 205, 196, 0.24) 100%
+  );
+  --admin-nav-active-border: rgba(167, 139, 250, 0.4);
+  --admin-nav-active-glow:
+    0 0 24px rgba(167, 139, 250, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Sidebar hover */
+  --admin-nav-hover-bg: rgba(167, 139, 250, 0.08);
+  --admin-nav-hover-border: rgba(167, 139, 250, 0.18);
+  --admin-nav-hover-glow: 0 0 16px rgba(167, 139, 250, 0.12);
+
+  /* Crisis / health card accents */
+  --admin-crisis-surface: linear-gradient(
+    145deg,
+    rgba(48, 12, 24, 0.96) 0%,
+    rgba(24, 8, 16, 0.98) 100%
+  );
+  --admin-crisis-border: rgba(248, 113, 113, 0.22);
+  --admin-crisis-glow: rgba(236, 72, 153, 0.12);
+  --admin-health-surface: linear-gradient(
+    145deg,
+    rgba(12, 32, 28, 0.96) 0%,
+    rgba(8, 16, 20, 0.98) 100%
+  );
+  --admin-health-border: rgba(78, 205, 196, 0.2);
+  --admin-health-glow: rgba(78, 205, 196, 0.1);
+  --admin-warning-surface: linear-gradient(
+    145deg,
+    rgba(40, 32, 12, 0.96) 0%,
+    rgba(20, 16, 8, 0.98) 100%
+  );
+  --admin-warning-border: rgba(251, 191, 36, 0.22);
 
   /* Page atmosphere */
-  --admin-page-bg: linear-gradient(
-    165deg,
-    #0a0f1e 0%,
-    #0b1124 38%,
-    #0a0f1e 72%,
-    #0c1022 100%
-  );
+  --admin-page-bg: #0a0f1e;
+
+  /* Transition — locked 180ms */
+  --admin-transition: 180ms ease;
+
+  /* Card radius scale */
+  --admin-radius-card: 1.25rem;
+  --admin-radius-card-lg: 1.5rem;
 
   /* shadcn bridge — admin always dark cosmos */
   --background: var(--admin-bg);
   --foreground: var(--admin-text);
-  --card: var(--admin-surface);
+  --card: var(--admin-surface-raised);
   --card-foreground: var(--admin-text);
   --popover: var(--admin-surface-elevated);
   --popover-foreground: var(--admin-text);
@@ -65,13 +129,43 @@ html[data-solace-admin] {
   --muted-foreground: var(--admin-text-muted);
   --accent: var(--admin-secondary);
   --accent-foreground: var(--admin-white);
-  --destructive: #f87171;
+  --destructive: #dc2626;
   --destructive-foreground: var(--admin-white);
   --border: var(--admin-border);
   --input: rgba(255, 255, 255, 0.06);
   --input-background: rgba(255, 255, 255, 0.03);
   --ring: rgba(78, 205, 196, 0.35);
   --radius: 0.875rem;
+
+  /* Remap Tailwind gray/slate text utilities → admin typography (fixes !text-gray-900 etc.) */
+  --color-gray-950: var(--admin-text);
+  --color-gray-900: var(--admin-text);
+  --color-gray-800: var(--admin-text);
+  --color-gray-700: var(--admin-text);
+  --color-gray-600: var(--admin-text-secondary);
+  --color-gray-500: var(--admin-text-secondary);
+  --color-gray-400: var(--admin-text-muted);
+  --color-gray-300: var(--admin-text-muted);
+  --color-zinc-950: var(--admin-text);
+  --color-zinc-900: var(--admin-text);
+  --color-zinc-800: var(--admin-text);
+  --color-zinc-700: var(--admin-text);
+  --color-zinc-600: var(--admin-text-secondary);
+  --color-zinc-500: var(--admin-text-secondary);
+  --color-zinc-400: var(--admin-text-muted);
+  --color-slate-950: var(--admin-text);
+  --color-slate-900: var(--admin-text);
+  --color-slate-800: var(--admin-text);
+  --color-slate-700: var(--admin-text);
+  --color-slate-600: var(--admin-text-secondary);
+  --color-slate-500: var(--admin-text-secondary);
+  --color-slate-400: var(--admin-text-muted);
+  --color-neutral-900: var(--admin-text);
+  --color-neutral-800: var(--admin-text);
+  --color-neutral-700: var(--admin-text);
+  --color-neutral-600: var(--admin-text-secondary);
+  --color-neutral-500: var(--admin-text-secondary);
+  --color-black: var(--admin-text);
 
   color: var(--admin-text);
 }

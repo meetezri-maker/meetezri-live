@@ -141,7 +141,7 @@ function WelcomeBlock({ className }: WelcomeBlockProps) {
   return (
     <div className={cn(className)}>
       <h1 className="solace-login-serif text-[clamp(1.85rem,3.2vw,2.75rem)] font-medium leading-[1.08] text-[#faf8fc] drop-shadow-[0_2px_28px_rgba(0,0,0,0.45)]">
-        Welcome Back
+        Welcome To Solace
       </h1>
       <p className="solace-login-serif mt-1.5 text-[clamp(1.35rem,2.2vw,1.85rem)] font-medium italic tracking-wide text-[#f472b8] drop-shadow-[0_0_18px_rgba(233,30,99,0.25)]">
         You&apos;re safe here. <span aria-hidden>♡</span>

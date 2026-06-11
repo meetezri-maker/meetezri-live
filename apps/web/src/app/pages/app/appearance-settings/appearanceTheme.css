@@ -1,16 +1,211 @@
+/* Default = sanctuary theme: violet primary, lavender secondary (not rose pink) */
+html {
+  --accent: #a78bfa;
+  --primary: #7c3aed;
+  --accent-secondary: #a78bfa;
+  --accent-primary: #22d3ee;
+  --button-primary: linear-gradient(135deg, #7c3aed 0%, #c026d3 100%);
+  --button-primary-text: #ffffff;
+  --solace-ds-border-glow: rgba(168, 85, 247, 0.22);
+  --solace-ds-glow-purple: rgba(168, 85, 247, 0.35);
+  --solace-ds-glow-pink: rgba(236, 72, 153, 0.28);
+  --nav-active-bg: linear-gradient(to right, rgba(167, 139, 250, 0.22), rgba(124, 58, 237, 0.1));
+  --nav-active-bg-light: linear-gradient(135deg, rgba(167, 139, 250, 0.24), rgba(124, 58, 237, 0.12));
+  --nav-active-border: rgba(167, 139, 250, 0.35);
+  --nav-active-border-light: rgba(167, 139, 250, 0.45);
+  --nav-active-shadow: 0 0 32px rgba(139, 92, 246, 0.22), inset 0 0 0 1px rgba(167, 139, 250, 0.32);
+  --nav-active-shadow-light: 0 0 20px rgba(167, 139, 250, 0.16);
+  --nav-active-icon: #a78bfa;
+  --nav-active-icon-light: #7c3aed;
+  --nav-active-text-light: #7c3aed;
+  --nav-mobile-indicator: linear-gradient(to right, #a78bfa, rgba(124, 58, 237, 0.85));
+  --appearance-selection-bg: linear-gradient(135deg, rgba(167, 139, 250, 0.14), rgba(124, 58, 237, 0.07));
+  --appearance-selection-border: rgba(167, 139, 250, 0.42);
+  --appearance-selection-shadow: 0 0 24px -8px rgba(139, 92, 246, 0.28);
+  --appearance-selection-ring: rgba(167, 139, 250, 0.8);
+  --appearance-orb-from: #a78bfa;
+  --appearance-orb-to: #7c3aed;
+}
+
 /* Accent color orbs — gradient via CSS variables (survives high-contrast mode) */
 .appearance-accent-orb {
   background: linear-gradient(
     135deg,
-    var(--appearance-orb-from, #ec4899) 0%,
-    var(--appearance-orb-to, #db2777) 100%
+    var(--appearance-orb-from, #a78bfa) 0%,
+    var(--appearance-orb-to, #7c3aed) 100%
   );
 }
 
 .high-contrast .appearance-accent-orb.hc-preserve-color {
   background: linear-gradient(
     135deg,
-    var(--appearance-orb-from, #ec4899) 0%,
-    var(--appearance-orb-to, #db2777) 100%
+    var(--appearance-orb-from, #a78bfa) 0%,
+    var(--appearance-orb-to, #7c3aed) 100%
   ) !important;
+}
+
+/* Selected-state checkmark uses current accent */
+.appearance-selected-check {
+  background: var(--button-primary, linear-gradient(135deg, #7c3aed, #c026d3));
+  background-image: var(--button-primary, linear-gradient(135deg, #7c3aed, #c026d3));
+  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--accent, #a78bfa) 65%, transparent);
+}
+
+/*
+ * Primary buttons — Tailwind gradient utilities set background-image and override
+ * bg-[var(--button-primary)]. Force accent gradient via CSS variables.
+ */
+.solace-app .solace-btn-primary,
+.solace-app .solace-cta-gradient:not(.solace-btn-destructive):not([class*="from-red"]):not(
+    [class*="from-rose"]
+  ):not([class*="from-emerald"]):not([class*="from-green-6"]) {
+  background: var(--button-primary) !important;
+  background-image: var(--button-primary) !important;
+  background-color: transparent !important;
+  color: var(--button-primary-text, #ffffff) !important;
+  box-shadow: var(
+    --button-primary-shadow,
+    0 8px 24px -8px color-mix(in srgb, var(--accent, #a78bfa) 35%, transparent),
+    0 0 20px -6px color-mix(in srgb, var(--accent, #a78bfa) 25%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--accent, #a78bfa) 35%, transparent);
+}
+
+.solace-app .solace-btn-primary:hover,
+.solace-app
+  .solace-cta-gradient:not(.solace-btn-destructive):not([class*="from-red"]):not(
+    [class*="from-rose"]
+  ):not([class*="from-emerald"]):not([class*="from-green-6"]):hover {
+  filter: brightness(1.06);
+  opacity: 1;
+}
+
+/* shadcn / Radix default primary variant */
+.solace-app button.bg-primary,
+.solace-app a.bg-primary,
+.solace-app [data-slot="button"].bg-primary {
+  background-color: var(--primary, var(--accent, #a78bfa)) !important;
+  color: var(--primary-foreground, #ffffff) !important;
+}
+
+/* App shell + page backdrop — solid, gradient, and pattern from appearance settings */
+.solace-app {
+  background-color: var(--solace-app-backdrop-color, var(--solace-bg, #07080f));
+}
+
+.solace-app > main.solace-app-main,
+.solace-page-backdrop,
+.appearance-settings-page {
+  background-color: var(--solace-app-backdrop-color, var(--solace-bg, #07080f));
+  background-image: var(--solace-app-backdrop-image, var(--solace-page-bg, none));
+  background-size: var(--solace-app-backdrop-size, auto);
+  background-position: var(--solace-app-backdrop-position, 0 0);
+  background-repeat: var(--solace-app-backdrop-repeat, no-repeat);
+  background-attachment: var(--solace-app-backdrop-attachment, scroll);
+}
+
+html[data-ezri-background-style="solid"] .solace-app > main.solace-app-main,
+html[data-ezri-background-style="solid"] .solace-page-backdrop,
+html[data-ezri-background-style="solid"] .appearance-settings-page {
+  background-image: none !important;
+}
+
+html[data-ezri-background-style="pattern"] .solace-app > main.solace-app-main,
+html[data-ezri-background-style="pattern"] .solace-page-backdrop,
+html[data-ezri-background-style="pattern"] .appearance-settings-page {
+  background-repeat: repeat !important;
+}
+
+html[data-ezri-background-style="gradient"] .solace-app > main.solace-app-main,
+html[data-ezri-background-style="gradient"] .solace-page-backdrop,
+html[data-ezri-background-style="gradient"] .appearance-settings-page {
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* Appearance picker mini-previews mirror live backdrop tokens */
+.appearance-bg-preview {
+  background-color: var(--solace-app-backdrop-color, #07080f);
+}
+.appearance-bg-preview--solid {
+  background-image: none;
+}
+.appearance-bg-preview--gradient {
+  background-image: var(--solace-app-backdrop-image, var(--solace-page-bg));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.appearance-bg-preview--pattern {
+  background-image: var(--solace-app-backdrop-image, var(--solace-page-bg));
+  background-size: var(--solace-app-backdrop-size, 12px 12px);
+  background-position: var(--solace-app-backdrop-position, 0 0);
+  background-repeat: repeat;
+}
+
+/* Accent-tinted selection ring on appearance swatches */
+.appearance-accent-swatch--selected {
+  outline: 3px solid var(--appearance-selection-ring, color-mix(in srgb, var(--accent, #ec4899) 80%, transparent));
+  outline-offset: 2px;
+  box-shadow: var(--appearance-selection-shadow, 0 0 28px -4px color-mix(in srgb, var(--accent, #ec4899) 75%, transparent));
+}
+
+/* Sidebar navigation — accent gradient active tab (dark) */
+.solace-app .solace-sidebar-nav--active {
+  background: var(--nav-active-bg) !important;
+  background-image: var(--nav-active-bg) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: var(--nav-active-shadow) !important;
+}
+
+.solace-app .solace-sidebar-nav-icon--active,
+.solace-app .solace-sidebar-nav--active svg {
+  color: var(--nav-active-icon, var(--accent, #a78bfa)) !important;
+}
+
+/* Mobile bottom nav — accent gradient active tab */
+.solace-app .solace-mobile-nav-tab--active {
+  border: 1px solid var(--nav-active-border, color-mix(in srgb, var(--accent) 35%, transparent)) !important;
+  background: var(--nav-active-bg) !important;
+  background-image: var(--nav-active-bg) !important;
+  color: var(--nav-active-icon, var(--accent)) !important;
+  box-shadow: var(--nav-active-shadow) !important;
+}
+
+.solace-mobile-nav-indicator {
+  background: var(--nav-mobile-indicator) !important;
+  background-image: var(--nav-mobile-indicator) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #a78bfa) 55%, transparent);
+}
+
+/* Appearance settings — theme / background option cards */
+.appearance-selection-active {
+  background: var(--appearance-selection-bg) !important;
+  background-image: var(--appearance-selection-bg) !important;
+  box-shadow: var(--appearance-selection-shadow) !important;
+}
+
+/* Light theme nav selection */
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active,
+html[data-theme="light"] .solace-app .solace-sidebar-nav--active {
+  color: var(--nav-active-text-light, #4c1d95) !important;
+  background: var(--nav-active-bg-light) !important;
+  background-image: var(--nav-active-bg-light) !important;
+  border: 1px solid var(--nav-active-border-light) !important;
+  box-shadow: var(--nav-active-shadow-light) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav-icon--active,
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active svg,
+html[data-theme="light"] .solace-app .solace-sidebar-nav-icon--active,
+html[data-theme="light"] .solace-app .solace-sidebar-nav--active svg {
+  color: var(--nav-active-icon-light, #7c3aed) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-mobile-nav-tab--active,
+html[data-theme="light"] .solace-app .solace-mobile-nav-tab--active {
+  border-color: var(--nav-active-border-light) !important;
+  background: var(--nav-active-bg-light) !important;
+  background-image: var(--nav-active-bg-light) !important;
+  color: var(--nav-active-text-light, #4c1d95) !important;
 }

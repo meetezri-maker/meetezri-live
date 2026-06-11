@@ -26,6 +26,7 @@ import {
 } from "@/app/admin/adminPageChrome";
 import { cn } from "@/lib/utils";
 import { isSupabaseSessionExpiredLocally } from "@/lib/jwtUtils";
+import { canAccessAdminPortal, type AdminLoginRole } from "@/lib/adminRoles";
 
 /** Resolve bearer token from sign-in response or current session. */
 async function resolveAccessToken(preferred?: string | null): Promise<string> {
@@ -106,9 +107,10 @@ export function AdminLogin() {
     setMfaFactorId(null);
   };
 
-  const verifyRoleAndNavigate = async (accessToken?: string) => {
+  const verifyRoleAndNavigate = async (accessToken?: string, authUser?: { app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null) => {
     if (!selectedRole) return;
 
+    api.clearMeCache();
     let token = await resolveAccessToken(accessToken);
 
     let profile;
@@ -121,13 +123,11 @@ export function AdminLogin() {
       profile = await api.getMe(token, { skipSignOutOn401: true });
     }
     
-    // Strict role check: The user must have the exact role or be a super_admin
-    // Exception: If the user is a super_admin in DB, they can login as any role they want (for testing/management)
-    const userRole = profile?.role;
-    
-    const hasPermission = 
-      userRole === selectedRole.id || 
-      userRole === 'super_admin';
+    const hasPermission = canAccessAdminPortal(
+      profile?.role,
+      selectedRole.id as AdminLoginRole,
+      authUser
+    );
 
     if (!hasPermission) {
        await supabase.auth.signOut();
@@ -223,7 +223,7 @@ export function AdminLogin() {
         return;
       }
 
-      await verifyRoleAndNavigate(accessToken);
+      await verifyRoleAndNavigate(accessToken, user);
 
     } catch (err: any) {
       const rawMsg = err?.message || "Authentication failed";
@@ -257,7 +257,7 @@ export function AdminLogin() {
             setIsLoading(false);
             return;
           }
-          await verifyRoleAndNavigate(accessToken);
+          await verifyRoleAndNavigate(accessToken, user);
           return;
         } catch (retryErr: any) {
           console.error("Retry sign-in failed:", retryErr);
@@ -302,7 +302,8 @@ export function AdminLogin() {
       if (verifyError) throw verifyError;
 
       const accessToken = await resolveAccessToken();
-      await verifyRoleAndNavigate(accessToken);
+      const { data: { user: sessionUser } } = await supabase.auth.getUser();
+      await verifyRoleAndNavigate(accessToken, sessionUser);
 
     } catch (err: any) {
       console.error("MFA verification error:", err);

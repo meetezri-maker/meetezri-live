@@ -30,7 +30,7 @@ import {
   Moon,
   Target,
 } from "lucide-react";
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { BrandLogo } from "./BrandLogo";
@@ -242,6 +242,26 @@ const NAVIGATION: NavSection[] = [
   },
 ];
 
+function isNavPageActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  return pathname.startsWith(`${href}/`);
+}
+
+function getActiveSectionName(sections: NavSection[], pathname: string): string | null {
+  let match: { name: string; hrefLength: number } | null = null;
+
+  for (const section of sections) {
+    for (const page of section.pages) {
+      if (!isNavPageActive(pathname, page.href)) continue;
+      if (!match || page.href.length > match.hrefLength) {
+        match = { name: section.name, hrefLength: page.href.length };
+      }
+    }
+  }
+
+  return match?.name ?? null;
+}
+
 const roleInfo: Record<AdminRole, { name: string; accent: string; icon: any }> = {
   super_admin: {
     name: "Super Admin",
@@ -277,13 +297,9 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
     : "team_admin";
   const adminEmail = user?.email || "admin@ezri.com";
   
-  // Find which section contains the current page
-  const findCurrentSection = () => {
-    const currentSection = NAVIGATION.find(section => 
-      section.pages.some(page => location.pathname === page.href)
-    );
-    return currentSection?.name || null;
-  };
+  // Find which section contains the current page (longest href match wins)
+  const findCurrentSection = () =>
+    getActiveSectionName(NAVIGATION, location.pathname);
 
   // Start with only the current section expanded
   const [expandedSection, setExpandedSection] = useState<string | null>(() => {
@@ -295,11 +311,12 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
   });
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Update expanded section when navigating to a new page
+  // Keep the section that contains the current page expanded
   useEffect(() => {
     const currentSection = findCurrentSection();
-    if (currentSection && !expandedSection) {
+    if (currentSection) {
       setExpandedSection(currentSection);
+      localStorage.setItem("adminExpandedSection", currentSection);
     }
   }, [location.pathname]);
 
@@ -336,6 +353,11 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
       pages: section.pages.filter(page => page.roles.includes(adminRole)),
     }))
     .filter(section => section.pages.length > 0);
+
+  const activeSectionName = useMemo(
+    () => getActiveSectionName(filteredNav, location.pathname),
+    [filteredNav, location.pathname]
+  );
 
   // Fallback if roleInfo doesn't match adminRole (e.g. invalid role in DB)
   const currentRoleInfo = roleInfo[adminRole] || roleInfo["team_admin"];
@@ -391,9 +413,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
               ) : filteredNav.map((section) => {
                 const isExpanded = expandedSection === section.name;
                 const SectionIcon = section.icon;
-                const hasActiveChild = section.pages.some(
-                  page => location.pathname === page.href
-                );
+                const isSectionSelected = section.name === activeSectionName;
 
                 return (
                   <div key={section.name}>
@@ -402,15 +422,22 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                       onClick={() => toggleSection(section.name)}
                       className={cn(
                         adminNavSection,
-                        hasActiveChild && adminNavSectionActive
+                        isSectionSelected && adminNavSectionActive
                       )}
                     >
-                      <SectionIcon className="w-4 h-4 flex-shrink-0" />
-                      <span className="flex-1 text-left">{section.name}</span>
+                      <SectionIcon
+                        className={cn(
+                          "h-[18px] w-[18px] shrink-0",
+                          isSectionSelected ? "text-violet-300" : "text-zinc-500"
+                        )}
+                      />
+                      <span className="flex-1 truncate text-left">{section.name}</span>
                       <ChevronRight
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          isExpanded ? "rotate-90" : ""
-                        }`}
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-transform duration-200",
+                          isExpanded && "rotate-90",
+                          isSectionSelected ? "text-violet-300/80" : "text-zinc-500"
+                        )}
                       />
                     </button>
 
@@ -418,7 +445,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                     {isExpanded && (
                       <div className="ml-6 mt-0.5 mb-1 space-y-0.5">
                         {section.pages.map(page => {
-                          const isActive = location.pathname === page.href;
+                          const isActive = isNavPageActive(location.pathname, page.href);
 
                           return (
                             <Link

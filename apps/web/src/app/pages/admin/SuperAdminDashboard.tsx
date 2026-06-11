@@ -1,7 +1,7 @@
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { adminCard, adminBtnSecondary } from "@/app/admin/adminPageChrome";
+import { adminCard, adminBtnSecondary, adminQuickAction, adminBtnPrimary, adminKpiTile } from "@/app/admin/adminPageChrome";
 import { cn } from "@/lib/utils";
 import { api } from "../../../lib/api";
 import { motion } from "motion/react";
@@ -689,7 +689,7 @@ export function SuperAdminDashboard() {
                 Export Report
               </Button>
               <Link to="/admin/system-settings-enhanced">
-                <Button size="sm" type="button">
+                <Button size="sm" type="button" className={adminBtnPrimary}>
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </Button>
@@ -704,23 +704,24 @@ export function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* Primary Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* KPI Stats — 8 uniform tiles */}
+        <div className="admin-kpi-grid">
           {/* Total Users */}
           <motion.div
+            className="h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0 }}
           >
-            <Card className="p-6 bg-gradient-to-br from-purple-50 to-white border-purple-200 relative overflow-hidden group hover:shadow-xl transition-all">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
+            <Card className={cn(adminKpiTile, "border-purple-200 bg-gradient-to-br from-purple-50 to-white group")}>
+              <div className="w-10 h-10 rounded-xl bg-purple-500 flex shrink-0 items-center justify-center">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 flex items-start justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">Total Users</p>
                   <div
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                       (kpi?.signupsWeekOverWeekPct ?? 0) >= 0
                         ? "bg-green-100 text-green-700"
                         : "bg-red-100 text-red-700"
@@ -729,19 +730,18 @@ export function SuperAdminDashboard() {
                     {kpi != null ? formatPctSigned(kpi.signupsWeekOverWeekPct) : "—"}
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Total Users</p>
                 <motion.div
                   key={userCount}
                   initial={{ scale: 1.1 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.3 }}
-                  className="text-3xl font-bold"
+                  className="text-2xl font-bold tabular-nums"
                 >
                   {userCount.toLocaleString()}
                 </motion.div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <TrendingUp className="w-3 h-3 shrink-0 text-green-600" />
+                  <span className="line-clamp-1 truncate">
                     {kpi != null
                       ? `${kpi.signupsLast7Days.toLocaleString()} signups in the last 7 days`
                       : "—"}
@@ -753,35 +753,37 @@ export function SuperAdminDashboard() {
 
           {/* Active Talk it out */}
           <motion.div
+            className="h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card className="p-6 bg-gradient-to-br from-cyan-50 to-white border-cyan-200 relative overflow-hidden group hover:shadow-xl transition-all">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-cyan-500 flex items-center justify-center">
-                    <Activity className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex items-center gap-1">
+            <Card className={cn(adminKpiTile, "border-cyan-200 bg-gradient-to-br from-cyan-50 to-white group")}>
+              <div className="w-10 h-10 rounded-xl bg-cyan-500 flex shrink-0 items-center justify-center">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 flex items-start justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Active Talk it out <span className="opacity-70">(last 4h)</span>
+                  </p>
+                  <div className="flex shrink-0 items-center gap-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-xs text-green-600 font-semibold">Live</span>
+                    <span className="text-[10px] font-semibold text-green-600">Live</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Active Talk it out <span className="text-xs">(last 4h)</span></p>
                 <motion.div
                   key={sessionCount}
                   initial={{ scale: 1.1 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.3 }}
-                  className="text-3xl font-bold"
+                  className="text-2xl font-bold tabular-nums"
                 >
                   {sessionCount.toLocaleString()}
                 </motion.div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  <Eye className="w-3 h-3 text-cyan-600" />
-                  <span>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Eye className="w-3 h-3 shrink-0 text-cyan-600" />
+                  <span className="line-clamp-1 truncate">
                     {kpi != null
                       ? `${kpi.sessionsLastHour.toLocaleString()} sessions started in the last hour`
                       : "—"}
@@ -793,19 +795,20 @@ export function SuperAdminDashboard() {
 
           {/* Revenue */}
           <motion.div
+            className="h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="p-6 bg-gradient-to-br from-green-50 to-white border-green-200 relative overflow-hidden group hover:shadow-xl transition-all">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-white" />
-                  </div>
+            <Card className={cn(adminKpiTile, "border-green-200 bg-gradient-to-br from-green-50 to-white group")}>
+              <div className="w-10 h-10 rounded-xl bg-green-500 flex shrink-0 items-center justify-center">
+                <DollarSign className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 flex items-start justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">Revenue (cash, range)</p>
                   <div
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                       (kpi?.paymentMomPct ?? 0) >= 0
                         ? "bg-green-100 text-green-700"
                         : "bg-red-100 text-red-700"
@@ -814,11 +817,10 @@ export function SuperAdminDashboard() {
                     {kpi != null ? formatPctSigned(kpi.paymentMomPct) : "—"} vs prior month
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Revenue (cash, range)</p>
-                <div className="text-3xl font-bold">{formatUsd(Number(revenue))}</div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>
+                <div className="text-2xl font-bold tabular-nums">{formatUsd(Number(revenue))}</div>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <TrendingUp className="w-3 h-3 shrink-0 text-green-600" />
+                  <span className="line-clamp-1 truncate leading-snug">
                     MRR est.: {formatUsd(mrrEstimate)} · {formatUsd(payThisMonthUsd)} (this month, Stripe)
                   </span>
                 </div>
@@ -828,121 +830,142 @@ export function SuperAdminDashboard() {
 
           {/* Crisis Alerts */}
           <motion.div
+            className="h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Link to="/admin/crisis-monitoring">
-              <Card className={`p-6 relative overflow-hidden group hover:shadow-xl transition-all cursor-pointer ${
+            <Link to="/admin/crisis-monitoring" className="block h-full">
+              <Card className={cn(
+                adminKpiTile,
+                "cursor-pointer group",
                 crisisAlertsCount > 0
                   ? "bg-gradient-to-br from-red-50 to-white border-red-300"
                   : "bg-gradient-to-br from-emerald-50 to-white border-emerald-200"
-              }`}>
-                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl ${
-                  crisisAlertsCount > 0 ? "bg-red-500/10" : "bg-emerald-500/10"
-                }`} />
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      crisisAlertsCount > 0 ? "bg-red-500" : "bg-emerald-500"
-                    }`}>
-                      <Siren className="w-6 h-6 text-white" />
-                    </div>
+              )}>
+                <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ${
+                  crisisAlertsCount > 0 ? "bg-red-500" : "bg-emerald-500"
+                }`}>
+                  <Siren className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-0.5 flex items-start justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">Open Crisis Alerts</p>
                     {crisisAlertsCount > 0 && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1">
                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                        <span className="text-xs text-red-600 font-semibold">Needs Review</span>
+                        <span className="text-[10px] font-semibold text-red-600">Needs Review</span>
                       </div>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mb-1">Open Crisis Alerts</p>
                   <motion.div
                     key={crisisAlertsCount}
                     initial={{ scale: 1.1 }}
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.3 }}
-                    className={`text-3xl font-bold ${crisisAlertsCount > 0 ? "text-red-600" : "text-emerald-600"}`}
+                    className={`text-2xl font-bold tabular-nums ${crisisAlertsCount > 0 ? "text-red-600" : "text-emerald-600"}`}
                   >
                     {crisisAlertsCount.toLocaleString()}
                   </motion.div>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <Shield className="w-3 h-3" />
-                    <span>{crisisAlertsCount === 0 ? "All clear — no pending crisis events" : "Tap to review pending events"}</span>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Shield className="w-3 h-3 shrink-0" />
+                    <span className="line-clamp-1 truncate">
+                      {crisisAlertsCount === 0 ? "All clear — no pending crisis events" : "Tap to review pending events"}
+                    </span>
                   </div>
                 </div>
               </Card>
             </Link>
           </motion.div>
-        </div>
 
-        {/* Engagement & Wellbeing Metrics Row */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total AI Talk it out */}
-            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+          {/* Total AI Talk it out */}
+          <motion.div
+            className="h-[7.875rem]"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <Card className={adminKpiTile}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex shrink-0 items-center justify-center">
                 <Brain className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Total AI Talk it out</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-1">Total AI Talk it out</p>
                 <p className="text-2xl font-bold tabular-nums">{totalSessions.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground truncate">All-time companion conversations</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-1 truncate">All-time companion conversations</p>
               </div>
             </Card>
+          </motion.div>
 
-            {/* Avg Session Duration */}
-            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0">
+          {/* Avg Session Duration */}
+          <motion.div
+            className="h-[7.875rem]"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Card className={adminKpiTile}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex shrink-0 items-center justify-center">
                 <Timer className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Avg Session Length</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-1">Avg Session Length</p>
                 <p className="text-2xl font-bold tabular-nums">{formatMinutes(avgSessionLength)}</p>
-                <p className="text-xs text-muted-foreground truncate">Per completed AI session</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-1 truncate">Per completed AI session</p>
               </div>
             </Card>
+          </motion.div>
 
-            {/* Avg Mood Score */}
-            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shrink-0">
+          {/* Avg Mood Score */}
+          <motion.div
+            className="h-[7.875rem]"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+          >
+            <Card className={adminKpiTile}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex shrink-0 items-center justify-center">
                 <HeartPulse className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Avg Mood Score</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-1">Avg Mood Score</p>
                 <p className="text-2xl font-bold tabular-nums">
                   {avgMoodScore != null ? `${avgMoodScore}/10` : "—"}
                 </p>
-                <p className="text-xs text-muted-foreground truncate">All-time intensity average</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-1 truncate">All-time intensity average</p>
               </div>
             </Card>
+          </motion.div>
 
-            {/* API Uptime */}
-            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+          {/* API Uptime */}
+          <motion.div
+            className="h-[7.875rem]"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card className={adminKpiTile}>
+              <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ${
                 processHealth?.databaseConnected === false
                   ? "bg-gradient-to-br from-red-500 to-rose-600"
                   : "bg-gradient-to-br from-teal-500 to-cyan-600"
               }`}>
                 <BookOpen className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">API Uptime</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-1">API Uptime</p>
                 <p className="text-2xl font-bold tabular-nums">
                   {formatUptime(processHealth?.uptimeSeconds ?? 0)}
                 </p>
-                <p className={`text-xs truncate font-medium ${
+                <p className={`mt-1 text-xs line-clamp-1 truncate font-medium ${
                   processHealth?.databaseConnected === false ? "text-red-500" : "text-emerald-600"
                 }`}>
                   {processHealth?.databaseConnected === false ? "DB unreachable" : "Database connected"}
                 </p>
               </div>
             </Card>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -1898,36 +1921,36 @@ export function SuperAdminDashboard() {
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <Link to="/admin/system-settings-enhanced">
-                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
+                <Button variant="outline" className={cn(adminQuickAction)}>
                   <Settings className="w-4 h-4" />
                   Settings
                 </Button>
               </Link>
               <Link to="/admin/analytics">
-                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
+                <Button variant="outline" className={cn(adminQuickAction)}>
                   <TrendingUp className="w-4 h-4" />
                   Analytics
                 </Button>
               </Link>
               <Link to="/admin/feature-flags">
-                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
+                <Button variant="outline" className={cn(adminQuickAction)}>
                   <Globe className="w-4 h-4" />
                   Features
                 </Button>
               </Link>
               <Link to="/admin/billing">
-                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
+                <Button variant="outline" className={cn(adminQuickAction)}>
                   <DollarSign className="w-4 h-4" />
                   Billing
                 </Button>
               </Link>
               <Link to="/admin/user-management">
-                <Button variant="outline" size="sm" className={adminBtnSecondary}>
+                <Button variant="outline" className={adminQuickAction}>
                   View All Users
                 </Button>
               </Link>
               <Link to="/admin/support-tickets">
-                <Button variant="outline" className={cn(adminBtnSecondary, "w-full justify-start gap-2")}>
+                <Button variant="outline" className={cn(adminQuickAction)}>
                   <MessageSquare className="w-4 h-4" />
                   Support
                 </Button>

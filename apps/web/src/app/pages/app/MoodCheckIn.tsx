@@ -209,7 +209,7 @@ export function MoodCheckIn() {
           className="pointer-events-none absolute inset-x-0 top-0 h-[min(44vh,380px)] bg-[radial-gradient(ellipse_90%_100%_at_50%_0%,rgba(92,106,172,0.14)_0%,transparent_72%)]"
           aria-hidden
         />
-        <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
+        <div className="relative z-[1] mx-auto max-w-[1680px] px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8 lg:pt-10">
           {/* Header */}
           <header className="mood-check-in-header mb-12 border-b border-white/[0.04] pb-10 [html[data-ezri-theme=light]_&]:border-[color:var(--border)] [html[data-theme=light]_&]:border-[color:var(--border)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
