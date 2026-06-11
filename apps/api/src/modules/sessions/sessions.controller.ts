@@ -6,6 +6,7 @@ import {
   endSession,
   createMessage,
   getSessionTranscript,
+  getOrGenerateSessionSummary,
   toggleSessionFavorite,
   heartbeatSession,
   cancelScheduledSession,
@@ -103,6 +104,22 @@ export async function getSessionTranscriptHandler(
     const user = request.user as UserPayload;
     const messages = await getSessionTranscript(user.sub, request.params.id);
     return reply.send(messages);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    throw error;
+  }
+}
+
+export async function getSessionSummaryHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const result = await getOrGenerateSessionSummary(user.sub, request.params.id);
+    return reply.send(result);
   } catch (error: any) {
     if (error.message === 'Session not found') {
       return reply.code(404).send({ message: 'Session not found' });

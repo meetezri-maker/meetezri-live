@@ -386,33 +386,29 @@ interface BackdropTokens {
 
 const LIGHT_PAGE_BASE = "#fbf8ff";
 const DARK_PAGE_BASE = "#07080f";
+const DARK_SOLID_BG = "#0a0b18";
+const LIGHT_SOLID_BG = "#f7f2ff";
 const LIGHT_GRADIENT =
   "linear-gradient(135deg, #ffffff 0%, #fbf8ff 38%, #f3ecff 72%, #ecfdfb 100%)";
+/** Neutral pattern strokes — independent of accent (accent is for chrome only). */
+const DARK_PATTERN_STROKE = "rgba(255, 255, 255, 0.055)";
+const LIGHT_PATTERN_STROKE = "rgba(16, 24, 40, 0.07)";
 
-/** Preview tokens for a given style + current accent (appearance picker cards). */
+/** Preview tokens for background style cards (theme + style only — not accent). */
 export function getBackdropTokensForStyle(
   style: BackgroundStyle,
-  accentKey: AccentColorKey,
   theme: AppearanceTheme
 ): BackdropTokens {
-  return buildBackdropTokens(style, accentKey, theme);
+  return buildBackdropTokens(style, theme);
 }
 
-function buildBackdropTokens(
-  style: BackgroundStyle,
-  accentKey: AccentColorKey,
-  theme: AppearanceTheme
-): BackdropTokens {
-  const accent = ACCENT_COLOR_MAP[accentKey];
-  const [orbFrom, orbTo] = ACCENT_ORB_GRADIENT[accentKey];
+function buildBackdropTokens(style: BackgroundStyle, theme: AppearanceTheme): BackdropTokens {
   const isLight = theme === "light";
   const base = isLight ? LIGHT_PAGE_BASE : DARK_PAGE_BASE;
 
   if (style === "solid") {
     return {
-      color: isLight
-        ? `color-mix(in srgb, ${accent} 10%, ${LIGHT_PAGE_BASE})`
-        : `color-mix(in srgb, ${accent} 16%, ${DARK_PAGE_BASE})`,
+      color: isLight ? LIGHT_SOLID_BG : DARK_SOLID_BG,
       image: "none",
       size: "auto",
       position: "0 0",
@@ -423,7 +419,7 @@ function buildBackdropTokens(
 
   if (style === "pattern") {
     const tile = isLight ? "10px 10px" : "12px 12px";
-    const stroke = accentRgba(accentKey, isLight ? 0.16 : 0.2);
+    const stroke = isLight ? LIGHT_PATTERN_STROKE : DARK_PATTERN_STROKE;
     return {
       color: base,
       image: `linear-gradient(135deg, ${stroke} 25%, transparent 25%), linear-gradient(225deg, ${stroke} 25%, transparent 25%)`,
@@ -434,15 +430,9 @@ function buildBackdropTokens(
     };
   }
 
-  let gradient = isLight
-    ? LIGHT_GRADIENT
-    : accentKey === DEFAULT_ACCENT_COLOR_KEY
-      ? DEFAULT_SOLACE_PAGE_BG
-      : `linear-gradient(165deg, color-mix(in srgb, ${orbFrom} 22%, #0a0b18) 0%, color-mix(in srgb, ${orbTo} 18%, #090a16) 42%, #0c0a18 100%)`;
-
   return {
     color: base,
-    image: gradient,
+    image: isLight ? LIGHT_GRADIENT : DEFAULT_SOLACE_PAGE_BG,
     size: "100% 100%",
     position: "0 0",
     repeat: "no-repeat",
@@ -478,16 +468,12 @@ function applyBackdropTokensToRoot(root: HTMLElement, tokens: BackdropTokens): v
   }
 }
 
-/** Page backdrop — solid, gradient, or pattern tinted by accent. */
-export function applyBackgroundStyleToDocument(
-  style: BackgroundStyle,
-  accentKey: AccentColorKey,
-  theme: AppearanceTheme
-) {
+/** Page backdrop — solid, gradient, or pattern (theme only; accent does not affect background). */
+export function applyBackgroundStyleToDocument(style: BackgroundStyle, theme: AppearanceTheme) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.setAttribute("data-ezri-background-style", style);
-  applyBackdropTokensToRoot(root, buildBackdropTokens(style, accentKey, theme));
+  applyBackdropTokensToRoot(root, buildBackdropTokens(style, theme));
 }
 
 export function applyAppearanceToDocument(settings: AppearanceSettingsSnapshot): void {
@@ -496,7 +482,7 @@ export function applyAppearanceToDocument(settings: AppearanceSettingsSnapshot):
 
   applyThemeToDocument(settings.theme);
   applyAccentColorToDocument(settings.accentColor);
-  applyBackgroundStyleToDocument(settings.backgroundStyle, settings.accentColor, settings.theme);
+  applyBackgroundStyleToDocument(settings.backgroundStyle, settings.theme);
 
   root.classList.toggle("appearance-no-animations", !settings.animations);
   root.classList.toggle("appearance-hide-avatars", !settings.showAvatars);

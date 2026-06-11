@@ -7,6 +7,7 @@ import {
   endSessionHandler,
   createMessageHandler,
   getSessionTranscriptHandler,
+  getSessionSummaryHandler,
   scheduleSessionHandler,
   getUserSessionsHandler,
   toggleSessionFavoriteHandler,
@@ -147,5 +148,13 @@ export async function sessionRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate],
     },
     getSessionTranscriptHandler
+  );
+
+  app.get(
+    '/:id/summary',
+    {
+      preHandler: [app.authenticate],
+    },
+    getSessionSummaryHandler
   );
 }

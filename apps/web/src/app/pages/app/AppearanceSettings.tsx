@@ -182,32 +182,17 @@ export function AppearanceSettings() {
     {
       value: "solid",
       label: "Solid Color",
-      dots: [
-        "bg-[color:var(--accent)]/40",
-        "bg-[color:var(--accent)]/30",
-        "bg-[color:var(--accent)]/50",
-        "bg-[color:var(--accent)]/25",
-      ],
+      dots: ["bg-slate-600", "bg-slate-500", "bg-slate-700", "bg-slate-400"],
     },
     {
       value: "gradient",
       label: "Gradient",
-      dots: [
-        "bg-[color:var(--appearance-orb-from)]",
-        "bg-[color:var(--accent)]",
-        "bg-[color:var(--appearance-orb-to)]",
-        "bg-[color:var(--accent)]/70",
-      ],
+      dots: ["bg-violet-500", "bg-fuchsia-500", "bg-indigo-600", "bg-purple-400"],
     },
     {
       value: "pattern",
       label: "Pattern",
-      dots: [
-        "bg-[color:var(--appearance-orb-from)]/80",
-        "bg-[color:var(--accent)]/70",
-        "bg-[color:var(--appearance-orb-to)]/80",
-        "bg-[color:var(--accent)]/50",
-      ],
+      dots: ["bg-slate-500/80", "bg-slate-400/70", "bg-slate-600/80", "bg-slate-400/50"],
     },
   ];
 
@@ -216,11 +201,7 @@ export function AppearanceSettings() {
 
   const getBackgroundPreviewStyle = useCallback(
     (style: "solid" | "gradient" | "pattern"): CSSProperties => {
-      const tokens = getBackdropTokensForStyle(
-        style,
-        draftSettings.accentColor,
-        draftSettings.theme
-      );
+      const tokens = getBackdropTokensForStyle(style, draftSettings.theme);
       return {
         backgroundColor: tokens.color,
         backgroundImage: tokens.image === "none" ? undefined : tokens.image,
@@ -229,7 +210,7 @@ export function AppearanceSettings() {
         backgroundRepeat: tokens.repeat,
       };
     },
-    [draftSettings.accentColor, draftSettings.theme]
+    [draftSettings.theme]
   );
 
   return (
@@ -339,7 +320,7 @@ export function AppearanceSettings() {
             <h2 className={cn(tc.sectionHeading, "mt-2")}>Personalize your sanctuary</h2>
             <p className={tc.sectionSubtitle}>
               Personalize Solace with a color that feels like you. Accent applies to buttons,
-              scrollbars, and highlights across the app.
+              sidebars, scrollbars, and glows — not your page background.
             </p>
 
             <div className="mt-6 flex gap-4 overflow-x-auto pb-2 sm:flex-wrap sm:justify-start sm:gap-5 sm:overflow-visible">

@@ -42,6 +42,15 @@ export {
 } from './wellnessPlan';
 
 export {
+  SOLACE_TRANSCRIPT_LABEL,
+  deriveSessionSummaryFromTranscript,
+  formatTranscriptForSummary,
+  formatTranscriptLine,
+  transcriptSpeakerLabel,
+  type TranscriptMessage,
+} from './sessionTranscriptSummary';
+
+export {
   scoreCommunityTextSentiment,
   sentimentSignalsFromTexts,
   computeCommunityPulsePercent,
