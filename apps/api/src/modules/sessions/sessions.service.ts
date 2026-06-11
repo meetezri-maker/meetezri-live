@@ -1,5 +1,9 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import {
+  deriveSessionSummaryFromTranscript,
+  formatTranscriptForSummary,
+} from '@meetezri/shared';
 import { resolveProfileRemainingSeconds } from '../billing/credit-balance.service';
 import { emailService } from '../email/email.service';
 import {
@@ -519,6 +523,106 @@ export async function getSessionTranscript(userId: string, sessionId: string) {
     where: { session_id: sessionId },
     orderBy: { created_at: 'asc' },
   });
+}
+
+async function generateAiSessionSummary(transcript: string): Promise<string | null> {
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!openaiKey || !transcript.trim()) return null;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 240,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You summarize wellness support conversations between a user and Solace (an AI companion). Write 2-4 sentences in second person ("you"). Capture the main topics, emotional themes, and how the conversation progressed across the FULL transcript. Only include facts stated in the transcript—never invent details. Ignore audio-check small talk (e.g. "can you hear me"). The assistant is always named Solace, never Ezri.',
+          },
+          {
+            role: 'user',
+            content: `Summarize this complete talk:\n\n${transcript.slice(0, 14000)}`,
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(25_000),
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const text = data.choices?.[0]?.message?.content?.trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getOrGenerateSessionSummary(userId: string, sessionId: string) {
+  const session = await getSessionById(userId, sessionId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  const config = (session.config || {}) as Record<string, unknown>;
+  const cached = typeof config.summary === 'string' ? config.summary.trim() : '';
+  const summarySource =
+    typeof config.summary_source === 'string' ? config.summary_source : null;
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const isTitleLikeSummary =
+    !cached ||
+    cached.length < 30 ||
+    /^(instant talk|scheduled talk|talking|new session)$/i.test(cached);
+  const canUseCached =
+    cached &&
+    !isTitleLikeSummary &&
+    (summarySource === 'ai' || !openaiKey);
+  if (canUseCached) {
+    return { summary: cached, source: 'cached' as const };
+  }
+
+  const rows = await getSessionTranscript(userId, sessionId);
+  if (!rows.length) {
+    return { summary: null, source: 'empty' as const };
+  }
+
+  const transcriptMessages = rows.map((row) => ({
+    role: row.role,
+    content: row.content,
+  }));
+
+  const transcriptText = formatTranscriptForSummary(transcriptMessages);
+  let summary = await generateAiSessionSummary(transcriptText);
+  let source: 'ai' | 'heuristic' = 'ai';
+
+  if (!summary) {
+    summary = deriveSessionSummaryFromTranscript(transcriptMessages);
+    source = 'heuristic';
+  }
+
+  if (summary?.trim()) {
+    const updatedConfig = {
+      ...config,
+      summary: summary.trim(),
+      summary_source: source,
+    };
+    await prisma.app_sessions.update({
+      where: { id: sessionId },
+      data: { config: updatedConfig as Prisma.InputJsonValue },
+    });
+    invalidateSessionsCache(userId);
+  }
+
+  return { summary: summary?.trim() || null, source };
 }
 
 export async function getUserSessions(userId: string) {

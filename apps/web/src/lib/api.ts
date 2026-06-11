@@ -1618,6 +1618,19 @@ export const api = {
       return handleResponse(res, 'Failed to fetch transcript');
     },
 
+    async getSummary(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/summary`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch session summary') as Promise<{
+        summary: string | null;
+        source: 'cached' | 'ai' | 'heuristic' | 'empty';
+      }>;
+    },
+
     async getUserSessions(userId: string) { // Admin only
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/sessions/admin/users/${userId}/sessions`, {

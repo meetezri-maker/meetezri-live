@@ -48,6 +48,10 @@ import {
   modalPrimaryButton,
   modalSecondaryButton,
 } from "@/lib/modalTheme";
+import {
+  deriveSessionSummaryFromTranscript,
+  formatTranscriptLine,
+} from "@meetezri/shared";
 
 interface SessionData {
   id: string;
@@ -100,27 +104,6 @@ interface BackendSession {
     mood?: string;
     summary?: string;
   };
-}
-
-function deriveSessionSummaryFromTranscript(
-  messages: { role: string; content: string }[]
-): string {
-  const userMessages = messages
-    .filter((m) => m.role?.toLowerCase() === "user")
-    .map((m) => m.content.trim())
-    .filter(Boolean);
-
-  const firstUser = userMessages[0];
-  if (firstUser) {
-    return firstUser.length > 280 ? `${firstUser.slice(0, 277)}…` : firstUser;
-  }
-
-  const firstMessage = messages.find((m) => m.content?.trim())?.content.trim();
-  if (firstMessage) {
-    return firstMessage.length > 280 ? `${firstMessage.slice(0, 277)}…` : firstMessage;
-  }
-
-  return "No summary available for this talk.";
 }
 
 const DEFAULT_HISTORY_AVATAR = {
@@ -366,6 +349,8 @@ export function SessionHistory() {
     { role: string; content: string; created_at?: string }[]
   >([]);
   const [loadingTranscript, setLoadingTranscript] = useState(false);
+  const [generatedSummary, setGeneratedSummary] = useState("");
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
   const handleToggleFavorite = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -405,6 +390,53 @@ export function SessionHistory() {
       setTranscript([]);
     }
   }, [selectedSession]);
+
+  useEffect(() => {
+    if (!selectedSession) {
+      setGeneratedSummary("");
+      setLoadingSummary(false);
+      return;
+    }
+
+    let cancelled = false;
+    const stored = selectedSession.summary.trim();
+    const isWeakStoredSummary =
+      !stored ||
+      stored.length < 30 ||
+      /^(instant talk|scheduled talk|talking|new session)$/i.test(stored);
+
+    if (stored && !isWeakStoredSummary) {
+      setGeneratedSummary(stored);
+      setLoadingSummary(false);
+      return;
+    }
+
+    const fetchSummary = async () => {
+      setLoadingSummary(true);
+      try {
+        const result = await api.sessions.getSummary(selectedSession.id);
+        if (cancelled) return;
+        const text = result.summary?.trim() ?? "";
+        if (!text) return;
+
+        setGeneratedSummary(text);
+        const patchSummary = (sessions: SessionData[]) =>
+          sessions.map((s) => (s.id === selectedSession.id ? { ...s, summary: text } : s));
+        setCompletedSessions(patchSummary);
+        setUpcomingSessions(patchSummary);
+        setSelectedSession((prev) => (prev ? { ...prev, summary: text } : prev));
+      } catch (error) {
+        console.error("Failed to fetch session summary", error);
+      } finally {
+        if (!cancelled) setLoadingSummary(false);
+      }
+    };
+
+    void fetchSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSession?.id, selectedSession?.summary]);
 
   useEffect(() => {
     if (isTrialUser) {
@@ -486,12 +518,6 @@ export function SessionHistory() {
     fetchSessions();
   }, [session, profile?.selected_avatar, profile?.selected_environment, isTrialUser]);
 
-  const transcriptLine = (role: string, content: string) => {
-    const r = role.toLowerCase();
-    const label = r === "user" ? "You" : "Ezri";
-    return `[${label}] ${content}`;
-  };
-
   const downloadTextFile = (filename: string, body: string) => {
     const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -519,12 +545,30 @@ export function SessionHistory() {
       }
     }
 
+    let summaryText = sessionData.summary.trim();
+    const isWeakSummary =
+      !summaryText ||
+      summaryText.length < 30 ||
+      /^(instant talk|scheduled talk|talking|new session)$/i.test(summaryText);
+
+    if (isWeakSummary) {
+      try {
+        const result = await api.sessions.getSummary(sessionData.id);
+        summaryText = result.summary?.trim() ?? summaryText;
+      } catch {
+        // fall through to heuristic
+      }
+    }
+    if (!summaryText && rows.length > 0) {
+      summaryText = deriveSessionSummaryFromTranscript(rows);
+    }
+
     const header = [
       `Session ID: ${sessionData.id}`,
       `Date: ${sessionData.date}`,
       `Duration: ${sessionData.duration}`,
       `Title: ${sessionData.title}`,
-      `Summary: ${sessionData.summary || deriveSessionSummaryFromTranscript(rows)}`,
+      `Summary: ${summaryText || "No summary available."}`,
       "",
       "--- Transcript ---",
       "",
@@ -532,7 +576,7 @@ export function SessionHistory() {
 
     const body =
       rows.length > 0
-        ? rows.map((m) => transcriptLine(m.role, m.content)).join("\n\n")
+        ? rows.map((m) => formatTranscriptLine(m.role, m.content)).join("\n\n")
         : "(No messages stored for this session.)";
 
     const text = `${header}${body}`;
@@ -614,12 +658,10 @@ export function SessionHistory() {
   const journeyProgress = Math.min(100, Math.round((sessionsInPeriod.length / 200) * 100));
 
   const selectedSessionSummary = useMemo(() => {
-    if (!selectedSession) return "";
-    const stored = selectedSession.summary.trim();
-    if (stored) return stored;
+    if (generatedSummary.trim()) return generatedSummary;
     if (transcript.length > 0) return deriveSessionSummaryFromTranscript(transcript);
     return "";
-  }, [selectedSession, transcript]);
+  }, [generatedSummary, transcript]);
 
   if (isTrialUser) {
     return (
@@ -1252,8 +1294,8 @@ export function SessionHistory() {
 
                 <div>
                   <h3 className={cn(modalSectionTitle, "mb-2")}>Summary</h3>
-                  {loadingTranscript && !selectedSessionSummary ? (
-                    <p className={cn(modalMutedText, "text-sm")}>Loading summary…</p>
+                  {loadingSummary || (loadingTranscript && !selectedSessionSummary) ? (
+                    <p className={cn(modalMutedText, "text-sm")}>Analyzing your talk…</p>
                   ) : selectedSessionSummary ? (
                     <p className={modalBodyText}>{selectedSessionSummary}</p>
                   ) : (
@@ -1281,7 +1323,7 @@ export function SessionHistory() {
                                   : "session-history-transcript-avatar-assistant bg-slate-700 text-slate-300"
                               )}
                             >
-                              {isUser ? "U" : "E"}
+                              {isUser ? "U" : "S"}
                             </div>
                             <div
                               className={cn(
