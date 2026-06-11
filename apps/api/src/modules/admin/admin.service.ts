@@ -1148,6 +1148,10 @@ export async function updateUser(id: string, data: { status?: string; role?: str
     }
   });
 
+  if (data.role) {
+    userService.invalidateUserProfileCache(id);
+  }
+
   let status = 'inactive';
   if (user.role === 'suspended') {
     status = 'suspended';

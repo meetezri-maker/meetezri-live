@@ -7,12 +7,16 @@
 html[data-solace-admin] .admin-card {
   position: relative;
   isolation: isolate;
-  border-radius: 1rem;
-  border: 1px solid var(--admin-border);
-  background: var(--admin-surface);
+  border-radius: var(--admin-radius-card);
+  border: 1px solid var(--admin-surface-border-color);
+  background: var(--admin-surface-gradient);
   color: var(--admin-text);
   box-shadow: var(--admin-shadow-panel);
-  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    border-color var(--admin-transition),
+    background-color var(--admin-transition),
+    box-shadow var(--admin-transition),
+    transform var(--admin-transition);
 }
 
 .solace-admin .admin-card::before,
@@ -23,11 +27,27 @@ html[data-solace-admin] .admin-card::before {
   inset: 0;
   border-radius: inherit;
   background: radial-gradient(
-    ellipse 80% 50% at 50% -20%,
+    ellipse 70% 45% at 12% -8%,
     var(--admin-glow-violet),
+    transparent 58%
+  );
+  opacity: 0.75;
+  z-index: 0;
+}
+
+.solace-admin .admin-card::after,
+html[data-solace-admin] .admin-card::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 50% 35% at 95% 100%,
+    var(--admin-glow-teal),
     transparent 55%
   );
-  opacity: 0.85;
+  opacity: 0.35;
   z-index: 0;
 }
 
@@ -41,21 +61,66 @@ html[data-solace-admin] .admin-card > * {
 html[data-solace-admin] .admin-card-hover:hover,
 .solace-admin a.admin-card:hover,
 html[data-solace-admin] a.admin-card:hover {
-  border-color: var(--admin-border-glow);
-  background: var(--admin-surface-hover);
+  border-color: rgba(167, 139, 250, 0.28) !important;
+  background: linear-gradient(
+    145deg,
+    rgba(20, 28, 52, 0.98) 0%,
+    rgba(11, 16, 32, 0.99) 100%
+  );
   box-shadow: var(--admin-shadow-panel-hover);
+  transform: translateY(-1px);
+  z-index: 2;
 }
 
-/* shadcn Card inside admin */
+/* Subtle branding wash on card surface — not neon */
+.solace-admin .admin-card-hover:hover::before,
+html[data-solace-admin] .admin-card-hover:hover::before,
+.solace-admin a.admin-card:hover::before,
+html[data-solace-admin] a.admin-card:hover::before {
+  opacity: 0.82;
+  background: radial-gradient(
+    ellipse 90% 60% at 14% -8%,
+    var(--admin-glow-violet-hover),
+    rgba(78, 205, 196, 0.04) 45%,
+    transparent 62%
+  );
+  transition: opacity var(--admin-transition), background var(--admin-transition);
+}
+
+.solace-admin .admin-card-hover:hover::after,
+html[data-solace-admin] .admin-card-hover:hover::after,
+.solace-admin a.admin-card:hover::after,
+html[data-solace-admin] a.admin-card:hover::after {
+  opacity: 0.42;
+  background: radial-gradient(
+    ellipse 55% 40% at 94% 102%,
+    var(--admin-glow-teal-hover),
+    transparent 58%
+  );
+  transition: opacity var(--admin-transition), background var(--admin-transition);
+}
+
+.solace-admin .admin-card::before,
+html[data-solace-admin] .admin-card::before,
+.solace-admin .admin-card::after,
+html[data-solace-admin] .admin-card::after {
+  transition: opacity var(--admin-transition), background var(--admin-transition);
+}
+
+/* shadcn Card inside admin — matte raised surface */
 .solace-admin [data-slot="card"],
 html[data-solace-admin] [data-slot="card"] {
   position: relative;
   isolation: isolate;
-  border-color: var(--admin-border) !important;
-  background: var(--admin-surface) !important;
+  border: 1px solid var(--admin-surface-border-color) !important;
+  background: var(--admin-surface-gradient) !important;
   color: var(--admin-text) !important;
   box-shadow: var(--admin-shadow-panel);
-  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    border-color var(--admin-transition),
+    box-shadow var(--admin-transition),
+    background var(--admin-transition),
+    transform var(--admin-transition);
 }
 
 .solace-admin [data-slot="card"]::before,
@@ -66,19 +131,65 @@ html[data-solace-admin] [data-slot="card"]::before {
   inset: 0;
   border-radius: inherit;
   background: radial-gradient(
-    ellipse 80% 50% at 50% -20%,
+    ellipse 70% 45% at 12% -8%,
     var(--admin-glow-violet),
+    transparent 58%
+  );
+  opacity: 0.65;
+  z-index: 0;
+  transition: opacity var(--admin-transition), background var(--admin-transition);
+}
+
+.solace-admin [data-slot="card"]::after,
+html[data-solace-admin] [data-slot="card"]::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 50% 35% at 95% 100%,
+    var(--admin-glow-teal),
     transparent 55%
   );
-  opacity: 0.75;
+  opacity: 0.35;
   z-index: 0;
+  transition: opacity var(--admin-transition), background var(--admin-transition);
+}
+
+.solace-admin [data-slot="card"] > *,
+html[data-solace-admin] [data-slot="card"] > * {
+  position: relative;
+  z-index: 1;
 }
 
 .solace-admin [data-slot="card"]:hover,
 html[data-solace-admin] [data-slot="card"]:hover {
-  border-color: var(--admin-border-glow) !important;
-  background: var(--admin-surface-hover) !important;
-  box-shadow: var(--admin-shadow-panel-hover);
+  border-color: rgba(167, 139, 250, 0.28) !important;
+  box-shadow: var(--admin-shadow-panel-hover) !important;
+  transform: translateY(-1px);
+  z-index: 2;
+}
+
+.solace-admin [data-slot="card"]:hover::before,
+html[data-solace-admin] [data-slot="card"]:hover::before {
+  opacity: 0.82;
+  background: radial-gradient(
+    ellipse 90% 60% at 14% -8%,
+    var(--admin-glow-violet-hover),
+    rgba(78, 205, 196, 0.04) 45%,
+    transparent 62%
+  );
+}
+
+.solace-admin [data-slot="card"]:hover::after,
+html[data-solace-admin] [data-slot="card"]:hover::after {
+  opacity: 0.42;
+  background: radial-gradient(
+    ellipse 55% 40% at 94% 102%,
+    var(--admin-glow-teal-hover),
+    transparent 58%
+  );
 }
 
 /* ── Tables — premium matte, not spreadsheet ── */
@@ -99,12 +210,14 @@ html[data-solace-admin] [data-slot="table-container"] {
 .solace-admin [data-slot="table-row"],
 html[data-solace-admin] [data-slot="table-row"] {
   border-color: rgba(255, 255, 255, 0.04) !important;
-  transition: background-color 0.2s ease;
+  background-color: transparent !important;
+  transition: background-color 0.2s ease, box-shadow var(--admin-transition);
 }
 
 .solace-admin [data-slot="table-row"]:hover,
 html[data-solace-admin] [data-slot="table-row"]:hover {
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: rgba(167, 139, 250, 0.06) !important;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.08);
 }
 
 .solace-admin [data-slot="table-head"],
@@ -125,8 +238,8 @@ html[data-solace-admin] [data-slot="dialog-overlay"] {
 
 html[data-solace-admin] [data-slot="alert-dialog-content"],
 html[data-solace-admin] [data-slot="dialog-content"] {
-  border-color: var(--admin-border) !important;
-  background: var(--admin-surface) !important;
+  border: 1px solid var(--admin-surface-border-color) !important;
+  background: var(--admin-surface-gradient) !important;
   color: var(--admin-text) !important;
   box-shadow: var(--admin-shadow-cinematic), inset 0 1px 0 var(--admin-edge-highlight) !important;
 }
@@ -166,34 +279,43 @@ html[data-solace-admin] [data-slot="select-content"] {
   box-shadow: var(--admin-shadow-panel) !important;
 }
 
-/* ── Form controls ── */
+/* ── Form controls — beat global .dark flat-black overrides ── */
 .solace-admin input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .solace-admin select,
 .solace-admin textarea,
+.solace-admin [data-slot="input"],
 html[data-solace-admin] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 html[data-solace-admin] select,
-html[data-solace-admin] textarea {
-  border-color: var(--admin-border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--admin-text);
+html[data-solace-admin] textarea,
+html[data-solace-admin] [data-slot="input"] {
+  border-color: var(--admin-border) !important;
+  background-color: color-mix(in oklab, var(--admin-surface-raised) 94%, transparent) !important;
+  color: var(--admin-text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .solace-admin input::placeholder,
 .solace-admin textarea::placeholder,
 html[data-solace-admin] input::placeholder,
 html[data-solace-admin] textarea::placeholder {
-  color: var(--admin-text-muted);
+  color: var(--admin-text-muted) !important;
 }
 
 .solace-admin input:focus,
 .solace-admin select:focus,
 .solace-admin textarea:focus,
+.solace-admin [data-slot="input"]:focus-visible,
 html[data-solace-admin] input:focus,
 html[data-solace-admin] select:focus,
-html[data-solace-admin] textarea:focus {
-  border-color: rgba(78, 205, 196, 0.35);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.12);
+html[data-solace-admin] textarea:focus,
+html[data-solace-admin] [data-slot="input"]:focus-visible {
+  border-color: rgba(78, 205, 196, 0.35) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.12) !important;
+}
+
+html[data-solace-admin] .bg-background {
+  background-color: color-mix(in oklab, var(--admin-surface-raised) 94%, transparent) !important;
 }
 
 /* ── Light-theme utility remaps (legacy admin pages) ── */
@@ -598,3 +720,838 @@ html[data-solace-admin] ::-webkit-scrollbar-thumb {
 html[data-solace-admin] ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ============================================================
+   SOLACE ADMIN MATERIAL SYSTEM v2 — global cascade
+   Applies to all admin routes without layout/UX changes.
+   ============================================================ */
+
+/* Typography tokens */
+.solace-admin .text-muted-foreground,
+html[data-solace-admin] .text-muted-foreground {
+  color: var(--admin-text-muted) !important;
+}
+
+/* Sub-page sidebar links — active = border + soft glow shadow */
+.solace-admin .admin-sidebar-nav.admin-nav-active,
+.solace-admin .admin-sidebar-nav.admin-sidebar-nav--active,
+html[data-solace-admin] .admin-sidebar-nav.admin-nav-active,
+html[data-solace-admin] .admin-sidebar-nav.admin-sidebar-nav--active {
+  background: transparent !important;
+  border: 1px solid var(--admin-nav-active-border) !important;
+  box-shadow:
+    0 0 14px rgba(139, 92, 246, 0.18),
+    inset 0 0 0 1px rgba(167, 139, 250, 0.22) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.solace-admin .admin-sidebar-nav:not(.admin-nav-active):not(.admin-sidebar-nav--active):hover,
+html[data-solace-admin] .admin-sidebar-nav:not(.admin-nav-active):not(.admin-sidebar-nav--active):hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* Top-level sidebar sections — all tabs get gradient border; active gets fill */
+.solace-admin button.admin-sidebar-section:not(.admin-sidebar-section--active),
+html[data-solace-admin] button.admin-sidebar-section:not(.admin-sidebar-section--active) {
+  border: 1px solid rgba(167, 139, 250, 0.22) !important;
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.06) !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+.solace-admin button.admin-sidebar-section:hover:not(.admin-sidebar-section--active),
+html[data-solace-admin] button.admin-sidebar-section:hover:not(.admin-sidebar-section--active) {
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  background: rgba(167, 139, 250, 0.06) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(167, 139, 250, 0.12),
+    0 0 16px rgba(139, 92, 246, 0.1) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.solace-admin button.admin-sidebar-section--active,
+html[data-solace-admin] button.admin-sidebar-section--active {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.42) 0%,
+    rgba(120, 100, 220, 0.28) 42%,
+    rgba(78, 205, 196, 0.32) 100%
+  ) !important;
+  border: 1px solid var(--admin-nav-active-border) !important;
+  box-shadow:
+    0 0 32px rgba(139, 92, 246, 0.28),
+    inset 0 0 0 1px rgba(167, 139, 250, 0.38) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.solace-admin button.admin-sidebar-section--active:hover,
+html[data-solace-admin] button.admin-sidebar-section--active:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.48) 0%,
+    rgba(120, 100, 220, 0.32) 42%,
+    rgba(78, 205, 196, 0.38) 100%
+  ) !important;
+}
+
+.solace-admin .admin-sidebar-section:not(.admin-sidebar-section--active),
+html[data-solace-admin] .admin-sidebar-section:not(.admin-sidebar-section--active) {
+  border: 1px solid rgba(167, 139, 250, 0.22) !important;
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.06) !important;
+}
+
+.solace-admin .admin-sidebar-section:hover:not(.admin-sidebar-section--active),
+html[data-solace-admin] .admin-sidebar-section:hover:not(.admin-sidebar-section--active) {
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  background: rgba(167, 139, 250, 0.06) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(167, 139, 250, 0.12),
+    0 0 16px rgba(139, 92, 246, 0.1) !important;
+}
+
+.solace-admin .admin-sidebar-section--active,
+html[data-solace-admin] .admin-sidebar-section--active {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.42) 0%,
+    rgba(120, 100, 220, 0.28) 42%,
+    rgba(78, 205, 196, 0.32) 100%
+  ) !important;
+  border: 1px solid var(--admin-nav-active-border) !important;
+  box-shadow:
+    0 0 32px rgba(139, 92, 246, 0.28),
+    inset 0 0 0 1px rgba(167, 139, 250, 0.38) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.solace-admin .admin-sidebar-section--active:hover,
+html[data-solace-admin] .admin-sidebar-section--active:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.48) 0%,
+    rgba(120, 100, 220, 0.32) 42%,
+    rgba(78, 205, 196, 0.38) 100%
+  ) !important;
+}
+
+/* Inactive sidebar links — transparent, no black blocks */
+.solace-admin .admin-sidebar-nav:not(.admin-nav-active):not(.admin-sidebar-nav--active),
+html[data-solace-admin] .admin-sidebar-nav:not(.admin-nav-active):not(.admin-sidebar-nav--active) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* KPI / stat cards — compact, content starts near top */
+.solace-admin .admin-kpi-card,
+html[data-solace-admin] .admin-kpi-card {
+  min-height: unset !important;
+  max-height: unset !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.solace-admin .grid > [data-slot="card"],
+.solace-admin .grid > * > [data-slot="card"],
+html[data-solace-admin] .grid > [data-slot="card"],
+html[data-solace-admin] .grid > * > [data-slot="card"] {
+  min-height: unset !important;
+}
+
+/* Stat grids: balanced padding, content starts near top */
+.solace-admin .grid.grid-cols-1 [data-slot="card"].p-6,
+.solace-admin .grid.grid-cols-2 [data-slot="card"].p-6,
+.solace-admin .grid.grid-cols-3 [data-slot="card"].p-6,
+.solace-admin .grid.grid-cols-4 [data-slot="card"].p-6,
+.solace-admin .grid.lg\:grid-cols-4 [data-slot="card"].p-6,
+.solace-admin .grid.md\:grid-cols-2 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.grid-cols-1 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.grid-cols-2 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.grid-cols-3 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.grid-cols-4 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.lg\:grid-cols-4 [data-slot="card"].p-6,
+html[data-solace-admin] .grid.md\:grid-cols-2 [data-slot="card"].p-6 {
+  padding: 1.375rem 1.5rem !important;
+}
+
+/* Remove oversized min-heights on metric cards */
+.solace-admin [data-slot="card"][class*="min-h-"],
+html[data-solace-admin] [data-slot="card"][class*="min-h-"] {
+  min-height: unset !important;
+}
+
+/* Decorative blurs must not affect layout flow */
+.solace-admin [data-slot="card"] > .absolute.blur-3xl,
+html[data-solace-admin] [data-slot="card"] > .absolute.blur-3xl {
+  pointer-events: none;
+}
+
+/* Primary buttons — Solace violet/teal gradient */
+.solace-admin button.bg-primary,
+.solace-admin [data-slot="button"].bg-primary,
+.solace-admin a.bg-primary,
+html[data-solace-admin] button.bg-primary,
+html[data-solace-admin] [data-slot="button"].bg-primary {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.92) 0%,
+    rgba(78, 205, 196, 0.88) 100%
+  ) !important;
+  color: #041018 !important;
+  border: none;
+  box-shadow: 0 0 24px -8px rgba(167, 139, 250, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: filter var(--admin-transition), box-shadow var(--admin-transition);
+}
+
+.solace-admin button.bg-primary:hover,
+.solace-admin [data-slot="button"].bg-primary:hover,
+html[data-solace-admin] button.bg-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 36px -4px rgba(167, 139, 250, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Destructive — deep red matte */
+.solace-admin button.bg-destructive,
+.solace-admin [data-slot="button"].bg-destructive,
+html[data-solace-admin] button.bg-destructive {
+  background: color-mix(in srgb, #dc2626 75%, #0d1428) !important;
+  color: #fecaca !important;
+  border: 1px solid rgba(248, 113, 113, 0.25) !important;
+}
+
+/* Outline / secondary buttons — exclude sidebar section toggles */
+.solace-admin button.border:not(.admin-sidebar-section),
+.solace-admin [data-slot="button"].border,
+html[data-solace-admin] button.border-input,
+html[data-solace-admin] [data-slot="button"].border {
+  border-color: var(--admin-surface-border-color) !important;
+  background: color-mix(in oklab, var(--admin-surface-raised) 90%, transparent) !important;
+  color: var(--admin-text-secondary) !important;
+  transition:
+    border-color var(--admin-transition),
+    background var(--admin-transition),
+    box-shadow var(--admin-transition);
+}
+
+.solace-admin button.border:not(.admin-sidebar-section):hover,
+html[data-solace-admin] button.border-input:hover {
+  border-color: var(--admin-border-glow-soft) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--admin-text) !important;
+  box-shadow: 0 0 24px -8px rgba(167, 139, 250, 0.22);
+  transform: translateY(-1px);
+}
+
+/* Charts — Recharts integration */
+.solace-admin .recharts-cartesian-grid line,
+html[data-solace-admin] .recharts-cartesian-grid line {
+  stroke: rgba(255, 255, 255, 0.06) !important;
+}
+
+.solace-admin .recharts-text,
+.solace-admin .recharts-label,
+html[data-solace-admin] .recharts-text,
+html[data-solace-admin] .recharts-label {
+  fill: var(--admin-text-muted) !important;
+  font-size: 11px;
+}
+
+.solace-admin .recharts-default-tooltip,
+html[data-solace-admin] .recharts-default-tooltip {
+  background: var(--admin-surface-elevated) !important;
+  border: 1px solid var(--admin-surface-border-color) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: var(--admin-shadow-panel) !important;
+  color: var(--admin-text) !important;
+}
+
+.solace-admin .recharts-tooltip-label,
+html[data-solace-admin] .recharts-tooltip-label {
+  color: var(--admin-text-secondary) !important;
+}
+
+/* Table header row */
+.solace-admin [data-slot="table-header"],
+html[data-solace-admin] [data-slot="table-header"] {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+}
+
+.solace-admin [data-slot="table-cell"],
+html[data-solace-admin] [data-slot="table-cell"] {
+  color: var(--admin-text-secondary) !important;
+}
+
+/* Tabs — transparent triggers, glow on active only */
+.solace-admin [data-slot="tabs-list"],
+html[data-solace-admin] [data-slot="tabs-list"] {
+  background: transparent !important;
+  border: none !important;
+  gap: 0.25rem;
+  padding: 0 !important;
+}
+
+.solace-admin [data-slot="tabs-trigger"],
+html[data-solace-admin] [data-slot="tabs-trigger"] {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--admin-text-muted) !important;
+  transition:
+    background var(--admin-transition),
+    border-color var(--admin-transition),
+    box-shadow var(--admin-transition),
+    color var(--admin-transition),
+    transform var(--admin-transition) !important;
+}
+
+.solace-admin [data-slot="tabs-trigger"]:hover,
+html[data-solace-admin] [data-slot="tabs-trigger"]:hover {
+  background: var(--admin-nav-hover-bg) !important;
+  border-color: var(--admin-nav-hover-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-nav-hover-glow) !important;
+}
+
+.solace-admin [data-slot="tabs-trigger"][data-state="active"],
+html[data-solace-admin] [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--admin-nav-active-bg) !important;
+  border: 1px solid var(--admin-nav-active-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-nav-active-glow) !important;
+}
+
+/* Dropdown menu items */
+html[data-solace-admin] [data-slot="dropdown-menu-item"]:focus,
+html[data-solace-admin] [data-slot="select-item"][data-highlighted] {
+  background: rgba(167, 139, 250, 0.12) !important;
+  color: var(--admin-text) !important;
+}
+
+/* Progress bars */
+.solace-admin [data-slot="progress"],
+html[data-solace-admin] [data-slot="progress"] {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.solace-admin [data-slot="progress-indicator"],
+html[data-solace-admin] [data-slot="progress-indicator"] {
+  background: linear-gradient(
+    90deg,
+    rgba(78, 205, 196, 0.85),
+    rgba(167, 139, 250, 0.85)
+  ) !important;
+}
+
+/* Legacy custom modals (not portaled shadcn) */
+.solace-admin .rounded-2xl.bg-white,
+.solace-admin .rounded-3xl.bg-white,
+.solace-admin .rounded-2xl[class*="bg-white"],
+html[data-solace-admin] .rounded-2xl[class*="bg-white"],
+html[data-solace-admin] .rounded-3xl[class*="bg-white"] {
+  background: var(--admin-surface-gradient) !important;
+  border: 1px solid var(--admin-surface-border-color) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-shadow-cinematic), inset 0 1px 0 var(--admin-edge-highlight) !important;
+}
+
+/* Badge / pill status — restrained */
+.solace-admin [data-slot="badge"],
+html[data-solace-admin] [data-slot="badge"] {
+  border: 1px solid var(--admin-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--admin-text-secondary);
+}
+
+/* Checkbox / switch focus */
+.solace-admin [data-slot="checkbox"],
+html[data-solace-admin] [data-slot="checkbox"] {
+  border-color: var(--admin-border);
+}
+
+/* Calendar / date picker */
+html[data-solace-admin] [data-slot="calendar"] {
+  background: var(--admin-surface-elevated) !important;
+  border: 1px solid var(--admin-surface-border-color) !important;
+}
+
+/* Hover on bordered list rows */
+.solace-admin .border.rounded-lg:hover,
+.solace-admin .border.rounded-xl:hover,
+html[data-solace-admin] .border.rounded-lg:hover,
+html[data-solace-admin] .border.rounded-xl:hover {
+  border-color: rgba(167, 139, 250, 0.28) !important;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: var(--admin-shadow-panel-hover);
+  transform: translateY(-1px);
+  transition:
+    border-color var(--admin-transition),
+    background var(--admin-transition),
+    box-shadow var(--admin-transition),
+    transform var(--admin-transition);
+}
+
+/* Alert banners */
+.solace-admin [role="alert"],
+html[data-solace-admin] [role="alert"] {
+  border-radius: 0.875rem;
+}
+
+/* Skeleton loaders */
+.solace-admin [data-slot="skeleton"],
+html[data-solace-admin] [data-slot="skeleton"] {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Chart container min-heights preserved; only style the shell */
+.solace-admin [data-slot="card"] .recharts-responsive-container,
+html[data-solace-admin] [data-slot="card"] .recharts-responsive-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   SOLACE ADMIN MATERIAL SYSTEM v3 — user-side twin refinements
+   ============================================================ */
+
+/* Primary KPI row — uniform tile size across all 8 dashboard KPIs */
+.solace-admin .admin-kpi-grid,
+html[data-solace-admin] .admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .solace-admin .admin-kpi-grid,
+  html[data-solace-admin] .admin-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.solace-admin .admin-kpi-grid > *,
+html[data-solace-admin] .admin-kpi-grid > * {
+  min-width: 0;
+  height: 7.875rem;
+}
+
+.solace-admin .admin-kpi-grid > a,
+html[data-solace-admin] .admin-kpi-grid > a {
+  display: block;
+  height: 7.875rem;
+  min-width: 0;
+}
+
+.solace-admin .admin-kpi-tile,
+html[data-solace-admin] .admin-kpi-tile {
+  height: 7.875rem !important;
+  min-height: 7.875rem !important;
+  max-height: 7.875rem !important;
+  width: 100% !important;
+  column-gap: 1.25rem !important;
+  transition:
+    border-color var(--admin-transition),
+    box-shadow var(--admin-transition),
+    transform var(--admin-transition),
+    background var(--admin-transition) !important;
+}
+
+.solace-admin .admin-kpi-tile:hover,
+html[data-solace-admin] .admin-kpi-tile:hover {
+  border-color: rgba(167, 139, 250, 0.28) !important;
+  box-shadow: var(--admin-shadow-panel-hover) !important;
+  transform: translateY(-1px);
+  z-index: 2;
+}
+
+.solace-admin .admin-kpi-tile > .shrink-0,
+.solace-admin .admin-kpi-tile > [class*="shrink-0"]:first-child,
+html[data-solace-admin] .admin-kpi-tile > .shrink-0,
+html[data-solace-admin] .admin-kpi-tile > [class*="shrink-0"]:first-child {
+  margin-right: 0.125rem;
+}
+
+/* Legacy alias */
+.solace-admin .admin-primary-kpi-grid,
+html[data-solace-admin] .admin-primary-kpi-grid {
+  align-items: stretch;
+}
+
+.solace-admin .admin-primary-kpi-grid [data-slot="card"],
+html[data-solace-admin] .admin-primary-kpi-grid [data-slot="card"] {
+  column-gap: 1.25rem !important;
+  height: 7.875rem !important;
+  min-height: 7.875rem !important;
+  max-height: 7.875rem !important;
+  width: 100% !important;
+}
+
+/* Matte KPI icon chips — remap solid neon icon blocks */
+.solace-admin [data-slot="card"] .rounded-xl.bg-purple-500,
+.solace-admin [data-slot="card"] .rounded-xl.bg-cyan-500,
+.solace-admin [data-slot="card"] .rounded-xl.bg-green-500,
+.solace-admin [data-slot="card"] .rounded-xl.bg-red-500,
+.solace-admin [data-slot="card"] .rounded-xl.bg-emerald-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-purple-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-cyan-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-green-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-red-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-emerald-500 {
+  background: color-mix(in srgb, var(--admin-secondary) 14%, transparent) !important;
+  border: 1px solid rgba(167, 139, 250, 0.22) !important;
+  box-shadow: none !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-cyan-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-cyan-500 {
+  background: color-mix(in srgb, var(--admin-primary) 14%, transparent) !important;
+  border-color: rgba(78, 205, 196, 0.22) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-green-500,
+.solace-admin [data-slot="card"] .rounded-xl.bg-emerald-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-green-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-emerald-500 {
+  background: color-mix(in srgb, var(--admin-primary) 12%, transparent) !important;
+  border-color: rgba(78, 205, 196, 0.2) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-red-500,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-red-500 {
+  background: color-mix(in srgb, var(--admin-pink) 14%, transparent) !important;
+  border-color: rgba(248, 113, 113, 0.22) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl[class*="bg-"] svg.text-white,
+html[data-solace-admin] [data-slot="card"] .rounded-xl[class*="bg-"] svg.text-white {
+  color: var(--admin-secondary) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-cyan-500 svg,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-cyan-500 svg {
+  color: var(--admin-primary) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-green-500 svg,
+.solace-admin [data-slot="card"] .rounded-xl.bg-emerald-500 svg,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-green-500 svg,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-emerald-500 svg {
+  color: var(--admin-primary) !important;
+}
+
+.solace-admin [data-slot="card"] .rounded-xl.bg-red-500 svg,
+html[data-solace-admin] [data-slot="card"] .rounded-xl.bg-red-500 svg {
+  color: #fca5a5 !important;
+}
+
+/* Crisis KPI cards — restrained danger matte */
+.solace-admin [data-slot="card"][class*="from-red-50"],
+.solace-admin [data-slot="card"][class*="border-red"],
+html[data-solace-admin] [data-slot="card"][class*="from-red-50"],
+html[data-solace-admin] [data-slot="card"][class*="border-red-3"] {
+  background: var(--admin-crisis-surface) !important;
+  background-image: none !important;
+  border-color: var(--admin-crisis-border) !important;
+}
+
+.solace-admin [data-slot="card"][class*="from-red-50"]::before,
+html[data-solace-admin] [data-slot="card"][class*="from-red-50"]::before {
+  background: radial-gradient(
+    ellipse 70% 45% at 12% -8%,
+    var(--admin-crisis-glow),
+    transparent 58%
+  ) !important;
+}
+
+/* Health / safe crisis cards — teal edge light */
+.solace-admin [data-slot="card"][class*="from-emerald-50"],
+.solace-admin [data-slot="card"][class*="border-emerald"],
+html[data-solace-admin] [data-slot="card"][class*="from-emerald-50"] {
+  background: var(--admin-health-surface) !important;
+  background-image: none !important;
+  border-color: var(--admin-health-border) !important;
+}
+
+.solace-admin [data-slot="card"][class*="from-emerald-50"]::after,
+html[data-solace-admin] [data-slot="card"][class*="from-emerald-50"]::after {
+  opacity: 0.55 !important;
+}
+
+/* Chart cards — softer glow, larger radius */
+.solace-admin .admin-chart-card,
+.solace-admin [data-slot="card"]:has(.recharts-responsive-container),
+html[data-solace-admin] [data-slot="card"]:has(.recharts-responsive-container) {
+  border-radius: var(--admin-radius-card-lg) !important;
+}
+
+.solace-admin [data-slot="card"]:has(.recharts-responsive-container):hover,
+html[data-solace-admin] [data-slot="card"]:has(.recharts-responsive-container):hover {
+  box-shadow:
+    0 20px 52px rgba(0, 0, 0, 0.38),
+    0 0 18px rgba(167, 139, 250, 0.08),
+    0 0 24px rgba(78, 205, 196, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Quick action buttons */
+.solace-admin .admin-quick-action:hover,
+html[data-solace-admin] .admin-quick-action:hover {
+  border-color: var(--admin-border-glow-soft) !important;
+  box-shadow: 0 0 24px -8px rgba(167, 139, 250, 0.22) !important;
+  transform: translateY(-1px);
+}
+
+/* Toggle group (date filters) — matte, no black pills */
+.solace-admin [data-slot="toggle-group"],
+html[data-solace-admin] [data-slot="toggle-group"] {
+  background: transparent !important;
+  border: none !important;
+  gap: 0.25rem;
+}
+
+.solace-admin [data-slot="toggle-group-item"],
+html[data-solace-admin] [data-slot="toggle-group-item"] {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--admin-text-muted) !important;
+  transition: all var(--admin-transition) !important;
+}
+
+.solace-admin [data-slot="toggle-group-item"]:hover,
+html[data-solace-admin] [data-slot="toggle-group-item"]:hover {
+  background: var(--admin-nav-hover-bg) !important;
+  border-color: var(--admin-nav-hover-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-nav-hover-glow) !important;
+}
+
+.solace-admin [data-slot="toggle-group-item"][data-state="on"],
+html[data-solace-admin] [data-slot="toggle-group-item"][data-state="on"] {
+  background: var(--admin-nav-active-bg) !important;
+  border: 1px solid var(--admin-nav-active-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: var(--admin-nav-active-glow) !important;
+}
+
+/* Dropdown / select items — hover glow */
+html[data-solace-admin] [data-slot="dropdown-menu-item"]:hover,
+html[data-solace-admin] [data-slot="select-item"]:hover {
+  background: rgba(167, 139, 250, 0.1) !important;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.12);
+}
+
+/* Popover content hover polish */
+html[data-solace-admin] [data-slot="popover-content"] {
+  border-color: var(--admin-surface-border-color) !important;
+  box-shadow: var(--admin-shadow-panel) !important;
+}
+
+/* Warning / amber alert banners — restrained */
+.solace-admin [class*="border-amber"][class*="bg-amber"],
+html[data-solace-admin] [class*="border-amber"][class*="bg-amber"] {
+  background: var(--admin-warning-surface) !important;
+  border-color: var(--admin-warning-border) !important;
+  color: #fcd34d !important;
+}
+
+/* Interactive card links — preserve hover without layout shift */
+.solace-admin a [data-slot="card"],
+html[data-solace-admin] a [data-slot="card"] {
+  cursor: pointer;
+}
+
+/* Footer profile mini-card — softer, not heavy block */
+.solace-admin aside .admin-card.rounded-xl,
+html[data-solace-admin] aside .admin-card.rounded-xl {
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(167, 139, 250, 0.1);
+}
+
+.solace-admin aside .admin-card.rounded-xl::before,
+.solace-admin aside .admin-card.rounded-xl::after,
+html[data-solace-admin] aside .admin-card.rounded-xl::before,
+html[data-solace-admin] aside .admin-card.rounded-xl::after {
+  opacity: 0.35;
+}
+
+/* ============================================================
+   Legacy HTML tables + .dark global overrides
+   Admin pages use raw <table> with bg-white / bg-gray-50 classes.
+   Global .dark rules force flat oklch black — restore Solace theme.
+   ============================================================ */
+
+html[data-solace-admin] table thead[class*="bg-gray"],
+html[data-solace-admin] table thead[class*="bg-slate"],
+html[data-solace-admin] table thead[class*="bg-zinc"] {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  background-image: none !important;
+  border-color: var(--admin-border) !important;
+}
+
+html[data-solace-admin] table tbody[class*="bg-white"],
+html[data-solace-admin] table tbody[class*="bg-gray"],
+html[data-solace-admin] table tbody[class*="bg-slate"] {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+html[data-solace-admin] table tbody tr {
+  background-color: transparent !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+html[data-solace-admin] table tbody tr:hover,
+html[data-solace-admin] table tbody tr[class*="hover:bg-gray"]:hover,
+html[data-solace-admin] table tbody tr[class*="hover:bg-slate"]:hover {
+  background-color: rgba(167, 139, 250, 0.06) !important;
+}
+
+html[data-solace-admin] table th[class*="text-gray"],
+html[data-solace-admin] table td[class*="text-gray"] {
+  color: var(--admin-text-secondary) !important;
+}
+
+html[data-solace-admin] table th[class*="uppercase"] {
+  color: var(--admin-text-muted) !important;
+  letter-spacing: 0.06em;
+}
+
+/* Beat .dark flat fills on utility classes inside admin shell */
+html[data-solace-admin] [class*="bg-white"],
+html[data-solace-admin] [class*="bg-gray-50"],
+html[data-solace-admin] [class*="bg-slate-50"] {
+  background-color: var(--admin-surface) !important;
+  background-image: none !important;
+}
+
+html[data-solace-admin] table tbody[class*="bg-white"],
+html[data-solace-admin] table tbody[class*="bg-gray-50"] {
+  background-color: transparent !important;
+}
+
+html[data-solace-admin] [class*="hover:bg-gray-50"]:hover,
+html[data-solace-admin] [class*="hover:bg-gray-100"]:hover,
+html[data-solace-admin] [class*="hover:bg-teal-50"]:hover {
+  background-color: rgba(167, 139, 250, 0.08) !important;
+}
+
+html[data-solace-admin].dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-solace-admin].dark textarea,
+html[data-solace-admin].dark select {
+  background-color: color-mix(in oklab, var(--admin-surface-raised) 94%, transparent) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin].dark [class*="bg-white"],
+html[data-solace-admin].dark [class*="bg-gray-50"],
+html[data-solace-admin].dark [class*="bg-gray-100"],
+html[data-solace-admin].dark [class*="bg-slate-50"] {
+  background-color: var(--admin-surface) !important;
+  background-image: none !important;
+}
+
+html[data-solace-admin].dark table tbody[class*="bg-white"],
+html[data-solace-admin].dark table tbody tr {
+  background-color: transparent !important;
+}
+
+html[data-solace-admin].dark table thead[class*="bg-gray"] {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* ============================================================
+   Admin typography — force readable light text globally
+   ============================================================ */
+
+html[data-solace-admin] .solace-admin,
+html[data-solace-admin] .solace-admin main {
+  color: var(--admin-text);
+}
+
+html[data-solace-admin] [class*="text-gray-900"],
+html[data-solace-admin] [class*="text-gray-800"],
+html[data-solace-admin] [class*="text-gray-700"],
+html[data-solace-admin] [class*="text-zinc-900"],
+html[data-solace-admin] [class*="text-zinc-800"],
+html[data-solace-admin] [class*="text-zinc-700"],
+html[data-solace-admin] [class*="text-slate-900"],
+html[data-solace-admin] [class*="text-slate-800"],
+html[data-solace-admin] [class*="text-slate-700"],
+html[data-solace-admin] [class*="text-neutral-900"],
+html[data-solace-admin] .text-black {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin] [class*="text-gray-600"],
+html[data-solace-admin] [class*="text-gray-500"],
+html[data-solace-admin] [class*="text-zinc-600"],
+html[data-solace-admin] [class*="text-zinc-500"],
+html[data-solace-admin] [class*="text-slate-600"],
+html[data-solace-admin] [class*="text-slate-500"],
+html[data-solace-admin] [class*="text-neutral-600"],
+html[data-solace-admin] [class*="text-neutral-500"] {
+  color: var(--admin-text-secondary) !important;
+}
+
+html[data-solace-admin] [class*="text-gray-400"],
+html[data-solace-admin] [class*="text-zinc-400"],
+html[data-solace-admin] [class*="text-slate-400"] {
+  color: var(--admin-text-muted) !important;
+}
+
+html[data-solace-admin] [data-slot="card"] h1,
+html[data-solace-admin] [data-slot="card"] h2,
+html[data-solace-admin] [data-slot="card"] h3,
+html[data-solace-admin] [data-slot="card"] h4,
+html[data-solace-admin] [data-slot="card"] .font-bold,
+html[data-solace-admin] [data-slot="card"] .font-semibold {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin] [data-slot="card"] p,
+html[data-solace-admin] [data-slot="card"] span:not([class*="text-green"]):not([class*="text-red"]):not([class*="text-emerald"]):not([class*="text-rose"]):not([class*="text-teal"]):not([class*="text-cyan"]):not([class*="text-amber"]):not([class*="text-orange"]):not([class*="text-purple"]):not([class*="text-violet"]):not([class*="text-pink"]) {
+  color: inherit;
+}
+
+html[data-solace-admin] .text-foreground,
+html[data-solace-admin] .text-card-foreground {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin] .text-muted-foreground {
+  color: var(--admin-text-muted) !important;
+}
+
+html[data-solace-admin] .admin-sidebar-nav:not(.admin-nav-active):not(.admin-sidebar-nav--active) {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+html[data-solace-admin] .admin-sidebar-nav.admin-nav-active,
+html[data-solace-admin] .admin-sidebar-nav.admin-sidebar-nav--active {
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+html[data-solace-admin] aside p,
+html[data-solace-admin] aside span {
+  color: inherit;
+}
+
+html[data-solace-admin] aside .text-muted-foreground,
+html[data-solace-admin] aside [class*="text-gray"] {
+  color: var(--admin-text-muted) !important;
+}
+
+html[data-solace-admin] main h1,
+html[data-solace-admin] main h2,
+html[data-solace-admin] main h3,
+html[data-solace-admin] main h4 {
+  color: var(--admin-text) !important;
+}
+

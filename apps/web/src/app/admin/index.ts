@@ -6,6 +6,9 @@ export {
   adminPageVignette,
   adminCard,
   adminCardStatic,
+  adminKpiCard,
+  adminKpiTile,
+  adminChartCard,
   adminTableWrap,
   adminSidebar,
   adminTopBar,
@@ -20,8 +23,13 @@ export {
   adminSelect,
   adminBtnPrimary,
   adminBtnSecondary,
+  adminBtnDanger,
   adminBtnGhost,
   adminRoleBadge,
+  adminQuickAction,
+  adminKpiIcon,
+  adminKpiIconTeal,
+  adminStatusPill,
 } from "./adminPageChrome";
 
 export { useAdminThemeScope } from "./useAdminThemeScope";

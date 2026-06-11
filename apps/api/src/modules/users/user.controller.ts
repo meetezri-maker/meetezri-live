@@ -4,6 +4,8 @@ import * as userService from './user.service';
 import * as billingService from '../billing/billing.service';
 import { supabaseAdmin } from '../../config/supabase';
 import { emailService } from '../email/email.service';
+import prisma from '../../lib/prisma';
+import { inferAdminRoleFromAuthUser, isAdminRole, normalizeAppRole } from '../../lib/adminRoles';
 
 interface UserPayload {
   sub: string;
@@ -40,6 +42,34 @@ function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
   }
 
   return sanitized;
+}
+
+async function resolveEffectiveProfileRole(
+  userId: string,
+  profileRole?: string | null
+): Promise<string | undefined> {
+  const normalized = normalizeAppRole(profileRole);
+  if (isAdminRole(normalized)) {
+    return normalized;
+  }
+
+  const authUser = await prisma.users.findUnique({
+    where: { id: userId },
+    select: {
+      is_super_admin: true,
+      raw_app_meta_data: true,
+      raw_user_meta_data: true,
+    },
+  });
+
+  const inferred = inferAdminRoleFromAuthUser(
+    authUser as {
+      is_super_admin?: boolean | null;
+      raw_app_meta_data?: Record<string, unknown> | null;
+      raw_user_meta_data?: Record<string, unknown> | null;
+    } | null
+  );
+  return inferred ?? normalized ?? profileRole ?? undefined;
 }
 
 function tryParseHttpOrigin(value?: string | null): string | null {
@@ -485,6 +515,11 @@ export async function getMeHandler(
     } catch (e) {
       request.log.warn({ e }, 'Failed to backfill full_name on getMe');
     }
+  }
+
+  const effectiveRole = await resolveEffectiveProfileRole(user.sub, profile.role);
+  if (effectiveRole) {
+    profile = { ...profile, role: effectiveRole };
   }
 
   return sanitizeSelfProfileResponse(profile as any);

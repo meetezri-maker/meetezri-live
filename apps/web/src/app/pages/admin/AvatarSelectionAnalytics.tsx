@@ -9,6 +9,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,6 +20,27 @@ import {
   tryResolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { Brain, ArrowLeft, User } from "lucide-react";
+
+const AVATAR_CHART_COLORS: Record<string, string> = {
+  Alex: "#3b82f6",
+  "Alex Rivera": "#3b82f6",
+  "Sara Mitchell": "#ec4899",
+  "Sarah Mitchell": "#ec4899",
+  "Jordan Taylor": "#10b981",
+  "Maya Chen": "#f59e0b",
+  Other: "#64748b",
+};
+
+const AVATAR_CHART_FALLBACK = ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#6366f1"];
+
+const ADMIN_CHART_TOOLTIP = {
+  backgroundColor: "var(--admin-chart-tooltip-bg, rgba(17, 22, 42, 0.96))",
+  border: "1px solid var(--admin-chart-tooltip-border, rgba(167, 139, 250, 0.22))",
+  borderRadius: "12px",
+  boxShadow: "0 18px 50px rgba(0, 0, 0, 0.38)",
+  color: "var(--admin-chart-tooltip-text, #f8fafc)",
+  fontSize: 12,
+};
 
 type AvatarUsageRow = {
   id: string;
@@ -118,6 +140,19 @@ export function AvatarSelectionAnalytics() {
 
   const mostUsed = useMemo(() => rows.slice(0, 3), [rows]);
 
+  const chartData = useMemo(
+    () =>
+      rows.map((row, index) => ({
+        name: row.name,
+        sessions: row.totalSessions,
+        usagePercent: row.usagePercent,
+        color:
+          AVATAR_CHART_COLORS[row.name] ??
+          AVATAR_CHART_FALLBACK[index % AVATAR_CHART_FALLBACK.length],
+      })),
+    [rows]
+  );
+
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
@@ -142,35 +177,74 @@ export function AvatarSelectionAnalytics() {
         </div>
 
         <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Avatar Usage Graph</h2>
+          <h2 className="text-xl font-semibold mb-2">Avatar Usage</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Share of Talk it out sessions by avatar companion.
+          </p>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading usage graph…</p>
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No usage data available for chart.</p>
           ) : (
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    interval={0}
-                    angle={-20}
-                    textAnchor="end"
-                    height={56}
-                  />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value: number, key: string) => {
-                      if (key === "usagePercent") return [formatUsagePercent(value), "Usage"];
-                      return [Number(value).toLocaleString(), "Talk it out"];
-                    }}
-                  />
-                  <Bar dataKey="usagePercent" name="Usage %" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--admin-chart-grid, rgba(167, 139, 250, 0.12))"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 12, fill: "var(--admin-chart-axis, #667085)" }}
+                      axisLine={{ stroke: "var(--admin-border, #E7DDFB)" }}
+                      tickLine={false}
+                      interval={0}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "var(--admin-chart-axis, #667085)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={44}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(167, 139, 250, 0.08)" }}
+                      contentStyle={ADMIN_CHART_TOOLTIP}
+                      itemStyle={{ color: "#f8fafc" }}
+                      labelStyle={{ color: "#b8c0d4" }}
+                      formatter={(value: number, _key, item) => {
+                        const row = item.payload as (typeof chartData)[number];
+                        return [
+                          `${Number(value).toLocaleString()} sessions (${formatUsagePercent(row.usagePercent)})`,
+                          "Talk it out",
+                        ];
+                      }}
+                    />
+                    <Bar dataKey="sessions" name="Talk it out" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} stroke="rgba(255,255,255,0.35)" strokeWidth={1} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {chartData.map((item) => (
+                  <div key={item.name} className="flex items-start gap-2 text-sm">
+                    <div
+                      className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{item.name}</span>
+                      <span className="mx-1">·</span>
+                      {item.sessions.toLocaleString()} sessions ({formatUsagePercent(item.usagePercent)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </Card>
 

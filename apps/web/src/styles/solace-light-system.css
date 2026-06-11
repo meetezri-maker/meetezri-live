@@ -274,13 +274,7 @@ html[data-theme="light"] .solace-app .solace-sidebar-shell {
   box-shadow: 0 0 24px rgba(167, 139, 250, 0.18), 0 12px 40px -18px rgba(16, 24, 40, 0.08) !important;
 }
 
-html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active,
-html[data-theme="light"] .solace-app .solace-sidebar-nav--active {
-  color: #4c1d95 !important;
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(78, 205, 196, 0.12)) !important;
-  border: 1px solid rgba(167, 139, 250, 0.45) !important;
-  box-shadow: 0 0 24px rgba(167, 139, 250, 0.18) !important;
-}
+/* light sidebar active — accent gradients via appearanceTheme.css */
 
 /* ─── Glass / rail cards ───────────────────────────────────────────────────── */
 html[data-ezri-theme="light"] .solace-app .solace-glass-card,

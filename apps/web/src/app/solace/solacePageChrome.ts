@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /** Shared settings / sanctuary page chrome — colors via CSS variables only. */
 export const solacePageAtmosphere = cn(
-  "relative min-h-full overflow-x-hidden pb-10 bg-[var(--solace-page-bg)] text-[var(--solace-text)]"
+  "solace-page-backdrop relative min-h-full overflow-x-hidden pb-10 text-[var(--solace-text)]"
 );
 
 export const solacePageGlowTop = cn(
@@ -184,19 +184,15 @@ export const solaceRowLink = cn(
   "hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,transparent)]"
 );
 
-/** Purple gradient CTA — preserved in light theme (not washed by hero scrims) */
+/** Accent-driven gradient CTA — fill via --button-primary in appearanceTheme.css */
 export const solaceCtaGradient = cn(
   "solace-cta-gradient inline-flex items-center justify-center gap-2 font-semibold text-white",
-  "bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700",
-  "shadow-[0_8px_28px_-6px_rgba(109,40,217,0.42)]",
   "transition-opacity hover:opacity-95"
 );
 
 export const solaceBtnPrimary = cn(
   "solace-btn-primary solace-cta-gradient inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-[var(--text-inverse,#ffffff)]",
-  "bg-[var(--button-primary)]",
-  "shadow-[0_8px_24px_-8px_rgba(236,72,153,0.28),0_0_20px_-6px_rgba(167,139,250,0.22)]",
-  "transition-all duration-300 hover:shadow-[0_10px_28px_-6px_rgba(236,72,153,0.35),0_0_28px_-4px_rgba(167,139,250,0.28)]"
+  "transition-all duration-300"
 );
 
 export const solaceBtnSecondary = cn(
@@ -237,8 +233,7 @@ export const solaceOptionCard = cn(
 );
 
 export const solaceOptionCardSelected = cn(
-  "border-[color:var(--solace-ds-border-glow)] bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_12%,var(--solace-ds-surface))]",
-  "shadow-[0_0_24px_-8px_rgba(139,92,246,0.22)]"
+  "appearance-selection-active border border-[color:var(--appearance-selection-border,var(--solace-ds-border-glow))]"
 );
 
 export const solaceBackLink = cn(
