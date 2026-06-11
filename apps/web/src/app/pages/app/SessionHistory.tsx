@@ -45,6 +45,7 @@ import {
   modalSectionTitle,
   modalBodyText,
   modalMutedText,
+  modalEmphasisText,
   modalPrimaryButton,
   modalSecondaryButton,
 } from "@/lib/modalTheme";
@@ -324,37 +325,7 @@ function SessionHistoryPeriodSelect({
 export function SessionHistory() {
   const navigate = useNavigate();
   const { session, profile } = useAuth();
-
-  if (profile?.subscription_plan === 'trial') {
-    return (
-      <div className="session-history-page min-h-screen flex items-center justify-center p-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="session-history-gate-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
-          <div className="relative">
-            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-              <Lock className="w-8 h-8 text-purple-400" />
-            </div>
-            <h2 className="session-history-gate-title text-2xl font-bold text-white mb-3">
-              Talking History is a Core Feature
-            </h2>
-            <p className="session-history-gate-lead text-slate-400 mb-8">
-              Upgrade to Core or Pro to unlock detailed talking logs and history.
-            </p>
-            <Button
-              onClick={() => navigate('/app/billing')}
-              className="session-history-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
-            >
-              View Plans
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+  const isTrialUser = profile?.subscription_plan === "trial";
 
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(null);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
@@ -412,9 +383,17 @@ export function SessionHistory() {
   }, [selectedSession]);
 
   useEffect(() => {
+    if (isTrialUser) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchSessions = async () => {
-      if (!session?.access_token) return;
-      
+      if (!session?.access_token) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const data: BackendSession[] = await api.sessions.list();
         const now = new Date();
@@ -479,7 +458,7 @@ export function SessionHistory() {
     };
 
     fetchSessions();
-  }, [session, profile?.selected_avatar, profile?.selected_environment]);
+  }, [session, profile?.selected_avatar, profile?.selected_environment, isTrialUser]);
 
   const transcriptLine = (role: string, content: string) => {
     const r = role.toLowerCase();
@@ -605,6 +584,37 @@ export function SessionHistory() {
 
   const longestStreak = profile?.streak_days || 14;
   const journeyProgress = Math.min(100, Math.round((sessionsInPeriod.length / 200) * 100));
+
+  if (isTrialUser) {
+    return (
+      <div className="session-history-page min-h-screen flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="session-history-gate-card relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-xl p-8 text-center max-w-md w-full"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
+          <div className="relative">
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+              <Lock className="w-8 h-8 text-purple-400" />
+            </div>
+            <h2 className="session-history-gate-title text-2xl font-bold text-white mb-3">
+              Talking History is a Core Feature
+            </h2>
+            <p className="session-history-gate-lead text-slate-400 mb-8">
+              Upgrade to Core or Pro to unlock detailed talking logs and history.
+            </p>
+            <Button
+              onClick={() => navigate("/app/billing")}
+              className="session-history-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
+            >
+              View Plans
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
