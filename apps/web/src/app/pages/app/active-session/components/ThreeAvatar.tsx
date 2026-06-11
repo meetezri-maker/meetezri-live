@@ -80,6 +80,48 @@ import type {
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
 import { SARA_V2_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraV2Config";
 import { prepareSaraV2Scene } from "@/lib/avatar/saraV2Runtime";
+import {
+  createSaraV2PresenceState,
+  isSaraV2PresenceMorph,
+  updateSaraV2Presence,
+  type SaraV2PresenceMode,
+  type SaraV2PresenceState,
+} from "@/lib/avatar/saraV2PresenceRuntime";
+import { SARA_RFV2_BINDING_PROFILE } from "@/lib/avatar/saraRfv2BindingProfile";
+import {
+  bindSaraRfv2FaceMorphTargets,
+  applySaraRfv2MorphTargets,
+  createSaraRfv2MorphApplierState,
+  SARA_RFV2_MORPH_APPLIER_EMPTY_DIAGNOSTICS,
+  type SaraRfv2FaceMorphBinding,
+  type SaraRfv2MorphApplierDiagnostics,
+  type SaraRfv2MorphApplierState,
+} from "@/lib/avatar/saraRfv2MorphApplier";
+import {
+  computeSaraRfv2VisemeTargets,
+  createSaraRfv2PhonemeState,
+  resolveSaraRfv2ActivePhoneme,
+  type SaraRfv2PhonemeState,
+} from "@/lib/avatar/saraRfv2PhonemeDriver";
+import {
+  createSaraRfv2SmoothingState,
+  smoothSaraRfv2Targets,
+  type SaraRfv2SmoothingState,
+} from "@/lib/avatar/saraRfv2SmoothingLayer";
+import {
+  SARA_V3_AVATAR_DEFINITION,
+  applySaraV3Environment,
+  captureSaraV3EnvironmentComparison,
+  createSaraV3ModelController,
+  createSaraV3PresenceState,
+  createSaraV3VisemeDriverState,
+  runSaraV3RawRenderAudit,
+  updateSaraV3PresenceRuntime,
+  updateSaraV3VisemeDriver,
+  type SaraV3ControllerState,
+  type SaraV3PresenceState,
+  type SaraV3VisemeDriverState,
+} from "@/avatar/saraV3";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getSpeechOpennessAt } from "../utils/speech";
@@ -92,17 +134,90 @@ export type FixedAvatarViewportConfig = {
 };
 
 const DEBUG_SARA_FRAMING = false;
+const SARA_RFV2_BINDING_RETRY_LIMIT = 45;
+const SARA_RFV2_PREVIEW_CAMERA_FRAMES = {
+  upperBody: {
+    label: "RFv2 Frame Upper Body",
+    position: [0, 1.45, 4.7],
+    lookAt: [0, 1.25, 0],
+  },
+  face: {
+    label: "RFv2 Frame Face",
+    position: [0, 1.5, 4.9],
+    lookAt: [0, 1.28, 0],
+  },
+} as const;
+const SARA_RFV2_PREVIEW_DEFAULT_CAMERA_FRAME =
+  SARA_RFV2_PREVIEW_CAMERA_FRAMES.upperBody;
 const SARA_VISUAL_ANCHOR_MESH_NAMES = new Set([
   "Face",
   "Character",
   "Character.002",
 ]);
+const SARA_V2_PRESENCE_FACE_MESH_NAMES = new Set([
+  "Face_1",
+  "Face_2",
+  "Face_3",
+  "Face_4",
+]);
+const SARA_V2_BLINK_TEST_VALUES = [0.25, 0.5, 0.75, 1] as const;
+const SARA_V2_BLINK_TEST_MORPHS = new Set([
+  "eyeBlinkLeft",
+  "eyeBlinkRight",
+]);
+const SARA_V2_EYE_LOOK_MORPHS = new Set([
+  "eyeLookUpLeft",
+  "eyeLookUpRight",
+  "eyeLookDownLeft",
+  "eyeLookDownRight",
+]);
+const SARA_HYBRID_AVATAR_IDS = new Set(["sara", "sarah"]);
 const SARA_OVERSIZED_SHELL_MESH_NAMES = new Set([
   "model_19",
   "model_19.001",
   "Object_2",
   "Object_0",
 ]);
+
+type SaraV2BlinkTestState = {
+  left: number | null;
+  right: number | null;
+  lastCommand: string | null;
+  updatedAtMs: number | null;
+};
+
+type SaraV2RecentActivePhonemeDiagnostic = {
+  time: number;
+  audioCurrentTime: number;
+  speechTime: number;
+  phoneme: string | null;
+  viseme: string | null;
+};
+
+function clampSaraV2BlinkTestValue(value: unknown): number {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) return 0;
+  return THREE.MathUtils.clamp(numericValue, 0, 1);
+}
+
+function getSaraHybridPresenceDisabledReason(args: {
+  isSaraAvatar: boolean;
+  isLegacyHybrid: boolean;
+  isSaraHybrid: boolean;
+  isRfv2Preview: boolean;
+  isRfv2MorphMode: boolean;
+  modelMatchesSaraHybrid: boolean;
+}): string {
+  if (args.isSaraHybrid) return "Sara Hybrid presence active.";
+  if (!args.isSaraAvatar) return "Presence disabled: active avatar is not Sara.";
+  if (args.isRfv2Preview) return "Presence disabled: Sara RFv2 Preview is active.";
+  if (args.isRfv2MorphMode) return "Presence disabled: RFv2 morph mode is active.";
+  if (!args.isLegacyHybrid) return "Presence disabled: avatar mode is not legacyHybrid.";
+  if (!args.modelMatchesSaraHybrid) {
+    return "Presence disabled: model is not the Sara Hybrid live model.";
+  }
+  return "Presence disabled: Sara Hybrid viewport gate did not match.";
+}
 
 function isSaraFixedViewportConfig(
   config: FixedAvatarViewportConfig | null | undefined
@@ -156,6 +271,14 @@ function isSaraVisualAnchorMesh(child: THREE.Object3D): boolean {
   const mesh = child as THREE.Mesh;
   return SARA_VISUAL_ANCHOR_MESH_NAMES.has(child.name || "") ||
     SARA_VISUAL_ANCHOR_MESH_NAMES.has(mesh.geometry?.name || "");
+}
+
+function isSaraV2PresenceFaceMesh(child: THREE.Object3D): boolean {
+  const mesh = child as THREE.Mesh;
+  return (
+    SARA_V2_PRESENCE_FACE_MESH_NAMES.has(child.name || "") ||
+    SARA_V2_PRESENCE_FACE_MESH_NAMES.has(mesh.geometry?.name || "")
+  );
 }
 
 function isSaraOversizedShellMesh(child: THREE.Object3D): boolean {
@@ -409,6 +532,846 @@ function computeSaraTopObjectBounds(
     .slice(0, limit);
 }
 
+type SaraRfv2PreviewAssetDiagnostics = {
+  detectedAsset: string;
+  topLevelRoots: string[];
+  faceRootFound: boolean;
+  faceRootName: string | null;
+  faceRootPath: string | null;
+  faceMeshFound: boolean;
+  faceMeshPath: string | null;
+  faceMorphNames: string[];
+  bodyRootFound: boolean;
+  hairRootFound: boolean;
+  hairDiagnostics: SaraRfv2HairDiagnostics;
+};
+
+type SaraTransformNodeAudit = {
+  name: string;
+  type: string;
+  path: string;
+  parentPath: string | null;
+  visible: boolean;
+  localPosition: number[];
+  localRotation: number[];
+  localScale: number[];
+  worldPosition: number[];
+  worldRotation: number[];
+  worldScale: number[];
+};
+
+type SaraTransformHierarchySnapshot = {
+  mode: "Current Hybrid" | "Sara RFv2 Preview";
+  modelPath: string;
+  timestamp: string;
+  topLevelRoots: string[];
+  avatarRoot: SaraTransformNodeAudit | null;
+  faceAlignmentGroup: SaraTransformNodeAudit | null;
+  faceRig: SaraTransformNodeAudit | null;
+  character: SaraTransformNodeAudit | null;
+  hairRoots: SaraTransformNodeAudit[];
+  transformCorrections: string[];
+  createsNewGroups: boolean;
+  reparentedNodes: string[];
+  movedNodes: string[];
+  notes: string[];
+};
+
+type SaraTransformAudit = {
+  currentHybrid: SaraTransformHierarchySnapshot | null;
+  saraRfv2Preview: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewBeforePrepare: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewAfterPrepare: SaraTransformHierarchySnapshot | null;
+  comparison: {
+    currentHybridAvailable: boolean;
+    saraRfv2PreviewAvailable: boolean;
+    avatarRootNames: {
+      currentHybrid: string | null;
+      saraRfv2Preview: string | null;
+    };
+    faceAlignmentGroupPresent: {
+      currentHybrid: boolean;
+      saraRfv2Preview: boolean;
+    };
+    faceRigPaths: {
+      currentHybrid: string | null;
+      saraRfv2Preview: string | null;
+    };
+    characterPaths: {
+      currentHybrid: string | null;
+      saraRfv2Preview: string | null;
+    };
+    hairRootPaths: {
+      currentHybrid: string[];
+      saraRfv2Preview: string[];
+    };
+  };
+  rfv2PreviewChanges: {
+    createsNewGroups: boolean;
+    reparentedNodes: string[];
+    movedNodes: string[];
+  };
+  rfv2PreviewOperationClaims: {
+    createsNewGroups: false;
+    reparentsNodes: false;
+    movesFaceRig: false;
+    movesCharacter: false;
+    movesHair: false;
+    morphApplierReparents: false;
+    morphApplierMoves: false;
+    morphApplierScales: false;
+    morphApplierRotates: false;
+  };
+};
+
+type SaraRfv2CameraFrameDiagnostics = {
+  cameraPosition: number[];
+  lookAt: number[];
+  boundsCenter: number[] | null;
+  boundsSize: number[] | null;
+  framingMode: string;
+};
+
+type SaraRfv2HairDiagnostics = {
+  hairMeshCount: number;
+  hairMeshNames: string[];
+  hairMaterialNames: string[];
+  hairVisible: Record<string, boolean>;
+  hairRenderOrder: Record<string, number>;
+  hairDepthWrite: Record<string, boolean | null>;
+  hairAlphaTest: Record<string, number | null>;
+  hairTransparent: Record<string, boolean | null>;
+  hairColorValues: Record<string, string | null>;
+  hasMap: Record<string, boolean>;
+  hasAlphaMap: Record<string, boolean>;
+  opacity: Record<string, number | null>;
+  alphaTestBeforeAfter: Record<string, { before: number | null; after: number | null }>;
+  transparentBeforeAfter: Record<string, { before: boolean | null; after: boolean | null }>;
+  hairWorldBounds: ReturnType<typeof serializableBox> | null;
+};
+
+function createEmptySaraRfv2PreviewAssetDiagnostics(): SaraRfv2PreviewAssetDiagnostics {
+  return {
+    detectedAsset: "",
+    topLevelRoots: [],
+    faceRootFound: false,
+    faceRootName: null,
+    faceRootPath: null,
+    faceMeshFound: false,
+    faceMeshPath: null,
+    faceMorphNames: [],
+    bodyRootFound: false,
+    hairRootFound: false,
+    hairDiagnostics: {
+      hairMeshCount: 0,
+      hairMeshNames: [],
+      hairMaterialNames: [],
+      hairVisible: {},
+      hairRenderOrder: {},
+      hairDepthWrite: {},
+      hairAlphaTest: {},
+      hairTransparent: {},
+      hairColorValues: {},
+      hasMap: {},
+      hasAlphaMap: {},
+      opacity: {},
+      alphaTestBeforeAfter: {},
+      transparentBeforeAfter: {},
+      hairWorldBounds: null,
+    },
+  };
+}
+
+function objectPath(object: THREE.Object3D): string {
+  const parts: string[] = [];
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    parts.unshift(current.name || current.type);
+    current = current.parent;
+  }
+  return parts.join(" > ");
+}
+
+function normalizedSceneName(name: string): string {
+  return name.trim().replace(/[._\s-]/g, "").toLowerCase();
+}
+
+function hasSaraRfv2FaceBindingProbes(
+  dictionary: Record<string, number> | undefined
+): boolean {
+  return Boolean(
+    dictionary &&
+      SARA_RFV2_BINDING_PROFILE.face.requiredMorphs.every(
+        (morphName) => morphName in dictionary
+      )
+  );
+}
+
+function isSaraRfv2PreviewFaceRoot(object: THREE.Object3D): boolean {
+  return SARA_RFV2_BINDING_PROFILE.face.rootCandidates.some(
+    (candidate) => normalizedSceneName(object.name || "") === normalizedSceneName(candidate)
+  );
+}
+
+function isSaraRfv2PreviewFaceMesh(object: THREE.Object3D): boolean {
+  const mesh = object as THREE.Mesh;
+  return (
+    normalizedSceneName(object.name || "") ===
+      normalizedSceneName(SARA_RFV2_BINDING_PROFILE.face.meshName) &&
+    (object as THREE.SkinnedMesh).isSkinnedMesh === true &&
+    hasSaraRfv2FaceBindingProbes(mesh.morphTargetDictionary as Record<string, number> | undefined)
+  );
+}
+
+function isSaraRfv2PreviewBodyObject(object: THREE.Object3D): boolean {
+  const normalized = normalizedSceneName(object.name || "");
+  return [
+    ...SARA_RFV2_BINDING_PROFILE.body.rootCandidates,
+    ...SARA_RFV2_BINDING_PROFILE.body.forbiddenMeshNames,
+  ].some((candidate) => normalized === normalizedSceneName(candidate));
+}
+
+function isSaraRfv2PreviewHairObject(object: THREE.Object3D): boolean {
+  const name = object.name || "";
+  const normalized = normalizedSceneName(name);
+  const mesh = object as THREE.Mesh;
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const materialHasHairName = materials
+    .filter(Boolean)
+    .some((material: any) => String(material.name || "").toLowerCase().includes("hair"));
+  return (
+    SARA_RFV2_BINDING_PROFILE.hair.rootCandidates.some(
+      (candidate) => normalized === normalizedSceneName(candidate)
+    ) ||
+    normalized.startsWith("hairmush") ||
+    name.includes("Hair_mush") ||
+    name.toLowerCase().includes("hair") ||
+    materialHasHairName
+  );
+}
+
+function serializeSaraTransformNode(object: THREE.Object3D | null): SaraTransformNodeAudit | null {
+  if (!object) return null;
+  object.updateWorldMatrix(true, false);
+  const worldPosition = object.getWorldPosition(new THREE.Vector3());
+  const worldQuaternion = object.getWorldQuaternion(new THREE.Quaternion());
+  const worldRotation = new THREE.Euler().setFromQuaternion(worldQuaternion, object.rotation.order);
+  const worldScale = object.getWorldScale(new THREE.Vector3());
+  return {
+    name: object.name || object.type,
+    type: object.type,
+    path: objectPath(object),
+    parentPath: object.parent ? objectPath(object.parent) : null,
+    visible: object.visible,
+    localPosition: object.position.toArray(),
+    localRotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+    localScale: object.scale.toArray(),
+    worldPosition: worldPosition.toArray(),
+    worldRotation: [worldRotation.x, worldRotation.y, worldRotation.z],
+    worldScale: worldScale.toArray(),
+  };
+}
+
+function firstObjectByPredicate(
+  root: THREE.Object3D,
+  predicate: (object: THREE.Object3D) => boolean
+): THREE.Object3D | null {
+  let found: THREE.Object3D | null = null;
+  root.traverse((child) => {
+    if (!found && predicate(child)) {
+      found = child;
+    }
+  });
+  return found;
+}
+
+function collectSaraHairRoots(root: THREE.Object3D): THREE.Object3D[] {
+  const roots: THREE.Object3D[] = [];
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    const name = child.name || "";
+    const isHairAuditRoot =
+      isSaraRfv2PreviewHairObject(child) ||
+      name.toLowerCase().includes("hair") ||
+      SARA_OVERSIZED_SHELL_MESH_NAMES.has(name) ||
+      SARA_OVERSIZED_SHELL_MESH_NAMES.has(mesh.geometry?.name || "");
+    if (!isHairAuditRoot) return;
+    const hasHairAncestor = roots.some((candidate) => {
+      let current: THREE.Object3D | null = child.parent;
+      while (current) {
+        if (current === candidate) return true;
+        current = current.parent;
+      }
+      return false;
+    });
+    if (!hasHairAncestor) roots.push(child);
+  });
+  return roots;
+}
+
+function createSaraTransformHierarchySnapshot(args: {
+  mode: "Current Hybrid" | "Sara RFv2 Preview";
+  modelPath: string;
+  avatarRoot: THREE.Object3D | null;
+  gltfScene: THREE.Object3D;
+  transformCorrections: readonly string[];
+}): SaraTransformHierarchySnapshot {
+  args.avatarRoot?.updateMatrixWorld(true);
+  args.gltfScene.updateMatrixWorld(true);
+  const faceAlignmentGroup =
+    args.gltfScene.getObjectByName("FaceAlignmentGroup") ??
+    firstObjectByPredicate(args.gltfScene, (child) => child.name === "FaceAlignmentGroup");
+  const faceRig =
+    firstObjectByPredicate(args.gltfScene, isSaraRfv2PreviewFaceRoot) ??
+    args.gltfScene.getObjectByName("Face_Rig") ??
+    args.gltfScene.getObjectByName("Face Rig");
+  const character =
+    args.gltfScene.getObjectByName("Character") ??
+    args.gltfScene.getObjectByName("Character.002") ??
+    firstObjectByPredicate(args.gltfScene, isSaraRfv2PreviewBodyObject);
+  const hairRoots = collectSaraHairRoots(args.gltfScene);
+  return {
+    mode: args.mode,
+    modelPath: args.modelPath,
+    timestamp: new Date().toISOString(),
+    topLevelRoots: args.gltfScene.children.map((child) => child.name || child.type),
+    avatarRoot: serializeSaraTransformNode(args.avatarRoot),
+    faceAlignmentGroup: serializeSaraTransformNode(faceAlignmentGroup),
+    faceRig: serializeSaraTransformNode(faceRig),
+    character: serializeSaraTransformNode(character),
+    hairRoots: hairRoots
+      .map((root) => serializeSaraTransformNode(root))
+      .filter((entry): entry is SaraTransformNodeAudit => entry !== null),
+    transformCorrections: [...args.transformCorrections],
+    createsNewGroups: false,
+    reparentedNodes: [],
+    movedNodes: [],
+    notes: [],
+  };
+}
+
+function vectorsDiffer(left: readonly number[], right: readonly number[], epsilon = 0.000001): boolean {
+  return left.length !== right.length || left.some((value, index) => Math.abs(value - right[index]) > epsilon);
+}
+
+function compareSaraTransformNodes(
+  before: SaraTransformNodeAudit | null,
+  after: SaraTransformNodeAudit | null,
+  label: string
+): {
+  reparentedNodes: string[];
+  movedNodes: string[];
+} {
+  if (!before || !after) return { reparentedNodes: [], movedNodes: [] };
+  const reparentedNodes =
+    before.parentPath !== after.parentPath
+      ? [`${label}: ${before.parentPath ?? "(none)"} -> ${after.parentPath ?? "(none)"}`]
+      : [];
+  const moved =
+    vectorsDiffer(before.localPosition, after.localPosition) ||
+    vectorsDiffer(before.localRotation, after.localRotation) ||
+    vectorsDiffer(before.localScale, after.localScale) ||
+    vectorsDiffer(before.worldPosition, after.worldPosition) ||
+    vectorsDiffer(before.worldRotation, after.worldRotation) ||
+    vectorsDiffer(before.worldScale, after.worldScale);
+  return {
+    reparentedNodes,
+    movedNodes: moved ? [label] : [],
+  };
+}
+
+function diffSaraTransformHierarchySnapshots(
+  before: SaraTransformHierarchySnapshot | null,
+  after: SaraTransformHierarchySnapshot | null
+): Pick<SaraTransformHierarchySnapshot, "createsNewGroups" | "reparentedNodes" | "movedNodes"> {
+  if (!before || !after) {
+    return {
+      createsNewGroups: false,
+      reparentedNodes: [],
+      movedNodes: [],
+    };
+  }
+  const reparentedNodes: string[] = [];
+  const movedNodes: string[] = [];
+  const comparedNodes = [
+    ["AvatarRoot", before.avatarRoot, after.avatarRoot],
+    ["FaceAlignmentGroup", before.faceAlignmentGroup, after.faceAlignmentGroup],
+    ["Face_Rig", before.faceRig, after.faceRig],
+    ["Character", before.character, after.character],
+  ] as const;
+  comparedNodes.forEach(([label, beforeNode, afterNode]) => {
+    const result = compareSaraTransformNodes(beforeNode, afterNode, label);
+    reparentedNodes.push(...result.reparentedNodes);
+    movedNodes.push(...result.movedNodes);
+  });
+  before.hairRoots.forEach((beforeHair) => {
+    const afterHair =
+      after.hairRoots.find((candidate) => candidate.path === beforeHair.path) ??
+      after.hairRoots.find((candidate) => candidate.name === beforeHair.name) ??
+      null;
+    const result = compareSaraTransformNodes(beforeHair, afterHair, `Hair:${beforeHair.name}`);
+    reparentedNodes.push(...result.reparentedNodes);
+    movedNodes.push(...result.movedNodes);
+  });
+  const beforeGroupPaths = new Set<string>();
+  const afterGroupPaths = new Set<string>();
+  if (before.faceAlignmentGroup) beforeGroupPaths.add(before.faceAlignmentGroup.path);
+  if (after.faceAlignmentGroup) afterGroupPaths.add(after.faceAlignmentGroup.path);
+  const createsNewGroups = [...afterGroupPaths].some((path) => !beforeGroupPaths.has(path));
+  return {
+    createsNewGroups,
+    reparentedNodes,
+    movedNodes,
+  };
+}
+
+function createSaraTransformAudit(args: {
+  currentHybrid: SaraTransformHierarchySnapshot | null;
+  saraRfv2Preview: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewBeforePrepare: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewAfterPrepare: SaraTransformHierarchySnapshot | null;
+}): SaraTransformAudit {
+  const rfv2PreviewChanges = diffSaraTransformHierarchySnapshots(
+    args.saraRfv2PreviewBeforePrepare,
+    args.saraRfv2PreviewAfterPrepare
+  );
+  return {
+    currentHybrid: args.currentHybrid,
+    saraRfv2Preview: args.saraRfv2Preview,
+    saraRfv2PreviewBeforePrepare: args.saraRfv2PreviewBeforePrepare,
+    saraRfv2PreviewAfterPrepare: args.saraRfv2PreviewAfterPrepare,
+    comparison: {
+      currentHybridAvailable: Boolean(args.currentHybrid),
+      saraRfv2PreviewAvailable: Boolean(args.saraRfv2Preview),
+      avatarRootNames: {
+        currentHybrid: args.currentHybrid?.avatarRoot?.name ?? null,
+        saraRfv2Preview: args.saraRfv2Preview?.avatarRoot?.name ?? null,
+      },
+      faceAlignmentGroupPresent: {
+        currentHybrid: Boolean(args.currentHybrid?.faceAlignmentGroup),
+        saraRfv2Preview: Boolean(args.saraRfv2Preview?.faceAlignmentGroup),
+      },
+      faceRigPaths: {
+        currentHybrid: args.currentHybrid?.faceRig?.path ?? null,
+        saraRfv2Preview: args.saraRfv2Preview?.faceRig?.path ?? null,
+      },
+      characterPaths: {
+        currentHybrid: args.currentHybrid?.character?.path ?? null,
+        saraRfv2Preview: args.saraRfv2Preview?.character?.path ?? null,
+      },
+      hairRootPaths: {
+        currentHybrid: args.currentHybrid?.hairRoots.map((root) => root.path) ?? [],
+        saraRfv2Preview: args.saraRfv2Preview?.hairRoots.map((root) => root.path) ?? [],
+      },
+    },
+    rfv2PreviewChanges,
+    rfv2PreviewOperationClaims: {
+      createsNewGroups: false,
+      reparentsNodes: false,
+      movesFaceRig: false,
+      movesCharacter: false,
+      movesHair: false,
+      morphApplierReparents: false,
+      morphApplierMoves: false,
+      morphApplierScales: false,
+      morphApplierRotates: false,
+    },
+  };
+}
+
+function findSaraRfv2RootObject(
+  root: THREE.Object3D,
+  names: readonly string[]
+): THREE.Object3D | null {
+  for (const name of names) {
+    const exact = root.getObjectByName(name);
+    if (exact) return exact;
+  }
+  return firstObjectByPredicate(root, (object) =>
+    names.some((name) => normalizedSceneName(object.name || "") === normalizedSceneName(name))
+  );
+}
+
+function createSaraRfv2TransformDiagnostics(root: THREE.Object3D) {
+  root.updateMatrixWorld(true);
+  const faceRig = findSaraRfv2RootObject(root, ["Face_Rig", "Face Rig"]);
+  const character = findSaraRfv2RootObject(root, ["Character"]);
+  const sketchfab = findSaraRfv2RootObject(root, ["Sketchfab_model"]);
+  const faceAlignmentGroup = root.getObjectByName("FaceAlignmentGroup");
+  const faceRigTransform = serializeSaraTransformNode(faceRig);
+  const characterTransform = serializeSaraTransformNode(character);
+  const sketchfabTransform = serializeSaraTransformNode(sketchfab);
+  const transformMismatchWarnings: string[] = [];
+
+  if (faceAlignmentGroup) {
+    transformMismatchWarnings.push(
+      "FaceAlignmentGroup exists in Sara RFv2 Preview; new sara.glb should keep the original Face_Rig hierarchy."
+    );
+  }
+  if (faceRigTransform?.path.includes("FaceAlignmentGroup")) {
+    transformMismatchWarnings.push(
+      "Face_Rig is under FaceAlignmentGroup; RFv2 Preview should not wrap or separately scale Face_Rig."
+    );
+  }
+  if (!faceRigTransform) transformMismatchWarnings.push("Face_Rig root was not found.");
+  if (!characterTransform) transformMismatchWarnings.push("Character root was not found.");
+  if (!sketchfabTransform) transformMismatchWarnings.push("Sketchfab_model root was not found.");
+
+  const rootParentPath = objectPath(root);
+  const expectedParent = rootParentPath;
+  [
+    ["Face_Rig", faceRigTransform],
+    ["Character", characterTransform],
+    ["Sketchfab_model", sketchfabTransform],
+  ].forEach(([label, transform]) => {
+    if (!transform) return;
+    if (transform.parentPath !== expectedParent) {
+      transformMismatchWarnings.push(
+        `${label} parent is ${transform.parentPath ?? "(none)"}, expected shared root ${expectedParent}.`
+      );
+    }
+  });
+
+  return {
+    rfv2UsesNewSaraTransform: true,
+    oldFaceAlignmentSkipped: true,
+    faceRigWorldTransform: faceRigTransform,
+    characterWorldTransform: characterTransform,
+    sketchfabWorldTransform: sketchfabTransform,
+    transformMismatchWarnings,
+  };
+}
+
+function getSaraRfv2VisibleBoundsDiagnostics(root: THREE.Object3D): {
+  boundsCenter: number[] | null;
+  boundsSize: number[] | null;
+} {
+  root.updateMatrixWorld(true);
+  const visibleBounds = computeSaraVisibleRenderMeshBounds(root);
+  if (visibleBounds.box.isEmpty()) {
+    return {
+      boundsCenter: null,
+      boundsSize: null,
+    };
+  }
+  const center = visibleBounds.box.getCenter(new THREE.Vector3());
+  const size = visibleBounds.box.getSize(new THREE.Vector3());
+  return {
+    boundsCenter: center.toArray(),
+    boundsSize: size.toArray(),
+  };
+}
+
+function createSaraRfv2CameraFrameDiagnostics(
+  camera: THREE.PerspectiveCamera,
+  root?: THREE.Object3D | null
+): SaraRfv2CameraFrameDiagnostics {
+  const boundsDiagnostics = root
+    ? getSaraRfv2VisibleBoundsDiagnostics(root)
+    : { boundsCenter: null, boundsSize: null };
+  return {
+    cameraPosition: camera.position.toArray(),
+    lookAt: Array.isArray(camera.userData.fixedLookAt)
+      ? camera.userData.fixedLookAt
+      : [],
+    boundsCenter: boundsDiagnostics.boundsCenter,
+    boundsSize: boundsDiagnostics.boundsSize,
+    framingMode: SARA_RFV2_PREVIEW_DEFAULT_CAMERA_FRAME.label,
+  };
+}
+
+function writeSaraTransformAuditToWindow(args: {
+  currentHybrid?: SaraTransformHierarchySnapshot | null;
+  saraRfv2Preview?: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewBeforePrepare?: SaraTransformHierarchySnapshot | null;
+  saraRfv2PreviewAfterPrepare?: SaraTransformHierarchySnapshot | null;
+}) {
+  if (typeof window === "undefined") return;
+  const existingFailureDiagnostics =
+    ((window as any).saraLiveRfv2FailureDiagnostics as
+      | { transformAudit?: SaraTransformAudit }
+      | undefined) ?? {};
+  const existingTransformAudit = existingFailureDiagnostics.transformAudit;
+  const currentHybrid = args.currentHybrid ?? existingTransformAudit?.currentHybrid ?? null;
+  const saraRfv2Preview =
+    args.saraRfv2Preview ?? existingTransformAudit?.saraRfv2Preview ?? null;
+  const saraRfv2PreviewBeforePrepare =
+    args.saraRfv2PreviewBeforePrepare ??
+    existingTransformAudit?.saraRfv2PreviewBeforePrepare ??
+    null;
+  const saraRfv2PreviewAfterPrepare =
+    args.saraRfv2PreviewAfterPrepare ??
+    existingTransformAudit?.saraRfv2PreviewAfterPrepare ??
+    null;
+  (window as any).saraLiveRfv2FailureDiagnostics = {
+    ...existingFailureDiagnostics,
+    transformAudit: createSaraTransformAudit({
+      currentHybrid,
+      saraRfv2Preview,
+      saraRfv2PreviewBeforePrepare,
+      saraRfv2PreviewAfterPrepare,
+    }),
+  };
+}
+
+function forceVisibleUpTree(object: THREE.Object3D | null) {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    current.visible = true;
+    current = current.parent;
+  }
+}
+
+function forceRenderableMesh(object: THREE.Object3D) {
+  const mesh = object as THREE.Mesh;
+  const skinnedMesh = object as THREE.SkinnedMesh;
+  if (!mesh.isMesh && !skinnedMesh.isSkinnedMesh) return;
+  object.visible = true;
+  object.frustumCulled = false;
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  materials.filter(Boolean).forEach((material: any) => {
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.needsUpdate = true;
+  });
+}
+
+function isSaraRfv2PreviewHairMesh(object: THREE.Object3D): object is THREE.Mesh {
+  const mesh = object as THREE.Mesh;
+  if (!mesh.isMesh && !(object as THREE.SkinnedMesh).isSkinnedMesh) return false;
+  if (isSaraRfv2PreviewHairObject(object)) return true;
+  const path = objectPath(object);
+  return path.includes("Sketchfab_model") || path.includes("Hair_mush");
+}
+
+type SaraRfv2HairMaterialPrepDiagnostic = {
+  hasMap: boolean;
+  hasAlphaMap: boolean;
+  opacity: number | null;
+  alphaTestBeforeAfter: { before: number | null; after: number | null };
+  transparentBeforeAfter: { before: boolean | null; after: boolean | null };
+};
+
+function prepareSaraRfv2HairMaterial(
+  material: any
+): SaraRfv2HairMaterialPrepDiagnostic | null {
+  if (!material) return null;
+  const alphaTestBefore =
+    typeof material.alphaTest === "number" ? material.alphaTest : null;
+  const transparentBefore =
+    typeof material.transparent === "boolean" ? material.transparent : null;
+  const hasMap = Boolean(material.map);
+  const hasAlphaMap = Boolean(material.alphaMap);
+  material.side = THREE.DoubleSide;
+  material.depthWrite = false;
+  material.depthTest = true;
+  material.opacity = 1;
+  if (hasAlphaMap) {
+    material.transparent = true;
+    material.alphaTest = 0.35;
+  } else {
+    material.transparent = false;
+    material.alphaTest = 0;
+  }
+  if (material.color?.isColor) {
+    const color = material.color as THREE.Color;
+    const maxChannel = Math.max(color.r, color.g, color.b);
+    if (maxChannel < 0.08) {
+      color.setRGB(0.09, 0.065, 0.045);
+    } else if (maxChannel < 0.14) {
+      color.multiplyScalar(1.25);
+    }
+  }
+  material.needsUpdate = true;
+  return {
+    hasMap,
+    hasAlphaMap,
+    opacity: typeof material.opacity === "number" ? material.opacity : null,
+    alphaTestBeforeAfter: {
+      before: alphaTestBefore,
+      after: typeof material.alphaTest === "number" ? material.alphaTest : null,
+    },
+    transparentBeforeAfter: {
+      before: transparentBefore,
+      after: typeof material.transparent === "boolean" ? material.transparent : null,
+    },
+  };
+}
+
+function prepareSaraRfv2HairRendering(root: THREE.Object3D): SaraRfv2HairDiagnostics {
+  const hairMeshes: THREE.Mesh[] = [];
+  const materialPrepDiagnostics: Record<string, SaraRfv2HairMaterialPrepDiagnostic> = {};
+  root.traverse((child) => {
+    if (!isSaraRfv2PreviewHairMesh(child)) return;
+    const mesh = child as THREE.Mesh;
+    hairMeshes.push(mesh);
+    forceVisibleUpTree(mesh);
+    mesh.visible = true;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 13;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.filter(Boolean).forEach((material: any, materialIndex: number) => {
+      const materialName = material.name || `${mesh.name || `(mesh ${mesh.id})`}:material${materialIndex}`;
+      const diagnosticKey = `${mesh.name || `(mesh ${mesh.id})`}:${materialName}`;
+      const prepDiagnostic = prepareSaraRfv2HairMaterial(material);
+      if (prepDiagnostic) {
+        materialPrepDiagnostics[diagnosticKey] = prepDiagnostic;
+      }
+    });
+  });
+
+  root.updateMatrixWorld(true);
+  const hairBounds = new THREE.Box3();
+  let hasHairBounds = false;
+  const materialNames = new Set<string>();
+  const hairVisible: Record<string, boolean> = {};
+  const hairRenderOrder: Record<string, number> = {};
+  const hairDepthWrite: Record<string, boolean | null> = {};
+  const hairAlphaTest: Record<string, number | null> = {};
+  const hairTransparent: Record<string, boolean | null> = {};
+  const hairColorValues: Record<string, string | null> = {};
+  const hasMap: Record<string, boolean> = {};
+  const hasAlphaMap: Record<string, boolean> = {};
+  const opacity: Record<string, number | null> = {};
+  const alphaTestBeforeAfter: Record<
+    string,
+    { before: number | null; after: number | null }
+  > = {};
+  const transparentBeforeAfter: Record<
+    string,
+    { before: boolean | null; after: boolean | null }
+  > = {};
+
+  hairMeshes.forEach((mesh) => {
+    const meshName = mesh.name || `(mesh ${mesh.id})`;
+    hairVisible[meshName] = mesh.visible;
+    hairRenderOrder[meshName] = mesh.renderOrder;
+    const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).filter(Boolean);
+    materials.forEach((material: any, materialIndex: number) => {
+      const materialName = material.name || `${meshName}:material${materialIndex}`;
+      materialNames.add(materialName);
+      const diagnosticKey = `${meshName}:${materialName}`;
+      hairDepthWrite[diagnosticKey] =
+        typeof material.depthWrite === "boolean" ? material.depthWrite : null;
+      hairAlphaTest[diagnosticKey] =
+        typeof material.alphaTest === "number" ? material.alphaTest : null;
+      hairTransparent[diagnosticKey] =
+        typeof material.transparent === "boolean" ? material.transparent : null;
+      hairColorValues[diagnosticKey] =
+        material.color?.isColor ? `#${(material.color as THREE.Color).getHexString()}` : null;
+      hasMap[diagnosticKey] = Boolean(material.map);
+      hasAlphaMap[diagnosticKey] = Boolean(material.alphaMap);
+      opacity[diagnosticKey] =
+        typeof material.opacity === "number" ? material.opacity : null;
+      alphaTestBeforeAfter[diagnosticKey] =
+        materialPrepDiagnostics[diagnosticKey]?.alphaTestBeforeAfter ?? {
+          before: null,
+          after: hairAlphaTest[diagnosticKey],
+        };
+      transparentBeforeAfter[diagnosticKey] =
+        materialPrepDiagnostics[diagnosticKey]?.transparentBeforeAfter ?? {
+          before: null,
+          after: hairTransparent[diagnosticKey],
+        };
+    });
+    const meshBox = new THREE.Box3().setFromObject(mesh);
+    if (!meshBox.isEmpty()) {
+      if (!hasHairBounds) {
+        hairBounds.copy(meshBox);
+        hasHairBounds = true;
+      } else {
+        hairBounds.union(meshBox);
+      }
+    }
+  });
+
+  return {
+    hairMeshCount: hairMeshes.length,
+    hairMeshNames: hairMeshes.map((mesh) => mesh.name || `(mesh ${mesh.id})`),
+    hairMaterialNames: Array.from(materialNames).sort(),
+    hairVisible,
+    hairRenderOrder,
+    hairDepthWrite,
+    hairAlphaTest,
+    hairTransparent,
+    hairColorValues,
+    hasMap,
+    hasAlphaMap,
+    opacity,
+    alphaTestBeforeAfter,
+    transparentBeforeAfter,
+    hairWorldBounds: hasHairBounds ? serializableBox(hairBounds) : null,
+  };
+}
+
+function prepareSaraRfv2PreviewScene(
+  root: THREE.Object3D,
+  modelUrl: string
+): SaraRfv2PreviewAssetDiagnostics {
+  const topLevelRoots = root.children.map((child) => child.name || child.type);
+  let faceRoot: THREE.Object3D | null = null;
+  let faceMesh: THREE.Mesh | null = null;
+  let bodyRoot: THREE.Object3D | null = null;
+  let hairRoot: THREE.Object3D | null = null;
+
+  root.traverse((child) => {
+    if (!faceRoot && isSaraRfv2PreviewFaceRoot(child)) {
+      faceRoot = child;
+    }
+    if (!faceMesh && isSaraRfv2PreviewFaceMesh(child)) {
+      faceMesh = child as THREE.Mesh;
+    }
+    if (!bodyRoot && isSaraRfv2PreviewBodyObject(child)) {
+      bodyRoot = child;
+    }
+    if (!hairRoot && isSaraRfv2PreviewHairObject(child)) {
+      hairRoot = child;
+    }
+  });
+
+  forceVisibleUpTree(faceRoot);
+  forceVisibleUpTree(faceMesh);
+  forceVisibleUpTree(bodyRoot);
+  forceVisibleUpTree(hairRoot);
+
+  root.traverse((child) => {
+    const underFace =
+      faceRoot !== null && (child === faceRoot || child.parent === faceRoot || objectPath(child).includes("Face Rig"));
+    const underBody =
+      bodyRoot !== null && (child === bodyRoot || objectPath(child).includes("Character"));
+    const underHair =
+      hairRoot !== null &&
+      (child === hairRoot ||
+        objectPath(child).includes("Sketchfab_model") ||
+        objectPath(child).includes("Hair_mush") ||
+        isSaraRfv2PreviewHairObject(child));
+    if (underFace || underBody || underHair || isSaraRfv2PreviewFaceMesh(child)) {
+      child.visible = true;
+      forceRenderableMesh(child);
+    }
+  });
+  const hairDiagnostics = prepareSaraRfv2HairRendering(root);
+
+  root.updateMatrixWorld(true);
+
+  const faceDictionary =
+    (faceMesh?.morphTargetDictionary as Record<string, number> | undefined) ?? {};
+
+  return {
+    detectedAsset: modelUrl || SARA_RFV2_BINDING_PROFILE.assetPath,
+    topLevelRoots,
+    faceRootFound: Boolean(faceRoot),
+    faceRootName: faceRoot?.name || null,
+    faceRootPath: faceRoot ? objectPath(faceRoot) : null,
+    faceMeshFound: Boolean(faceMesh),
+    faceMeshPath: faceMesh ? objectPath(faceMesh) : null,
+    faceMorphNames: Object.keys(faceDictionary).sort((a, b) => faceDictionary[a] - faceDictionary[b]),
+    bodyRootFound: Boolean(bodyRoot),
+    hairRootFound: Boolean(hairRoot),
+    hairDiagnostics,
+  };
+}
+
 // Crisis keyword popup (public, user-facing).
 const CRISIS_KEYWORD_MODAL_ENABLED = false;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,11 +1512,12 @@ function isSaraV2MouthInteriorMorph(name: string): boolean {
 
 function saraV2MouthCapFor(name: string, speaking: boolean): number {
   if (isSaraV2MouthInteriorMorph(name)) return 0.02;
-  if (isSaraV2VisemeAAMorph(name)) return 0.24;
-  if (isSaraV2VisemeMorph(name)) return 0.24;
   if (isSaraV2SmileFrownMorph(name) && speaking) return 0.04;
-  if (isSaraV2JawOpenMorph(name)) return 0.1;
-  if (isSaraV2GenericOpenMorph(name)) return 0.04;
+
+  if (isSaraV2VisemeAAMorph(name)) return 0.65;
+  if (isSaraV2VisemeMorph(name)) return 0.55;
+  if (isSaraV2JawOpenMorph(name)) return 0.35;
+  if (isSaraV2GenericOpenMorph(name)) return 0.18;
   return 0.06;
 }
 
@@ -1754,6 +2718,8 @@ function ThreeAvatarComponent({
   viewTuning,
   fixedViewportConfig,
   useRfv2Morphs,
+  useSaraRfv2Preview,
+  onSaraRfv2Fallback,
   avatarPhonemeTimelineRef,
   avatarAudioCurrentTimeRef,
 }: {
@@ -1779,6 +2745,8 @@ function ThreeAvatarComponent({
   viewTuning: CompanionViewTuning;
   fixedViewportConfig?: FixedAvatarViewportConfig | null;
   useRfv2Morphs: boolean;
+  useSaraRfv2Preview: boolean;
+  onSaraRfv2Fallback?: (reason: string) => void;
   avatarPhonemeTimelineRef: MutableRefObject<AvatarPhonemeTimeline | null>;
   avatarAudioCurrentTimeRef: MutableRefObject<number>;
 }) {
@@ -1826,11 +2794,37 @@ function ThreeAvatarComponent({
   const baseScaleRef = useRef(1);
   const mouthDriveMultRef = useRef(viewTuning.mouthDriveMultiplier);
   const avatarMode: AvatarRenderMode = useRfv2Morphs ? "rfv2Morph" : "legacyHybrid";
+  const saraRfv2PreviewActive =
+    import.meta.env.DEV === true &&
+    useSaraRfv2Preview &&
+    activeAvatarId === "sarah" &&
+    !useRfv2Morphs;
+  const isSaraAvatar = SARA_HYBRID_AVATAR_IDS.has(activeAvatarId);
+    const isSaraV3Avatar = activeAvatarId === "saraV3";
+    const saraV3RawAuditMode =
+      isSaraV3Avatar && SARA_V3_AVATAR_DEFINITION.saraV3.rawRenderAuditMode;
+  const modelMatchesSaraHybrid =
+    modelUrl === SARA_V2_AVATAR_DEFINITION.model.url;
+  const modelMatchesSaraV3 = modelUrl === SARA_V3_AVATAR_DEFINITION.model.url;
   const isSaraV2Viewport =
     isSaraFixedViewportConfig(fixedViewportConfig) &&
     fixedViewportConfig.camera.mode === "fixed" &&
     !useRfv2Morphs &&
-    modelUrl === SARA_V2_AVATAR_DEFINITION.model.url;
+    !saraRfv2PreviewActive &&
+    modelMatchesSaraHybrid;
+  const isSaraHybrid =
+    isSaraAvatar &&
+    avatarMode === "legacyHybrid" &&
+    isSaraV2Viewport &&
+    !saraRfv2PreviewActive;
+  const saraHybridPresenceReason = getSaraHybridPresenceDisabledReason({
+    isSaraAvatar,
+    isLegacyHybrid: avatarMode === "legacyHybrid",
+    isSaraHybrid,
+    isRfv2Preview: saraRfv2PreviewActive,
+    isRfv2MorphMode: useRfv2Morphs,
+    modelMatchesSaraHybrid,
+  });
   mouthDriveMultRef.current = viewTuning.mouthDriveMultiplier;
 
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
@@ -1840,12 +2834,50 @@ function ThreeAvatarComponent({
   const jordanMorphBindingsRef = useRef<Map<JordanMorphName, MorphBinding[]>>(new Map());
   const jordanMorphValuesRef = useRef<Map<JordanMorphName, number>>(new Map());
   const saraV2PhonemeMorphValuesRef = useRef<Map<string, number>>(new Map());
+  const saraV2PresenceBindingsRef = useRef<Map<string, MorphBinding[]>>(new Map());
+  const saraV2BlinkTestRef = useRef<SaraV2BlinkTestState>({
+    left: null,
+    right: null,
+    lastCommand: null,
+    updatedAtMs: null,
+  });
+  const saraV2PresenceStateRef = useRef<SaraV2PresenceState>(
+    createSaraV2PresenceState()
+  );
   const previousSaraV2VisemeRef = useRef<string | null>(null);
   const saraV2ClipHasValidPhonemeTimelineRef = useRef(false);
   const saraV2WasSpeakingRef = useRef(false);
   const saraV2LastSpeechEndMsRef = useRef<number | null>(null);
   const loggedMissingSaraV2PhonemeMorphsRef = useRef<Set<string>>(new Set());
   const saraGreetingFirstVisemeLoggedRef = useRef(false);
+  const saraV2RecentActivePhonemesRef = useRef<SaraV2RecentActivePhonemeDiagnostic[]>([]);
+  const saraV2LastRecentPhonemeKeyRef = useRef("");
+  const saraRfv2BindingsRef = useRef<readonly SaraRfv2FaceMorphBinding[]>([]);
+  const saraRfv2ApplierStateRef = useRef<SaraRfv2MorphApplierState>(
+    createSaraRfv2MorphApplierState()
+  );
+  const saraRfv2PhonemeStateRef = useRef<SaraRfv2PhonemeState>(
+    createSaraRfv2PhonemeState()
+  );
+  const saraRfv2SmoothingStateRef = useRef<SaraRfv2SmoothingState>(
+    createSaraRfv2SmoothingState()
+  );
+  const saraRfv2ApplierDiagnosticsRef =
+    useRef<SaraRfv2MorphApplierDiagnostics>(
+      SARA_RFV2_MORPH_APPLIER_EMPTY_DIAGNOSTICS
+    );
+  const saraRfv2AssetDiagnosticsRef = useRef<SaraRfv2PreviewAssetDiagnostics>(
+    createEmptySaraRfv2PreviewAssetDiagnostics()
+  );
+  const saraRfv2BindingRetryCountRef = useRef(0);
+  const saraRfv2FallbackTriggeredRef = useRef(false);
+  const saraV3ControllerRef = useRef<SaraV3ControllerState | null>(null);
+  const saraV3VisemeStateRef = useRef<SaraV3VisemeDriverState>(
+    createSaraV3VisemeDriverState()
+  );
+  const saraV3PresenceStateRef = useRef<SaraV3PresenceState>(
+    createSaraV3PresenceState()
+  );
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
   const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
@@ -1954,6 +2986,68 @@ function ThreeAvatarComponent({
   const speechEndBlinkPendingRef = useRef(false);
 
   useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      import.meta.env.DEV !== true ||
+      !isSaraHybrid
+    ) {
+      return;
+    }
+
+    const blinkTestControls = {
+      forceBlink: (value: unknown) => {
+        const blinkValue = clampSaraV2BlinkTestValue(value);
+        saraV2BlinkTestRef.current = {
+          left: blinkValue,
+          right: blinkValue,
+          lastCommand: "forceBlink",
+          updatedAtMs: performance.now(),
+        };
+      },
+      forceLeftBlink: (value: unknown) => {
+        const blinkValue = clampSaraV2BlinkTestValue(value);
+        saraV2BlinkTestRef.current = {
+          ...saraV2BlinkTestRef.current,
+          left: blinkValue,
+          lastCommand: "forceLeftBlink",
+          updatedAtMs: performance.now(),
+        };
+      },
+      forceRightBlink: (value: unknown) => {
+        const blinkValue = clampSaraV2BlinkTestValue(value);
+        saraV2BlinkTestRef.current = {
+          ...saraV2BlinkTestRef.current,
+          right: blinkValue,
+          lastCommand: "forceRightBlink",
+          updatedAtMs: performance.now(),
+        };
+      },
+      reset: () => {
+        saraV2BlinkTestRef.current = {
+          left: null,
+          right: null,
+          lastCommand: "reset",
+          updatedAtMs: performance.now(),
+        };
+      },
+      supportedValues: SARA_V2_BLINK_TEST_VALUES,
+    };
+
+    (window as any).saraV2BlinkTest = blinkTestControls;
+    return () => {
+      if ((window as any).saraV2BlinkTest === blinkTestControls) {
+        delete (window as any).saraV2BlinkTest;
+      }
+      saraV2BlinkTestRef.current = {
+        left: null,
+        right: null,
+        lastCommand: null,
+        updatedAtMs: null,
+      };
+    };
+  }, [isSaraHybrid]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -2000,6 +3094,7 @@ function ThreeAvatarComponent({
     renderer.domElement.style.height = "100%";
 
     container.appendChild(renderer.domElement);
+    let saraV3EnvironmentHandle: ReturnType<typeof applySaraV3Environment> | null = null;
     const roomGroup = new THREE.Group();
     roomGroup.name = "AvatarVideoCallRoom";
     const floorMaterial = new THREE.MeshStandardMaterial({
@@ -2260,6 +3355,16 @@ function ThreeAvatarComponent({
     // Reset refs
     mouthBindingsRef.current = [];
     blinkBindingsRef.current = [];
+    saraV2PresenceBindingsRef.current = new Map();
+    saraV2BlinkTestRef.current = {
+      left: null,
+      right: null,
+      lastCommand: null,
+      updatedAtMs: null,
+    };
+    saraV2RecentActivePhonemesRef.current = [];
+    saraV2LastRecentPhonemeKeyRef.current = "";
+    saraV2PresenceStateRef.current = createSaraV2PresenceState();
     jordanMorphBindingsRef.current = new Map();
     jordanMorphValuesRef.current = new Map(
       JORDAN_MORPH_NAMES.map((name) => [name, name === "viseme_rest" ? 0.25 : 0])
@@ -2329,6 +3434,19 @@ function ThreeAvatarComponent({
     underChinBonesRef.current = [];
     cheekBindingsRef.current = [];
     cheekBonesRef.current = [];
+    saraRfv2BindingsRef.current = [];
+    saraRfv2ApplierStateRef.current = createSaraRfv2MorphApplierState();
+    saraRfv2PhonemeStateRef.current = createSaraRfv2PhonemeState();
+    saraRfv2SmoothingStateRef.current = createSaraRfv2SmoothingState();
+    saraRfv2ApplierDiagnosticsRef.current =
+      SARA_RFV2_MORPH_APPLIER_EMPTY_DIAGNOSTICS;
+    saraRfv2AssetDiagnosticsRef.current =
+      createEmptySaraRfv2PreviewAssetDiagnostics();
+    saraRfv2BindingRetryCountRef.current = 0;
+    saraRfv2FallbackTriggeredRef.current = false;
+    saraV3ControllerRef.current = null;
+    saraV3VisemeStateRef.current = createSaraV3VisemeDriverState();
+    saraV3PresenceStateRef.current = createSaraV3PresenceState();
     faceBoneDefaultsRef.current = new Map();
     jordanIdlePresenceBonesRef.current = [];
     avatarRootRef.current = null;
@@ -2348,6 +3466,79 @@ function ThreeAvatarComponent({
           !useRfv2Morphs && fixedCameraConfig?.mode === "fixed";
         const isSaraViewport = isSaraFixedViewportConfig(fixedViewportConfig);
         const useSaraLabAlignedViewport = hasFixedViewportConfig && isSaraViewport;
+        if (saraV3RawAuditMode) {
+          console.info("[SaraV3 raw audit] Loading untouched GLB scene", {
+            activeAvatarId,
+            modelUrl,
+          });
+          scene.add(gltfScene);
+          gltfScene.updateMatrixWorld(true);
+          const fixedCamera = fixedCameraConfig ?? {};
+          const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.55, 3.0]);
+          const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.65, 0]);
+          camera.fov = fixedCamera.fov ?? 11;
+          camera.near = 0.01;
+          camera.far = 100;
+          camera.position.copy(cameraPosition);
+          camera.lookAt(cameraLookAt);
+          camera.userData.fixedLookAt = cameraLookAt.toArray();
+          camera.updateProjectionMatrix();
+          renderer.render(scene, camera);
+          const saraV3EnvironmentComparison =
+            SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.captureComparisonDiagnostics
+              ? captureSaraV3EnvironmentComparison({
+                  root: gltfScene,
+                  scene,
+                  camera,
+                  renderer,
+                  applyEnvironment: () => {
+                    saraV3EnvironmentHandle = applySaraV3Environment({
+                      scene,
+                      renderer,
+                    });
+                    return saraV3EnvironmentHandle;
+                  },
+                })
+              : null;
+          if (!saraV3EnvironmentComparison) {
+            saraV3EnvironmentHandle = applySaraV3Environment({
+              scene,
+              renderer,
+            });
+            renderer.render(scene, camera);
+          }
+          if (typeof window !== "undefined") {
+            (window as any).saraV3EnvironmentDiagnostics = {
+              environmentEnabled: SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.enabled,
+              environmentSource: saraV3EnvironmentHandle?.source ?? null,
+              pmremGeneratorUsed: true,
+              sceneEnvironmentAssigned: Boolean(scene.environment),
+              sceneBackgroundChanged: false,
+              beforeAfterComparison: saraV3EnvironmentComparison,
+            };
+          }
+          runSaraV3RawRenderAudit({
+            root: gltfScene,
+            scene,
+            camera,
+            renderer,
+            modelUrl,
+            cameraAppliedInRawAudit: true,
+            cameraConfigSource: "fixedCameraConfig",
+            cameraLookAt,
+          });
+          if (!cancelled) {
+            setAvatarLoadState("ready");
+            setAvatarLoadProgress(1);
+          }
+          return;
+        }
+        if (isSaraV3Avatar && !saraV3EnvironmentHandle) {
+          saraV3EnvironmentHandle = applySaraV3Environment({
+            scene,
+            renderer,
+          });
+        }
         console.info("[Avatar Runtime Config]", {
           activeAvatarId,
           fixedConfigAvatarId: fixedViewportConfig?.avatarId ?? null,
@@ -2404,7 +3595,7 @@ function ThreeAvatarComponent({
         const diagnosticHiddenMeshes: string[] = [];
         const activeMorphTargets = new Set<string>();
         const transformCorrections: string[] = [];
-        if (isSaraViewport) {
+        if (isSaraViewport && !saraRfv2PreviewActive) {
           const saraV2Diagnostics = prepareSaraV2Scene(gltfScene, {
             modelUrl,
             definition: SARA_V2_AVATAR_DEFINITION,
@@ -2415,6 +3606,8 @@ function ThreeAvatarComponent({
           if (saraV2Diagnostics.warnings.length > 0) {
             console.warn("[Sara V2 Runtime] diagnostics warnings", saraV2Diagnostics.warnings);
           }
+        } else if (saraRfv2PreviewActive) {
+          transformCorrections.push("saraRfv2.oldFaceAlignmentSkipped");
         }
         const bodyMeshes: THREE.SkinnedMesh[] = [];
         const saraMeshDiagnostics: Array<Record<string, unknown>> = [];
@@ -2611,7 +3804,7 @@ function ThreeAvatarComponent({
 
               // Mouth bindings
               const mouthCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? false : isMouthName(name)
+                useRfv2Morphs || isSaraV3Avatar ? false : isMouthName(name)
               );
 
               mouthCandidates.forEach(([name, index]) => {
@@ -2626,7 +3819,11 @@ function ThreeAvatarComponent({
 
               // Blink bindings
               const blinkCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? isRfv2BlinkMorphName(name) : isBlinkName(name)
+                useRfv2Morphs
+                  ? isRfv2BlinkMorphName(name)
+                  : isSaraV3Avatar
+                    ? false
+                    : isBlinkName(name)
               );
 
               blinkCandidates.forEach(([name, index]) => {
@@ -2640,7 +3837,11 @@ function ThreeAvatarComponent({
               });
 
               const cheekCandidates = entries.filter(([name]) =>
-                useRfv2Morphs ? isRfv2ExpressionMorphName(name) : isCheekMorphName(name)
+                useRfv2Morphs
+                  ? isRfv2ExpressionMorphName(name)
+                  : isSaraV3Avatar
+                    ? false
+                    : isCheekMorphName(name)
               );
               cheekCandidates.forEach(([name, index]) => {
                 cheekBindingsRef.current.push({
@@ -2651,6 +3852,24 @@ function ThreeAvatarComponent({
                   primitiveIndex,
                 });
               });
+
+              if (
+                isSaraHybrid &&
+                isSaraV2PresenceFaceMesh(child)
+              ) {
+                entries.forEach(([name, index]) => {
+                  if (!isSaraV2PresenceMorph(name)) return;
+                  const current = saraV2PresenceBindingsRef.current.get(name) ?? [];
+                  current.push({
+                    mesh: child as THREE.Mesh,
+                    index,
+                    name,
+                    initialInfluence: influences[index] ?? 0,
+                    primitiveIndex,
+                  });
+                  saraV2PresenceBindingsRef.current.set(name, current);
+                });
+              }
             }
           }
 
@@ -2737,10 +3956,16 @@ function ThreeAvatarComponent({
           );
         }
 
-        if (process.env.NODE_ENV === "development") console.groupEnd();
-        console.groupEnd();
+	        if (process.env.NODE_ENV === "development") console.groupEnd();
+	        console.groupEnd();
+	        if (isSaraV3Avatar && modelMatchesSaraV3) {
+	          saraV3ControllerRef.current = createSaraV3ModelController({
+	            root: gltfScene,
+	            modelUrl,
+	          });
+	        }
 
-        console.log(
+	        console.log(
           "[Avatar] Summary — mouth bindings:",
           mouthBindingsRef.current.map((b) => `${b.mesh.name}:${b.name}`),
           "| blink bindings:",
@@ -2822,6 +4047,128 @@ function ThreeAvatarComponent({
         gltfScene.updateMatrixWorld(true);
         avatarRoot.updateMatrixWorld(true);
         roomGroup.updateMatrixWorld(true);
+        if (isSaraV2Viewport) {
+          writeSaraTransformAuditToWindow({
+            currentHybrid: createSaraTransformHierarchySnapshot({
+              mode: "Current Hybrid",
+              modelPath: modelUrl,
+              avatarRoot,
+              gltfScene,
+              transformCorrections,
+            }),
+          });
+        }
+
+        if (saraRfv2PreviewActive) {
+          const saraRfv2PreviewLightGroup = new THREE.Group();
+          saraRfv2PreviewLightGroup.name = "SaraRFv2PreviewHairFillLights";
+          const saraRfv2HairFill = new THREE.DirectionalLight(0xfff1df, 0.42);
+          saraRfv2HairFill.name = "SaraRFv2PreviewHairFill";
+          saraRfv2HairFill.position.set(-2.2, 2.7, 3.2);
+          const saraRfv2HairRim = new THREE.DirectionalLight(0xd8e6ff, 0.32);
+          saraRfv2HairRim.name = "SaraRFv2PreviewHairRim";
+          saraRfv2HairRim.position.set(2.4, 3.4, -2.8);
+          saraRfv2PreviewLightGroup.add(saraRfv2HairFill, saraRfv2HairRim);
+          scene.add(saraRfv2PreviewLightGroup);
+          const transformAuditBeforePrepare = createSaraTransformHierarchySnapshot({
+            mode: "Sara RFv2 Preview",
+            modelPath: modelUrl,
+            avatarRoot,
+            gltfScene,
+            transformCorrections,
+          });
+          const assetDiagnostics = prepareSaraRfv2PreviewScene(gltfScene, modelUrl);
+          const transformAuditAfterPrepare = createSaraTransformHierarchySnapshot({
+            mode: "Sara RFv2 Preview",
+            modelPath: modelUrl,
+            avatarRoot,
+            gltfScene,
+            transformCorrections,
+          });
+          const transformDiff = diffSaraTransformHierarchySnapshots(
+            transformAuditBeforePrepare,
+            transformAuditAfterPrepare
+          );
+          const transformAuditSnapshot = {
+            ...transformAuditAfterPrepare,
+            ...transformDiff,
+            notes: [
+              "Sara RFv2 Preview prepare path only forces visibility/frustum-culling/material renderability.",
+              "MorphApplier is audited as morph-only and must not reparent, move, scale, or rotate nodes.",
+            ],
+          };
+          writeSaraTransformAuditToWindow({
+            saraRfv2Preview: transformAuditSnapshot,
+            saraRfv2PreviewBeforePrepare: transformAuditBeforePrepare,
+            saraRfv2PreviewAfterPrepare: transformAuditSnapshot,
+          });
+          saraRfv2AssetDiagnosticsRef.current = assetDiagnostics;
+          const bindingResult = bindSaraRfv2FaceMorphTargets({ root: gltfScene });
+          const rfv2TransformDiagnostics = createSaraRfv2TransformDiagnostics(gltfScene);
+          saraRfv2BindingsRef.current = bindingResult.bindings;
+          saraRfv2ApplierStateRef.current = {
+            ...bindingResult.state,
+            enabled: true,
+          };
+          saraRfv2ApplierDiagnosticsRef.current = bindingResult.diagnostics;
+          if (typeof window !== "undefined") {
+            (window as any).saraLiveRfv2Diagnostics = {
+              mode: "Sara RFv2 Preview",
+              modelPath: modelUrl,
+              bindingProfileUsed: bindingResult.diagnostics.bindingProfileUsed,
+              profileAssetPath: bindingResult.diagnostics.profileAssetPath,
+              faceRootCandidates: bindingResult.diagnostics.faceRootCandidates,
+              ...rfv2TransformDiagnostics,
+              detectedAsset: assetDiagnostics.detectedAsset,
+              topLevelRoots: assetDiagnostics.topLevelRoots,
+              faceRootFound: assetDiagnostics.faceRootFound,
+              faceRootName: assetDiagnostics.faceRootName,
+              faceRootPath: assetDiagnostics.faceRootPath,
+              faceMeshFound: assetDiagnostics.faceMeshFound,
+              faceMeshPath: assetDiagnostics.faceMeshPath,
+              faceMorphNames: assetDiagnostics.faceMorphNames,
+              requiredMorphsPresent: bindingResult.diagnostics.requiredMorphsPresent,
+              missingRequiredMorphs: bindingResult.diagnostics.missingRequiredMorphs,
+              allowedMorphsFound: bindingResult.diagnostics.allowedMorphsFound,
+              forbiddenMeshesRejected: bindingResult.diagnostics.forbiddenMeshesRejected,
+              forbiddenMorphsRejected: bindingResult.diagnostics.forbiddenMorphsRejected,
+              faceRootChildren: bindingResult.diagnostics.faceRootChildren,
+              faceRootAudit: bindingResult.diagnostics.faceRootAudit,
+              faceGroupDetected: bindingResult.diagnostics.faceGroupDetected,
+              faceGroupPath: bindingResult.diagnostics.faceGroupPath,
+              boundFaceMeshNames: bindingResult.diagnostics.boundFaceMeshNames,
+              boundFaceMeshPaths: bindingResult.diagnostics.boundFaceMeshPaths,
+              boundFaceMeshCount: bindingResult.diagnostics.boundFaceMeshCount,
+              bodyRootFound: assetDiagnostics.bodyRootFound,
+              hairRootFound: assetDiagnostics.hairRootFound,
+              hairDiagnostics: assetDiagnostics.hairDiagnostics,
+              rfv2Enabled: true,
+              faceBound: bindingResult.bindings.length > 0,
+              boundMeshes: bindingResult.diagnostics.boundMeshNames,
+              boundFaceMeshes: bindingResult.diagnostics.boundMeshNames,
+              activePhoneme: null,
+              activeViseme: "viseme_rest",
+              rawTargets: {},
+              smoothedTargets: {},
+              appliedMorphs: {},
+              missingMorphs: bindingResult.diagnostics.missingMorphs,
+              blockedMorphs: bindingResult.diagnostics.blockedMorphs,
+              bindingRetryCount: saraRfv2BindingRetryCountRef.current,
+              fallbackReason: null,
+            };
+          }
+          if (bindingResult.bindings.length === 0) {
+            console.warn("[Sara RFv2 Live Preview] Face binding pending retry", {
+              reason: bindingResult.diagnostics.applierBindingReason,
+              diagnostics: bindingResult.diagnostics,
+            });
+          } else {
+            console.info("[Sara RFv2 Live Preview] bound Face morph meshes", {
+              modelUrl,
+              boundMeshes: bindingResult.diagnostics.boundMeshNames,
+            });
+          }
+        }
 
         camera.near = 0.01;
         camera.far = 100;
@@ -2842,14 +4189,12 @@ function ThreeAvatarComponent({
           if (useSaraLabAlignedViewport) {
             gltfScene.updateMatrixWorld(true);
             avatarRoot.updateMatrixWorld(true);
-            const saraCameraPosition = vector3FromConfig(
-              fixedCamera.position,
-              [0, 1.35, 4.2]
-            );
-            const saraCameraLookAt = vector3FromConfig(
-              fixedCamera.lookAt,
-              [0, 1.15, 0]
-            );
+            const saraCameraPosition = saraRfv2PreviewActive
+              ? new THREE.Vector3(...SARA_RFV2_PREVIEW_DEFAULT_CAMERA_FRAME.position)
+              : vector3FromConfig(fixedCamera.position, [0, 1.35, 4.2]);
+            const saraCameraLookAt = saraRfv2PreviewActive
+              ? new THREE.Vector3(...SARA_RFV2_PREVIEW_DEFAULT_CAMERA_FRAME.lookAt)
+              : vector3FromConfig(fixedCamera.lookAt, [0, 1.15, 0]);
             const saraFov = fixedCamera.fov ?? 22;
             camera.fov = saraFov;
             camera.near = 0.01;
@@ -2857,15 +4202,18 @@ function ThreeAvatarComponent({
             camera.position.copy(saraCameraPosition);
             camera.lookAt(saraCameraLookAt);
             camera.userData.fixedLookAt = saraCameraLookAt.toArray();
+            camera.userData.saraRfv2CameraFrame = saraRfv2PreviewActive
+              ? createSaraRfv2CameraFrameDiagnostics(camera, gltfScene)
+              : null;
             if (typeof window !== "undefined") {
               const existingSaraDiagnostics = (window as any).saraLiveV2Diagnostics ?? {};
               (window as any).saraLiveV2Diagnostics = {
                 ...existingSaraDiagnostics,
                 cameraConfig: {
-                  mode: fixedCamera.mode ?? "fixed",
-                  fov: saraFov,
-                  position: saraCameraPosition.toArray(),
-                  lookAt: saraCameraLookAt.toArray(),
+                mode: fixedCamera.mode ?? "fixed",
+                fov: saraFov,
+                position: saraCameraPosition.toArray(),
+                lookAt: saraCameraLookAt.toArray(),
                   near: camera.near,
                   far: camera.far,
                 },
@@ -2873,6 +4221,13 @@ function ThreeAvatarComponent({
             }
             transformCorrections.push("sara.labAlignedIdentityTransform");
             transformCorrections.push("sara.configCamera");
+            if (saraRfv2PreviewActive && typeof window !== "undefined") {
+              const existingRfv2Diagnostics = (window as any).saraLiveRfv2Diagnostics ?? {};
+              (window as any).saraLiveRfv2Diagnostics = {
+                ...existingRfv2Diagnostics,
+                cameraFrame: createSaraRfv2CameraFrameDiagnostics(camera, gltfScene),
+              };
+            }
           } else {
             const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.6, 3.2]);
             const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.7, 0]);
@@ -3366,12 +4721,14 @@ function ThreeAvatarComponent({
           console.groupEnd();
         }
 
-        if (!cancelled) {
-          setAvatarLoadState("ready");
-          setAvatarLoadProgress(1);
-        }
-        startBlinkLoop();
-      },
+	        if (!cancelled) {
+	          setAvatarLoadState("ready");
+	          setAvatarLoadProgress(1);
+	        }
+	        if (!isSaraV3Avatar) {
+	          startBlinkLoop();
+	        }
+	      },
       undefined,
       (error) => {
         console.error("[Avatar] Failed to load GLB:", error);
@@ -3476,47 +4833,80 @@ function ThreeAvatarComponent({
           const jawOpenAdj = THREE.MathUtils.clamp(jawOpen * mdm, 0, 1.35);
           const lipFollowAdj = THREE.MathUtils.clamp(lipFollow * mdm, 0, 1.35);
           const saraV2VisemeCaps = SARA_V2_AVATAR_DEFINITION.visemes.caps;
-          const saraV2Timeline = isSaraV2Viewport ? avatarPhonemeTimelineRef.current : null;
+          const saraAudioFallbackConfig = saraV2VisemeCaps?.audioDrivenMouthFallback;
+          const saraUseAudioDrivenMouth =
+            isSaraHybrid &&
+            speaking &&
+            Boolean(saraAudioFallbackConfig?.enabled);
+          const saraAudioNormGain = saraAudioFallbackConfig?.audioNormGain ?? 0.85;
+          const saraMouthAdjGain = saraAudioFallbackConfig?.mouthAdjGain ?? 0.25;
+          const saraAudioMouthOpen = saraUseAudioDrivenMouth
+            ? THREE.MathUtils.clamp(
+                audioNorm * saraAudioNormGain + mouthAdj * saraMouthAdjGain,
+                0,
+                1
+              )
+            : 0;
+          const saraAudioJawOpenTarget =
+            saraAudioMouthOpen * (saraAudioFallbackConfig?.jawOpenMax ?? 0.28);
+          const saraAudioVisemeAATarget =
+            saraAudioMouthOpen * (saraAudioFallbackConfig?.visemeAAMax ?? 0.25);
+          const saraV2Timeline = isSaraHybrid ? avatarPhonemeTimelineRef.current : null;
           const saraV2TimelineLength = saraV2Timeline?.phonemes.length ?? 0;
           const saraV2ValidTimeline =
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             !!saraV2Timeline &&
             saraV2TimelineLength > 0 &&
             !hasInvalidJordanPhonemeTimestamps(saraV2Timeline);
-          const saraV2AudioCurrentTime = isSaraV2Viewport
+          const saraV2AudioCurrentTime = isSaraHybrid
             ? avatarAudioCurrentTimeRef.current
             : 0;
           const saraV2LookAheadSeconds = saraV2VisemeCaps?.lookAheadSeconds ?? 0.04;
-          const saraV2SpeechTime = saraV2AudioCurrentTime + saraV2LookAheadSeconds;
+          const saraAudioSyncOffsetSeconds =
+            saraV2VisemeCaps?.saraAudioSyncOffsetSeconds ?? 0;
+          const saraV2SpeechTime = Math.max(
+            0,
+            saraV2AudioCurrentTime +
+              saraV2LookAheadSeconds +
+              saraAudioSyncOffsetSeconds
+          );
           const saraV2ActivePhoneme =
-            isSaraV2Viewport && speaking && saraV2ValidTimeline
+            isSaraHybrid && speaking && saraV2ValidTimeline
               ? findActiveSaraPhoneme(saraV2Timeline, saraV2SpeechTime)
               : null;
           const saraV2ActiveViseme =
             saraV2ActivePhoneme?.viseme ?? (saraV2ValidTimeline ? "viseme_rest" : null);
           const saraV2PhonemeDriverActive =
-            isSaraV2Viewport && speaking && saraV2ValidTimeline;
-          if (isSaraV2Viewport && speaking && saraV2ValidTimeline) {
+            isSaraHybrid &&
+            speaking &&
+            saraV2ValidTimeline &&
+            !saraUseAudioDrivenMouth;
+          const saraV2PhonemeDriverBypassedForAudioFallback =
+            saraUseAudioDrivenMouth && saraV2ValidTimeline;
+          if (isSaraHybrid && speaking && saraV2ValidTimeline) {
             saraV2ClipHasValidPhonemeTimelineRef.current = true;
           }
-          if (isSaraV2Viewport && speaking) {
+          if (isSaraHybrid && speaking) {
             saraV2WasSpeakingRef.current = true;
             saraV2LastSpeechEndMsRef.current = null;
-          } else if (isSaraV2Viewport && saraV2WasSpeakingRef.current) {
+          } else if (isSaraHybrid && saraV2WasSpeakingRef.current) {
             saraV2WasSpeakingRef.current = false;
             saraV2LastSpeechEndMsRef.current = now;
           }
           const saraV2HasValidPhonemeTimeline =
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             (saraV2ValidTimeline || saraV2ClipHasValidPhonemeTimelineRef.current);
           const saraV2PostSpeechElapsedMs =
-            isSaraV2Viewport && !speaking && saraV2LastSpeechEndMsRef.current !== null
+            isSaraHybrid && !speaking && saraV2LastSpeechEndMsRef.current !== null
               ? now - saraV2LastSpeechEndMsRef.current
               : null;
           const saraV2PostSpeechReleaseActive =
             saraV2HasValidPhonemeTimeline && !speaking;
           const saraV2FallbackMouthDriverActive =
-            isSaraV2Viewport && speaking && !saraV2HasValidPhonemeTimeline;
+            isSaraHybrid &&
+            speaking &&
+            !saraV2HasValidPhonemeTimeline &&
+            !saraUseAudioDrivenMouth;
           const saraV2VisemeOpennessMultipliers =
             saraV2VisemeCaps?.opennessMultipliers as Readonly<Record<string, number>> | undefined;
           const saraV2JawSupportMap =
@@ -3530,6 +4920,33 @@ function ThreeAvatarComponent({
           const saraV2PreviousViseme = previousSaraV2VisemeRef.current;
           const saraV2VisemeChanged =
             saraV2PhonemeDriverActive && saraV2PreviousViseme !== saraV2ActiveViseme;
+          const saraV2RecentPhonemeKey =
+            saraV2PhonemeDriverActive && saraV2ActivePhoneme
+              ? [
+                  saraV2ActivePhoneme.phoneme,
+                  saraV2ActiveViseme,
+                  saraV2ActivePhoneme.start.toFixed(3),
+                  (saraV2ActivePhoneme.end ?? -1).toFixed(3),
+                ].join(":")
+              : "";
+          if (
+            saraV2RecentPhonemeKey &&
+            saraV2RecentPhonemeKey !== saraV2LastRecentPhonemeKeyRef.current
+          ) {
+            saraV2LastRecentPhonemeKeyRef.current = saraV2RecentPhonemeKey;
+            saraV2RecentActivePhonemesRef.current = [
+              ...saraV2RecentActivePhonemesRef.current,
+              {
+                time: now,
+                audioCurrentTime: saraV2AudioCurrentTime,
+                speechTime: saraV2SpeechTime,
+                phoneme: saraV2ActivePhoneme.phoneme,
+                viseme: saraV2ActiveViseme,
+              },
+            ].slice(-20);
+          } else if (!saraV2PhonemeDriverActive) {
+            saraV2LastRecentPhonemeKeyRef.current = "";
+          }
           const saraV2RestFrameDetected =
             saraV2PhonemeDriverActive &&
             (!saraV2ActivePhoneme || saraV2ActiveViseme === "viseme_rest");
@@ -3602,6 +5019,197 @@ function ThreeAvatarComponent({
                 activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
                 speechTime: saraV2SpeechTime,
               });
+            }
+          }
+
+          if (saraRfv2PreviewActive) {
+            if (saraRfv2BindingsRef.current.length === 0 && model) {
+              if (saraRfv2BindingRetryCountRef.current < SARA_RFV2_BINDING_RETRY_LIMIT) {
+                saraRfv2BindingRetryCountRef.current += 1;
+                const assetDiagnostics = prepareSaraRfv2PreviewScene(model, modelUrl);
+                saraRfv2AssetDiagnosticsRef.current = assetDiagnostics;
+                const bindingResult = bindSaraRfv2FaceMorphTargets({ root: model });
+                saraRfv2BindingsRef.current = bindingResult.bindings;
+                saraRfv2ApplierStateRef.current = {
+                  ...bindingResult.state,
+                  enabled: true,
+                };
+                saraRfv2ApplierDiagnosticsRef.current = bindingResult.diagnostics;
+              }
+            }
+
+            const timeline = avatarPhonemeTimelineRef.current;
+            const timelineItems = timeline?.phonemes ?? [];
+            const audioCurrentTime = avatarAudioCurrentTimeRef.current;
+            const resolved = resolveSaraRfv2ActivePhoneme({
+              timeline: timelineItems.map((item) => ({
+                phoneme: item.phoneme,
+                start: item.start,
+                end: item.end ?? item.start,
+              })),
+              audioCurrentTime,
+            });
+            const raw = computeSaraRfv2VisemeTargets({
+              activeViseme: resolved.activeViseme,
+              speaking,
+            });
+            const nextPhonemeState: SaraRfv2PhonemeState = {
+              ...saraRfv2PhonemeStateRef.current,
+              enabled: true,
+              activePhoneme: resolved.activePhoneme,
+              activeViseme: resolved.activeViseme,
+              lastSpeechTime: resolved.speechTime,
+              lastUpdatedAtMs: now,
+              targets: raw.targets,
+            };
+            saraRfv2PhonemeStateRef.current = nextPhonemeState;
+
+            let smoothedTargets: Record<string, number> = {};
+            let appliedMorphs: Readonly<Record<string, number>> = {};
+            let missingMorphs: readonly string[] = [];
+            let blockedMorphs: readonly string[] = [];
+            let boundMeshNames: readonly string[] =
+              saraRfv2ApplierDiagnosticsRef.current.boundMeshNames;
+
+            if (saraRfv2BindingsRef.current.length > 0) {
+              const smoothed = smoothSaraRfv2Targets({
+                state: saraRfv2SmoothingStateRef.current,
+                rawTargets: raw.targets,
+                nowMs: now,
+                forceEnabled: true,
+              });
+              saraRfv2SmoothingStateRef.current = smoothed.state;
+              smoothedTargets = smoothed.smoothedTargets;
+              const applied = applySaraRfv2MorphTargets({
+                state: saraRfv2ApplierStateRef.current,
+                bindings: saraRfv2BindingsRef.current,
+                targets: smoothed.smoothedTargets,
+                nowMs: now,
+                resetUnspecifiedOwnedMorphs: true,
+              });
+              saraRfv2ApplierStateRef.current = {
+                ...applied.state,
+                enabled: true,
+              };
+              const bindingDiagnostics = saraRfv2ApplierDiagnosticsRef.current;
+              saraRfv2ApplierDiagnosticsRef.current = {
+                ...bindingDiagnostics,
+                appliedMorphs: applied.diagnostics.appliedMorphs,
+                missingMorphs: applied.diagnostics.missingMorphs,
+                blockedMorphs: applied.diagnostics.blockedMorphs,
+                releasedMorphs: applied.diagnostics.releasedMorphs,
+                highestAppliedValue: applied.diagnostics.highestAppliedValue,
+                postWriteInfluences: applied.diagnostics.postWriteInfluences,
+                writeSucceeded: applied.diagnostics.writeSucceeded,
+                writtenButNoVisualChangeSuspected:
+                  applied.diagnostics.writtenButNoVisualChangeSuspected,
+              };
+              appliedMorphs = applied.diagnostics.appliedMorphs;
+              missingMorphs = applied.diagnostics.missingMorphs;
+              blockedMorphs = applied.diagnostics.blockedMorphs;
+              boundMeshNames = applied.diagnostics.boundMeshNames;
+            }
+
+            const fallbackReason =
+              saraRfv2BindingsRef.current.length === 0 &&
+              saraRfv2BindingRetryCountRef.current >= SARA_RFV2_BINDING_RETRY_LIMIT
+                ? saraRfv2ApplierDiagnosticsRef.current.applierBindingReason
+                : null;
+            if (fallbackReason && !saraRfv2FallbackTriggeredRef.current) {
+              if (typeof window !== "undefined") {
+                const assetDiagnostics = saraRfv2AssetDiagnosticsRef.current;
+                const existingFailureDiagnostics =
+                  (window as any).saraLiveRfv2FailureDiagnostics ?? {};
+                (window as any).saraLiveRfv2FailureDiagnostics = {
+                  ...existingFailureDiagnostics,
+                  attemptedMode: "Sara RFv2 Preview",
+                  attemptedModelPath: modelUrl,
+                  fallbackReason,
+                  topLevelRoots: assetDiagnostics.topLevelRoots,
+                  faceRootFound: assetDiagnostics.faceRootFound,
+                  faceRootName: assetDiagnostics.faceRootName,
+                  faceRootPath: assetDiagnostics.faceRootPath,
+                  faceRootChildren:
+                    saraRfv2ApplierDiagnosticsRef.current.faceRootChildren,
+                  faceRootAudit:
+                    saraRfv2ApplierDiagnosticsRef.current.faceRootAudit,
+                  allMorphCapableMeshes:
+                    saraRfv2ApplierDiagnosticsRef.current.allMorphCapableMeshes,
+                  timestamp: new Date().toISOString(),
+                };
+              }
+              saraRfv2FallbackTriggeredRef.current = true;
+              onSaraRfv2Fallback?.(fallbackReason);
+            }
+            if (typeof window !== "undefined") {
+              const assetDiagnostics = saraRfv2AssetDiagnosticsRef.current;
+              const rfv2TransformDiagnostics = model
+                ? createSaraRfv2TransformDiagnostics(model)
+                : {
+                    rfv2UsesNewSaraTransform: true,
+                    oldFaceAlignmentSkipped: true,
+                    faceRigWorldTransform: null,
+                    characterWorldTransform: null,
+                    sketchfabWorldTransform: null,
+                    transformMismatchWarnings: ["Sara RFv2 model root is not available."],
+                  };
+              (window as any).saraLiveRfv2Diagnostics = {
+                mode: "Sara RFv2 Preview",
+                modelPath: modelUrl,
+                bindingProfileUsed: saraRfv2ApplierDiagnosticsRef.current.bindingProfileUsed,
+                profileAssetPath: saraRfv2ApplierDiagnosticsRef.current.profileAssetPath,
+                faceRootCandidates: saraRfv2ApplierDiagnosticsRef.current.faceRootCandidates,
+                ...rfv2TransformDiagnostics,
+                cameraFrame: createSaraRfv2CameraFrameDiagnostics(camera, model),
+                detectedAsset: assetDiagnostics.detectedAsset,
+                topLevelRoots: assetDiagnostics.topLevelRoots,
+                faceRootFound: assetDiagnostics.faceRootFound,
+                faceRootName: assetDiagnostics.faceRootName,
+                faceRootPath: assetDiagnostics.faceRootPath,
+                faceMeshFound: assetDiagnostics.faceMeshFound,
+                faceMeshPath: assetDiagnostics.faceMeshPath,
+                faceMorphNames: assetDiagnostics.faceMorphNames,
+                requiredMorphsPresent:
+                  saraRfv2ApplierDiagnosticsRef.current.requiredMorphsPresent,
+                missingRequiredMorphs:
+                  saraRfv2ApplierDiagnosticsRef.current.missingRequiredMorphs,
+                allowedMorphsFound:
+                  saraRfv2ApplierDiagnosticsRef.current.allowedMorphsFound,
+                forbiddenMeshesRejected:
+                  saraRfv2ApplierDiagnosticsRef.current.forbiddenMeshesRejected,
+                forbiddenMorphsRejected:
+                  saraRfv2ApplierDiagnosticsRef.current.forbiddenMorphsRejected,
+                faceRootChildren:
+                  saraRfv2ApplierDiagnosticsRef.current.faceRootChildren,
+                faceRootAudit:
+                  saraRfv2ApplierDiagnosticsRef.current.faceRootAudit,
+                faceGroupDetected:
+                  saraRfv2ApplierDiagnosticsRef.current.faceGroupDetected,
+                faceGroupPath:
+                  saraRfv2ApplierDiagnosticsRef.current.faceGroupPath,
+                boundFaceMeshNames:
+                  saraRfv2ApplierDiagnosticsRef.current.boundFaceMeshNames,
+                boundFaceMeshPaths:
+                  saraRfv2ApplierDiagnosticsRef.current.boundFaceMeshPaths,
+                boundFaceMeshCount:
+                  saraRfv2ApplierDiagnosticsRef.current.boundFaceMeshCount,
+                bodyRootFound: assetDiagnostics.bodyRootFound,
+                hairRootFound: assetDiagnostics.hairRootFound,
+                hairDiagnostics: assetDiagnostics.hairDiagnostics,
+                rfv2Enabled: true,
+                faceBound: saraRfv2BindingsRef.current.length > 0,
+                boundMeshes: boundMeshNames,
+                boundFaceMeshes: boundMeshNames,
+                activePhoneme: resolved.activePhoneme,
+                activeViseme: resolved.activeViseme,
+                rawTargets: raw.targets,
+                smoothedTargets,
+                appliedMorphs,
+                missingMorphs,
+                blockedMorphs,
+                bindingRetryCount: saraRfv2BindingRetryCountRef.current,
+                fallbackReason,
+              };
             }
           }
 
@@ -5494,8 +7102,27 @@ function ThreeAvatarComponent({
                     });
                   }
                 }
-          const saraV2MouthMorphBindings = isSaraV2Viewport
-            ? mouthBindingsRef.current.map(({ mesh, index, name }) => ({
+	          if (!saraV3RawAuditMode && isSaraV3Avatar && saraV3ControllerRef.current) {
+	            updateSaraV3VisemeDriver({
+	              state: saraV3VisemeStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              timeline: avatarPhonemeTimelineRef.current,
+	              audioCurrentTime: avatarAudioCurrentTimeRef.current,
+	              isSpeaking: speaking,
+	              dt,
+	            });
+	            updateSaraV3PresenceRuntime({
+	              state: saraV3PresenceStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              nowMs: now,
+	              dt,
+	              isSpeaking: speaking,
+	              isListening: isListeningRef.current,
+	              isThinking: isThinkingRef.current,
+	            });
+	          }
+	          const saraV2MouthMorphBindings = isSaraV2Viewport
+	            ? mouthBindingsRef.current.map(({ mesh, index, name }) => ({
                 morphName: name,
                 meshName: mesh.name || "(unnamed mesh)",
                 index,
@@ -5529,9 +7156,13 @@ function ThreeAvatarComponent({
           const saraV2HasMouthActivity =
             isSaraV2Viewport &&
             speaking &&
-            (saraV2PhonemeDriverActive || Math.max(mouthAdj, jawOpenAdj, lipFollowAdj) > 0.001);
+            (saraUseAudioDrivenMouth ||
+              saraV2PhonemeDriverActive ||
+              Math.max(mouthAdj, jawOpenAdj, lipFollowAdj) > 0.001);
           const saraV2PrimaryOpenDriver = !saraV2HasMouthActivity
             ? "none"
+            : saraUseAudioDrivenMouth
+              ? "audioDrivenPrimary"
             : saraV2PhonemeDriverActive
               ? "saraPhoneme"
             : saraV2MouthOpenDriverKinds.includes("viseme")
@@ -5567,7 +7198,12 @@ function ThreeAvatarComponent({
 
           // Apply mouth morphs — conservative ranges to avoid extreme deformation.
           // Also avoid any targets that look like full head/neck controls.
-          if (!useRfv2Morphs && mouthBindingsRef.current.length > 0) {
+	          if (
+	            !useRfv2Morphs &&
+	            !saraRfv2PreviewActive &&
+	            !isSaraV3Avatar &&
+	            mouthBindingsRef.current.length > 0
+	          ) {
             mouthBindingsRef.current.forEach(({ mesh, index, name }) => {
               const influences = mesh.morphTargetInfluences;
               if (!influences || index >= influences.length) return;
@@ -5599,19 +7235,29 @@ function ThreeAvatarComponent({
               const isSaraV2GenericReleaseTarget = isSaraV2GenericMouthReleaseTarget(name);
 
               let strength = mouthAdj;
-              if (saraV2HasValidPhonemeTimeline && isSaraV2Viewport) {
+              if ((saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth) && isSaraHybrid) {
                 const activeVisemeNormalized = normalizeSaraV2MorphName(
                   saraV2ActiveViseme ?? "viseme_rest"
                 );
                 const visemeMaxStrength = saraV2VisemeCaps?.visemeMaxStrength ?? 0.1;
                 const jawOpenMax = saraV2VisemeCaps?.jawOpenMax ?? 0.04;
-                const attackSpeed = saraV2VisemeCaps?.attackSpeed ?? 18;
-                const releaseSpeed = saraV2VisemeCaps?.releaseSpeed ?? 22;
+                const attackSpeed = saraUseAudioDrivenMouth
+                  ? saraAudioFallbackConfig?.attackSpeed ?? 22
+                  : saraV2VisemeCaps?.attackSpeed ?? 18;
+                const releaseSpeed = saraUseAudioDrivenMouth
+                  ? saraAudioFallbackConfig?.releaseSpeed ?? 18
+                  : saraV2VisemeCaps?.releaseSpeed ?? 22;
                 const jawReleaseSpeed = saraV2VisemeCaps?.jawReleaseSpeed ?? 26;
                 const restReleaseSpeed = saraV2VisemeCaps?.restReleaseSpeed ?? 28;
                 const restVisemeNormalized = normalizeSaraV2MorphName("viseme_rest");
                 let targetStrength = 0;
-                if (isAllowedSaraPhonemeMorph && isSaraV2VisemeMorph(name)) {
+                if (saraUseAudioDrivenMouth && isSaraV2JawOpenMorph(name)) {
+                  targetStrength = saraAudioJawOpenTarget;
+                } else if (saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)) {
+                  targetStrength = saraAudioVisemeAATarget;
+                } else if (saraUseAudioDrivenMouth && isAllowedSaraPhonemeMorph) {
+                  targetStrength = 0;
+                } else if (isAllowedSaraPhonemeMorph && isSaraV2VisemeMorph(name)) {
                   const isActiveOpenViseme =
                     saraV2PhonemeDriverActive &&
                     normalizedMorphName === activeVisemeNormalized &&
@@ -5667,6 +7313,9 @@ function ThreeAvatarComponent({
                 if (normalizedMorphName === activeVisemeNormalized && isSaraV2VisemeMorph(name)) {
                   saraV2AppliedVisemeStrength = nextStrength;
                 }
+                if (saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)) {
+                  saraV2AppliedVisemeStrength = nextStrength;
+                }
                 if (isSaraV2JawOpenMorph(name)) {
                   saraV2AppliedJawSupport = nextStrength;
                 }
@@ -5705,7 +7354,7 @@ function ThreeAvatarComponent({
               }
 
               const saraV2DriverKind = saraV2OpenDriverKind(name);
-              if (isSaraV2Viewport && saraV2HasValidPhonemeTimeline) {
+              if (isSaraV2Viewport && (saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth)) {
                 if (isSaraV2GenericReleaseTarget) {
                   saraV2GenericFallbackSuppressed = true;
                 }
@@ -5728,7 +7377,7 @@ function ThreeAvatarComponent({
                 }
               }
 
-              const shaped = saraV2HasValidPhonemeTimeline && isSaraV2Viewport
+              const shaped = (saraV2HasValidPhonemeTimeline || saraUseAudioDrivenMouth) && isSaraHybrid
                 ? THREE.MathUtils.clamp(strength, 0, 1.5)
                 : Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
 
@@ -5750,7 +7399,14 @@ function ThreeAvatarComponent({
                 lower.includes("roll");
 
               const isOpenTarget = isJawLike || isTeethLike;
-              const saraV2Cap = isSaraV2Viewport ? saraV2MouthCapFor(name, speaking) : null;
+              const saraV2Cap =
+                isSaraV2Viewport && saraUseAudioDrivenMouth && isSaraV2JawOpenMorph(name)
+                  ? saraAudioFallbackConfig?.jawOpenMax ?? 0.28
+                  : isSaraV2Viewport && saraUseAudioDrivenMouth && isSaraV2VisemeAAMorph(name)
+                    ? saraAudioFallbackConfig?.visemeAAMax ?? 0.25
+                    : isSaraV2Viewport
+                      ? saraV2MouthCapFor(name, speaking)
+                      : null;
               const gain = isSaraV2Viewport
                 ? 1
                 : isOpenTarget
@@ -5852,7 +7508,7 @@ function ThreeAvatarComponent({
             )
           );
 
-          if (!useRfv2Morphs && cheekBindingsRef.current.length > 0) {
+          if (!useRfv2Morphs && !saraRfv2PreviewActive && cheekBindingsRef.current.length > 0) {
             cheekBindingsRef.current.forEach(
               ({ mesh, index, name, initialInfluence }) => {
                 const influences = mesh.morphTargetInfluences;
@@ -5875,7 +7531,7 @@ function ThreeAvatarComponent({
             );
           }
 
-if (!useRfv2Morphs) {
+if (!useRfv2Morphs && !saraRfv2PreviewActive) {
           // Cheeks: strong enough pitch to read on camera; small lateral Y/Z for puff (kept < ~0.12 rad).
           cheekBonesRef.current.forEach((bone) => {
             if (!isPrimaryCheekBoneName(bone.name)) return;
@@ -5949,7 +7605,7 @@ if (!useRfv2Morphs) {
             underChinBonesRef.current.forEach(resetFaceBoneX);
           }
 
-if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
+if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) {
 	          jawBonesRef.current.forEach((bone) => {
 	            if (!isMainMandibleBoneName(bone.name)) return;
 	            applyFaceBoneX(bone, mouthForJaw * 0.26, "jaw");
@@ -5988,7 +7644,7 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
 	        }
 
           if (
-            isSaraV2Viewport &&
+            isSaraHybrid &&
             (speaking || saraV2HasValidPhonemeTimeline || saraV2PostSpeechReleaseActive) &&
             typeof window !== "undefined" &&
             now - lastSaraV2MouthDiagnosticsLogRef.current >= 400
@@ -6084,11 +7740,36 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
               rotationDeltasApplied: saraV2BoneMovementFrame,
               maxRotationDelta,
             };
+            const timelinePhonemes = saraV2Timeline?.phonemes ?? [];
+            const firstPhoneme = timelinePhonemes[0] ?? null;
+            const lastPhoneme = timelinePhonemes[timelinePhonemes.length - 1] ?? null;
+            const playbackDiagnostics =
+              typeof window !== "undefined"
+                ? (window as any).saraV2MouthDiagnostics ?? {}
+                : {};
             const diagnostics = {
+              ...playbackDiagnostics,
               runtimeMode: avatarModeLabel(avatarMode),
               useRfv2Morphs,
               isSaraV2Viewport,
               phonemeDriverActive: saraV2PhonemeDriverActive,
+              audioDrivenMouthFallbackActive: saraUseAudioDrivenMouth,
+              saraMouthDriverMode: saraUseAudioDrivenMouth
+                ? "audioDrivenPrimary"
+                : saraV2PhonemeDriverActive
+                  ? "phonemeTimeline"
+                  : saraV2FallbackMouthDriverActive
+                    ? "legacyFallback"
+                    : "idle",
+              saraAudioMouthOpen,
+              audioNorm,
+              mouthAdj,
+              audioNormGain: saraAudioNormGain,
+              mouthAdjGain: saraMouthAdjGain,
+              jawOpenTarget: saraAudioJawOpenTarget,
+              visemeAATarget: saraAudioVisemeAATarget,
+              phonemeDriverBypassedForAudioFallback:
+                saraV2PhonemeDriverBypassedForAudioFallback,
               saraV2HasValidPhonemeTimeline,
               activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
               previousSaraViseme: saraV2PreviousViseme,
@@ -6111,6 +7792,14 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
               timelineLength: saraV2TimelineLength,
               speechTime: saraV2SpeechTime,
               audioCurrentTime: saraV2AudioCurrentTime,
+              lookAheadSeconds: saraV2LookAheadSeconds,
+              saraAudioSyncOffsetSeconds,
+              firstPhonemeStart: firstPhoneme?.start ?? null,
+              lastPhonemeEnd:
+                lastPhoneme?.end ??
+                lastPhoneme?.start ??
+                null,
+              recentActivePhonemes: saraV2RecentActivePhonemesRef.current,
               validTimeline: saraV2ValidTimeline,
               fallbackMouthDriverActive: saraV2FallbackMouthDriverActive,
               appliedVisemeValues: saraV2AppliedVisemeValues,
@@ -6118,8 +7807,6 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
               boneDriverDisabledForSara: saraV2MouthBoneDriverDisabled,
               primaryOpenDriver: saraV2PrimaryOpenDriver,
               speaking,
-              audioNorm,
-              mouthAdj,
               jawOpenAdj,
               lipFollowAdj,
               morphBindings: saraV2MouthMorphBindings,
@@ -6185,8 +7872,209 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
             console.log("recommendation hint", diagnostics.recommendationHint);
             console.groupEnd();
           }
-	
-	          if (avatarRoot) {
+	          if (isSaraHybrid) {
+	            const saraPresenceMode: SaraV2PresenceMode =
+	              saraV2PostSpeechReleaseActive && isListeningRef.current
+	                ? "interrupted"
+	                : speaking
+	                  ? "speaking"
+	                  : isThinkingRef.current
+	                    ? "thinking"
+	                    : isListeningRef.current
+	                      ? "listening"
+	                      : "idle";
+	            const presenceResult = updateSaraV2Presence({
+	              state: saraV2PresenceStateRef.current,
+	              nowMs: now,
+	              deltaSeconds: dt,
+	              mode: saraPresenceMode,
+	              sentiment: {
+	                label: avatarPhonemeTimelineRef.current?.sentiment,
+	                compound: sentimentCompoundRef.current,
+	              },
+	              audioNorm,
+	              isSpeaking: speaking,
+	              isListening: isListeningRef.current,
+	              isThinking: isThinkingRef.current,
+	            });
+	            saraV2PresenceStateRef.current = presenceResult.state;
+
+	            const blinkTestState = saraV2BlinkTestRef.current;
+	            const blinkTestActive =
+	              import.meta.env.DEV === true &&
+	              (blinkTestState.left !== null || blinkTestState.right !== null);
+	            const presenceMorphTargets = blinkTestActive
+	              ? Array.from(saraV2PresenceBindingsRef.current.keys()).reduce(
+	                  (targets, name) => {
+	                    if (name === "eyeBlinkLeft") {
+	                      targets[name] = blinkTestState.left ?? 0;
+	                    } else if (name === "eyeBlinkRight") {
+	                      targets[name] = blinkTestState.right ?? 0;
+	                    } else {
+	                      targets[name] = 0;
+	                    }
+	                    return targets;
+	                  },
+	                  {} as Record<string, number>
+	                )
+	              : presenceResult.morphTargets;
+	            const appliedPresenceTargets: Record<string, number> = {};
+	            const actualInfluenceReadback: Record<
+	              string,
+	              Array<{
+	                meshName: string;
+	                geometryName: string | null;
+	                visible: boolean;
+	                index: number;
+	                target: number;
+	                beforeApply: number;
+	                afterApply: number;
+	              }>
+	            > = {};
+	            let overwrittenAfterApply = false;
+
+	            Object.entries(presenceMorphTargets).forEach(([name, target]) => {
+	              if (name.startsWith("viseme_") || name === "jawOpen") return;
+	              if (
+	                blinkTestActive &&
+	                !SARA_V2_BLINK_TEST_MORPHS.has(name) &&
+	                !SARA_V2_EYE_LOOK_MORPHS.has(name)
+	              ) {
+	                return;
+	              }
+	              const bindings = saraV2PresenceBindingsRef.current.get(name) ?? [];
+	              if (bindings.length === 0) return;
+	              const clampedTarget = THREE.MathUtils.clamp(target, 0, 1);
+	              bindings.forEach(({ mesh, index }) => {
+	                const influences = mesh.morphTargetInfluences;
+	                if (!influences || index >= influences.length) return;
+	                const beforeApply = influences[index] ?? 0;
+	                influences[index] = clampedTarget;
+	                const afterApply = influences[index] ?? 0;
+	                if (Math.abs(afterApply - clampedTarget) > 0.0005) {
+	                  overwrittenAfterApply = true;
+	                }
+	                const geometryName = mesh.geometry?.name || null;
+	                const readbackEntry = {
+	                  meshName: mesh.name || "(unnamed mesh)",
+	                  geometryName,
+	                  visible: mesh.visible,
+	                  index,
+	                  target: clampedTarget,
+	                  beforeApply,
+	                  afterApply,
+	                };
+	                const current = actualInfluenceReadback[name] ?? [];
+	                current.push(readbackEntry);
+	                actualInfluenceReadback[name] = current;
+	              });
+	              appliedPresenceTargets[name] = clampedTarget;
+	            });
+
+	            const visibleFaceMeshNames = new Set<string>();
+	            saraV2PresenceBindingsRef.current.forEach((bindings) => {
+	              bindings.forEach(({ mesh }) => {
+	                if (mesh.visible) visibleFaceMeshNames.add(mesh.name || "(unnamed mesh)");
+	              });
+	            });
+	            const requiredFaceMeshes = Array.from(SARA_V2_PRESENCE_FACE_MESH_NAMES);
+	            const missingRequiredFaceMeshes = requiredFaceMeshes.filter(
+	              (meshName) => !visibleFaceMeshNames.has(meshName)
+	            );
+	            const blinkReadback = {
+	              eyeBlinkLeft: actualInfluenceReadback.eyeBlinkLeft ?? [],
+	              eyeBlinkRight: actualInfluenceReadback.eyeBlinkRight ?? [],
+	            };
+	            const blinkAppliedStrength = Math.max(
+	              appliedPresenceTargets.eyeBlinkLeft ?? 0,
+	              appliedPresenceTargets.eyeBlinkRight ?? 0
+	            );
+	            const blinkRawStrength = blinkTestActive
+	              ? Math.max(blinkTestState.left ?? 0, blinkTestState.right ?? 0)
+	              : presenceResult.diagnostics.blinkRawStrength;
+	            const hybridPresenceDiagnostics = {
+	              ...presenceResult.diagnostics,
+	              enabled: true,
+	              presenceCalledThisFrame: true,
+	              mode: saraPresenceMode,
+	              reason: saraHybridPresenceReason,
+	              isSaraHybrid,
+	              isRfv2Preview: saraRfv2PreviewActive,
+	              isSaraAvatar,
+	              avatarMode,
+	              rawTargets: presenceResult.diagnostics.rawTargets,
+	              appliedTargets: appliedPresenceTargets,
+	              readback: actualInfluenceReadback,
+	              actualInfluenceReadback,
+	              overwrittenAfterApply,
+	              blinkMaxUsed: blinkTestActive
+	                ? blinkRawStrength
+	                : presenceResult.diagnostics.blinkMaxUsed,
+	              blinkPhase: blinkTestActive
+	                ? "forced-test"
+	                : presenceResult.diagnostics.blinkPhase,
+	              blinkRawStrength,
+	              blinkAppliedStrength,
+	              blinkStrength: blinkAppliedStrength,
+	              blinkReadback,
+	              blinkActive:
+	                blinkTestActive || presenceResult.diagnostics.blinkActive,
+	              eyeLookSuppressedForBlink:
+	                blinkTestActive ||
+	                presenceResult.diagnostics.eyeLookSuppressedForBlink,
+	              blinkTargets: {
+	                eyeBlinkLeft: appliedPresenceTargets.eyeBlinkLeft ?? 0,
+	                eyeBlinkRight: appliedPresenceTargets.eyeBlinkRight ?? 0,
+	              },
+	              eyeLookTargetsBeforeSuppression:
+	                presenceResult.diagnostics.eyeLookTargetsBeforeSuppression,
+	              eyeLookTargetsAfterSuppression:
+	                presenceResult.diagnostics.eyeLookTargetsAfterSuppression,
+	              blinkTest: {
+	                active: blinkTestActive,
+	                left: blinkTestState.left,
+	                right: blinkTestState.right,
+	                lastCommand: blinkTestState.lastCommand,
+	                updatedAtMs: blinkTestState.updatedAtMs,
+	                supportedValues: SARA_V2_BLINK_TEST_VALUES,
+	              },
+	              activePresenceMorphs: Object.entries(appliedPresenceTargets)
+	                .filter(([, value]) => value > 0.001)
+	                .map(([name]) => name),
+	              availablePresenceMorphs: Array.from(
+	                saraV2PresenceBindingsRef.current.keys()
+	              ),
+	              visiblePresenceFaceMeshes: Array.from(visibleFaceMeshNames),
+	              requiredPresenceFaceMeshes: requiredFaceMeshes,
+	              missingRequiredPresenceFaceMeshes: missingRequiredFaceMeshes,
+	            };
+
+	            if (typeof window !== "undefined") {
+	              (window as any).saraHybridPresenceDiagnostics =
+	                hybridPresenceDiagnostics;
+	              (window as any).saraV2PresenceDiagnostics =
+	                hybridPresenceDiagnostics;
+	            }
+	          } else if (typeof window !== "undefined") {
+	            const disabledDiagnostics = {
+	              enabled: false,
+	              mode: "disabled",
+	              reason: saraHybridPresenceReason,
+	              isSaraHybrid,
+	              isRfv2Preview: saraRfv2PreviewActive,
+	              isSaraAvatar,
+	              avatarMode,
+	              appliedTargets: {},
+	              readback: {},
+	              overwrittenAfterApply: false,
+	              blinkActive: false,
+	              blinkStrength: 0,
+	            };
+	            (window as any).saraHybridPresenceDiagnostics = disabledDiagnostics;
+	            (window as any).saraV2PresenceDiagnostics = disabledDiagnostics;
+	          }
+
+		          if (avatarRoot) {
 	        avatarRoot.scale.setScalar(baseScaleRef.current);
 	      }
 
@@ -6440,7 +8328,11 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
           blinkRafRef.current = requestAnimationFrame(tick);
         }
 
-        blinkFnRef.current = animateBlink;
+	        blinkFnRef.current = isSaraV2Viewport
+	          ? ((_duration?: number, onDone?: () => void) => {
+	              onDone?.();
+	            })
+	          : animateBlink;
 
         const getJordanBlinkModeForLog = (): JordanBlinkMode => {
           const hasSplit =
@@ -6634,13 +8526,16 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
           }, delay);
         }
 
-        function startBlinkLoop() {
-          if (blinkTimeoutRef.current) {
-            clearTimeout(blinkTimeoutRef.current);
-          }
-          if (useRfv2Morphs) {
-            scheduleNextBlink();
-            return;
+	        function startBlinkLoop() {
+	          if (blinkTimeoutRef.current) {
+	            clearTimeout(blinkTimeoutRef.current);
+	          }
+	          if (isSaraV2Viewport) {
+	            return;
+	          }
+	          if (useRfv2Morphs) {
+	            scheduleNextBlink();
+	            return;
           }
           // Trigger one legacy blink immediately so we can verify eyelid bones affect the mesh.
           animateBlink(340, scheduleNextBlink);
@@ -6674,6 +8569,15 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
             } catch {
               /* noop */
             }
+          }
+
+          if (saraV3EnvironmentHandle) {
+            try {
+              saraV3EnvironmentHandle.dispose();
+            } catch {
+              /* noop */
+            }
+            saraV3EnvironmentHandle = null;
           }
 
           if (avatarRootRef.current && sceneRef.current) {
@@ -6728,7 +8632,19 @@ if (!useRfv2Morphs && !saraV2MouthBoneDriverDisabled) {
 
           blinkFnRef.current = null;
         };
-      }, [modelUrl, viewTuning, fixedViewportConfig, useRfv2Morphs]);
+      }, [
+        modelUrl,
+        viewTuning,
+        fixedViewportConfig,
+        useRfv2Morphs,
+        saraRfv2PreviewActive,
+        isSaraV2Viewport,
+        isSaraHybrid,
+        isSaraAvatar,
+        avatarMode,
+        saraHybridPresenceReason,
+        onSaraRfv2Fallback,
+      ]);
 
     useEffect(() => {
       if (!isSpeaking) {

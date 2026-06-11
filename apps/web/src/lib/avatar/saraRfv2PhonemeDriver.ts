@@ -21,7 +21,7 @@ export interface SaraRfv2PhonemeTimelineItem {
 }
 
 export interface SaraRfv2PhonemeState {
-  readonly enabled: false;
+  readonly enabled: boolean;
   readonly activePhoneme: string | null;
   readonly activeViseme: string;
   readonly lastSpeechTime: number;
@@ -70,7 +70,7 @@ export interface UpdateSaraRfv2PhonemeDriverResult {
   readonly activeViseme: string;
   readonly targets: Readonly<Record<string, number>>;
   readonly debug: {
-    readonly enabled: false;
+    readonly enabled: boolean;
     readonly reason: string;
     readonly validTimeline: boolean;
     readonly timelineLength: number;

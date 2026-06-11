@@ -105,45 +105,60 @@ export const PHONEME_TO_SARA_VISEME: Record<string, SaraMorphName> = {
   AH: "viseme_AA",
   AE: "viseme_AA",
   AY: "viseme_AA",
+
   EY: "viseme_E",
   EH: "viseme_E",
+
   IH: "viseme_IH",
   IY: "viseme_IH",
+
   AO: "viseme_O",
   OW: "viseme_O",
   OY: "viseme_O",
   UW: "viseme_O",
   UH: "viseme_O",
+
   P: "viseme_PP",
   B: "viseme_PP",
   M: "viseme_PP",
+
   CH: "viseme_CH",
   SH: "viseme_CH",
   JH: "viseme_CH",
-  S: "viseme_rest",
-  Z: "viseme_rest",
+
+  S: "viseme_E",
+  Z: "viseme_E",
+
   PAUSE: "viseme_rest",
   SIL: "viseme_rest",
   REST: "viseme_rest",
+
   SP: "viseme_rest",
-  HH: "viseme_rest",
-  DH: "viseme_rest",
-  TH: "viseme_rest",
-  D: "viseme_rest",
-  T: "viseme_rest",
-  N: "viseme_rest",
-  L: "viseme_rest",
-  R: "viseme_rest",
-  K: "viseme_rest",
-  G: "viseme_rest",
-  Y: "viseme_rest",
-  W: "viseme_rest",
-  F: "viseme_rest",
-  V: "viseme_rest",
+
+  HH: "viseme_E",
+
+  DH: "viseme_CH",
+  TH: "viseme_CH",
+
+  D: "viseme_CH",
+  T: "viseme_CH",
+  N: "viseme_CH",
+  L: "viseme_E",
+
+  R: "viseme_O",
+
+  K: "viseme_AA",
+  G: "viseme_AA",
+
+  Y: "viseme_IH",
+  W: "viseme_O",
+
+  F: "viseme_PP",
+  V: "viseme_PP",
 };
 
 export const SARA_FACE_TUNING = {
-  lookAheadSeconds: 0.04,
+  lookAheadSeconds: 0,
   speechLerpSpeed: 12,
   decayLerpSpeed: 7,
   jawLerpSpeed: 6,

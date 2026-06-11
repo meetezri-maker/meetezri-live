@@ -38,6 +38,7 @@ import {
   normalizeCompanionId,
   companionSessionUsesRfv2Morphs,
   companionSessionUses3dModel,
+  resolveCompanionAvatarRuntime,
   resolveCompanionModelUrl,
   resolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
@@ -46,6 +47,7 @@ import {
   type CompanionViewTuning,
 } from "@/lib/avatar/companionViewTuning";
 import { SARA_V2_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraV2Config";
+import { SARA_V3_AVATAR_DEFINITION, useSaraV3ForSara } from "@/avatar/saraV3";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import { normalizeAvatarPhonemeTimeline } from "@/lib/avatar/phonemeToViseme";
 import * as THREE from "three";
@@ -86,6 +88,8 @@ type WsAudioQueueItem = {
   subtitle: string;
   audio: unknown;
   avatarData: EzriAvatarData | null;
+  audioReceived: number | null;
+  avatarDataReceived: number | null;
   saraGreetingSync?: SaraGreetingSyncState;
 };
 
@@ -105,6 +109,11 @@ type SaraGreetingDiagnostics = {
   firstVisemeTime: number | null;
   deltaMs: number | null;
 };
+
+type SaraLiveAvatarMode = "hybrid" | "rfv2";
+
+const SARA_LIVE_RFV2_MODEL_URL = "/avatars/sara.glb";
+const isDevSaraLiveRfv2PreviewAllowed = () => import.meta.env.DEV === true;
 
 export function ActiveSession() {
   const navigate = useNavigate();
@@ -157,10 +166,43 @@ export function ActiveSession() {
     () => normalizeCompanionId(companionAvatarLabel),
     [companionAvatarLabel]
   );
+  const resolvedAvatarRuntime = useMemo(
+    () => resolveCompanionAvatarRuntime(companionAvatarLabel),
+    [companionAvatarLabel]
+  );
+  const resolvedAvatarKey =
+    resolvedAvatarRuntime === "legacyHybridSara"
+      ? "sara"
+      : resolvedAvatarRuntime;
+
+  const [saraLiveAvatarMode, setSaraLiveAvatarMode] =
+    useState<SaraLiveAvatarMode>(() => {
+      if (!isDevSaraLiveRfv2PreviewAllowed()) return "hybrid";
+      if (typeof window === "undefined") return "hybrid";
+      return new URLSearchParams(window.location.search).get("saraMode") === "rfv2"
+        ? "rfv2"
+        : "hybrid";
+    });
+
+  const showSaraLiveRfv2ModeSwitch =
+    isDevSaraLiveRfv2PreviewAllowed() &&
+    companionCanonicalId === "sarah" &&
+    !useSaraV3ForSara;
+  const saraLiveRfv2PreviewEnabled =
+    showSaraLiveRfv2ModeSwitch && saraLiveAvatarMode === "rfv2";
+
+  useEffect(() => {
+    if (companionCanonicalId !== "sarah" && saraLiveAvatarMode !== "hybrid") {
+      setSaraLiveAvatarMode("hybrid");
+    }
+  }, [companionCanonicalId, saraLiveAvatarMode]);
 
   const companionModelUrl = useMemo(
-    () => resolveCompanionModelUrl(companionAvatarLabel),
-    [companionAvatarLabel]
+    () =>
+      saraLiveRfv2PreviewEnabled
+        ? SARA_LIVE_RFV2_MODEL_URL
+        : resolveCompanionModelUrl(companionAvatarLabel),
+    [companionAvatarLabel, saraLiveRfv2PreviewEnabled]
   );
 
   const companionPortraitUrl = useMemo(
@@ -175,13 +217,20 @@ export function ActiveSession() {
 
   const companionFixedViewportConfig = useMemo<FixedAvatarViewportConfig | null>(
     () =>
-      companionCanonicalId === "sarah"
+      companionCanonicalId === "sarah" && !useSaraV3ForSara
         ? {
             debugLabel: "Sara",
             avatarId: SARA_V2_AVATAR_DEFINITION.id,
             camera: SARA_V2_AVATAR_DEFINITION.camera,
             gltfTransform: SARA_V2_AVATAR_DEFINITION.gltfTransform,
           }
+        : companionCanonicalId === "sarah" && useSaraV3ForSara
+          ? {
+              debugLabel: "SaraV3",
+              avatarId: SARA_V3_AVATAR_DEFINITION.id,
+              camera: SARA_V3_AVATAR_DEFINITION.camera,
+              gltfTransform: SARA_V3_AVATAR_DEFINITION.gltfTransform,
+            }
         : null,
     [companionCanonicalId]
   );
@@ -191,10 +240,13 @@ export function ActiveSession() {
     console.log("[Sara Route]", {
       rawAvatar: companionAvatarLabel,
       normalizedAvatarId: companionCanonicalId,
-      activeAvatarId: companionCanonicalId,
+      activeAvatarId: resolvedAvatarKey,
+      resolvedAvatarRuntime,
       modelUrl: companionModelUrl,
       uses3d: sessionUsesCompanion3d,
       useRfv2Morphs: sessionUsesRfv2Morphs,
+      saraLiveAvatarMode,
+      saraLiveRfv2PreviewEnabled,
       hasFixedViewportConfig: Boolean(companionFixedViewportConfig),
       cameraConfig: companionFixedViewportConfig?.camera ?? null,
       gltfTransformConfig: companionFixedViewportConfig?.gltfTransform ?? null,
@@ -204,9 +256,69 @@ export function ActiveSession() {
     companionCanonicalId,
     companionFixedViewportConfig,
     companionModelUrl,
+    resolvedAvatarKey,
+    resolvedAvatarRuntime,
+    saraLiveAvatarMode,
+    saraLiveRfv2PreviewEnabled,
     sessionUsesCompanion3d,
     sessionUsesRfv2Morphs,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).saraAvatarRoutingDiagnostics = {
+      selectedCompanionId: companionAvatarLabel ?? null,
+      selectedAvatarKey: companionCanonicalId,
+      resolvedAvatarRuntime,
+      resolvedModelUrl: companionModelUrl,
+      usingSaraV3ForSara: useSaraV3ForSara,
+      oldSaraStillAvailable: true,
+    };
+  }, [
+    companionAvatarLabel,
+    companionCanonicalId,
+    companionModelUrl,
+    resolvedAvatarRuntime,
+  ]);
+
+  const handleSaraLiveAvatarModeChange = useCallback(
+    (mode: SaraLiveAvatarMode) => {
+      if (!showSaraLiveRfv2ModeSwitch) return;
+      setSaraLiveAvatarMode(mode);
+    },
+    [showSaraLiveRfv2ModeSwitch]
+  );
+
+  const handleSaraLiveRfv2Fallback = useCallback((reason: string) => {
+    setSaraLiveAvatarMode("hybrid");
+    toast.warning(`Sara RFv2 Preview fell back to Current Hybrid: ${reason}`);
+  }, []);
+
+  useEffect(() => {
+    if (
+      !isDevSaraLiveRfv2PreviewAllowed() ||
+      companionCanonicalId !== "sarah" ||
+      useSaraV3ForSara
+    ) {
+      return;
+    }
+    if (typeof window === "undefined" || saraLiveRfv2PreviewEnabled) return;
+    (window as any).saraLiveRfv2Diagnostics = {
+      mode: "Current Hybrid",
+      modelPath: companionModelUrl,
+      rfv2Enabled: false,
+      faceBound: false,
+      boundMeshes: [],
+      activePhoneme: null,
+      activeViseme: null,
+      rawTargets: {},
+      smoothedTargets: {},
+      appliedMorphs: {},
+      missingMorphs: [],
+      blockedMorphs: [],
+      fallbackReason: null,
+    };
+  }, [companionCanonicalId, companionModelUrl, saraLiveRfv2PreviewEnabled]);
 
   /** Same id as WebSocket `voice=` â€” must be sent on REST speak/chat too or TTS often defaults to one (female) voice. */
   const ezriTtsVoiceId = useMemo(
@@ -1038,6 +1150,8 @@ export function ActiveSession() {
       /** When true, do not resume STT until all WS chunks played and server sent `tts_done`. */
       partOfWsStreamingTurn?: boolean;
       avatarData?: EzriAvatarData | null;
+      audioReceived?: number | null;
+      avatarDataReceived?: number | null;
       saraGreetingSync?: SaraGreetingSyncState;
     }
   ) => {
@@ -1106,6 +1220,62 @@ export function ActiveSession() {
       opts?.avatarData ?? null
     );
     avatarPhonemeTimelineRef.current = initialPhonemeTimeline;
+    const isSaraHybridPlayback =
+      companionCanonicalId === "sarah" &&
+      !useSaraV3ForSara &&
+      saraLiveAvatarMode === "hybrid" &&
+      !saraLiveRfv2PreviewEnabled &&
+      !sessionUsesRfv2Morphs;
+    let currentAvatarDataReceivedAt =
+      opts?.avatarDataReceived ??
+      opts?.saraGreetingSync?.avatarDataReceived ??
+      null;
+    const currentAudioReceivedAt =
+      opts?.audioReceived ??
+      opts?.saraGreetingSync?.audioReceived ??
+      null;
+    const updateSaraMouthPlaybackDiagnostics = (
+      patch: Record<string, unknown>
+    ) => {
+      if (typeof window === "undefined" || !isSaraHybridPlayback) return;
+      (window as any).saraV2MouthDiagnostics = {
+        ...((window as any).saraV2MouthDiagnostics ?? {}),
+        ...patch,
+      };
+    };
+    const waitForSaraPhonemesBeforePlayback = async () => {
+      const waitStartedAt = performance.now();
+      let waitedForPhonemesBeforePlayback = false;
+      while (
+        seq === audioPlaySeqRef.current &&
+        performance.now() - waitStartedAt < 300 &&
+        !avatarPhonemeTimelineRef.current?.phonemes?.length
+      ) {
+        waitedForPhonemesBeforePlayback = true;
+        if (avatarPendingDataRef.current) {
+          const lateTimeline = normalizeAvatarPhonemeTimeline(
+            avatarPendingDataRef.current,
+            Number.isFinite(audio.duration) ? audio.duration : undefined
+          );
+          if (lateTimeline?.phonemes.length) {
+            avatarPhonemeTimelineRef.current = lateTimeline;
+            currentAvatarDataReceivedAt =
+              avatarPendingDataReceivedAtRef.current ?? performance.now();
+            avatarPendingDataRef.current = null;
+            avatarPendingDataReceivedAtRef.current = null;
+            break;
+          }
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 25));
+      }
+      const phonemeWaitMs = performance.now() - waitStartedAt;
+      return {
+        waitedForPhonemesBeforePlayback,
+        phonemeWaitMs,
+        timelineAttachedBeforeAudioPlay:
+          !!avatarPhonemeTimelineRef.current?.phonemes?.length,
+      };
+    };
     if (opts?.saraGreetingSync) {
       const firstPhoneme = initialPhonemeTimeline?.phonemes[0] ?? null;
       updateSaraGreetingDiagnostics({
@@ -1226,7 +1396,9 @@ export function ActiveSession() {
         opts?.avatarData ?? null,
         Number.isFinite(audio.duration) ? audio.duration : undefined
       );
-      avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      if (metadataPhonemeTimeline?.phonemes.length || opts?.avatarData) {
+        avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      }
       if (opts?.saraGreetingSync) {
         const firstPhoneme = metadataPhonemeTimeline?.phonemes[0] ?? null;
         updateSaraGreetingDiagnostics({
@@ -1307,9 +1479,40 @@ export function ActiveSession() {
     });
 
     try {
+      const shouldWaitForSaraPhonemes =
+        isSaraHybridPlayback &&
+        Boolean(
+          opts?.partOfWsStreamingTurn ||
+            opts?.saraGreetingSync ||
+            opts?.avatarData ||
+            avatarPendingDataRef.current
+        );
+      const waitDiagnostics = shouldWaitForSaraPhonemes
+        ? await waitForSaraPhonemesBeforePlayback()
+        : {
+            waitedForPhonemesBeforePlayback: false,
+            phonemeWaitMs: 0,
+            timelineAttachedBeforeAudioPlay:
+              !!avatarPhonemeTimelineRef.current?.phonemes?.length,
+          };
+      const audioPlayStartedAtMs = performance.now();
+      updateSaraMouthPlaybackDiagnostics({
+        ...waitDiagnostics,
+        audioPlayStartedAtMs,
+        avatarDataReceivedAtMs: currentAvatarDataReceivedAt,
+        audioReceivedAtMs: currentAudioReceivedAt,
+        deltaAvatarDataToAudioPlayMs:
+          currentAvatarDataReceivedAt !== null
+            ? audioPlayStartedAtMs - currentAvatarDataReceivedAt
+            : null,
+      });
+      console.log(
+        "[PHONEME TIMELINE BEFORE PLAY]",
+        avatarPhonemeTimelineRef.current
+      );
       await audio.play();
       if (seq === audioPlaySeqRef.current && opts?.saraGreetingSync) {
-        const playbackStart = performance.now();
+        const playbackStart = audioPlayStartedAtMs;
         updateSaraGreetingDiagnostics({ playbackStart });
         console.log("[Sara Greeting Sync]", {
           greetingSentence: opts.saraGreetingSync.sentence || text,
@@ -1563,6 +1766,8 @@ export function ActiveSession() {
     void playEzriAudio(next.subtitle, next.audio, {
       partOfWsStreamingTurn: true,
       avatarData: next.avatarData,
+      audioReceived: next.audioReceived,
+      avatarDataReceived: next.avatarDataReceived,
       saraGreetingSync: next.saraGreetingSync,
       onDone: () => {
         wsIsPlaybackActiveRef.current = false;
@@ -3021,6 +3226,7 @@ export function ActiveSession() {
           const avatarDataReceived = performance.now();
           const queuedGreetingWithoutData =
             companionCanonicalId === "sarah" &&
+            !useSaraV3ForSara &&
             !permissionsGrantedRef.current
               ? prePermissionAudioQueueRef.current.find(
                   (item) => item.saraGreetingSync && !item.avatarData
@@ -3144,7 +3350,9 @@ export function ActiveSession() {
               wsPendingFallbackTextRef.current.trim() ||
               "…";
             const isSaraGreetingAudio =
-              companionCanonicalId === "sarah" && !permissionsGrantedRef.current;
+              companionCanonicalId === "sarah" &&
+              !useSaraV3ForSara &&
+              !permissionsGrantedRef.current;
             const saraGreetingSync = isSaraGreetingAudio
               ? {
                   id: ++saraGreetingSyncSeqRef.current,
@@ -3157,6 +3365,8 @@ export function ActiveSession() {
               subtitle,
               audio,
               avatarData: avatarPendingDataRef.current,
+              audioReceived,
+              avatarDataReceived: avatarPendingDataReceivedAtRef.current,
               saraGreetingSync,
             };
             avatarPendingDataRef.current = null;
@@ -3937,10 +4147,16 @@ export function ActiveSession() {
       sessionUsesCompanion3d={sessionUsesCompanion3d}
       companionAvatarLabel={companionAvatarLabel}
       companionCanonicalId={companionCanonicalId}
+      resolvedAvatarKey={resolvedAvatarKey}
       companionModelUrl={companionModelUrl}
       companionViewTuning={companionViewTuning}
       companionFixedViewportConfig={companionFixedViewportConfig}
       sessionUsesRfv2Morphs={sessionUsesRfv2Morphs}
+      showSaraLiveRfv2ModeSwitch={showSaraLiveRfv2ModeSwitch}
+      saraLiveAvatarMode={saraLiveAvatarMode}
+      saraLiveRfv2PreviewEnabled={saraLiveRfv2PreviewEnabled}
+      onSaraLiveAvatarModeChange={handleSaraLiveAvatarModeChange}
+      onSaraLiveRfv2Fallback={handleSaraLiveRfv2Fallback}
       isListening={isListening}
       isEzriThinking={isEzriThinking}
       mouthAudioLevelRef={mouthAudioLevelRef}

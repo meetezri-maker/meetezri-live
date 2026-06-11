@@ -5,7 +5,7 @@
  * These types give future per-avatar "brain folders" a stable shape without
  * changing camera, morph, blink, gaze, viseme, or session behavior today.
  */
-export type AvatarId = "jordan" | "sara";
+export type AvatarId = "jordan" | "sara" | "saraV3";
 
 export type Vector3Tuple = readonly [number, number, number];
 export type Vector3Object = {

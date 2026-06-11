@@ -1,5 +1,6 @@
 import { DEFAULT_AVATAR_MODEL_URL, getVitePublicBaseUrl } from "./avatarModelUrl";
 import { SARA_V2_MODEL_URL } from "./configs/saraV2Config";
+import { SARA_V3_MODEL_URL, useSaraV3ForSara } from "@/avatar/saraV3";
 
 /**
  * Use DB `image_url` only when it is a real URL or path to an image file.
@@ -19,6 +20,12 @@ export function effectiveAvatarImageUrlFromDb(
 
 /** Canonical companion id for URLs, tuning, and assets (keep in sync with view tuning). */
 export type CompanionCanonicalId = "alex" | "sarah" | "maya" | "jordan";
+export type CompanionAvatarRuntime =
+  | "alex"
+  | "maya"
+  | "jordan"
+  | "legacyHybridSara"
+  | "saraV3";
 
 /** GLB/PNG filenames under `public/avatars/` (spaces encoded for URLs). */
 function avatarAssetFile(fileName: string): string {
@@ -67,7 +74,7 @@ export function portraitUrlFromAvatarsFolderFile(
 
 /**
  * Companions that use a 3D GLB in the live session (`ActiveSession`).
- * Sarah uses the Sara V2 GLB path; Jordan/RFv2 uses morph-only GLB mode.
+ * Sarah routes to SaraV3 or legacy Sara via config; Jordan/RFv2 uses morph-only GLB mode.
  */
 export function companionSessionUses3dModel(
   avatarLabel: string | null | undefined
@@ -136,6 +143,17 @@ export function normalizeCompanionId(
   return null;
 }
 
+export function resolveCompanionAvatarRuntime(
+  avatarLabel: string | null | undefined
+): CompanionAvatarRuntime | null {
+  const id = normalizeCompanionId(avatarLabel);
+  if (!id) return null;
+  if (id === "sarah") {
+    return useSaraV3ForSara ? "saraV3" : "legacyHybridSara";
+  }
+  return id;
+}
+
 /**
  * Map profile / session avatar labels to GLB URLs under `public/`.
  * Add entries as you drop `Name.glb` into `public/avatars/`.
@@ -144,11 +162,14 @@ export function resolveCompanionModelUrl(
   avatarLabel: string | null | undefined
 ): string {
   const id = normalizeCompanionId(avatarLabel);
-  switch (id) {
+  const runtime = resolveCompanionAvatarRuntime(avatarLabel);
+  switch (runtime) {
     case "alex":
       return avatarAssetFile("Alex.glb");
-    case "sarah":
+    case "legacyHybridSara":
       return SARA_V2_MODEL_URL;
+    case "saraV3":
+      return SARA_V3_MODEL_URL;
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":

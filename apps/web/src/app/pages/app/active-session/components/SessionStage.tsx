@@ -19,10 +19,13 @@ export interface SessionStageProps {
   sessionUsesCompanion3d: boolean;
   companionAvatarLabel: string | undefined;
   companionCanonicalId: string | null;
+  resolvedAvatarKey: string | null;
   companionModelUrl: string;
   companionViewTuning: CompanionViewTuning;
   companionFixedViewportConfig: FixedAvatarViewportConfig | null | undefined;
   sessionUsesRfv2Morphs: boolean;
+  saraLiveRfv2PreviewEnabled: boolean;
+  onSaraLiveRfv2Fallback: (reason: string) => void;
   isListening: boolean;
   isEzriThinking: boolean;
   mouthAudioLevelRef: MutableRefObject<number>;
@@ -48,10 +51,13 @@ export const SessionStage = memo(function SessionStage({
   sessionUsesCompanion3d,
   companionAvatarLabel,
   companionCanonicalId,
+  resolvedAvatarKey,
   companionModelUrl,
   companionViewTuning,
   companionFixedViewportConfig,
   sessionUsesRfv2Morphs,
+  saraLiveRfv2PreviewEnabled,
+  onSaraLiveRfv2Fallback,
   isListening,
   isEzriThinking,
   mouthAudioLevelRef,
@@ -98,11 +104,13 @@ export const SessionStage = memo(function SessionStage({
             >
               <ThreeAvatar
                 rawAvatarLabel={companionAvatarLabel}
-                activeAvatarId={companionCanonicalId}
+                activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
                 modelUrl={companionModelUrl}
                 viewTuning={companionViewTuning}
                 fixedViewportConfig={companionFixedViewportConfig}
                 useRfv2Morphs={sessionUsesRfv2Morphs}
+                useSaraRfv2Preview={saraLiveRfv2PreviewEnabled}
+                onSaraRfv2Fallback={onSaraLiveRfv2Fallback}
                 isSpeaking={isEzriSpeaking}
                 isListening={isListening}
                 isThinking={isEzriThinking}

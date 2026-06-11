@@ -3,6 +3,7 @@ import type {
   AvatarId,
   AvatarPersonalityTimingConfig,
 } from "./avatarConfigTypes";
+import { SARA_V3_AVATAR_DEFINITION } from "@/avatar/saraV3";
 import { JORDAN_AVATAR_DEFINITION } from "./configs/jordanConfig";
 import { SARA_V2_AVATAR_DEFINITION } from "./configs/saraV2Config";
 
@@ -15,6 +16,7 @@ import { SARA_V2_AVATAR_DEFINITION } from "./configs/saraV2Config";
 export const AVATAR_REGISTRY = {
   jordan: JORDAN_AVATAR_DEFINITION,
   sara: SARA_V2_AVATAR_DEFINITION,
+  saraV3: SARA_V3_AVATAR_DEFINITION,
 } as const satisfies Record<AvatarId, AvatarDefinition>;
 
 export function getAvatarDefinition(id: AvatarId): AvatarDefinition {
@@ -48,6 +50,14 @@ function normalizeAvatarPersonalityId(id: string): AvatarId | null {
 
   if (normalized === "jordan" || normalized.includes("jordan")) {
     return "jordan";
+  }
+
+  if (
+    normalized === "sarav3" ||
+    normalized === "sara v3" ||
+    normalized === "sara-v3"
+  ) {
+    return "saraV3";
   }
 
   if (
