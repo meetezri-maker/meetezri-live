@@ -530,7 +530,9 @@ export async function resolveAccountStateByEmail(email: string) {
   const emailConfirmed = !!authUser.email_confirmed_at;
   const rawMeta: any = authUser.raw_user_meta_data as any;
   const verificationRequired = rawMeta?.email_verification_required === true;
-  const emailVerified = emailConfirmed && !verificationRequired;
+  // Supabase confirmation wins over a stale client metadata flag left from signup.
+  const emailVerified =
+    emailConfirmed && (!verificationRequired || emailConfirmed);
 
   let profile: any = null;
   try {
@@ -1150,15 +1152,10 @@ export async function getProfile(userId: string) {
     // Check custom metadata flag we set during trial signup.
     const verificationRequired = rawMeta?.email_verification_required === true;
 
-    // Trial-only consistency:
-    // If email is confirmed, treat verification_required as cleared logically.
-    // (The callback flow may clear it later; we avoid write-side effects in GET /users/me.)
-    const signupType = (result as any)?.signup_type;
-    const isTrial = signupType === 'trial' || (result?.subscription_plan === 'trial');
+    // If Supabase has confirmed the email, ignore a stale `email_verification_required`
+    // flag that can remain in JWT metadata after password login (callback-only clear).
     const verificationRequiredAfter =
-      isTrial && isConfirmed && verificationRequired
-        ? false
-        : verificationRequired;
+      isConfirmed && verificationRequired ? false : verificationRequired;
 
     // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
     emailVerified = isConfirmed && !verificationRequiredAfter;

@@ -9,9 +9,9 @@ export const SARA_V3_MODEL_URL = "/avatars/sara-v3.glb";
 export const useSaraV3ForSara = true;
 
 export const saraV3CameraConfig = {
-  fov: 32,
-  position: [0, 0, 3.0],
-  lookAt: [0, 0.65, 0],
+  fov: 12,
+  position: [0, 1.25, 3.0],
+  lookAt: [0, 1.25, 0],
 };
 
 export const SARA_V3_AVATAR_DEFINITION = {
@@ -25,14 +25,14 @@ export const SARA_V3_AVATAR_DEFINITION = {
   },
   camera: {
     mode: "fixed",
-    fov: 14,
-    position: [0, 1.25, 2.2],
+    fov: 12,
+    position: [0, 1.25, 3.0],
     lookAt: [0, 1.25, 0],
-    notes: "SaraV3 starts from Jordan framing defaults and remains independently tunable.",
+    notes: "Sara head framing with Jordan session-room camera distance (z=3.0).",
   },
   gltfTransform: {
-    position: [0, -1.65, 0],
-    scale: [1.35, 1.35, 1.35],
+    position: [0, 0, 0],
+    scale: [1, 1, 1],
     rotation: [0, 0, 0],
     notes: "SaraV3 transform is isolated from Sara Hybrid and Jordan.",
   },
@@ -116,16 +116,16 @@ export const SARA_V3_AVATAR_DEFINITION = {
   },
   saraV3: {
     modelUrl: SARA_V3_MODEL_URL,
-    rawRenderAuditMode: false, //shaz
+    rawRenderAuditMode: false,
     environmentConfig: {
-      enabled: true,
+      enabled: false,
       source: "roomEnvironmentPmrem",
-      intensity: 0.35, // shaz exposure
+      intensity: 0.35,
       backgroundMode: "unchanged",
-      captureComparisonDiagnostics: true,
+      captureComparisonDiagnostics: false,
     },
-    scale: [1.35, 1.35, 1.35],
-    position: [0, -0.55, 0],
+    scale: [1, 1, 1],
+    position: [0, 0, 0],
     rotation: [0, 0, 0],
     faceMeshHints: ["face", "head", "skin", "facemesh"],
     bodyMeshHints: ["body", "character", "torso", "armature"],

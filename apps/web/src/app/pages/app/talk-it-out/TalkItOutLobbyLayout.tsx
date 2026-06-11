@@ -256,7 +256,7 @@ export function TalkItOutLobbyLayout({
                 <div
                   className={cn(
                     solaceHeroContent,
-                    "flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12"
+                    "flex min-h-[234px] flex-col items-center px-5 pb-5 pt-5 text-center sm:min-h-[252px] sm:px-8 sm:pb-7 sm:pt-7"
                   )}
                 >
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#120818]/25 via-[#0a0612]/45 to-[#06040c]/78" />
@@ -265,12 +265,12 @@ export function TalkItOutLobbyLayout({
                     aria-hidden
                   />
                   <div className="relative z-[3] flex w-full max-w-lg flex-col items-center">
-                    <div className="relative mb-7 flex justify-center">
+                    <div className="relative mb-3 flex justify-center">
                       <div
-                        className="absolute h-[108px] w-[108px] scale-110 rounded-full bg-violet-500/25 blur-2xl"
+                        className="absolute h-[65px] w-[65px] scale-110 rounded-full bg-violet-500/25 blur-2xl"
                         aria-hidden
                       />
-                      <div className="relative h-[208px] w-[208px] shrink-0 overflow-hidden rounded-full border-2 border-violet-400/50 bg-black/45 shadow-[0_0_52px_rgba(139,92,246,0.4)] ring-2 ring-violet-500/20">
+                      <div className="relative h-[119px] w-[119px] shrink-0 overflow-hidden rounded-full border-2 border-violet-400/50 bg-black/45 shadow-[0_0_52px_rgba(139,92,246,0.4)] ring-2 ring-violet-500/20 sm:h-[126px] sm:w-[126px]">
                         <img
                           src={heroPortraitSrc}
                           alt={companionAlt}
@@ -289,15 +289,15 @@ export function TalkItOutLobbyLayout({
                       <Sparkles className="h-3.5 w-3.5 text-violet-300" aria-hidden />
                       {companionPill}
                     </p>
-                    <h2 className="talk-it-out-hero-title font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-[var(--solace-text)] sm:text-[1.95rem]">
+                    <h2 className="talk-it-out-hero-title font-serif text-[1.45rem] font-normal leading-[1.18] tracking-tight text-[var(--solace-text)] sm:text-[1.65rem]">
                       {heroMessageLine1}
                       <br />
                       {heroMessageLine2}
                     </h2>
-                    <p className="talk-it-out-hero-supporting mt-5 max-w-md text-[14.5px] leading-[1.65] text-[var(--solace-muted)]">
+                    <p className="talk-it-out-hero-supporting mt-3 max-w-md text-[13.5px] leading-[1.6] text-[var(--solace-muted)] sm:text-[14px]">
                       {heroSupporting}
                     </p>
-                    <div className="mt-9 flex w-full max-w-sm flex-col items-center gap-4">
+                    <div className="mt-4 flex w-full max-w-sm flex-col items-center gap-2.5 sm:mt-5">
                       <button
                         type="button"
                         onClick={() => {
@@ -338,7 +338,7 @@ export function TalkItOutLobbyLayout({
                         )
                       )}
                     >
-                      <span className="solace-media-card relative block aspect-[16/10] w-full overflow-hidden">
+                      <span className="solace-media-card relative block aspect-[16/6.3] w-full overflow-hidden">
                         <img
                           src={imageSrc}
                           alt=""
@@ -596,7 +596,7 @@ export function TalkItOutLobbyLayout({
                         )}
                       >
                         {comingSoon ? <ComingSoonOverlay className="rounded-lg" /> : null}
-                        <span className="relative block aspect-[4/5] overflow-hidden">
+                        <span className="relative block aspect-[25/18] overflow-hidden">
                           <img src={env.image} alt="" className="h-full w-full object-cover opacity-95 transition-opacity group-hover:opacity-100" />
                           <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                         </span>
