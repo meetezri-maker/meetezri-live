@@ -54,6 +54,13 @@ export function createSaraV3ModelController(args: {
       ? [discovery.selectedFaceMesh]
       : [];
   const bindings = bindSaraV3MorphTargets(boundFaceMeshes);
+  console.log("[SaraV3 Discovery Result]", {
+    faceMeshCandidates: discovery.faceMeshCandidates,
+    selectedFaceMesh: discovery.selectedFaceMesh?.name ?? null,
+    groupedFaceMeshNames: discovery.groupedFaceMeshNames,
+    groupedFaceMeshCount: discovery.groupedFaceMeshes.length,
+    groupedMorphNames: discovery.groupedMorphNames,
+  });
   writeSaraV3Diagnostics({
     saraV3Loaded: true,
     modelUrl: args.modelUrl,

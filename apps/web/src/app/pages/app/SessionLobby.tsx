@@ -22,6 +22,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
 import {
   companionSessionUses3dModel,
+  resolveCompanionAvatarRuntime,
   resolveCompanionModelUrl,
   companionCardPortraitFrameClass,
   companionCardPortraitImgClass,
@@ -110,6 +111,25 @@ function environmentLabel(value: string | undefined | null): string {
 function isFemaleAvatarName(name: string | null | undefined): boolean {
   const n = (name ?? "").trim().toLowerCase();
   return n === "maya chen" || n === "maya" || n === "sara mitchell" || n === "sarah mitchell" || n === "sarah";
+}
+
+declare global {
+  interface Window {
+    sessionLobbyDiagnostics?: {
+      buttonDisabled: boolean;
+      disabledReason: string | null;
+      blockingStates: Record<string, boolean>;
+      isLoading: boolean;
+      isStarting: boolean;
+      canStart: boolean;
+      companionReady: boolean;
+      avatarReady: boolean;
+      micReady: boolean;
+      sessionReady: boolean;
+      selectedCompanion: string | null;
+      selectedAvatarRuntime: string | null;
+    };
+  }
 }
 
 export function SessionLobby() {
@@ -787,6 +807,58 @@ export function SessionLobby() {
     setSelectedDuration(d);
   }, []);
 
+  const selectedAvatarRuntime = useMemo(
+    () => resolveCompanionAvatarRuntime(selectedAvatar),
+    [selectedAvatar]
+  );
+
+  const sessionLobbyButtonDisabled =
+    isStarting ||
+    minutesAvailable <= 0 ||
+    selectedDuration > minutesAvailable ||
+    selectedDuration < 1;
+
+  const sessionLobbyDisabledReason = useMemo(() => {
+    if (isStarting) return "isStarting";
+    if (minutesAvailable <= 0) return "minutesAvailable<=0";
+    if (selectedDuration > minutesAvailable) return "selectedDuration>minutesAvailable";
+    if (selectedDuration < 1) return "selectedDuration<1";
+    return null;
+  }, [isStarting, minutesAvailable, selectedDuration]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.sessionLobbyDiagnostics = {
+      buttonDisabled: sessionLobbyButtonDisabled,
+      disabledReason: sessionLobbyDisabledReason,
+      blockingStates: {
+        isStarting,
+        noMinutesAvailable: minutesAvailable <= 0,
+        selectedDurationExceedsBalance: selectedDuration > minutesAvailable,
+        selectedDurationBelowMinimum: selectedDuration < 1,
+      },
+      isLoading: isLoadingSessions || isAuthLoading,
+      isStarting,
+      canStart: !sessionLobbyButtonDisabled,
+      companionReady: Boolean(selectedCompanionPreview?.name),
+      avatarReady: true,
+      micReady: true,
+      sessionReady: !isStarting,
+      selectedCompanion: selectedCompanionPreview?.name ?? null,
+      selectedAvatarRuntime,
+    };
+  }, [
+    isAuthLoading,
+    isLoadingSessions,
+    isStarting,
+    minutesAvailable,
+    selectedCompanionPreview,
+    selectedDuration,
+    selectedAvatarRuntime,
+    sessionLobbyButtonDisabled,
+    sessionLobbyDisabledReason,
+  ]);
+
   const selectFreeFlow = useCallback(() => {
     setSessionLengthKind("free");
     setSelectedDuration(Math.max(1, minutesAvailable));
@@ -1075,12 +1147,7 @@ export function SessionLobby() {
                     <Button
                       type="button"
                       onClick={() => void handleStartSession()}
-                      disabled={
-                        isStarting ||
-                        minutesAvailable <= 0 ||
-                        selectedDuration > minutesAvailable ||
-                        selectedDuration < 1
-                      }
+                      disabled={sessionLobbyButtonDisabled}
                       className={cn(modalPrimaryButton, "h-11 px-6")}
                     >
                       <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />

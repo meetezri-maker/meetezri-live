@@ -4,7 +4,13 @@ export {
   useSaraV3ForSara,
 } from "./saraV3Config";
 export { createSaraV3ModelController } from "./saraV3ModelController";
+export {
+  createSaraV3ExpressionState,
+  updateSaraV3ExpressionRuntime,
+} from "./saraV3ExpressionRuntime";
+export { createSaraV3EyeRuntimeState, updateSaraV3EyeRuntime } from "./saraV3EyeRuntime";
 export { createSaraV3PresenceState, updateSaraV3PresenceRuntime } from "./saraV3PresenceRuntime";
+export { createSaraV3SmileRuntimeState, updateSaraV3SmileRuntime } from "./saraV3SmileRuntime";
 export { applySaraV3Environment, captureSaraV3EnvironmentComparison } from "./saraV3Environment";
 export { runSaraV3RawRenderAudit } from "./saraV3RawAudit";
 export { createSaraV3VisemeDriverState, updateSaraV3VisemeDriver } from "./saraV3VisemeDriver";
@@ -13,8 +19,11 @@ export type {
   SaraV3BindingSet,
   SaraV3ControllerState,
   SaraV3Diagnostics,
+  SaraV3EyeRuntimeState,
+  SaraV3ExpressionState,
   SaraV3PresenceState,
   SaraV3RawAudit,
   SaraV3RuntimeMode,
+  SaraV3SmileRuntimeState,
   SaraV3VisemeDriverState,
 } from "./saraV3Types";

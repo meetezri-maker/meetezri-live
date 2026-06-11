@@ -112,14 +112,23 @@ import {
   SARA_V3_AVATAR_DEFINITION,
   applySaraV3Environment,
   captureSaraV3EnvironmentComparison,
+  createSaraV3EyeRuntimeState,
+  createSaraV3ExpressionState,
   createSaraV3ModelController,
   createSaraV3PresenceState,
+  createSaraV3SmileRuntimeState,
   createSaraV3VisemeDriverState,
   runSaraV3RawRenderAudit,
+  updateSaraV3EyeRuntime,
+  updateSaraV3ExpressionRuntime,
   updateSaraV3PresenceRuntime,
+  updateSaraV3SmileRuntime,
   updateSaraV3VisemeDriver,
   type SaraV3ControllerState,
+  type SaraV3EyeRuntimeState,
+  type SaraV3ExpressionState,
   type SaraV3PresenceState,
+  type SaraV3SmileRuntimeState,
   type SaraV3VisemeDriverState,
 } from "@/avatar/saraV3";
 import * as THREE from "three";
@@ -2875,6 +2884,15 @@ function ThreeAvatarComponent({
   const saraV3VisemeStateRef = useRef<SaraV3VisemeDriverState>(
     createSaraV3VisemeDriverState()
   );
+  const saraV3EyeStateRef = useRef<SaraV3EyeRuntimeState>(
+    createSaraV3EyeRuntimeState()
+  );
+  const saraV3ExpressionStateRef = useRef<SaraV3ExpressionState>(
+    createSaraV3ExpressionState()
+  );
+  const saraV3SmileStateRef = useRef<SaraV3SmileRuntimeState>(
+    createSaraV3SmileRuntimeState()
+  );
   const saraV3PresenceStateRef = useRef<SaraV3PresenceState>(
     createSaraV3PresenceState()
   );
@@ -3446,6 +3464,9 @@ function ThreeAvatarComponent({
     saraRfv2FallbackTriggeredRef.current = false;
     saraV3ControllerRef.current = null;
     saraV3VisemeStateRef.current = createSaraV3VisemeDriverState();
+    saraV3EyeStateRef.current = createSaraV3EyeRuntimeState();
+    saraV3ExpressionStateRef.current = createSaraV3ExpressionState();
+    saraV3SmileStateRef.current = createSaraV3SmileRuntimeState();
     saraV3PresenceStateRef.current = createSaraV3PresenceState();
     faceBoneDefaultsRef.current = new Map();
     jordanIdlePresenceBonesRef.current = [];
@@ -3548,7 +3569,7 @@ function ThreeAvatarComponent({
           cameraConfig: fixedViewportConfig?.camera ?? null,
           gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
         });
-        if (hasFixedViewportConfig && !isSaraViewport && fixedGltfTransform) {
+        if (hasFixedViewportConfig && !isSaraViewport && !isSaraV3Avatar && fixedGltfTransform) {
           applyVector3Config(gltfScene.position, fixedGltfTransform.position, [
             0,
             0,
@@ -4042,11 +4063,11 @@ function ThreeAvatarComponent({
           avatarRoot.rotation.z = viewTuning.modelRotationZ;
           transformCorrections.push("root.rotation.z");
         }
-        avatarRoot.add(gltfScene);
-        scene.add(avatarRoot);
-        gltfScene.updateMatrixWorld(true);
-        avatarRoot.updateMatrixWorld(true);
-        roomGroup.updateMatrixWorld(true);
+	        avatarRoot.add(gltfScene);
+	        scene.add(avatarRoot);
+	        gltfScene.updateMatrixWorld(true);
+	        avatarRoot.updateMatrixWorld(true);
+	        roomGroup.updateMatrixWorld(true);
         if (isSaraV2Viewport) {
           writeSaraTransformAuditToWindow({
             currentHybrid: createSaraTransformHierarchySnapshot({
@@ -4174,16 +4195,16 @@ function ThreeAvatarComponent({
         camera.far = 100;
         camera.updateProjectionMatrix();
 
-        if (useRfv2Morphs) {
-          baseScaleRef.current = 1;
-          camera.fov = 11; // camera zoom shaz
+	        if (useRfv2Morphs) {
+	          baseScaleRef.current = 1;
+	          camera.fov = 11; // camera zoom shaz
           camera.near = 0.01;
           camera.far = 100;
           camera.position.set(0, 0.55, 3.0);
           camera.lookAt(0, 0.65, 0);
           transformCorrections.push("jordan.gltf.fixedDemoTransform");
           transformCorrections.push("jordan.camera.fixedDemoView");
-        } else if (hasFixedViewportConfig) {
+	        } else if (hasFixedViewportConfig) {
           baseScaleRef.current = 1;
           const fixedCamera = fixedCameraConfig ?? {};
           if (useSaraLabAlignedViewport) {
@@ -4236,11 +4257,11 @@ function ThreeAvatarComponent({
             camera.far = 100;
             camera.position.copy(cameraPosition);
             camera.lookAt(cameraLookAt);
-            camera.userData.fixedLookAt = cameraLookAt.toArray();
-            transformCorrections.push(`${fixedViewportDebugLabel}.gltf.fixedTransform`);
-            transformCorrections.push(`${fixedViewportDebugLabel}.camera.fixedView`);
-          }
-          if (isSaraViewport && DEBUG_SARA_FRAMING) {
+	            camera.userData.fixedLookAt = cameraLookAt.toArray();
+	            transformCorrections.push(`${fixedViewportDebugLabel}.gltf.fixedTransform`);
+	            transformCorrections.push(`${fixedViewportDebugLabel}.camera.fixedView`);
+	          }
+	          if (isSaraViewport && DEBUG_SARA_FRAMING) {
             gltfScene.updateMatrixWorld(true);
             avatarRoot.updateMatrixWorld(true);
             const saraVisibleBounds = computeSaraVisibleRenderMeshBounds(gltfScene);
@@ -4354,7 +4375,65 @@ function ThreeAvatarComponent({
           camera.position.set(lookAt.x, lookAt.y, lookAt.z + distance);
           camera.lookAt(lookAt);
         }
+        if (isSaraV3Avatar && modelMatchesSaraV3) {
+          const saraV3Camera = SARA_V3_AVATAR_DEFINITION.camera;
+          const saraV3CameraPosition = vector3FromConfig(saraV3Camera.position, [0, 1.3, 2.2]);
+          const saraV3CameraLookAt = vector3FromConfig(saraV3Camera.lookAt, [0, 1.25, 0]);
+          camera.fov = saraV3Camera.fov ?? 12;
+          camera.near = 0.01;
+          camera.far = 100;
+          camera.position.copy(saraV3CameraPosition);
+          camera.lookAt(saraV3CameraLookAt);
+          camera.userData.fixedLookAt = saraV3CameraLookAt.toArray();
+          transformCorrections.push("saraV3.camera.configView");
+        }
         camera.updateProjectionMatrix();
+        if (isSaraV3Avatar && modelMatchesSaraV3 && typeof window !== "undefined") {
+          const bounds = new THREE.Box3().setFromObject(gltfScene);
+          const hasBounds = Number.isFinite(bounds.min.x) && !bounds.isEmpty();
+          const boundsCenter = hasBounds
+            ? bounds.getCenter(new THREE.Vector3()).toArray()
+            : null;
+          const boundsSize = hasBounds
+            ? bounds.getSize(new THREE.Vector3()).toArray()
+            : null;
+          let totalMeshCount = 0;
+          let visibleMeshCount = 0;
+          gltfScene.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            const skinnedMesh = child as THREE.SkinnedMesh;
+            if (!mesh.isMesh && !skinnedMesh.isSkinnedMesh) return;
+            totalMeshCount += 1;
+            if (child.visible) {
+              visibleMeshCount += 1;
+            }
+          });
+          const fixedLookAt = Array.isArray(camera.userData.fixedLookAt)
+            ? camera.userData.fixedLookAt
+            : null;
+          window.saraV3ViewDiagnostics = {
+            avatarRootAddedToScene: scene.children.includes(avatarRoot),
+            rootVisible: gltfScene.visible,
+            rootPosition: gltfScene.position.toArray(),
+            rootScale: gltfScene.scale.toArray(),
+            rootRotation: [gltfScene.rotation.x, gltfScene.rotation.y, gltfScene.rotation.z],
+            boundingBoxCenter: boundsCenter,
+            boundingBoxSize: boundsSize,
+            cameraPosition: camera.position.toArray(),
+            cameraLookAt: fixedLookAt,
+            cameraFov: camera.fov,
+            environmentApplied: Boolean(saraV3EnvironmentHandle && scene.environment),
+            visibleMeshCount,
+            totalMeshCount,
+            transformAppliedBy: "SaraV3ModelController",
+            possibleIssue:
+              visibleMeshCount === 0
+                ? "No visible SaraV3 meshes detected after controller setup."
+                : hasBounds
+                  ? null
+                  : "SaraV3 bounding box is empty after controller setup.",
+          };
+        }
 
         if (process.env.NODE_ENV === "development") {
           avatarRoot.updateMatrixWorld(true);
@@ -5019,9 +5098,8 @@ function ThreeAvatarComponent({
                 activePhoneme: saraV2ActivePhoneme?.phoneme ?? null,
                 speechTime: saraV2SpeechTime,
               });
-            }
-          }
-
+	          }
+	        }
           if (saraRfv2PreviewActive) {
             if (saraRfv2BindingsRef.current.length === 0 && model) {
               if (saraRfv2BindingRetryCountRef.current < SARA_RFV2_BINDING_RETRY_LIMIT) {
@@ -7108,17 +7186,35 @@ function ThreeAvatarComponent({
 	              bindings: saraV3ControllerRef.current.bindings,
 	              timeline: avatarPhonemeTimelineRef.current,
 	              audioCurrentTime: avatarAudioCurrentTimeRef.current,
+	              audioLevel: mouthAudioLevelRef.current,
 	              isSpeaking: speaking,
 	              dt,
 	            });
 	            updateSaraV3PresenceRuntime({
 	              state: saraV3PresenceStateRef.current,
-	              bindings: saraV3ControllerRef.current.bindings,
-	              nowMs: now,
-	              dt,
 	              isSpeaking: speaking,
 	              isListening: isListeningRef.current,
 	              isThinking: isThinkingRef.current,
+	            });
+	            updateSaraV3EyeRuntime({
+	              state: saraV3EyeStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              activePresenceState: saraV3PresenceStateRef.current.currentMode,
+	              nowMs: now,
+	            });
+	            updateSaraV3SmileRuntime({
+	              state: saraV3SmileStateRef.current,
+	              activePresenceState: saraV3PresenceStateRef.current.currentMode,
+	              eyeState: saraV3EyeStateRef.current,
+	              nowMs: now,
+	            });
+	            updateSaraV3ExpressionRuntime({
+	              state: saraV3ExpressionStateRef.current,
+	              bindings: saraV3ControllerRef.current.bindings,
+	              activePresenceState: saraV3PresenceStateRef.current.currentMode,
+	              scheduledSmileTargets: saraV3SmileStateRef.current.smileAdditiveTargets,
+	              coordinatedBlinkSupport: saraV3EyeStateRef.current.coordinatedMorphs,
+	              dt,
 	            });
 	          }
 	          const saraV2MouthMorphBindings = isSaraV2Viewport

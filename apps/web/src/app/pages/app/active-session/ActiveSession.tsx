@@ -48,6 +48,11 @@ import {
 } from "@/lib/avatar/companionViewTuning";
 import { SARA_V2_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraV2Config";
 import { SARA_V3_AVATAR_DEFINITION, useSaraV3ForSara } from "@/avatar/saraV3";
+import {
+  writeSaraV3LipSyncDiagnostics,
+  writeSaraV3WelcomeLipSyncDiagnostics,
+  writeSaraV3WelcomePlaybackAudit,
+} from "@/avatar/saraV3/saraV3Diagnostics";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import { normalizeAvatarPhonemeTimeline } from "@/lib/avatar/phonemeToViseme";
 import * as THREE from "three";
@@ -632,6 +637,27 @@ export function ActiveSession() {
   const [ezriWarmupStatus, setEzriWarmupStatus] = useState<"idle" | "warming" | "ready">("idle");
   const permissionsGrantedRef = useRef(false);
   const flushWsAudioQueueRef = useRef<() => void>(() => {});
+  const updateSaraV3AudioDiagnostics = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (companionCanonicalId !== "sarah" || !useSaraV3ForSara) return;
+      writeSaraV3LipSyncDiagnostics(patch);
+    },
+    [companionCanonicalId, useSaraV3ForSara]
+  );
+  const updateSaraV3WelcomeDiagnostics = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (companionCanonicalId !== "sarah" || !useSaraV3ForSara) return;
+      writeSaraV3WelcomeLipSyncDiagnostics(patch);
+    },
+    [companionCanonicalId, useSaraV3ForSara]
+  );
+  const updateSaraV3WelcomePlaybackAudit = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (companionCanonicalId !== "sarah" || !useSaraV3ForSara) return;
+      writeSaraV3WelcomePlaybackAudit(patch);
+    },
+    [companionCanonicalId, useSaraV3ForSara]
+  );
 
   const [transcript, setTranscript] = useState<
     { role: string; content: string; timestamp: number }[]
@@ -1002,6 +1028,11 @@ export function ActiveSession() {
   };
 
   const stopAudioAndSpeechDriver = () => {
+    const lastAudioElement = audioRef.current;
+    const lastWelcomeDiagnostics =
+      typeof window !== "undefined" ? window.saraV3WelcomeLipSyncDiagnostics : undefined;
+    const lastWelcomeAudit =
+      typeof window !== "undefined" ? window.saraV3WelcomePlaybackAudit : undefined;
     if (ttsAnalyserRafRef.current) {
       cancelAnimationFrame(ttsAnalyserRafRef.current);
       ttsAnalyserRafRef.current = null;
@@ -1017,6 +1048,77 @@ export function ActiveSession() {
     avatarPhonemeTimelineRef.current = null;
     avatarPendingDataRef.current = null;
     avatarPendingDataReceivedAtRef.current = null;
+    updateSaraV3AudioDiagnostics({
+      isSpeaking: false,
+      audioCurrentTime: 0,
+      audioStartedAt: null,
+      audioDuration: null,
+      originalFirstTimelineStart: null,
+      rebasedFirstTimelineStart: null,
+      timelineRebasedToZero: false,
+      timelineUnitConverted: false,
+      effectiveLookupTime: 0,
+      previousLookupTime: null,
+    });
+    updateSaraV3WelcomeDiagnostics({
+      welcomeAudioPlaying: false,
+      welcomeAudioCurrentTime: lastAudioElement?.currentTime ?? lastWelcomeDiagnostics?.welcomeAudioCurrentTime ?? 0,
+      welcomeAudioDuration:
+        Number.isFinite(lastAudioElement?.duration)
+          ? lastAudioElement?.duration ?? null
+          : lastWelcomeDiagnostics?.welcomeAudioDuration ?? null,
+      welcomeHasAvatarData: lastWelcomeDiagnostics?.welcomeHasAvatarData ?? false,
+      welcomeTimelineLength: lastWelcomeDiagnostics?.welcomeTimelineLength ?? 0,
+      welcomeTimelineFirstItem: lastWelcomeDiagnostics?.welcomeTimelineFirstItem ?? null,
+      welcomeTimelineLastItem: lastWelcomeDiagnostics?.welcomeTimelineLastItem ?? null,
+      saraV3TimelineLength: lastWelcomeDiagnostics?.saraV3TimelineLength ?? 0,
+      saraV3IsSpeaking: false,
+      saraV3ActivePhoneme: lastWelcomeDiagnostics?.saraV3ActivePhoneme ?? null,
+      saraV3ActiveViseme: lastWelcomeDiagnostics?.saraV3ActiveViseme ?? null,
+      saraV3AppliedMorphs: lastWelcomeDiagnostics?.saraV3AppliedMorphs ?? {},
+      reasonLipsNotMoving:
+        lastWelcomeAudit?.playResolved && !lastWelcomeAudit?.playRejected
+          ? "Welcome playback has already ended; see window.saraV3WelcomePlaybackAudit.lastWelcomePlaybackSummary."
+          : null,
+    });
+    updateSaraV3WelcomePlaybackAudit({
+      audioPaused: lastAudioElement?.paused ?? null,
+      audioEnded: lastAudioElement?.ended ?? lastWelcomeAudit?.audioEnded ?? false,
+      audioSrcExists: Boolean(lastAudioElement?.src),
+      currentTime: lastAudioElement?.currentTime ?? lastWelcomeAudit?.currentTime ?? 0,
+      duration:
+        Number.isFinite(lastAudioElement?.duration)
+          ? lastAudioElement?.duration ?? null
+          : lastWelcomeAudit?.duration ?? null,
+      usingSameAudioClockAsSaraV3: true,
+      diagnosticsCheckedAfterEnded:
+        Boolean(lastWelcomeAudit?.playResolved) &&
+        !Boolean(lastWelcomeAudit?.playRejected),
+      reason:
+        lastWelcomeAudit?.playResolved && !lastWelcomeAudit?.playRejected
+          ? "Welcome audio finished and runtime state was reset; lastWelcomePlaybackSummary preserves the final playback state."
+          : lastWelcomeAudit?.reason ?? null,
+      lastWelcomePlaybackSummary:
+        lastWelcomeAudit?.welcomeTriggered
+          ? {
+              ended: lastAudioElement?.ended ?? true,
+              finalCurrentTime:
+                lastAudioElement?.currentTime ?? lastWelcomeAudit?.currentTime ?? 0,
+              finalDuration:
+                Number.isFinite(lastAudioElement?.duration)
+                  ? lastAudioElement?.duration ?? null
+                  : lastWelcomeAudit?.duration ?? null,
+              hadAvatarData: lastWelcomeDiagnostics?.welcomeHasAvatarData ?? false,
+              timelineLength: lastWelcomeDiagnostics?.welcomeTimelineLength ?? 0,
+              playResolved: lastWelcomeAudit?.playResolved ?? false,
+              playRejected: lastWelcomeAudit?.playRejected ?? false,
+              playRejectReason: lastWelcomeAudit?.playRejectReason ?? null,
+              fallbackExpected:
+                (lastWelcomeDiagnostics?.welcomeTimelineLength ?? 0) === 0 &&
+                Boolean(lastWelcomeAudit?.playResolved),
+            }
+          : lastWelcomeAudit?.lastWelcomePlaybackSummary ?? null,
+    });
     if (speechDriverIntervalRef.current) {
       window.clearInterval(speechDriverIntervalRef.current);
       speechDriverIntervalRef.current = null;
@@ -1216,10 +1318,47 @@ export function ActiveSession() {
     audio.preload = "auto";
     audio.src = url;
     avatarAudioCurrentTimeRef.current = 0;
+    updateSaraV3AudioDiagnostics({
+      audioCurrentTime: 0,
+      audioStartedAt: null,
+      audioDuration: null,
+      originalFirstTimelineStart: null,
+      rebasedFirstTimelineStart: null,
+      timelineRebasedToZero: false,
+      timelineUnitConverted: false,
+      effectiveLookupTime: 0,
+      previousLookupTime: null,
+    });
     const initialPhonemeTimeline = normalizeAvatarPhonemeTimeline(
       opts?.avatarData ?? null
     );
     avatarPhonemeTimelineRef.current = initialPhonemeTimeline;
+    const isSaraV3Playback =
+      companionCanonicalId === "sarah" && useSaraV3ForSara;
+    const isSaraWelcomePlayback =
+      companionCanonicalId === "sarah" && Boolean(opts?.saraGreetingSync);
+    if (isSaraV3Playback && isSaraWelcomePlayback) {
+      updateSaraV3WelcomePlaybackAudit({
+        welcomeTriggered: true,
+        audioElementCreated: true,
+        playCalled: false,
+        playResolved: false,
+        playRejected: false,
+        playRejectReason: null,
+        audioSrcExists: Boolean(url),
+        audioPaused: audio.paused,
+        audioEnded: audio.ended,
+        currentTime: audio.currentTime || 0,
+        duration: Number.isFinite(audio.duration) ? audio.duration : null,
+        usingSameAudioClockAsSaraV3: audioRef.current === audio,
+        diagnosticsCheckedAfterEnded: false,
+        selectedRuntime: resolvedAvatarRuntime,
+        reason: permissionsGrantedRef.current
+          ? "Welcome playback is starting after the session-start user gesture."
+          : "Welcome audio is queued until session start grants the user gesture.",
+        lastWelcomePlaybackSummary: null,
+      });
+    }
     const isSaraHybridPlayback =
       companionCanonicalId === "sarah" &&
       !useSaraV3ForSara &&
@@ -1234,6 +1373,40 @@ export function ActiveSession() {
       opts?.audioReceived ??
       opts?.saraGreetingSync?.audioReceived ??
       null;
+    const updateSaraV3WelcomeTimelineDiagnostics = (
+      timeline: AvatarPhonemeTimeline | null,
+      reasonLipsNotMoving: string | null = null
+    ) => {
+      if (!isSaraV3Playback || !isSaraWelcomePlayback) return;
+      updateSaraV3WelcomeDiagnostics({
+        welcomeAudioPlaying: false,
+        welcomeAudioCurrentTime: 0,
+        welcomeAudioDuration: Number.isFinite(audio.duration) ? audio.duration : null,
+        welcomeHasAvatarData: Boolean(
+          timeline?.phonemes.length ||
+            opts?.avatarData ||
+            avatarPendingDataRef.current ||
+            currentAvatarDataReceivedAt !== null
+        ),
+        welcomeTimelineLength: timeline?.phonemes.length ?? 0,
+        welcomeTimelineFirstItem: timeline?.phonemes[0]
+          ? {
+              phoneme: timeline.phonemes[0].phoneme,
+              start: timeline.phonemes[0].start,
+              end: timeline.phonemes[0].end ?? null,
+            }
+          : null,
+        welcomeTimelineLastItem:
+          timeline?.phonemes.length
+            ? {
+                phoneme: timeline.phonemes[timeline.phonemes.length - 1].phoneme,
+                start: timeline.phonemes[timeline.phonemes.length - 1].start,
+                end: timeline.phonemes[timeline.phonemes.length - 1].end ?? null,
+              }
+            : null,
+        reasonLipsNotMoving,
+      });
+    };
     const updateSaraMouthPlaybackDiagnostics = (
       patch: Record<string, unknown>
     ) => {
@@ -1263,6 +1436,7 @@ export function ActiveSession() {
               avatarPendingDataReceivedAtRef.current ?? performance.now();
             avatarPendingDataRef.current = null;
             avatarPendingDataReceivedAtRef.current = null;
+            updateSaraV3WelcomeTimelineDiagnostics(lateTimeline);
             break;
           }
         }
@@ -1313,6 +1487,16 @@ export function ActiveSession() {
         timelineAttached: !!initialPhonemeTimeline?.phonemes.length,
       });
     }
+    if (isSaraV3Playback && isSaraWelcomePlayback) {
+      updateSaraV3WelcomeTimelineDiagnostics(
+        initialPhonemeTimeline,
+        initialPhonemeTimeline?.phonemes.length
+          ? null
+          : opts?.avatarData
+            ? "Welcome avatar_data exists but no phoneme timeline is attached yet."
+            : "Welcome audio started before avatar_data was attached."
+      );
+    }
     if (ttsAudioClockRafRef.current) {
       cancelAnimationFrame(ttsAudioClockRafRef.current);
       ttsAudioClockRafRef.current = null;
@@ -1321,6 +1505,18 @@ export function ActiveSession() {
     const tickAudioClock = () => {
       if (clockSeq !== audioPlaySeqRef.current) return;
       avatarAudioCurrentTimeRef.current = audio.currentTime || 0;
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomeDiagnostics({
+          welcomeAudioCurrentTime: audio.currentTime || 0,
+        });
+        updateSaraV3WelcomePlaybackAudit({
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          audioPaused: audio.paused,
+          audioEnded: audio.ended,
+          usingSameAudioClockAsSaraV3: audioRef.current === audio,
+        });
+      }
       ttsAudioClockRafRef.current = requestAnimationFrame(tickAudioClock);
     };
     ttsAudioClockRafRef.current = requestAnimationFrame(tickAudioClock);
@@ -1391,6 +1587,9 @@ export function ActiveSession() {
 
     audio.onloadedmetadata = () => {
       if (seq !== audioPlaySeqRef.current) return;
+      updateSaraV3AudioDiagnostics({
+        audioDuration: Number.isFinite(audio.duration) ? audio.duration : null,
+      });
       const ms = Number.isFinite(audio.duration) ? Math.max(800, audio.duration * 1000) : 3500;
       const metadataPhonemeTimeline = normalizeAvatarPhonemeTimeline(
         opts?.avatarData ?? null,
@@ -1398,6 +1597,59 @@ export function ActiveSession() {
       );
       if (metadataPhonemeTimeline?.phonemes.length || opts?.avatarData) {
         avatarPhonemeTimelineRef.current = metadataPhonemeTimeline;
+      }
+      const activeWelcomeTimeline =
+        metadataPhonemeTimeline?.phonemes.length || opts?.avatarData
+          ? metadataPhonemeTimeline
+          : avatarPhonemeTimelineRef.current;
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomeDiagnostics({
+          welcomeAudioDuration: Number.isFinite(audio.duration) ? audio.duration : null,
+          welcomeHasAvatarData: Boolean(
+            activeWelcomeTimeline?.phonemes.length ||
+              opts?.avatarData ||
+              avatarPendingDataRef.current ||
+              currentAvatarDataReceivedAt !== null
+          ),
+          welcomeTimelineLength: activeWelcomeTimeline?.phonemes.length ?? 0,
+          welcomeTimelineFirstItem: activeWelcomeTimeline?.phonemes[0]
+            ? {
+                phoneme: activeWelcomeTimeline.phonemes[0].phoneme,
+                start: activeWelcomeTimeline.phonemes[0].start,
+                end: activeWelcomeTimeline.phonemes[0].end ?? null,
+              }
+            : null,
+          welcomeTimelineLastItem:
+            activeWelcomeTimeline?.phonemes.length
+              ? {
+                  phoneme:
+                    activeWelcomeTimeline.phonemes[
+                      activeWelcomeTimeline.phonemes.length - 1
+                    ].phoneme,
+                  start:
+                    activeWelcomeTimeline.phonemes[
+                      activeWelcomeTimeline.phonemes.length - 1
+                    ].start,
+                  end:
+                    activeWelcomeTimeline.phonemes[
+                      activeWelcomeTimeline.phonemes.length - 1
+                    ].end ?? null,
+                }
+              : null,
+	          reasonLipsNotMoving: activeWelcomeTimeline?.phonemes.length
+	            ? null
+	            : opts?.avatarData
+	              ? "Welcome avatar_data loaded without phonemes; SaraV3 will hold viseme_rest and use subtle jaw fallback."
+	              : "Welcome audio still has no avatar_data or phoneme timeline attached.",
+	        });
+	        updateSaraV3WelcomePlaybackAudit({
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+	          reason: activeWelcomeTimeline?.phonemes.length
+	            ? "Welcome audio metadata loaded and phoneme timeline is attached."
+	            : opts?.avatarData
+	              ? "Welcome audio metadata loaded without phonemes; welcome playback should stay on viseme_rest with subtle jaw fallback."
+	              : "Welcome audio metadata loaded before avatar_data/timeline attachment completed.",
+	        });
       }
       if (opts?.saraGreetingSync) {
         const firstPhoneme = metadataPhonemeTimeline?.phonemes[0] ?? null;
@@ -1425,6 +1677,24 @@ export function ActiveSession() {
     };
 
     audio.onended = () => {
+      updateSaraV3AudioDiagnostics({
+        isSpeaking: false,
+      });
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomeDiagnostics({
+          welcomeAudioPlaying: false,
+          welcomeAudioCurrentTime: audio.currentTime || 0,
+        });
+        updateSaraV3WelcomePlaybackAudit({
+          audioPaused: audio.paused,
+          audioEnded: true,
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          diagnosticsCheckedAfterEnded: true,
+          reason:
+            "Welcome audio ended normally; lastWelcomePlaybackSummary preserves the final playback state.",
+        });
+      }
       finishPlayback("ended");
     };
 
@@ -1446,6 +1716,17 @@ export function ActiveSession() {
         canPlayOgg: audio.canPlayType("audio/ogg"),
         canPlayWebm: audio.canPlayType("audio/webm"),
       });
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomePlaybackAudit({
+          playRejected: true,
+          playRejectReason: me?.message || `MediaError ${me?.code ?? "unknown"}`,
+          audioPaused: audio.paused,
+          audioEnded: audio.ended,
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          reason: "Welcome audio element emitted an error before playback could complete.",
+        });
+      }
       stopAudioAndSpeechDriver();
       maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       if (opts?.partOfWsStreamingTurn) {
@@ -1480,7 +1761,7 @@ export function ActiveSession() {
 
     try {
       const shouldWaitForSaraPhonemes =
-        isSaraHybridPlayback &&
+        isSaraWelcomePlayback &&
         Boolean(
           opts?.partOfWsStreamingTurn ||
             opts?.saraGreetingSync ||
@@ -1496,6 +1777,59 @@ export function ActiveSession() {
               !!avatarPhonemeTimelineRef.current?.phonemes?.length,
           };
       const audioPlayStartedAtMs = performance.now();
+      updateSaraV3AudioDiagnostics({
+        audioStartedAt: audioPlayStartedAtMs,
+      });
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomeDiagnostics({
+          welcomeAudioPlaying: true,
+          welcomeAudioCurrentTime: 0,
+          welcomeAudioDuration: Number.isFinite(audio.duration) ? audio.duration : null,
+          welcomeHasAvatarData: Boolean(opts?.avatarData ?? avatarPendingDataRef.current),
+          welcomeTimelineLength: avatarPhonemeTimelineRef.current?.phonemes.length ?? 0,
+          welcomeTimelineFirstItem: avatarPhonemeTimelineRef.current?.phonemes[0]
+            ? {
+                phoneme: avatarPhonemeTimelineRef.current.phonemes[0].phoneme,
+                start: avatarPhonemeTimelineRef.current.phonemes[0].start,
+                end: avatarPhonemeTimelineRef.current.phonemes[0].end ?? null,
+              }
+            : null,
+          welcomeTimelineLastItem:
+            avatarPhonemeTimelineRef.current?.phonemes.length
+              ? {
+                  phoneme:
+                    avatarPhonemeTimelineRef.current.phonemes[
+                      avatarPhonemeTimelineRef.current.phonemes.length - 1
+                    ].phoneme,
+                  start:
+                    avatarPhonemeTimelineRef.current.phonemes[
+                      avatarPhonemeTimelineRef.current.phonemes.length - 1
+                    ].start,
+                  end:
+                    avatarPhonemeTimelineRef.current.phonemes[
+                      avatarPhonemeTimelineRef.current.phonemes.length - 1
+                    ].end ?? null,
+                }
+              : null,
+	          reasonLipsNotMoving: avatarPhonemeTimelineRef.current?.phonemes.length
+	            ? null
+	            : Boolean(opts?.avatarData ?? avatarPendingDataRef.current)
+	              ? "Welcome phoneme timeline is missing; SaraV3 will stay on viseme_rest and use subtle jaw fallback."
+	              : "Welcome avatar_data is still missing at playback start; SaraV3 will stay on viseme_rest and use subtle jaw fallback.",
+	        });
+        updateSaraV3WelcomePlaybackAudit({
+          playCalled: true,
+          audioSrcExists: Boolean(audio.src),
+          audioPaused: audio.paused,
+          audioEnded: audio.ended,
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          usingSameAudioClockAsSaraV3: audioRef.current === audio,
+          reason: permissionsGrantedRef.current
+            ? "Calling welcome audio play() after the session-start gesture."
+            : "Calling welcome audio play() without a confirmed session-start gesture.",
+        });
+      }
       updateSaraMouthPlaybackDiagnostics({
         ...waitDiagnostics,
         audioPlayStartedAtMs,
@@ -1511,6 +1845,20 @@ export function ActiveSession() {
         avatarPhonemeTimelineRef.current
       );
       await audio.play();
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomePlaybackAudit({
+          playResolved: true,
+          playRejected: false,
+          playRejectReason: null,
+          audioPaused: audio.paused,
+          audioEnded: audio.ended,
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          usingSameAudioClockAsSaraV3: audioRef.current === audio,
+          reason:
+            "Welcome audio play() resolved and is using the same audio clock source as SaraV3.",
+        });
+      }
       if (seq === audioPlaySeqRef.current && opts?.saraGreetingSync) {
         const playbackStart = audioPlayStartedAtMs;
         updateSaraGreetingDiagnostics({ playbackStart });
@@ -1542,6 +1890,21 @@ export function ActiveSession() {
         canPlayOgg: audio.canPlayType("audio/ogg"),
         canPlayWebm: audio.canPlayType("audio/webm"),
       });
+      if (isSaraV3Playback && isSaraWelcomePlayback) {
+        updateSaraV3WelcomePlaybackAudit({
+          playRejected: true,
+          playRejectReason: e?.message || e?.name || "Unknown play() rejection",
+          audioPaused: audio.paused,
+          audioEnded: audio.ended,
+          currentTime: audio.currentTime || 0,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+          usingSameAudioClockAsSaraV3: audioRef.current === audio,
+          reason:
+            e?.name === "NotAllowedError"
+              ? "Welcome play() was blocked by autoplay policy because there was no usable user gesture."
+              : "Welcome play() rejected before playback could begin.",
+        });
+      }
       stopAudioAndSpeechDriver();
       maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       if (opts?.partOfWsStreamingTurn) {
@@ -3226,7 +3589,6 @@ export function ActiveSession() {
           const avatarDataReceived = performance.now();
           const queuedGreetingWithoutData =
             companionCanonicalId === "sarah" &&
-            !useSaraV3ForSara &&
             !permissionsGrantedRef.current
               ? prePermissionAudioQueueRef.current.find(
                   (item) => item.saraGreetingSync && !item.avatarData
@@ -3272,6 +3634,30 @@ export function ActiveSession() {
               firstVisemeApplied: null,
               repairedLateAvatarData: true,
             });
+            if (companionCanonicalId === "sarah" && useSaraV3ForSara) {
+              updateSaraV3WelcomeDiagnostics({
+                welcomeHasAvatarData: true,
+                welcomeTimelineLength: timeline?.phonemes.length ?? 0,
+                welcomeTimelineFirstItem: firstPhoneme
+                  ? {
+                      phoneme: firstPhoneme.phoneme,
+                      start: firstPhoneme.start,
+                      end: firstPhoneme.end ?? null,
+                    }
+                  : null,
+                welcomeTimelineLastItem:
+                  timeline?.phonemes.length
+                    ? {
+                        phoneme: timeline.phonemes[timeline.phonemes.length - 1].phoneme,
+                        start: timeline.phonemes[timeline.phonemes.length - 1].start,
+                        end: timeline.phonemes[timeline.phonemes.length - 1].end ?? null,
+                      }
+                    : null,
+                reasonLipsNotMoving: timeline?.phonemes.length
+                  ? null
+                  : "Welcome avatar_data arrived, but no phoneme timeline was attached.",
+              });
+            }
             avatarPendingDataRef.current = null;
             avatarPendingDataReceivedAtRef.current = null;
           } else {
@@ -3351,8 +3737,7 @@ export function ActiveSession() {
               "…";
             const isSaraGreetingAudio =
               companionCanonicalId === "sarah" &&
-              !useSaraV3ForSara &&
-              !permissionsGrantedRef.current;
+            !permissionsGrantedRef.current;
             const saraGreetingSync = isSaraGreetingAudio
               ? {
                   id: ++saraGreetingSyncSeqRef.current,
@@ -3361,6 +3746,27 @@ export function ActiveSession() {
                   avatarDataReceived: avatarPendingDataReceivedAtRef.current,
                 }
               : undefined;
+            if (saraGreetingSync && companionCanonicalId === "sarah" && useSaraV3ForSara) {
+              updateSaraV3WelcomePlaybackAudit({
+                welcomeTriggered: true,
+                audioElementCreated: false,
+                playCalled: false,
+                playResolved: false,
+                playRejected: false,
+                playRejectReason: null,
+                audioSrcExists: false,
+                audioPaused: null,
+                audioEnded: false,
+                currentTime: 0,
+                duration: null,
+                usingSameAudioClockAsSaraV3: false,
+                diagnosticsCheckedAfterEnded: false,
+                selectedRuntime: resolvedAvatarRuntime,
+                reason:
+                  "Welcome audio chunk was received before permissions; playback is queued until the session-start user gesture.",
+                lastWelcomePlaybackSummary: null,
+              });
+            }
             const chunk: WsAudioQueueItem = {
               subtitle,
               audio,
