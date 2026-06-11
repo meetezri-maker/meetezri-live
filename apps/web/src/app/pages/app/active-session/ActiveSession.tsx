@@ -33,7 +33,12 @@ import {
   type EzriWsStatus,
 } from "@/lib/ezri/realtimeClient";
 import { resolveEzriWsVoiceForCompanion } from "@/lib/ezri/voiceForCompanion";
-import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
+import {
+  type EzriAudioSource,
+  normalizeAudioSource,
+  toObjectUrl,
+} from "@/lib/ezri/audio";
+import { EzriWsAudioScheduler } from "@/lib/ezri/wsAudioScheduler";
 import {
   normalizeCompanionId,
   companionSessionUsesRfv2Morphs,
@@ -637,6 +642,7 @@ export function ActiveSession() {
   const [ezriWarmupStatus, setEzriWarmupStatus] = useState<"idle" | "warming" | "ready">("idle");
   const permissionsGrantedRef = useRef(false);
   const flushWsAudioQueueRef = useRef<() => void>(() => {});
+  const scheduleWsChunkRef = useRef<(item: WsAudioQueueItem) => void>(() => {});
   const updateSaraV3AudioDiagnostics = useCallback(
     (patch: Record<string, unknown>) => {
       if (companionCanonicalId !== "sarah" || !useSaraV3ForSara) return;
@@ -671,8 +677,13 @@ export function ActiveSession() {
   const isEzriSpeakingRef = useRef(false);
   /** Single source for ThreeAvatar RMS: updated every RAF (TTS tap or mic), never React state. */
   const mouthAudioLevelRef = useRef(0);
-  /** WS TTS queue (declared early for sound-off / stop handlers). */
+  /** WS TTS queue (pre-permission greeting + late-chunk buffer). */
   const wsAudioQueueRef = useRef<WsAudioQueueItem[]>([]);
+  const wsScheduledChunkMapRef = useRef(new Map<string, WsAudioQueueItem>());
+  const wsSchedulerRef = useRef<EzriWsAudioScheduler | null>(null);
+  const wsChunkClockRef = useRef<{ ctx: AudioContext; startTime: number } | null>(
+    null,
+  );
   const wsIsPlaybackActiveRef = useRef(false);
   /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
   const wsTtsStreamingRef = useRef(false);
@@ -710,12 +721,23 @@ export function ActiveSession() {
   };
   /** After barge-in, don't treat overlap with the last assistant line as Ezri echo (common follow-ups share words). */
   const bargeInEchoGraceUntilRef = useRef(0);
+  const wsSchedulerPipelineActive = (): boolean =>
+    wsSchedulerRef.current?.isPipelineActive() ?? false;
+
   /** True while Solace may still be streaming or playing TTS (covers gaps between WS audio chunks). */
   const ezriWsAudioPipelineActive = (): boolean =>
     isEzriSpeakingRef.current ||
     wsTtsStreamingRef.current ||
     wsIsPlaybackActiveRef.current ||
+    wsSchedulerPipelineActive() ||
     wsAudioQueueRef.current.length > 0;
+
+  /** More WS audio may still arrive or play for the current assistant turn (Ezri_Avatar app.js parity). */
+  const wsTurnHasMoreAudioExpected = (): boolean =>
+    wsAudioQueueRef.current.length > 0 ||
+    wsSchedulerPipelineActive() ||
+    !wsTtsDoneReceivedRef.current ||
+    wsTtsStreamingRef.current;
 
   useEffect(() => {
     permissionsGrantedRef.current = permissionsGranted;
@@ -1012,6 +1034,9 @@ export function ActiveSession() {
     audioPlaySeqRef.current += 1;
 
     // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
+    wsSchedulerRef.current?.stop();
+    wsScheduledChunkMapRef.current.clear();
+    wsChunkClockRef.current = null;
     wsAudioQueueRef.current = [];
     wsIsPlaybackActiveRef.current = false;
     wsTtsDoneReceivedRef.current = true; // treat as done so we don't get stuck waiting
@@ -1235,12 +1260,10 @@ export function ActiveSession() {
       resumeStt();
       return;
     }
-    if (
-      wsAudioQueueRef.current.length === 0 &&
-      wsTtsDoneReceivedRef.current
-    ) {
-      resumeStt();
+    if (wsTurnHasMoreAudioExpected()) {
+      return;
     }
+    resumeStt();
   };
 
   const playEzriAudio = async (
@@ -1579,7 +1602,16 @@ export function ActiveSession() {
       if (reason !== "ended") {
         console.warn(`[Audio] Completing playback via ${reason} (browser may have skipped onended)`);
       }
-      stopAudioAndSpeechDriver();
+      const betweenWsChunks =
+        opts?.partOfWsStreamingTurn && wsTurnHasMoreAudioExpected();
+      if (betweenWsChunks) {
+        // Keep speaking state + mic suppression alive between WS chunks (reference app.js queue).
+        stopPriorEzriAudioForNextChunk();
+        isEzriSpeakingRef.current = true;
+        setIsEzriSpeaking(true);
+      } else {
+        stopAudioAndSpeechDriver();
+      }
       maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       speechPulseRef.current += 1;
       opts?.onDone?.();
@@ -1668,10 +1700,14 @@ export function ActiveSession() {
       driveSpeechAnimationForText(text, ms);
 
       // Firefox sometimes never fires `onended` for blob WAV — force queue advance + playback_done.
-      if (opts?.partOfWsStreamingTurn && Number.isFinite(audio.duration) && audio.duration > 0) {
+      if (opts?.partOfWsStreamingTurn) {
+        const durationMs =
+          Number.isFinite(audio.duration) && audio.duration > 0
+            ? Math.ceil(audio.duration * 1000) + 800
+            : Math.max(8000, text.length * 55 + 800);
         playbackEndFallbackTimer = window.setTimeout(
           () => finishPlayback("duration_fallback"),
-          Math.ceil(audio.duration * 1000) + 800,
+          durationMs,
         );
       }
     };
@@ -1727,20 +1763,24 @@ export function ActiveSession() {
           reason: "Welcome audio element emitted an error before playback could complete.",
         });
       }
-      stopAudioAndSpeechDriver();
-      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
-      if (opts?.partOfWsStreamingTurn) {
-        const fallback =
-          text.trim() ||
-          wsPendingFallbackTextRef.current.trim() ||
-          wsLastFinalTextRef.current.trim();
-        if (fallback) {
-          clearSpeakFallbackTimer();
-          void speakViaEzriTts(fallback);
+      if (opts?.partOfWsStreamingTurn && wsTurnHasMoreAudioExpected()) {
+        finishPlayback("error_continue_queue");
+      } else {
+        stopAudioAndSpeechDriver();
+        maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
+        if (opts?.partOfWsStreamingTurn) {
+          const fallback =
+            text.trim() ||
+            wsPendingFallbackTextRef.current.trim() ||
+            wsLastFinalTextRef.current.trim();
+          if (fallback) {
+            clearSpeakFallbackTimer();
+            void speakViaEzriTts(fallback);
+          }
         }
+        opts?.onError?.();
+        finishPlayback("error");
       }
-      opts?.onError?.();
-      finishPlayback("error");
     };
 
     // Resume AudioContext and pre-load before play to satisfy Firefox autoplay policy.
@@ -1905,20 +1945,24 @@ export function ActiveSession() {
               : "Welcome play() rejected before playback could begin.",
         });
       }
-      stopAudioAndSpeechDriver();
-      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
-      if (opts?.partOfWsStreamingTurn) {
-        const fallback =
-          text.trim() ||
-          wsPendingFallbackTextRef.current.trim() ||
-          wsLastFinalTextRef.current.trim();
-        if (fallback) {
-          clearSpeakFallbackTimer();
-          void speakViaEzriTts(fallback);
+      if (opts?.partOfWsStreamingTurn && wsTurnHasMoreAudioExpected()) {
+        finishPlayback("play_failed_continue_queue");
+      } else {
+        stopAudioAndSpeechDriver();
+        maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
+        if (opts?.partOfWsStreamingTurn) {
+          const fallback =
+            text.trim() ||
+            wsPendingFallbackTextRef.current.trim() ||
+            wsLastFinalTextRef.current.trim();
+          if (fallback) {
+            clearSpeakFallbackTimer();
+            void speakViaEzriTts(fallback);
+          }
         }
+        opts?.onError?.();
+        finishPlayback("play_failed");
       }
-      opts?.onError?.();
-      finishPlayback("play_failed");
     }
 
     // play() resolves before first frame; interrupt during decode/scheduling otherwise leaves audio audible.
@@ -2023,6 +2067,10 @@ export function ActiveSession() {
    * audio queue is empty and `tts_done` was received — do not delay or debounce.
    */
   const sendPlaybackDoneNow = useCallback(() => {
+    if (ezriWsAudioPipelineActive()) {
+      pendingPlaybackDoneRef.current = true;
+      return;
+    }
     if (playbackDoneCooldownTimerRef.current !== null) {
       window.clearTimeout(playbackDoneCooldownTimerRef.current);
       playbackDoneCooldownTimerRef.current = null;
@@ -2053,6 +2101,7 @@ export function ActiveSession() {
   const tryUnlockServerMic = useCallback(
     (reason: string) => {
       if (!serverPcmSttActive) return;
+      if (ezriWsAudioPipelineActive()) return;
       if (playbackDoneAckRef.current) return;
       const ws = wsClientRef.current;
       if (!ws || ws.getStatus() !== "connected") return;
@@ -2089,6 +2138,10 @@ export function ActiveSession() {
     }
     playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
       playbackDoneCooldownTimerRef.current = null;
+      if (ezriWsAudioPipelineActive()) {
+        pendingPlaybackDoneRef.current = true;
+        return;
+      }
       if (serverPcmSttActive) {
         try {
           wsClientRef.current?.sendPlaybackDone();
@@ -2103,43 +2156,185 @@ export function ActiveSession() {
     }, cooldownMs);
   };
 
-  const playNextWsQueue = () => {
-    if (suppressIncomingAudioRef.current) {
-      wsAudioQueueRef.current = [];
-      wsIsPlaybackActiveRef.current = false;
-      return;
+  const stopWsSchedulerMouthAnalyser = () => {
+    if (ttsAnalyserRafRef.current) {
+      cancelAnimationFrame(ttsAnalyserRafRef.current);
+      ttsAnalyserRafRef.current = null;
     }
-    if (wsIsPlaybackActiveRef.current) return;
-    const next = wsAudioQueueRef.current.shift();
-    if (!next) {
-      if (wsTtsDoneReceivedRef.current) {
-        wsTtsDoneReceivedRef.current = false;
-        sendPlaybackDoneNow();
-      } else {
-        pendingPlaybackDoneRef.current = true;
-        console.log(
-          "[WS] Audio queue drained before tts_done — will send playback_done when tts_done arrives",
+    if (ttsAudioClockRafRef.current) {
+      cancelAnimationFrame(ttsAudioClockRafRef.current);
+      ttsAudioClockRafRef.current = null;
+    }
+    ezriPlaybackSmoothRef.current = 0;
+    ttsMouthTapOkRef.current = false;
+    mouthAudioLevelRef.current = 0;
+    wsChunkClockRef.current = null;
+  };
+
+  const startWsSchedulerMouthAnalyser = () => {
+    const analyser = wsSchedulerRef.current?.getAnalyser();
+    const ctx = wsSchedulerRef.current?.getAudioContext();
+    if (!analyser || !ctx) return;
+
+    if (ttsAnalyserRafRef.current) {
+      cancelAnimationFrame(ttsAnalyserRafRef.current);
+    }
+    playbackAudioContextRef.current = ctx;
+    ezriPlaybackSmoothRef.current = 0;
+    const bufferLength = analyser.fftSize;
+    const dataArray = new Uint8Array(bufferLength);
+    const tickMouth = () => {
+      analyser.getByteTimeDomainData(dataArray);
+      let sumSq = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const x = (dataArray[i] - 128) / 128;
+        sumSq += x * x;
+      }
+      const rms = Math.sqrt(sumSq / bufferLength);
+      const instant = Math.min(240, 22 + rms * 980);
+      ezriPlaybackSmoothRef.current +=
+        (instant - ezriPlaybackSmoothRef.current) * 0.5;
+      mouthAudioLevelRef.current = ezriPlaybackSmoothRef.current;
+      ttsAnalyserRafRef.current = requestAnimationFrame(tickMouth);
+    };
+    ttsAnalyserRafRef.current = requestAnimationFrame(tickMouth);
+    ttsMouthTapOkRef.current = true;
+
+    if (ttsAudioClockRafRef.current) {
+      cancelAnimationFrame(ttsAudioClockRafRef.current);
+    }
+    const tickClock = () => {
+      const clock = wsChunkClockRef.current;
+      if (clock) {
+        avatarAudioCurrentTimeRef.current = Math.max(
+          0,
+          clock.ctx.currentTime - clock.startTime,
         );
       }
+      ttsAudioClockRafRef.current = requestAnimationFrame(tickClock);
+    };
+    ttsAudioClockRafRef.current = requestAnimationFrame(tickClock);
+  };
+
+  const handleWsSchedulerChunkStart = (
+    item: WsAudioQueueItem | undefined,
+    subtitle: string,
+    timing: { durationMs: number; audioContextStartTime: number },
+  ) => {
+    const text = item?.subtitle?.trim() || subtitle.trim();
+    if (!text) return;
+
+    ezriPlaybackTextRef.current = text;
+    speechTextRef.current = text;
+    speechCharIndexRef.current = 0;
+    isEzriSpeakingRef.current = true;
+    setIsEzriSpeaking(true);
+    setLiveUserSpeech("");
+
+    const ctx = wsSchedulerRef.current?.getAudioContext();
+    if (ctx) {
+      wsChunkClockRef.current = {
+        ctx,
+        startTime: timing.audioContextStartTime,
+      };
+    }
+
+    const timeline = normalizeAvatarPhonemeTimeline(
+      item?.avatarData ?? null,
+      timing.durationMs / 1000,
+    );
+    if (timeline?.phonemes.length || item?.avatarData) {
+      avatarPhonemeTimelineRef.current = timeline;
+    }
+
+    startWsSchedulerMouthAnalyser();
+    driveSpeechAnimationForText(text, timing.durationMs);
+  };
+
+  const handleWsSchedulerPipelineIdle = () => {
+    wsTtsStreamingRef.current = false;
+    wsIsPlaybackActiveRef.current = false;
+    stopWsSchedulerMouthAnalyser();
+    stopAudioAndSpeechDriver();
+    maybeResumeMicAfterEzriPlayback(true);
+    wsTtsDoneReceivedRef.current = false;
+    sendPlaybackDoneAfterCooldown(1200);
+  };
+
+  const wsSchedulerCallbacksRef = useRef({
+    onChunkStart: (
+      _meta: { subtitle: string; chunkId?: string },
+      _timing: { durationMs: number; audioContextStartTime: number },
+    ) => {},
+    onPipelineIdle: () => {},
+  });
+  wsSchedulerCallbacksRef.current = {
+    onChunkStart: (meta, timing) => {
+      const item = meta.chunkId
+        ? wsScheduledChunkMapRef.current.get(meta.chunkId)
+        : undefined;
+      if (meta.chunkId) {
+        wsScheduledChunkMapRef.current.delete(meta.chunkId);
+      }
+      handleWsSchedulerChunkStart(item, meta.subtitle, timing);
+    },
+    onPipelineIdle: () => {
+      handleWsSchedulerPipelineIdle();
+    },
+  };
+
+  if (!wsSchedulerRef.current) {
+    wsSchedulerRef.current = new EzriWsAudioScheduler({
+      onChunkStart: (meta, timing) => {
+        wsSchedulerCallbacksRef.current.onChunkStart(meta, timing);
+      },
+      onPipelineIdle: () => {
+        wsSchedulerCallbacksRef.current.onPipelineIdle();
+      },
+      onScheduleError: (error, meta) => {
+        console.error("[WS Audio] Chunk schedule failed:", meta.subtitle, error);
+      },
+    });
+  }
+
+  const scheduleWsChunk = (item: WsAudioQueueItem) => {
+    if (suppressIncomingAudioRef.current) return;
+    if (isSoundOffRef.current) {
+      wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
       return;
     }
+    if (!item.audio || typeof item.audio !== "object") return;
+
     clearSpeakFallbackTimer();
+    if (!wsSchedulerPipelineActive()) {
+      jordanSpeechStartedAtMsRef.current = performance.now();
+    }
     wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
     wsIsPlaybackActiveRef.current = true;
-    void playEzriAudio(next.subtitle, next.audio, {
-      partOfWsStreamingTurn: true,
-      avatarData: next.avatarData,
-      audioReceived: next.audioReceived,
-      avatarDataReceived: next.avatarDataReceived,
-      saraGreetingSync: next.saraGreetingSync,
-      onDone: () => {
-        wsIsPlaybackActiveRef.current = false;
-        playNextWsQueue();
-      },
+    pauseStt();
+
+    const chunkId = `${performance.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    wsScheduledChunkMapRef.current.set(chunkId, item);
+
+    void wsSchedulerRef.current?.schedule(item.audio as EzriAudioSource, {
+      subtitle: item.subtitle,
+      chunkId,
     });
   };
 
-  flushWsAudioQueueRef.current = playNextWsQueue;
+  const flushWsAudioQueue = () => {
+    if (suppressIncomingAudioRef.current) {
+      wsAudioQueueRef.current = [];
+      return;
+    }
+    const pending = wsAudioQueueRef.current.splice(0);
+    for (const chunk of pending) {
+      scheduleWsChunk(chunk);
+    }
+  };
+
+  flushWsAudioQueueRef.current = flushWsAudioQueue;
+  scheduleWsChunkRef.current = scheduleWsChunk;
 
   const finalizeSessionEntry = useCallback(() => {
     if (!pendingMediaEntryRef.current) return;
@@ -2162,7 +2357,7 @@ export function ActiveSession() {
     const queued = prePermissionAudioQueueRef.current.splice(0);
     if (queued.length > 0) {
       wsAudioQueueRef.current.push(...queued);
-      playNextWsQueue();
+      flushWsAudioQueue();
     } else if (
       wsTtsDoneReceivedRef.current &&
       !wsIsPlaybackActiveRef.current &&
@@ -3185,61 +3380,9 @@ export function ActiveSession() {
     return () => clearInterval(watchdog);
   }, [permissionsGranted, isListening, browserSttActive]);
 
-  // â”€â”€ Mic-level barge-in (always when TTS pipeline active) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Mobile: Web Speech is aborted during TTS â€” mic level is the main path.
-  // Desktop: Web Speech often yields no/lazy results under AEC; RMS stops playback when the user
-  // clearly talks over Ezri. Desktop uses a higher threshold + longer hold than mobile to limit
-  // false triggers from speaker bleed.
-  useEffect(() => {
-    if (!permissionsGranted) return;
-
-    let raf: number | null = null;
-    let aboveSince: number | null = null;
-
-    const THRESH = isMobileBrowser ? 18 : 34;
-    const HOLD_MS = isMobileBrowser ? 130 : 220;
-
-    const tick = () => {
-      if (isSessionEndingRef.current) return;
-      if (isMutedRef.current || isSessionPausedRef.current) {
-        aboveSince = null;
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      const pipelineActive = ezriWsAudioPipelineActive();
-      if (!pipelineActive) {
-        aboveSince = null;
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-
-      // Speaker bleed at the start of TTS looks like user speech — ignore briefly (app.js echo window).
-      if (performance.now() - jordanSpeechStartedAtMsRef.current < 1800) {
-        aboveSince = null;
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-
-      const level = audioLevelForWatchdogRef.current;
-      if (level >= THRESH) {
-        if (aboveSince === null) aboveSince = performance.now();
-        const held = performance.now() - aboveSince;
-        if (held >= HOLD_MS) {
-          aboveSince = null;
-          requestBargeInInterrupt("mic_level_barge_in");
-        }
-      } else {
-        aboveSince = null;
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [permissionsGranted, isMobileBrowser]);
+  // Mic-level barge-in intentionally disabled during WS TTS (Ezri_Avatar app.js parity).
+  // Speaker bleed was stopping multi-sentence answers mid-playback. User interrupts via STT
+  // (paused during TTS) or server VAD on the PCM path.
 
   // â”€â”€ Media stream cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Media access is initiated only via requestMediaAccess() on user action.
@@ -3280,6 +3423,8 @@ export function ActiveSession() {
     if (isSessionPaused) {
       // Stop any assistant playback immediately
       audioPlaySeqRef.current += 1;
+      wsSchedulerRef.current?.stop();
+      wsScheduledChunkMapRef.current.clear();
       wsAudioQueueRef.current = [];
       wsIsPlaybackActiveRef.current = false;
       try {
@@ -3364,6 +3509,19 @@ export function ActiveSession() {
   const sessionId = apiSessionId ?? fallbackEzriSessionId;
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
+  // Recover if the WS queue has chunks but playback stalled (e.g. missed onended).
+  useEffect(() => {
+    if (!permissionsGranted || hasSessionEnded) return;
+    const id = window.setInterval(() => {
+      if (suppressIncomingAudioRef.current) return;
+      if (wsAudioQueueRef.current.length > 0 && !wsSchedulerPipelineActive()) {
+        console.warn("[WS] Audio queue stall detected — resuming playback");
+        flushWsAudioQueueRef.current();
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [permissionsGranted, hasSessionEnded]);
+
   const ezriUserid = useMemo(() => getOrCreateEzriUserid(user?.id), [user?.id]);
   const ezriApi = useMemo(() => (ezriConfig ? createEzriApiClient(ezriConfig.apiBase) : null), [ezriConfig]);
 
@@ -3414,6 +3572,8 @@ export function ActiveSession() {
     isSoundOffRef.current = isSoundOff;
     if (!isSoundOff) return;
     audioPlaySeqRef.current += 1;
+    wsSchedulerRef.current?.stop();
+    wsScheduledChunkMapRef.current.clear();
     wsAudioQueueRef.current = [];
     wsIsPlaybackActiveRef.current = false;
     try {
@@ -3516,6 +3676,8 @@ export function ActiveSession() {
           // so the NEXT response (the merged one) is allowed through.
           if (dropOldResponsesRef.current > 0) {
             dropOldResponsesRef.current -= 1;
+            wsSchedulerRef.current?.stop();
+            wsScheduledChunkMapRef.current.clear();
             wsAudioQueueRef.current = [];
             wsIsPlaybackActiveRef.current = false;
             wsTtsDoneReceivedRef.current = false;
@@ -3524,30 +3686,16 @@ export function ActiveSession() {
           }
 
           wsTtsDoneReceivedRef.current = true;
-          wsTtsStreamingRef.current = false;
+          // Keep wsTtsStreamingRef true until audio finishes (handleWsSchedulerPipelineIdle).
           jordanLastSpeechAtMsRef.current = performance.now();
-
-          // Ezri app.js: if greeting audio already finished (common on Firefox), unlock the server mic now.
-          if (
-            !suppressIncomingAudioRef.current &&
-            !wsIsPlaybackActiveRef.current &&
-            wsAudioQueueRef.current.length === 0 &&
-            prePermissionAudioQueueRef.current.length === 0
-          ) {
-            if (pendingPlaybackDoneRef.current || !playbackDoneAckRef.current) {
-              console.log("[WS] tts_done + idle queue — sending playback_done immediately");
-              sendPlaybackDoneNowRef.current();
-            }
-          } else if (pendingPlaybackDoneRef.current) {
-            sendPlaybackDoneNowRef.current();
-          }
+          wsSchedulerRef.current?.setTtsDoneReceived();
 
           clearTtsDoneGraceTimer();
           const turnAtDone = wsActiveTurnRef.current;
           const heardAudioThisTurn =
             wsAudioSeenTurnRef.current === turnAtDone;
 
-          // Late binary chunks can arrive after tts_done — wait before declaring playback finished.
+          // Late binary chunks can arrive after tts_done — wait before REST speak fallback.
           wsTtsDoneGraceTimerRef.current = window.setTimeout(() => {
             wsTtsDoneGraceTimerRef.current = null;
             if (suppressIncomingAudioRef.current) return;
@@ -3561,21 +3709,20 @@ export function ActiveSession() {
               }
             }
 
-            if (
-              wsTtsDoneReceivedRef.current &&
-              !wsIsPlaybackActiveRef.current &&
-              wsAudioQueueRef.current.length === 0 &&
-              prePermissionAudioQueueRef.current.length === 0
-            ) {
-              playNextWsQueue();
+            if (wsAudioQueueRef.current.length > 0) {
+              flushWsAudioQueueRef.current();
             }
           }, TTS_DONE_GRACE_MS);
+        },
+        onAudioStart: (info) => {
+          wsSchedulerRef.current?.setAudioFormat(info.format, info.sampleRate);
         },
         onSpeakingStart: () => {
           // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
           playbackDoneAckRef.current = false;
           pendingPlaybackDoneRef.current = false;
           wsTtsDoneReceivedRef.current = false;
+          wsSchedulerRef.current?.resetForNewTurn();
           wsTtsStreamingRef.current = true;
           jordanSpeechStartedAtMsRef.current = performance.now();
           pauseStt();
@@ -3661,8 +3808,48 @@ export function ActiveSession() {
             avatarPendingDataRef.current = null;
             avatarPendingDataReceivedAtRef.current = null;
           } else {
-            avatarPendingDataRef.current = data;
-            avatarPendingDataReceivedAtRef.current = avatarDataReceived;
+            const sentence = data.sentence?.trim() ?? "";
+            const chunkIndex =
+              typeof data.chunk_index === "number" ? data.chunk_index : null;
+            const queuedWithoutData =
+              (chunkIndex !== null
+                ? wsAudioQueueRef.current[chunkIndex]
+                : undefined) ??
+              wsAudioQueueRef.current.find(
+                (item) =>
+                  !item.avatarData &&
+                  sentence.length > 0 &&
+                  item.subtitle.trim() === sentence
+              ) ??
+              wsAudioQueueRef.current.find((item) => !item.avatarData) ??
+              [...wsScheduledChunkMapRef.current.values()].find(
+                (item) => !item.avatarData
+              );
+            if (queuedWithoutData) {
+              queuedWithoutData.avatarData = data;
+              queuedWithoutData.avatarDataReceived = avatarDataReceived;
+              queuedWithoutData.subtitle = sentence;
+              avatarPendingDataRef.current = null;
+              avatarPendingDataReceivedAtRef.current = null;
+            } else if (
+              wsIsPlaybackActiveRef.current &&
+              sentence.length > 0 &&
+              ezriPlaybackTextRef.current.trim() === sentence
+            ) {
+              const playingDuration = audioRef.current?.duration;
+              const lateTimeline = normalizeAvatarPhonemeTimeline(
+                data,
+                Number.isFinite(playingDuration) ? playingDuration : undefined
+              );
+              if (lateTimeline?.phonemes.length) {
+                avatarPhonemeTimelineRef.current = lateTimeline;
+              }
+              avatarPendingDataRef.current = null;
+              avatarPendingDataReceivedAtRef.current = null;
+            } else {
+              avatarPendingDataRef.current = data;
+              avatarPendingDataReceivedAtRef.current = avatarDataReceived;
+            }
           }
           latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
           sentimentCompoundRef.current = extractJordanSentimentCompound(data.sentiment);
@@ -3676,6 +3863,7 @@ export function ActiveSession() {
 
           const wasPlayingOrStreaming =
             wsIsPlaybackActiveRef.current ||
+            wsSchedulerPipelineActive() ||
             wsAudioQueueRef.current.length > 0 ||
             wsTtsStreamingRef.current;
 
@@ -3823,8 +4011,7 @@ export function ActiveSession() {
             }
 
             clearSpeakFallbackTimer();
-            wsAudioQueueRef.current.push(chunk);
-            flushWsAudioQueueRef.current();
+            scheduleWsChunkRef.current(chunk);
             setIsEzriThinking(false);
             isEzriThinkingRef.current = false;
             pendingUserTextRef.current = "";

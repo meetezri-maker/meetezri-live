@@ -80,6 +80,23 @@ export async function normalizeAudioSource(source: EzriAudioSource): Promise<Ezr
   return { kind: "blob", blob: new Blob([bytes], { type: mime }) };
 }
 
+export async function audioSourceToArrayBuffer(
+  source: EzriAudioSource,
+): Promise<ArrayBuffer> {
+  if (source.kind === "blob") {
+    return source.blob.arrayBuffer();
+  }
+  if (source.kind === "base64") {
+    const blob = base64ToBlob(source.base64, source.mimeType || "audio/mpeg");
+    return blob.arrayBuffer();
+  }
+  const response = await fetch(source.url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch audio URL (${response.status})`);
+  }
+  return response.arrayBuffer();
+}
+
 export function toObjectUrl(source: EzriAudioSource): { url: string; revoke?: () => void } {
   if (source.kind === "url") return { url: source.url };
   const blob =
