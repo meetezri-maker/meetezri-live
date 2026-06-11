@@ -228,6 +228,11 @@ async function getJsonCached<T>(
 export type ApiRequestOptions = HandleResponseOptions;
 
 export const api = {
+  clearMeCache() {
+    shortGetCache.delete('GET:/users/me');
+    getMeInFlight = null;
+  },
+
   async getMe(accessToken?: string, options?: ApiRequestOptions) {
     const run = async () => {
       const headers = await getHeaders(accessToken);

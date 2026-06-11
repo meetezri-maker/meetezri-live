@@ -16,10 +16,10 @@ import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
-  applyAccentColorToDocument,
-  applyThemeToDocument,
-  resolveAppearanceTheme,
-  type AppearanceTheme,
+  applyAppearanceToDocument,
+  parseAppearanceSettings,
+  readAppearanceFromStorage,
+  type AppearanceSettingsSnapshot,
 } from "@/app/pages/app/appearance-settings/appearanceConstants";
 import { modalDestructiveButton } from "@/lib/modalTheme";
 import {
@@ -52,118 +52,27 @@ export function AppLayout() {
     return `ezri_appearance_settings_${user.id}`;
   }, [user?.id]);
 
-  const [appearance, setAppearance] = useState<{
-    backgroundStyle: string;
-    compactMode: boolean;
-    theme: string;
-    accentColor: string;
-  }>(() => {
-    // Initial state setup to avoid flash of wrong theme
-    const defaults = {
-      backgroundStyle: "gradient",
-      compactMode: false,
-      theme: "dark",
-      accentColor: "pink"
-    };
-
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      return defaults;
-    }
-
-    // Try to get user-specific key if possible, otherwise fallback
-    // Note: This runs before useMemo for appearanceStorageKey, so we replicate the logic slightly
-    // but simplified since we might not have user object fully ready yet.
-    // However, since this component is usually behind ProtectedRoute, user should be loaded.
-    // But hooks order matters. We can't access appearanceStorageKey here as it's defined above.
-    // We'll try to read it dynamically.
-    
-    // We can't easily access the computed appearanceStorageKey inside the useState initializer
-    // because it depends on `user` which might change. 
-    // BUT, we can try to read from the most likely key if we have the user ID from props or context.
-    
-    // Actually, let's just use the `appearanceStorageKey` computed value in a useEffect, 
-    // but for INITIAL render, we can try to guess or just read the generic one if user ID isn't ready.
-    // If we are behind ProtectedRoute, user.id IS ready.
-    
-    // Let's rely on the fact that `appearanceStorageKey` is computed from `user.id`.
-    // If `user` is present, we can construct the key.
-    
-    const key = user?.id ? `ezri_appearance_settings_${user.id}` : "ezri_appearance_settings";
-    const saved = window.localStorage.getItem(key);
-    
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          backgroundStyle: parsed.backgroundStyle || "gradient",
-          compactMode: Boolean(parsed.compactMode),
-          theme: resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion),
-          accentColor: parsed.accentColor || "pink",
-        };
-      } catch {
-        return defaults;
-      }
-    }
-
-    return defaults;
-  });
+  const [appearance, setAppearance] = useState<AppearanceSettingsSnapshot>(() =>
+    readAppearanceFromStorage(user?.id)
+  );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      return;
-    }
-    const saved = window.localStorage.getItem(appearanceStorageKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setAppearance({
-          backgroundStyle: parsed.backgroundStyle || "gradient",
-          compactMode: Boolean(parsed.compactMode),
-          theme: resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion),
-          accentColor: parsed.accentColor || "pink",
-        });
-      } catch {
-        setAppearance({
-          backgroundStyle: "gradient",
-          compactMode: false,
-          theme: "dark",
-          accentColor: "pink",
-        });
-      }
-    }
-  }, [appearanceStorageKey]);
+    setAppearance(readAppearanceFromStorage(user?.id));
+  }, [appearanceStorageKey, user?.id]);
 
   useEffect(() => {
-    applyThemeToDocument(appearance.theme as AppearanceTheme);
-  }, [appearance.theme]);
-
-  useEffect(() => {
-    applyAccentColorToDocument(appearance.accentColor);
-  }, [appearance.accentColor]);
+    applyAppearanceToDocument(appearance);
+  }, [appearance]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const handler = (event: Event) => {
-      const custom = event as CustomEvent<any>;
+      const custom = event as CustomEvent<Partial<AppearanceSettingsSnapshot>>;
       const detail = custom.detail || {};
-      // Merge so partial events (e.g. theme-only) do not wipe compactMode / accent.
-      setAppearance((prev) => ({
-        backgroundStyle:
-          typeof detail.backgroundStyle === "string"
-            ? detail.backgroundStyle
-            : prev.backgroundStyle,
-        compactMode:
-          typeof detail.compactMode === "boolean" ? detail.compactMode : prev.compactMode,
-        theme:
-          typeof detail.theme === "string"
-            ? resolveAppearanceTheme(detail.theme, detail.appearanceVersion)
-            : prev.theme,
-        accentColor:
-          typeof detail.accentColor === "string" ? detail.accentColor : prev.accentColor,
-      }));
+      setAppearance((prev) => parseAppearanceSettings({ ...prev, ...detail }));
     };
 
     window.addEventListener("ezri-appearance-change", handler as EventListener);
@@ -217,7 +126,7 @@ export function AppLayout() {
   };
 
   return (
-    <div className="solace-app flex h-dvh max-h-dvh flex-col overflow-hidden bg-[var(--solace-bg)] text-[var(--solace-text)]">
+    <div className="solace-app flex h-dvh max-h-dvh flex-col overflow-hidden text-[var(--solace-text)]">
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
@@ -287,7 +196,7 @@ export function AppLayout() {
         className={`flex-1 min-h-0 antialiased ${mainPaddingClass} ${
           isActiveSessionRoute
             ? "flex flex-col overflow-hidden"
-            : "solace-scroll overflow-y-auto overscroll-contain"
+            : "solace-app-main solace-scroll overflow-y-auto overscroll-contain"
         }`}
       >
         {isUnverified && (

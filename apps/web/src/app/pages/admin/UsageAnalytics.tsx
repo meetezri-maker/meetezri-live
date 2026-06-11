@@ -11,17 +11,12 @@ import {
   MessageSquare,
   Heart,
   BarChart3,
-  PieChart,
   LineChart,
 } from "lucide-react";
 import {
-  LineChart as RechartsLine,
   BarChart,
-  PieChart as RechartsPie,
   Line,
   Bar,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -33,21 +28,22 @@ import {
 } from "recharts";
 import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { AdminDonutChart } from "../../components/admin/AdminDonutChart";
 import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
 import { useAdminStats } from "@/lib/queries/adminQueries";
 
 const COMPANION_PIE_COLOR: Record<string, string> = {
-  "Not set": "#94a3b8",
+  "Not set": "#8b5cf6",
   Alex: "#3b82f6",
   "Alex Rivera": "#3b82f6",
   "Sara Mitchell": "#ec4899",
   "Sarah Mitchell": "#ec4899",
   "Jordan Taylor": "#10b981",
-  "Maya Chen": "#8b5cf6",
+  "Maya Chen": "#f59e0b",
   Other: "#64748b",
 };
 
-const PIE_FALLBACK_COLORS = ["#0ea5e9", "#f97316", "#a855f7", "#14b8a6", "#eab308", "#6366f1"];
+const PIE_FALLBACK_COLORS = ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#6366f1"];
 
 function formatAnalyticsRangeLabel(from: string, to: string): string {
   try {
@@ -166,17 +162,19 @@ export function UsageAnalytics() {
     });
   })();
 
-  const sessionTypeData = featureUsage.map((item: any) => ({
+  const sessionTypeData = featureUsage.map((item: any, index: number) => ({
     name: item.feature,
     value: item.usage,
     color:
-      item.feature === "AI Talk it out"
+      item.feature === "AI Talk it out" || item.feature === "AI Sessions"
         ? "#3B82F6"
         : item.feature === "Mood Tracking"
-        ? "#10B981"
-        : item.feature === "Journal"
-        ? "#8B5CF6"
-        : "#F59E0B",
+          ? "#10B981"
+          : item.feature === "Journal"
+            ? "#8B5CF6"
+            : item.feature === "Wellness Tools"
+              ? "#F59E0B"
+              : PIE_FALLBACK_COLORS[index % PIE_FALLBACK_COLORS.length],
   }));
 
   const hourlyData = statsData?.hourlyActivity || [];
@@ -465,64 +463,18 @@ export function UsageAnalytics() {
             transition={{ delay: 0.5 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Platform Preferences</h2>
+              <h2 className="text-xl font-bold mb-2">Platform Preferences</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Companion choices grouped to the same four avatars as the user app (Session Lobby). Unrecognized values
                 roll into &quot;Other&quot;.
               </p>
-              {avatarData.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-12 text-center">No avatar selection data available.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <RechartsPie margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-                    <Pie
-                      data={avatarData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      isAnimationActive={false}
-                      label={false}
-                      innerRadius={60}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                      paddingAngle={3}
-                    >
-                      {avatarData.map((entry, index) => (
-                        <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number, name: string, item: { payload?: { count?: number } }) => [
-                        `${item.payload?.count ?? "—"} profiles (${value}%)`,
-                        name,
-                      ]}
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "10px",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                        fontSize: 12,
-                      }}
-                    />
-                  </RechartsPie>
-                </ResponsiveContainer>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-                {avatarData.map((avatar) => (
-                  <div key={avatar.name} className="flex items-start gap-2 text-sm">
-                    <div
-                      className="w-3 h-3 rounded-full mt-1 shrink-0"
-                      style={{ backgroundColor: avatar.color }}
-                    />
-                    <span className="text-muted-foreground">
-                      <span className="font-medium text-foreground">{avatar.name}</span>
-                      <span className="mx-1">·</span>
-                      {avatar.count} profiles ({avatar.value}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <AdminDonutChart
+                data={avatarData}
+                height={300}
+                emptyMessage="No avatar selection data available."
+                legendFormat={(item) => `${item.count} profiles (${item.value}%)`}
+                tooltipFormat={(item) => [`${item.count ?? "—"} profiles (${item.value}%)`, item.name]}
+              />
             </Card>
           </motion.div>
 
@@ -532,60 +484,18 @@ export function UsageAnalytics() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Feature Usage</h2>
+              <h2 className="text-xl font-bold mb-2">Feature Usage</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Relative share by feature activity in the product database (not the same denominator as session count
                 above).
               </p>
-              <ResponsiveContainer width="100%" height={280}>
-                <RechartsPie margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-                  <Pie
-                    data={sessionTypeData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    isAnimationActive={false}
-                    label={false}
-                    innerRadius={60}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                    paddingAngle={3}
-                  >
-                    {sessionTypeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, _n, item: { payload?: { name?: string } }) => [
-                      `${value}% of max feature volume`,
-                      item.payload?.name ?? "",
-                    ]}
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                      fontSize: 12,
-                    }}
-                  />
-                </RechartsPie>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-                {sessionTypeData.map((type) => (
-                  <div key={type.name} className="flex items-start gap-2 text-sm">
-                    <div
-                      className="w-3 h-3 rounded-full mt-1 shrink-0"
-                      style={{ backgroundColor: type.color }}
-                    />
-                    <span className="text-muted-foreground">
-                      <span className="font-medium text-foreground">{type.name}</span>
-                      <span className="mx-1">·</span>
-                      relative {type.value}%
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <AdminDonutChart
+                data={sessionTypeData}
+                height={300}
+                emptyMessage="No feature usage data available."
+                legendFormat={(item) => `relative ${item.value}%`}
+                tooltipFormat={(item) => [`${item.value}% of max feature volume`, item.name]}
+              />
             </Card>
           </motion.div>
         </div>

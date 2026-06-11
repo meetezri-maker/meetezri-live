@@ -39,14 +39,24 @@ function applyAppearanceToDom(appearance: SystemSettingsEnhancedState["appearanc
   if (typeof document === "undefined") return;
   const root = document.documentElement;
 
-  // Theme
+  // Theme — explicit data-theme for admin light/dark material system
   if (appearance.defaultTheme === "Dark") {
     root.classList.add("dark");
+    root.setAttribute("data-theme", "dark");
+    root.setAttribute("data-ezri-theme", "dark");
+    root.style.colorScheme = "dark";
   } else if (appearance.defaultTheme === "System") {
     const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
     root.classList.toggle("dark", prefersDark);
+    const resolved = prefersDark ? "dark" : "light";
+    root.setAttribute("data-theme", resolved);
+    root.setAttribute("data-ezri-theme", resolved);
+    root.style.colorScheme = resolved;
   } else {
     root.classList.remove("dark");
+    root.setAttribute("data-theme", "light");
+    root.setAttribute("data-ezri-theme", "light");
+    root.style.colorScheme = "light";
   }
 
   // Primary & accent color apply everywhere (admin + user app)

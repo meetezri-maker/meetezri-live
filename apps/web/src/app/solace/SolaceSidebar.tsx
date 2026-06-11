@@ -102,14 +102,14 @@ export function SolaceSidebar() {
               className={cn(
                 "solace-sidebar-nav flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
                 active
-                  ? "solace-sidebar-nav--active bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[rgba(255,255,255,0.96)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
+                  ? "solace-sidebar-nav--active"
                   : "text-[rgba(255,255,255,0.55)] hover:bg-white/[0.04] hover:text-[rgba(255,255,255,0.82)]"
               )}
             >
               <Icon
                 className={cn(
                   "h-[18px] w-[18px] shrink-0",
-                  active ? "text-violet-300" : "text-zinc-500"
+                  active ? "solace-sidebar-nav-icon--active" : "text-zinc-500"
                 )}
               />
               <span className="truncate">{item.label}</span>

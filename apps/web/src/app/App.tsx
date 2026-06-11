@@ -16,10 +16,8 @@ import { Toaster } from '@/app/components/ui/sonner';
 import { MobileMetaTags } from '@/app/components/MobileMetaTags';
 import { ThemeManager } from '@/app/components/ThemeManager';
 import {
-  applyAccentColorToDocument,
-  applyThemeToDocument,
-  isAccentColorKey,
-  resolveAppearanceTheme,
+  applyAppearanceToDocument,
+  readAppearanceFromStorage,
 } from '@/app/pages/app/appearance-settings/appearanceConstants';
 import {
   applyAccessibilitySettings,
@@ -296,8 +294,7 @@ function OnboardingAccessGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   useEffect(() => {
-    let theme = "dark";
-    let accentKey = "pink";
+    let appearanceSettings = readAppearanceFromStorage();
     let accessibilitySettings = loadAccessibilitySettings();
 
     if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
@@ -306,20 +303,8 @@ export default function App() {
       const isAppRoute = pathname.startsWith("/app") || pathname.startsWith("/admin") || pathname.startsWith("/onboarding");
       
       if (isAppRoute) {
-        const saved = window.localStorage.getItem("ezri_appearance_settings");
+        appearanceSettings = readAppearanceFromStorage();
         const savedAccessibility = window.localStorage.getItem("ezri_accessibility_settings");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed.theme) {
-              theme = resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion);
-            }
-            if (parsed.accentColor) {
-              accentKey = parsed.accentColor;
-            }
-          } catch {
-          }
-        }
         // Admin-set appearance (hex colors + theme from system settings page)
         const adminAppearance = window.localStorage.getItem("ezri_admin_appearance");
         if (adminAppearance) {
@@ -330,9 +315,12 @@ export default function App() {
               accentColor?: string;
               reducedMotion?: boolean;
             };
-            if (ap.defaultTheme === "Dark") theme = "dark";
-            else if (ap.defaultTheme === "System") theme = "dark";
-            else if (ap.defaultTheme === "Light") theme = "light";
+            if (ap.defaultTheme === "Dark") appearanceSettings = { ...appearanceSettings, theme: "dark" };
+            else if (ap.defaultTheme === "System") {
+              const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+              appearanceSettings = { ...appearanceSettings, theme: prefersDark ? "dark" : "light" };
+            }
+            else if (ap.defaultTheme === "Light") appearanceSettings = { ...appearanceSettings, theme: "light" };
             // Colors and reduced motion apply everywhere
             if (ap.primaryColor) (window as any).__adminPrimaryColor = ap.primaryColor;
             if (ap.accentColor) (window as any).__adminAccentColor = ap.accentColor;
@@ -352,9 +340,7 @@ export default function App() {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
 
-    applyThemeToDocument(theme === "light" ? "light" : "dark");
-
-    applyAccentColorToDocument(isAccentColorKey(accentKey) ? accentKey : "pink");
+    applyAppearanceToDocument(appearanceSettings);
 
     // Override with admin appearance colors (from system settings page)
     const adminPrimary = (window as any).__adminPrimaryColor;

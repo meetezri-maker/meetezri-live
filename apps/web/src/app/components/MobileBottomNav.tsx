@@ -42,14 +42,14 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
                 {isActive && (
                   <motion.div
                     layoutId="solaceMobileTab"
-                    className="absolute -top-px left-1/2 h-0.5 w-10 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-400 to-cyan-400 opacity-90 shadow-[0_0_14px_rgba(139,92,246,0.55)]"
+                    className="solace-mobile-nav-indicator absolute -top-px left-1/2 h-0.5 w-10 -translate-x-1/2 rounded-full opacity-90"
                     transition={{ type: "spring", stiffness: 420, damping: 32 }}
                   />
                 )}
                 <span
                   className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
                     isActive
-                      ? "solace-mobile-nav-tab--active border-violet-400/35 bg-violet-500/15 text-violet-200 shadow-[var(--solace-glow-purple)]"
+                      ? "solace-mobile-nav-tab--active"
                       : "solace-mobile-nav-tab border-transparent bg-transparent text-[var(--solace-muted)]"
                   }`}
                 >

@@ -421,10 +421,10 @@ html[data-ezri-theme="light"] .solace-app .solace-hero-media button[class*="bg-g
 html[data-theme="light"] .solace-app .solace-cta-gradient,
 html[data-theme="light"] .solace-app .solace-hero-content button[class*="bg-gradient"],
 html[data-theme="light"] .solace-app .solace-hero-media button[class*="bg-gradient"] {
-  background: linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #4338ca 100%) !important;
-  background-image: linear-gradient(to right, #7c3aed, #c026d3, #4338ca) !important;
+  background: var(--button-primary, linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #4338ca 100%)) !important;
+  background-image: var(--button-primary, linear-gradient(to right, #7c3aed, #c026d3, #4338ca)) !important;
   color: #ffffff !important;
-  border-color: rgba(124, 58, 237, 0.35) !important;
+  border-color: color-mix(in srgb, var(--accent, #7c3aed) 35%, transparent) !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .solace-cta-gradient svg,
