@@ -4,7 +4,11 @@ import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
 import type { EzriWsStatus } from "@/lib/ezri/realtimeClient";
-import type { SessionBackdropLayers, SessionBackdropPreference } from "@/lib/sessionBackdropPresets";
+import type {
+  SessionBackdropLayers,
+  SessionBackdropPreference,
+  SessionBackdropPresetKey,
+} from "@/lib/sessionBackdropPresets";
 import type { SafetyResource, SafetyState } from "@/app/types/safety";
 import { CRISIS_KEYWORD_MODAL_ENABLED } from "../constants";
 import type { LiveUserSpeechStore } from "../hooks/useLiveUserSpeechStore";
@@ -28,6 +32,7 @@ export interface ActiveSessionViewProps {
   sessionContainerRef: RefObject<HTMLDivElement>;
   sessionViewportClass: string;
   sessionBackdropLayers: SessionBackdropLayers;
+  sessionRoomThemeKey: SessionBackdropPresetKey;
   isEndingSession: boolean;
   stageShellPadding: string;
   stageRoundClass: string;
@@ -150,6 +155,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     sessionContainerRef,
     sessionViewportClass,
     sessionBackdropLayers,
+    sessionRoomThemeKey,
     isEndingSession,
     stageShellPadding,
     stageRoundClass,
@@ -291,6 +297,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
           <SessionStage
             stageRoundClass={stageRoundClass}
             sessionBackdropLayers={sessionBackdropLayers}
+            sessionRoomThemeKey={sessionRoomThemeKey}
             isEzriSpeaking={isEzriSpeaking}
             sessionUsesCompanion3d={sessionUsesCompanion3d}
             companionAvatarLabel={companionAvatarLabel}
