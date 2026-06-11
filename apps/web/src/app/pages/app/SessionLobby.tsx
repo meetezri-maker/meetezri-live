@@ -901,7 +901,7 @@ export function SessionLobby() {
             </div>
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_308px]">
               <div className="min-w-0 space-y-9">
-                <Skeleton className="h-[440px] w-full rounded-[1.75rem] bg-white/[0.05]" />
+                <Skeleton className="h-[252px] w-full rounded-[1.75rem] bg-white/[0.05]" />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {[0, 1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-28 rounded-[1.2rem] bg-white/[0.05]" />

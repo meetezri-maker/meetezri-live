@@ -66,14 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const maybeClearEmailVerificationRequired = async (sessionUser: User | null) => {
       if (!sessionUser) return;
-      // Prevent overly-aggressive metadata clearing.
-      // We should only clear `email_verification_required` during the auth callback flow,
-      // otherwise trial users can lose the "verification required" state before they
-      // actually click/complete email verification.
-      if (typeof window !== 'undefined') {
-        const pathname = window.location.pathname || '';
-        if (!pathname.startsWith('/auth/callback')) return;
-      }
+      // Clear stale signup metadata once Supabase has confirmed the email.
+      // Without this, password logins keep an old JWT flag and paid users get sent to /verify-email.
       try {
         const needsClear =
           (sessionUser.user_metadata as any)?.email_verification_required === true;
@@ -82,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await supabase.auth.updateUser({
             data: { email_verification_required: false },
           });
-          // No toast here to avoid UX noise during redirect flows.
         }
       } catch {
         // Best-effort only; do not block app navigation.

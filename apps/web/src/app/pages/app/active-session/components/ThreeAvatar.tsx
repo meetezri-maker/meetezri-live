@@ -3554,7 +3554,11 @@ function ThreeAvatarComponent({
           }
           return;
         }
-        if (isSaraV3Avatar && !saraV3EnvironmentHandle) {
+        if (
+          isSaraV3Avatar &&
+          !saraV3EnvironmentHandle &&
+          SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.enabled
+        ) {
           saraV3EnvironmentHandle = applySaraV3Environment({
             scene,
             renderer,
@@ -3585,6 +3589,11 @@ function ThreeAvatarComponent({
           gltfScene.position.set(0, 0, 0);
           gltfScene.rotation.set(0, 0, 0);
           gltfScene.scale.set(1, 1, 1);
+        } else if (isSaraV3Avatar) {
+          const saraV3Layout = SARA_V3_AVATAR_DEFINITION.saraV3;
+          applyVector3Config(gltfScene.position, saraV3Layout.position, [0, 0, 0]);
+          applyVector3Config(gltfScene.rotation, saraV3Layout.rotation, [0, 0, 0]);
+          applyScaleConfig(gltfScene, saraV3Layout.scale, 1);
         } else if (useRfv2Morphs) {
           gltfScene.position.set(0, -1.65, 0); // move avatar down shaz
           gltfScene.rotation.set(0, 0, 0);
@@ -3616,6 +3625,9 @@ function ThreeAvatarComponent({
         const diagnosticHiddenMeshes: string[] = [];
         const activeMorphTargets = new Set<string>();
         const transformCorrections: string[] = [];
+        if (isSaraV3Avatar) {
+          transformCorrections.push("saraV3.gltf.configTransform");
+        }
         if (isSaraViewport && !saraRfv2PreviewActive) {
           const saraV2Diagnostics = prepareSaraV2Scene(gltfScene, {
             modelUrl,
@@ -4377,7 +4389,7 @@ function ThreeAvatarComponent({
         }
         if (isSaraV3Avatar && modelMatchesSaraV3) {
           const saraV3Camera = SARA_V3_AVATAR_DEFINITION.camera;
-          const saraV3CameraPosition = vector3FromConfig(saraV3Camera.position, [0, 1.3, 2.2]);
+          const saraV3CameraPosition = vector3FromConfig(saraV3Camera.position, [0, 1.25, 3.0]);
           const saraV3CameraLookAt = vector3FromConfig(saraV3Camera.lookAt, [0, 1.25, 0]);
           camera.fov = saraV3Camera.fov ?? 12;
           camera.near = 0.01;
