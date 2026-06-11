@@ -59,6 +59,9 @@ interface SessionData {
   messagesCount: number;
   topicsDiscussed: string[];
   thumbnail: string;
+  /** Display title (e.g. Instant Talk) */
+  title: string;
+  /** Stored session summary from config, if any */
   summary: string;
   favorite: boolean;
   status?: "completed" | "upcoming";
@@ -95,7 +98,29 @@ interface BackendSession {
     avatar?: string;
     environment?: string;
     mood?: string;
+    summary?: string;
   };
+}
+
+function deriveSessionSummaryFromTranscript(
+  messages: { role: string; content: string }[]
+): string {
+  const userMessages = messages
+    .filter((m) => m.role?.toLowerCase() === "user")
+    .map((m) => m.content.trim())
+    .filter(Boolean);
+
+  const firstUser = userMessages[0];
+  if (firstUser) {
+    return firstUser.length > 280 ? `${firstUser.slice(0, 277)}…` : firstUser;
+  }
+
+  const firstMessage = messages.find((m) => m.content?.trim())?.content.trim();
+  if (firstMessage) {
+    return firstMessage.length > 280 ? `${firstMessage.slice(0, 277)}…` : firstMessage;
+  }
+
+  return "No summary available for this talk.";
 }
 
 const DEFAULT_HISTORY_AVATAR = {
@@ -429,7 +454,9 @@ export function SessionHistory() {
             messagesCount: s._count?.session_messages || 0,
             topicsDiscussed: [],
             thumbnail: pickSolaceCinematicImage(s.id),
-            summary: formatSessionSummaryTitle(s.title, s.type),
+            title: formatSessionSummaryTitle(s.title, s.type),
+            summary:
+              typeof s.config?.summary === "string" ? s.config.summary.trim() : "",
             favorite: s.is_favorite || false,
             status: s.status === 'completed' ? 'completed' : 'upcoming',
             recordingUrl: s.recording_url || undefined,
@@ -496,7 +523,8 @@ export function SessionHistory() {
       `Session ID: ${sessionData.id}`,
       `Date: ${sessionData.date}`,
       `Duration: ${sessionData.duration}`,
-      `Summary: ${sessionData.summary}`,
+      `Title: ${sessionData.title}`,
+      `Summary: ${sessionData.summary || deriveSessionSummaryFromTranscript(rows)}`,
       "",
       "--- Transcript ---",
       "",
@@ -526,6 +554,7 @@ export function SessionHistory() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       sessions = sessions.filter(s => 
+        s.title.toLowerCase().includes(q) ||
         s.summary.toLowerCase().includes(q) ||
         s.topicsDiscussed.some(topic => topic.toLowerCase().includes(q))
       );
@@ -583,6 +612,14 @@ export function SessionHistory() {
 
   const longestStreak = profile?.streak_days || 14;
   const journeyProgress = Math.min(100, Math.round((sessionsInPeriod.length / 200) * 100));
+
+  const selectedSessionSummary = useMemo(() => {
+    if (!selectedSession) return "";
+    const stored = selectedSession.summary.trim();
+    if (stored) return stored;
+    if (transcript.length > 0) return deriveSessionSummaryFromTranscript(transcript);
+    return "";
+  }, [selectedSession, transcript]);
 
   if (isTrialUser) {
     return (
@@ -906,9 +943,12 @@ export function SessionHistory() {
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="session-history-row-title font-semibold text-white mb-1 truncate">{sessionItem.summary}</h3>
+                        <h3 className="session-history-row-title font-semibold text-white mb-1 truncate">{sessionItem.title}</h3>
                         <p className="session-history-row-preview text-sm text-slate-400 mb-2 line-clamp-1">
-                          You opened up about feeling overwhelmed and anxious.
+                          {sessionItem.summary ||
+                            (sessionItem.messagesCount > 0
+                              ? `${sessionItem.messagesCount} messages — open to view summary`
+                              : "Open to view talk details")}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="session-history-type-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300">
@@ -1212,7 +1252,15 @@ export function SessionHistory() {
 
                 <div>
                   <h3 className={cn(modalSectionTitle, "mb-2")}>Summary</h3>
-                  <p className={modalBodyText}>{selectedSession.summary}</p>
+                  {loadingTranscript && !selectedSessionSummary ? (
+                    <p className={cn(modalMutedText, "text-sm")}>Loading summary…</p>
+                  ) : selectedSessionSummary ? (
+                    <p className={modalBodyText}>{selectedSessionSummary}</p>
+                  ) : (
+                    <p className={cn(modalMutedText, "text-sm italic")}>
+                      No summary available for this talk.
+                    </p>
+                  )}
                 </div>
 
                 <div>

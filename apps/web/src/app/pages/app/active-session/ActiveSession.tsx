@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import {
   parseSessionBackdropPreference,
   resolveSessionBackdropLayers,
+  resolveSessionBackdropPresetKey,
   SESSION_BACKDROP_EMOJI_OPTIONS,
   SESSION_BACKDROP_STORAGE_KEY,
   type SessionBackdropPreference,
@@ -787,20 +788,22 @@ export function ActiveSession() {
     [sessionBackdropPreference, sortedMoodPreview],
   );
 
-  const selectedRoomMoodOption = useMemo(() => {
-    const fromList = SESSION_BACKDROP_EMOJI_OPTIONS.find(
-      (o) => o.value === sessionBackdropPreference,
-    );
-    if (fromList) return fromList;
-    if (sessionBackdropPreference === "solace") {
-      return {
-        value: "solace" as const,
-        emoji: "ðŸ’ ",
-        label: "Solace â€” brand default",
-      };
-    }
-    return SESSION_BACKDROP_EMOJI_OPTIONS[0];
-  }, [sessionBackdropPreference]);
+  const sessionRoomThemeKey = useMemo(
+    () =>
+      resolveSessionBackdropPresetKey(
+        sessionBackdropPreference,
+        sortedMoodPreview[0]?.mood ?? null,
+      ),
+    [sessionBackdropPreference, sortedMoodPreview],
+  );
+
+  const selectedRoomMoodOption = useMemo(
+    () =>
+      SESSION_BACKDROP_EMOJI_OPTIONS.find(
+        (o) => o.value === sessionBackdropPreference,
+      ) ?? SESSION_BACKDROP_EMOJI_OPTIONS[0],
+    [sessionBackdropPreference],
+  );
 
   useEffect(() => {
     try {
@@ -4628,7 +4631,7 @@ export function ActiveSession() {
     "top-3 sm:top-4 md:top-5 end-3 sm:end-4 md:end-5";
   /** Left rail: greeting + transcript. */
   const stageRailWidthLeftClass =
-    "w-full max-w-[min(24rem,calc(100%-1.5rem))] sm:max-w-[min(24rem,calc(100%-2rem))] md:w-[24rem] md:max-w-none shrink-0";
+    "w-full max-w-[min(26.4rem,calc(100%-1.5rem))] sm:max-w-[min(26.4rem,calc(100%-2rem))] md:w-[26.4rem] md:max-w-none shrink-0";
   const stageRailWidthRightClass =
     "w-[min(18rem,calc(100%-1.25rem))] sm:w-[min(18rem,calc(100%-1.5rem))] md:w-72 shrink-0";
   const stageBottomBar = "bottom-4 sm:bottom-5 md:bottom-6";
@@ -4728,6 +4731,7 @@ export function ActiveSession() {
       sessionContainerRef={sessionContainerRef}
       sessionViewportClass={sessionViewportClass}
       sessionBackdropLayers={sessionBackdropLayers}
+      sessionRoomThemeKey={sessionRoomThemeKey}
       isEndingSession={isEndingSession}
       stageShellPadding={stageShellPadding}
       stageRoundClass={stageRoundClass}

@@ -131,9 +131,47 @@ import {
   type SaraV3SmileRuntimeState,
   type SaraV3VisemeDriverState,
 } from "@/avatar/saraV3";
+import {
+  SESSION_ROOM_3D_THEMES,
+  type SessionBackdropPresetKey,
+  type SessionRoom3dTheme,
+} from "@/lib/sessionBackdropPresets";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getSpeechOpennessAt } from "../utils/speech";
+
+interface SessionRoomThemeBundle {
+  curvedWallMat: THREE.MeshStandardMaterial;
+  sideWallMatL: THREE.MeshStandardMaterial;
+  sideWallMatR: THREE.MeshStandardMaterial;
+  floorMat: THREE.MeshStandardMaterial;
+  ceilMat: THREE.MeshStandardMaterial;
+  wallMatDeep: THREE.MeshStandardMaterial;
+  roomMatsWithGrain: THREE.MeshStandardMaterial[];
+  keyLight: THREE.DirectionalLight;
+  fillLight: THREE.DirectionalLight;
+  rimLight: THREE.DirectionalLight;
+  roomWarmth: THREE.PointLight;
+}
+
+function applySessionRoom3dTheme(
+  bundle: SessionRoomThemeBundle,
+  theme: SessionRoom3dTheme,
+) {
+  bundle.curvedWallMat.color.setHex(theme.wall);
+  bundle.sideWallMatL.color.setHex(theme.wall);
+  bundle.sideWallMatR.color.setHex(theme.wall);
+  bundle.wallMatDeep.color.setHex(theme.wallDeep);
+  bundle.floorMat.color.setHex(theme.floor);
+  bundle.ceilMat.color.setHex(theme.ceiling);
+  for (const mat of bundle.roomMatsWithGrain) {
+    mat.emissive.setHex(theme.emissive);
+  }
+  bundle.keyLight.color.setHex(theme.keyLight);
+  bundle.fillLight.color.setHex(theme.fillLight);
+  bundle.rimLight.color.setHex(theme.rimLight);
+  bundle.roomWarmth.color.setHex(theme.warmthLight);
+}
 
 export type FixedAvatarViewportConfig = {
   avatarId: string;
@@ -2706,6 +2744,7 @@ function resolveJordanSpeakingBehaviorContribution({
 const SHOW_ROOM = false;
 
 function ThreeAvatarComponent({
+  sessionRoomThemeKey,
   isSpeaking,
   isListening,
   isThinking,
@@ -2732,6 +2771,7 @@ function ThreeAvatarComponent({
   avatarPhonemeTimelineRef,
   avatarAudioCurrentTimeRef,
 }: {
+  sessionRoomThemeKey: SessionBackdropPresetKey;
   isSpeaking: boolean;
   isListening: boolean;
   isThinking: boolean;
@@ -2767,6 +2807,10 @@ function ThreeAvatarComponent({
   );
   const [jordanPhonemeDebug, setJordanPhonemeDebug] =
     useState<JordanPhonemeDebugState>(EMPTY_JORDAN_PHONEME_DEBUG_STATE);
+
+  const sessionRoomThemeBundleRef = useRef<SessionRoomThemeBundle | null>(null);
+  const sessionRoomThemeKeyRef = useRef(sessionRoomThemeKey);
+  sessionRoomThemeKeyRef.current = sessionRoomThemeKey;
 
   const isSpeakingRef = useRef(isSpeaking);
   const isListeningRef = useRef(isListening);
@@ -3369,6 +3413,24 @@ function ThreeAvatarComponent({
 
     scene.add(room);
     sessionRoomGroup = room;
+
+    sessionRoomThemeBundleRef.current = {
+      curvedWallMat,
+      sideWallMatL,
+      sideWallMatR,
+      floorMat,
+      ceilMat,
+      wallMatDeep,
+      roomMatsWithGrain,
+      keyLight,
+      fillLight,
+      rimLight,
+      roomWarmth,
+    };
+    applySessionRoom3dTheme(
+      sessionRoomThemeBundleRef.current,
+      SESSION_ROOM_3D_THEMES[sessionRoomThemeKeyRef.current],
+    );
 
     // Reset refs
     mouthBindingsRef.current = [];
@@ -8670,6 +8732,7 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
             }
           }
           sessionRoomGroup = null;
+          sessionRoomThemeBundleRef.current = null;
 
           if (SHOW_ROOM && sceneRef.current) {
             try {
@@ -8754,7 +8817,13 @@ if (!useRfv2Morphs && !saraRfv2PreviewActive && !saraV2MouthBoneDriverDisabled) 
         onSaraRfv2Fallback,
       ]);
 
-    useEffect(() => {
+  useEffect(() => {
+    const bundle = sessionRoomThemeBundleRef.current;
+    if (!bundle) return;
+    applySessionRoom3dTheme(bundle, SESSION_ROOM_3D_THEMES[sessionRoomThemeKey]);
+  }, [sessionRoomThemeKey]);
+
+  useEffect(() => {
       if (!isSpeaking) {
         mouthTargetRef.current = 0;
         mouthBaseRef.current = 0;

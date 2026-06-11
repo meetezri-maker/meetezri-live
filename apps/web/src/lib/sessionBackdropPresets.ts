@@ -209,12 +209,127 @@ export const SESSION_MOOD_SWATCH_GRADIENT: Record<
 };
 
 /** Short label on gradient tiles (full phrase stays in aria-label). */
+/** Three.js cyclorama colors per resolved preset (matches `SessionBackdrop` moods). */
+export interface SessionRoom3dTheme {
+  wall: number;
+  wallDeep: number;
+  floor: number;
+  ceiling: number;
+  emissive: number;
+  keyLight: number;
+  fillLight: number;
+  rimLight: number;
+  warmthLight: number;
+}
+
+export const SESSION_ROOM_3D_THEMES: Record<
+  SessionBackdropPresetKey,
+  SessionRoom3dTheme
+> = {
+  solace: {
+    wall: 0x2c3a4e,
+    wallDeep: 0x1a2838,
+    floor: 0x1a2434,
+    ceiling: 0x232f3f,
+    emissive: 0x0d1522,
+    keyLight: 0xfff5eb,
+    fillLight: 0xfff1df,
+    rimLight: 0x4466aa,
+    warmthLight: 0xffc9a8,
+  },
+  happy: {
+    wall: 0x3a4230,
+    wallDeep: 0x252e1c,
+    floor: 0x1c2414,
+    ceiling: 0x2a3224,
+    emissive: 0x181408,
+    keyLight: 0xfff8e8,
+    fillLight: 0xfff0c8,
+    rimLight: 0xfbbf24,
+    warmthLight: 0xffd080,
+  },
+  calm: {
+    wall: 0x1e3d42,
+    wallDeep: 0x122830,
+    floor: 0x0f2228,
+    ceiling: 0x1a2e35,
+    emissive: 0x081820,
+    keyLight: 0xe8fffa,
+    fillLight: 0xd4f5f0,
+    rimLight: 0x2dd4bf,
+    warmthLight: 0x7ecfc0,
+  },
+  anxious: {
+    wall: 0x2d2850,
+    wallDeep: 0x1a1838,
+    floor: 0x151228,
+    ceiling: 0x221f3a,
+    emissive: 0x100e22,
+    keyLight: 0xf0ecff,
+    fillLight: 0xe8e0ff,
+    rimLight: 0x6366f1,
+    warmthLight: 0xc4b5fd,
+  },
+  sad: {
+    wall: 0x1e2a42,
+    wallDeep: 0x121a2e,
+    floor: 0x0c1420,
+    ceiling: 0x182230,
+    emissive: 0x080c18,
+    keyLight: 0xe8f0ff,
+    fillLight: 0xc7d9f0,
+    rimLight: 0x3b82f6,
+    warmthLight: 0x93c5fd,
+  },
+  angry: {
+    wall: 0x2a2828,
+    wallDeep: 0x181616,
+    floor: 0x121010,
+    ceiling: 0x1e1c1c,
+    emissive: 0x0a0808,
+    keyLight: 0xfff0ec,
+    fillLight: 0xe8e0dc,
+    rimLight: 0x64748b,
+    warmthLight: 0xd4a0a0,
+  },
+  tired: {
+    wall: 0x2a2a35,
+    wallDeep: 0x1a1a22,
+    floor: 0x141418,
+    ceiling: 0x1e1e28,
+    emissive: 0x0c0c12,
+    keyLight: 0xf0eef8,
+    fillLight: 0xd8d4e8,
+    rimLight: 0x6b7280,
+    warmthLight: 0xc7c0d8,
+  },
+  excited: {
+    wall: 0x352550,
+    wallDeep: 0x201535,
+    floor: 0x181025,
+    ceiling: 0x281e40,
+    emissive: 0x120a22,
+    keyLight: 0xfff0ff,
+    fillLight: 0xf5e0ff,
+    rimLight: 0xa78bfa,
+    warmthLight: 0xf0abfc,
+  },
+};
+
+export function resolveSessionRoom3dTheme(
+  preference: SessionBackdropPreference,
+  latestMoodSlug: string | null,
+): SessionRoom3dTheme {
+  const key = resolveSessionBackdropPresetKey(preference, latestMoodSlug);
+  return SESSION_ROOM_3D_THEMES[key];
+}
+
 export const SESSION_MOOD_TILE_CAPTION: Record<
   SessionBackdropPreference,
   string
 > = {
   auto: "Auto",
-  solace: "Solace",
+  solace: "Default",
   happy: "Happy",
   calm: "Calm",
   anxious: "Ease",
@@ -236,13 +351,14 @@ export function resolveSessionBackdropPresetKey(
   return preference as SessionBackdropPresetKey;
 }
 
-/** Picker tiles (8) — 4×2 grid. "Solace" is still a valid saved preference & auto fallback, but no separate tile (use Auto). */
+/** Picker tiles — 3×3 grid. `solace` is the brand-default room (original session look). */
 export const SESSION_BACKDROP_EMOJI_OPTIONS: {
   value: SessionBackdropPreference;
   emoji: string;
   label: string;
 }[] = [
   { value: "auto", emoji: "✨", label: "Auto — match latest check-in" },
+  { value: "solace", emoji: "🌌", label: "Default — brand atmosphere" },
   { value: "happy", emoji: "😊", label: "Happy" },
   { value: "calm", emoji: "😌", label: "Calm" },
   { value: "anxious", emoji: "😰", label: "Anxious (soothing)" },

@@ -59,6 +59,7 @@ import {
   modalPanelBody,
   modalPanelHeader,
   modalPanelLg,
+  modalPanelMd,
   modalPrimaryButton,
   modalSecondaryButton,
   modalSectionTitle,
@@ -1661,34 +1662,38 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowUpcomingActionModal(false)}
-              className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
+              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg"
+                className={cn(modalPanelMd, "rounded-[1.25rem]")}
+                role="dialog"
+                aria-modal="true"
               >
-                <Card className="p-6 shadow-2xl bg-white dark:bg-gray-900">
-                  <div className="flex items-start justify-between mb-4">
+                <div className={modalPanelHeader}>
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-xl font-bold">Talking Options</h3>
-                      <p className="text-sm text-muted-foreground">
+                      <h3 className={modalTitle}>Talking Options</h3>
+                      <p className={modalSubtitle}>
                         {activeUpcomingSession.avatarName} • Choose minutes and action
                       </p>
                     </div>
-                    <Button
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
                       onClick={() => setShowUpcomingActionModal(false)}
+                      className={cn(modalCloseButton, "rounded-full p-2")}
+                      aria-label="Close"
                     >
-                      <X className="w-4 h-4" />
-                    </Button>
+                      <X className="h-5 w-5" aria-hidden />
+                    </button>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className={modalPanelBody}>
+                  <div className="grid grid-cols-4 gap-2">
                     {durations.map((duration) => {
                       const isDisabled = !!durationDisabled.get(duration);
                       const isSelected = selectedDuration === duration;
@@ -1701,36 +1706,40 @@ export function SessionLobby() {
                             if (isDisabled) return;
                             applyDurationPreset(duration);
                           }}
-                          className={`rounded-xl border p-3 text-center transition-all ${
+                          className={cn(
+                            "rounded-[1.1rem] p-3 text-center",
                             isDisabled
-                              ? "opacity-40 cursor-not-allowed"
+                              ? modalOptionCardDisabled
                               : isSelected
-                              ? "border-primary bg-primary/10"
-                              : "hover:border-primary/40"
-                          }`}
+                                ? modalOptionCardSelected
+                                : modalOptionCard
+                          )}
                         >
-                          <div className="text-lg font-bold">{duration}</div>
-                          <div className="text-[10px] text-muted-foreground">min</div>
+                          <div className="text-lg font-semibold">{duration}</div>
+                          <div className={modalOptionCardMeta}>min</div>
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-5">
-                    <span>Minutes available: {minutesAvailable}</span>
-                    <span>Selected: {selectedDuration} min</span>
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <p className={modalMutedText}>
+                      Minutes available:{" "}
+                      <span className={modalEmphasisText}>{minutesAvailable}</span>
+                    </p>
+                    <span className={modalBadge}>Selected: {selectedDuration} min</span>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       type="button"
-                      className="flex-1 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
+                      className={cn(modalPrimaryButton, "flex-1")}
+                      isLoading={isStarting}
                       onClick={() => {
                         void handleStartSession({
                           avatarOverride: activeUpcomingSession.avatarName,
                           scheduledSessionId: activeUpcomingSession.id,
                         });
-                        setShowUpcomingActionModal(false);
                       }}
                       disabled={isStarting || selectedDuration > minutesAvailable || selectedDuration < 1}
                     >
@@ -1739,7 +1748,7 @@ export function SessionLobby() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1"
+                      className={cn(modalSecondaryButton, "flex-1")}
                       onClick={() => {
                         setShowUpcomingActionModal(false);
                         setSelectedMode("schedule");
@@ -1767,7 +1776,12 @@ export function SessionLobby() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1 border-red-300 text-red-600 hover:bg-red-500 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                      className={cn(
+                        modalSecondaryButton,
+                        "flex-1 border-red-500/30 text-red-400 hover:border-red-400/40 hover:bg-red-500/10",
+                        "[html[data-ezri-theme=light]_&]:border-red-300 [html[data-ezri-theme=light]_&]:text-red-600 [html[data-ezri-theme=light]_&]:hover:bg-red-50",
+                        "[html[data-theme=light]_&]:border-red-300 [html[data-theme=light]_&]:text-red-600 [html[data-theme=light]_&]:hover:bg-red-50"
+                      )}
                       onClick={() => {
                         void handleCancelScheduledSession();
                       }}
@@ -1776,7 +1790,7 @@ export function SessionLobby() {
                       {isCancelingScheduled ? "Canceling..." : "Cancel Talk"}
                     </Button>
                   </div>
-                </Card>
+                </div>
               </motion.div>
             </motion.div>
           )}

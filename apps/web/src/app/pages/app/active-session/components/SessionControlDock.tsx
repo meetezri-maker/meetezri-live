@@ -188,7 +188,7 @@ function SessionControlDockComponent({
           </p>
         </div>
         <div
-          className="grid grid-cols-4 grid-rows-2 gap-1.5 p-2.5 sm:gap-2 sm:p-3"
+          className="grid grid-cols-3 gap-1.5 p-2.5 sm:gap-2 sm:p-3"
           role="listbox"
           aria-label="Room mood color options"
         >

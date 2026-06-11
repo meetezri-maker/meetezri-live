@@ -3,7 +3,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { Loader2 } from "lucide-react";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
-import type { SessionBackdropLayers } from "@/lib/sessionBackdropPresets";
+import type {
+  SessionBackdropLayers,
+  SessionBackdropPresetKey,
+} from "@/lib/sessionBackdropPresets";
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { StaticSessionPortrait } from "./StaticSessionPortrait";
 import { SessionBackdrop } from "./SessionBackdrop";
@@ -15,6 +18,7 @@ const ThreeAvatar = lazy(() =>
 export interface SessionStageProps {
   stageRoundClass: string;
   sessionBackdropLayers: SessionBackdropLayers;
+  sessionRoomThemeKey: SessionBackdropPresetKey;
   isEzriSpeaking: boolean;
   sessionUsesCompanion3d: boolean;
   companionAvatarLabel: string | undefined;
@@ -47,6 +51,7 @@ export interface SessionStageProps {
 export const SessionStage = memo(function SessionStage({
   stageRoundClass,
   sessionBackdropLayers,
+  sessionRoomThemeKey,
   isEzriSpeaking,
   sessionUsesCompanion3d,
   companionAvatarLabel,
@@ -103,6 +108,7 @@ export const SessionStage = memo(function SessionStage({
               }
             >
               <ThreeAvatar
+                sessionRoomThemeKey={sessionRoomThemeKey}
                 rawAvatarLabel={companionAvatarLabel}
                 activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
                 modelUrl={companionModelUrl}
