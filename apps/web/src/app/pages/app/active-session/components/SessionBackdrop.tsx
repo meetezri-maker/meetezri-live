@@ -1,36 +1,60 @@
-import { memo } from "react";
-import type { SessionBackdropLayers } from "@/lib/sessionBackdropPresets";
+import { memo, useMemo } from "react";
+import type {
+  SessionBackdropLayers,
+  SessionBackdropPreference,
+} from "@/lib/sessionBackdropPresets";
+import { resolveSessionMoodSwatchGradient } from "@/lib/sessionBackdropPresets";
 
 export interface SessionBackdropProps {
   sessionBackdropLayers: SessionBackdropLayers;
+  sessionBackdropPreference: SessionBackdropPreference;
+  latestMoodSlug: string | null;
 }
 
 /** Static mood atmosphere layers (z-0). */
 export const SessionBackdrop = memo(function SessionBackdrop({
   sessionBackdropLayers,
+  sessionBackdropPreference,
+  latestMoodSlug,
 }: SessionBackdropProps) {
+  const moodSwatchGradient = useMemo(
+    () =>
+      resolveSessionMoodSwatchGradient(
+        sessionBackdropPreference,
+        latestMoodSlug,
+      ),
+    [sessionBackdropPreference, latestMoodSlug],
+  );
+
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-0 min-h-full w-full"
-      style={{ backgroundColor: sessionBackdropLayers.rootBg }}
+      className="pointer-events-none absolute inset-0 z-0 min-h-full w-full transition-[background] duration-700 ease-out"
+      style={{ background: moodSwatchGradient }}
       aria-hidden
     >
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-[background-color,opacity] duration-700 ease-out"
+        style={{ backgroundColor: sessionBackdropLayers.rootBg, opacity: 0.42 }}
+      />
+      <div
+        className="absolute inset-0 transition-[background-image,opacity] duration-700 ease-out"
         style={{
           backgroundImage: sessionBackdropLayers.radialPrimary,
+          opacity: 0.72,
         }}
       />
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-[background-image,opacity] duration-700 ease-out"
         style={{
           backgroundImage: sessionBackdropLayers.radialFloor,
+          opacity: 0.85,
         }}
       />
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-[background-image,opacity] duration-700 ease-out"
         style={{
           backgroundImage: sessionBackdropLayers.linearAccent,
+          opacity: 0.9,
         }}
       />
       <div

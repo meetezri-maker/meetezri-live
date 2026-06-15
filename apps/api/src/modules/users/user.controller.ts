@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput, SignupInput, signupSchema } from './user.schema';
+import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput, SignupInput, signupSchema, ResendVerificationPublicInput } from './user.schema';
 import * as userService from './user.service';
 import * as billingService from '../billing/billing.service';
 import { supabaseAdmin } from '../../config/supabase';
@@ -137,6 +137,112 @@ function buildVerificationRedirectTo(
   // mark email_confirmed_at as expected unless we explicitly confirm server-side.
   const redirectTo = `${webBaseUrl}/auth/callback?redirect=${encodeURIComponent(targetPath)}&via=verification&flow=${signupType}`;
   return { redirectTo, targetPath };
+}
+
+async function sendVerificationReminderForUser(
+  request: FastifyRequest,
+  params: {
+    userId: string;
+    email: string;
+    signupTypeHint?: 'trial' | 'plan' | null;
+  }
+): Promise<void> {
+  const { userId, email, signupTypeHint } = params;
+
+  const profile = await userService.getProfile(userId);
+  let signupTypeResolved: 'trial' | 'plan' | null = signupTypeHint ?? null;
+  if (!signupTypeResolved) {
+    if (profile?.signup_type === 'trial' || profile?.signup_type === 'plan') {
+      signupTypeResolved = profile.signup_type;
+    } else {
+      try {
+        const metaSignup = await userService.getSignupTypeFromAuthMeta(userId);
+        if (metaSignup) signupTypeResolved = metaSignup;
+      } catch {
+        // leave as null
+      }
+    }
+  }
+
+  const { webBaseUrl: baseUrl, source: baseUrlSource } =
+    getWebBaseUrlFromRequest(request);
+
+  const signupTypeForRedirect: 'trial' | 'plan' =
+    signupTypeResolved === 'trial' ? 'trial' : 'plan';
+  const { redirectTo, targetPath } = buildVerificationRedirectTo(
+    baseUrl,
+    signupTypeForRedirect
+  );
+
+  request.log.info(
+    {
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        WEB_BASE_URL: process.env.WEB_BASE_URL,
+        APP_URL: process.env.APP_URL,
+        CLIENT_URL: process.env.CLIENT_URL,
+      },
+      request: {
+        origin: request.headers.origin,
+        referer: request.headers.referer,
+        x_web_base_url: request.headers['x-web-base-url'],
+        baseUrl,
+        baseUrlSource,
+        isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
+        signupTypeResolved,
+        targetPath,
+      },
+      supabase: {
+        type: 'magiclink',
+        redirectTo,
+      },
+    },
+    'Supabase resend generateLink redirectTo (exact, per-flow)'
+  );
+
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (linkError) throw linkError;
+  const verificationLinkRaw = linkData.properties?.action_link;
+  if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
+  let verificationLink = verificationLinkRaw;
+  try {
+    const u = new URL(verificationLinkRaw);
+    u.searchParams.set('redirect_to', redirectTo);
+    verificationLink = u.toString();
+  } catch {
+    verificationLink = verificationLinkRaw;
+  }
+
+  try {
+    const u = new URL(verificationLink);
+    const rt = u.searchParams.get('redirect_to') || '';
+    const rtOrigin = rt ? (new URL(rt)).origin : null;
+    request.log.info(
+      { redirectToPassed: redirectTo, redirectToInLinkOrigin: rtOrigin },
+      'Resend verification link redirect_to (origin only)'
+    );
+  } catch {
+    // ignore
+  }
+
+  const verificationReminderEmail = emailService.buildVerificationReminderEmail({
+    verificationLink,
+    audience: signupTypeResolved === 'trial' ? 'trial' : 'plan',
+  });
+
+  await emailService.sendEmail(
+    email,
+    verificationReminderEmail.subject,
+    verificationReminderEmail.html,
+    verificationReminderEmail.text
+  );
 }
 
 export async function confirmEmailHandler(
@@ -355,106 +461,50 @@ export async function resendVerificationHandler(
   }
 
   try {
-    const profile = await userService.getProfile(userId);
-    // Resolve flow type deterministically.
-    let signupTypeResolved: 'trial' | 'plan' | null = null;
-    if (profile?.signup_type === 'trial' || profile?.signup_type === 'plan') {
-      signupTypeResolved = profile.signup_type;
-    } else {
-      try {
-        const metaSignup = await userService.getSignupTypeFromAuthMeta(userId);
-        if (metaSignup) signupTypeResolved = metaSignup;
-      } catch {
-        // leave as null
-      }
-    }
-
-    const { webBaseUrl: baseUrl, source: baseUrlSource } =
-      getWebBaseUrlFromRequest(request);
-
-    const signupTypeForRedirect: 'trial' | 'plan' =
-      signupTypeResolved === 'trial' ? 'trial' : 'plan';
-    const { redirectTo, targetPath } = buildVerificationRedirectTo(
-      baseUrl,
-      signupTypeForRedirect
-    );
-
-    // Required debug logging: exact redirectTo passed to Supabase (Auth admin generateLink).
-    request.log.info(
-      {
-        env: {
-          NODE_ENV: process.env.NODE_ENV,
-          WEB_BASE_URL: process.env.WEB_BASE_URL,
-          APP_URL: process.env.APP_URL,
-          CLIENT_URL: process.env.CLIENT_URL,
-        },
-        request: {
-          origin: request.headers.origin,
-          referer: request.headers.referer,
-          x_web_base_url: request.headers['x-web-base-url'],
-          baseUrl,
-          baseUrlSource,
-          isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
-          signupTypeResolved,
-          targetPath,
-        },
-        supabase: {
-          type: 'magiclink',
-          redirectTo,
-        },
-      },
-      'Supabase resend generateLink redirectTo (exact, per-flow)'
-    );
-
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-      options: {
-        redirectTo,
-      },
-    });
-
-    if (linkError) throw linkError;
-    const verificationLinkRaw = linkData.properties?.action_link;
-    if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
-    // Supabase can sometimes rewrite/override redirect_to based on project URL config.
-    // Enforce our computed redirect explicitly so local dev stays on localhost.
-    let verificationLink = verificationLinkRaw;
-    try {
-      const u = new URL(verificationLinkRaw);
-      u.searchParams.set('redirect_to', redirectTo);
-      verificationLink = u.toString();
-    } catch {
-      verificationLink = verificationLinkRaw;
-    }
-
-    try {
-      const u = new URL(verificationLink);
-      const rt = u.searchParams.get('redirect_to') || '';
-      const rtOrigin = rt ? (new URL(rt)).origin : null;
-      request.log.info(
-        { redirectToPassed: redirectTo, redirectToInLinkOrigin: rtOrigin },
-        'Resend verification link redirect_to (origin only)'
-      );
-    } catch {
-      // ignore
-    }
-
-    const verificationReminderEmail = emailService.buildVerificationReminderEmail({
-      verificationLink,
-      audience: signupTypeResolved === 'trial' ? 'trial' : 'plan',
-    });
-
-    await emailService.sendEmail(
-      email,
-      verificationReminderEmail.subject,
-      verificationReminderEmail.html,
-      verificationReminderEmail.text
-    );
-
+    await sendVerificationReminderForUser(request, { userId, email });
     return reply.code(200).send({ success: true, message: 'Verification email sent' });
   } catch (error: any) {
     request.log.error({ error }, 'Resend verification failed');
+    return reply.code(500).send({ message: error.message || 'Failed to send verification email' });
+  }
+}
+
+export async function resendVerificationPublicHandler(
+  request: FastifyRequest<{ Body: ResendVerificationPublicInput }>,
+  reply: FastifyReply
+) {
+  const email = request.body.email.trim().toLowerCase();
+
+  try {
+    const accountState = await userService.resolveAccountStateByEmail(email);
+
+    if (accountState.state === 'NO_ACCOUNT') {
+      return reply.code(200).send({
+        success: true,
+        message: 'If an account exists with this email, a verification link has been sent.',
+      });
+    }
+
+    if (accountState.email_verified) {
+      return reply.code(400).send({
+        message: 'This email is already verified. Please sign in.',
+      });
+    }
+
+    const authUserId = accountState.auth_user_id;
+    if (!authUserId) {
+      return reply.code(400).send({ message: 'Unable to resend verification email.' });
+    }
+
+    await sendVerificationReminderForUser(request, {
+      userId: authUserId,
+      email,
+      signupTypeHint: accountState.signup_type,
+    });
+
+    return reply.code(200).send({ success: true, message: 'Verification email sent' });
+  } catch (error: any) {
+    request.log.error({ error, email }, 'Public resend verification failed');
     return reply.code(500).send({ message: error.message || 'Failed to send verification email' });
   }
 }

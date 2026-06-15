@@ -16,6 +16,7 @@ import {
   checkUserExistsHandler,
   signupHandler,
   resendVerificationHandler,
+  resendVerificationPublicHandler,
   confirmEmailHandler,
   getKnowledgeTwoFactorStatusHandler,
   setupKnowledgeTwoFactorHandler,
@@ -28,12 +29,17 @@ import {
   verifyKnowledgeTwoFactorLoginCodeHandler,
   reportCrisisEventHandler,
 } from './user.controller';
-import { checkUserSchema, signupSchema } from './user.schema';
+import { checkUserSchema, signupSchema, resendVerificationPublicSchema } from './user.schema';
 
 export async function userRoutes(fastify: FastifyInstance) {
   // Public Routes
   fastify.post('/check', { schema: { body: checkUserSchema } }, checkUserExistsHandler);
   fastify.post('/signup', { schema: { body: signupSchema } }, signupHandler);
+  fastify.post(
+    '/resend-verification-public',
+    { schema: { body: resendVerificationPublicSchema } },
+    resendVerificationPublicHandler
+  );
 
 
   // Admin Routes

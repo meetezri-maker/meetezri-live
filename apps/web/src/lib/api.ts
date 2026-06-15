@@ -453,6 +453,20 @@ export const api = {
     return handleResponse(res, 'Failed to send verification email');
   },
 
+  async resendVerificationEmailPublic(email: string) {
+    const res = await fetch(`${API_URL}/users/resend-verification-public`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-web-base-url':
+          import.meta.env.VITE_WEB_BASE_URL ||
+          (typeof window !== 'undefined' ? window.location.origin : ''),
+      },
+      body: JSON.stringify({ email }),
+    });
+    return handleResponse(res, 'Failed to send verification email');
+  },
+
   async confirmEmail() {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/confirm-email`, {

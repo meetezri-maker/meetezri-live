@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Mail, Menu, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, Menu, X } from "lucide-react";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 import { BrandLogo } from "../components/BrandLogo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "@/lib/api";
+import {
+  getPendingVerificationEmail,
+  maskEmail,
+  storePendingVerification,
+} from "@/lib/pendingVerification";
 
 const VERIFY_HERO_BG = "/solace/login-cinematic-lock.png";
 const VERIFY_NAV_H = "72px";
@@ -312,6 +320,56 @@ function VerifyNextStepsPanel({ className }: VerifyNextStepsPanelProps) {
 }
 
 export function VerifyEmail() {
+  const { user, profile } = useAuth();
+  const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const verificationEmail = useMemo(() => {
+    return user?.email || getPendingVerificationEmail() || "";
+  }, [user?.email]);
+
+  const maskedEmail = verificationEmail ? maskEmail(verificationEmail) : null;
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const handleResend = useCallback(async () => {
+    const emailToResend = verificationEmail.trim();
+    if (!emailToResend) {
+      toast.error("We couldn't find your email. Please sign in or sign up again.");
+      return;
+    }
+
+    if (user?.email) {
+      storePendingVerification(
+        emailToResend,
+        profile?.signup_type === "trial" ? "trial" : "plan",
+      );
+    }
+
+    setIsResending(true);
+    try {
+      if (user?.email) {
+        await api.resendVerificationEmail();
+      } else {
+        await api.resendVerificationEmailPublic(emailToResend);
+      }
+      toast.success("Verification email sent! Please check your inbox.");
+      setResendCooldown(60);
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to resend verification email";
+      toast.error(msg);
+    } finally {
+      setIsResending(false);
+    }
+  }, [profile?.signup_type, user?.email, verificationEmail]);
+
   return (
     <motion.div
       className="solace-login-page flex min-h-screen flex-col overflow-x-hidden bg-[#0a0b1e] text-[#f4f4f8]"
@@ -369,12 +427,39 @@ export function VerifyEmail() {
                   Check your email
                 </h1>
                 <p className="mx-auto mt-4 max-w-[420px] text-[15px] leading-relaxed text-white/[0.72]">
-                  We&apos;ve sent a verification link to your email address. Please click the link
-                  to verify your account and get started.
+                  We&apos;ve sent a verification link to{" "}
+                  {maskedEmail ? (
+                    <span className="font-medium text-white/88">{maskedEmail}</span>
+                  ) : (
+                    "your email address"
+                  )}
+                  . Please click the link to verify your account and get started.
                 </p>
 
                 <div className="mt-8 space-y-6">
                   <VerifyNextStepsPanel className="relative" />
+
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={isResending || resendCooldown > 0 || !verificationEmail}
+                    className={cn(
+                      "group flex h-[52px] w-full items-center justify-center gap-2 rounded-[18px]",
+                      "border border-[#9C27B0]/35 bg-white/[0.04] text-[15px] font-medium text-white/90",
+                      "shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-[box-shadow,transform,opacity] duration-300",
+                      "hover:border-[#E91E63]/45 hover:bg-white/[0.07] hover:shadow-[0_0_32px_-12px_rgba(168,85,247,0.45)]",
+                      "disabled:cursor-not-allowed disabled:opacity-50",
+                    )}
+                  >
+                    {isResending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Mail className="h-4 w-4 text-[#e879f9]" aria-hidden />
+                    )}
+                    {resendCooldown > 0
+                      ? `Resend email in ${resendCooldown}s`
+                      : "Resend email"}
+                  </button>
 
                   <Link to="/login" className="block">
                     <motion.span

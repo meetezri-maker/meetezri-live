@@ -181,6 +181,10 @@ export const checkUserSchema = z.object({
   email: z.string().email(),
 });
 
+export const resendVerificationPublicSchema = z.object({
+  email: z.string().email(),
+});
+
 export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -194,5 +198,6 @@ export const signupSchema = z.object({
 });
 
 export type CheckUserInput = z.infer<typeof checkUserSchema>;
+export type ResendVerificationPublicInput = z.infer<typeof resendVerificationPublicSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 
