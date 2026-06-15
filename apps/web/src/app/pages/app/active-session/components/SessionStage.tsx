@@ -5,6 +5,7 @@ import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
 import type {
   SessionBackdropLayers,
+  SessionBackdropPreference,
   SessionBackdropPresetKey,
 } from "@/lib/sessionBackdropPresets";
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
@@ -18,6 +19,8 @@ const ThreeAvatar = lazy(() =>
 export interface SessionStageProps {
   stageRoundClass: string;
   sessionBackdropLayers: SessionBackdropLayers;
+  sessionBackdropPreference: SessionBackdropPreference;
+  latestMoodSlug: string | null;
   sessionRoomThemeKey: SessionBackdropPresetKey;
   isEzriSpeaking: boolean;
   sessionUsesCompanion3d: boolean;
@@ -51,6 +54,8 @@ export interface SessionStageProps {
 export const SessionStage = memo(function SessionStage({
   stageRoundClass,
   sessionBackdropLayers,
+  sessionBackdropPreference,
+  latestMoodSlug,
   sessionRoomThemeKey,
   isEzriSpeaking,
   sessionUsesCompanion3d,
@@ -82,7 +87,11 @@ export const SessionStage = memo(function SessionStage({
 }: SessionStageProps) {
   return (
     <div className={`absolute inset-0 overflow-hidden ${stageRoundClass}`}>
-      <SessionBackdrop sessionBackdropLayers={sessionBackdropLayers} />
+      <SessionBackdrop
+        sessionBackdropLayers={sessionBackdropLayers}
+        sessionBackdropPreference={sessionBackdropPreference}
+        latestMoodSlug={latestMoodSlug}
+      />
       <div className="relative z-[1] h-full min-h-0 w-full">
         <AnimatePresence>
           {isEzriSpeaking && (

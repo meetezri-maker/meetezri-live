@@ -3413,6 +3413,8 @@ function ThreeAvatarComponent({
 
     scene.add(room);
     sessionRoomGroup = room;
+    /* Cyclorama geometry is hidden so CSS mood gradients show through the canvas. */
+    room.visible = false;
 
     sessionRoomThemeBundleRef.current = {
       curvedWallMat,

@@ -386,3 +386,22 @@ export function resolveSessionBackdropLayers(
   const key = resolveSessionBackdropPresetKey(preference, latestMoodSlug);
   return SESSION_BACKDROP_PRESETS[key];
 }
+
+/** Swatch gradient key — Auto resolves to the active mood preset, not the rainbow tile. */
+export function resolveSessionMoodSwatchKey(
+  preference: SessionBackdropPreference,
+  latestMoodSlug: string | null,
+): SessionBackdropPreference {
+  if (preference === "auto") {
+    return resolveSessionBackdropPresetKey(preference, latestMoodSlug);
+  }
+  return preference;
+}
+
+export function resolveSessionMoodSwatchGradient(
+  preference: SessionBackdropPreference,
+  latestMoodSlug: string | null,
+): string {
+  const key = resolveSessionMoodSwatchKey(preference, latestMoodSlug);
+  return SESSION_MOOD_SWATCH_GRADIENT[key];
+}

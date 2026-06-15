@@ -297,6 +297,8 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
           <SessionStage
             stageRoundClass={stageRoundClass}
             sessionBackdropLayers={sessionBackdropLayers}
+            sessionBackdropPreference={sessionBackdropPreference}
+            latestMoodSlug={sortedMoodPreview[0]?.mood ?? null}
             sessionRoomThemeKey={sessionRoomThemeKey}
             isEzriSpeaking={isEzriSpeaking}
             sessionUsesCompanion3d={sessionUsesCompanion3d}

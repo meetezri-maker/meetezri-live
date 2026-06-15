@@ -26,6 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
+import { storePendingVerification } from "@/lib/pendingVerification";
 import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import {
   Form,
@@ -410,6 +411,7 @@ export function Signup() {
           if (checkResult.state === "EMAIL_UNVERIFIED") {
             toast.error("Your account exists but email verification is still pending.");
             setIsLoading(false);
+            storePendingVerification(data.email, "trial");
             navigate("/verify-email");
             return;
           }
@@ -500,6 +502,7 @@ export function Signup() {
         toast.success(
           signupRes?.message || "Account created! Please verify your email to continue.",
         );
+        storePendingVerification(data.email, "plan");
         navigate("/verify-email");
       }
     } catch (error: any) {
