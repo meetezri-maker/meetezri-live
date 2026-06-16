@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import { type Area } from "react-easy-crop";
-import { Shield } from "lucide-react";
+import { Loader2, LogOut, Shield } from "lucide-react";
 import {
   profileFieldRow,
   profileFieldRowLabel,
@@ -42,12 +42,20 @@ import * as z from "zod";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
+import {
+  modalBodyText,
+  modalDestructiveButton,
+  modalSecondaryButton,
+  modalTitle,
+} from "@/lib/modalTheme";
 
 const GRAD =
   "linear-gradient(135deg, #7c3aed 0%, #c026d3 48%, #a855f7 100%)";
@@ -254,6 +262,7 @@ export function UserProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string>("");
   const [resending, setResending] = useState(false);
@@ -648,11 +657,20 @@ export function UserProfile() {
     finally { setResending(false); }
   };
 
-  const handleLogout = async () => {
-    if (!confirm("Are you sure you want to log out?")) return;
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
     setIsLoggingOut(true);
-    try { await signOut(); navigate("/login"); }
-    catch { toast.error("Failed to log out"); setIsLoggingOut(false); }
+    try {
+      await signOut();
+      setShowLogoutModal(false);
+      navigate("/login");
+    } catch {
+      toast.error("Failed to log out");
+      setIsLoggingOut(false);
+    }
   };
 
   // Use auth session as source of truth for verification state.
@@ -769,6 +787,51 @@ export function UserProfile() {
         PILL={PILL}
         profileAgeStorage={rawProfile?.age ?? null}
       />
+
+      <AlertDialog
+        open={showLogoutModal}
+        onOpenChange={(open) => {
+          if (isLoggingOut) return;
+          setShowLogoutModal(open);
+        }}
+      >
+        <AlertDialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <div className="p-6 pb-5">
+            <div className="flex items-start gap-4">
+              <span className={profileIconCircle("rose")}>
+                <LogOut className="h-5 w-5" aria-hidden />
+              </span>
+              <AlertDialogHeader className="min-w-0 flex-1 gap-1.5 text-left">
+                <AlertDialogTitle className={cn(modalTitle, "text-xl")}>
+                  Log out?
+                </AlertDialogTitle>
+                <AlertDialogDescription className={modalBodyText}>
+                  Are you sure you want to log out of your account? You can sign back in anytime.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-row justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4 sm:justify-end">
+            <AlertDialogCancel disabled={isLoggingOut} className={modalSecondaryButton}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className={modalDestructiveButton}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Logging out...
+                </span>
+              ) : (
+                "Log Out"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* verified alert */}
       <AlertDialog open={showVerifiedAlert} onOpenChange={setShowVerifiedAlert}>

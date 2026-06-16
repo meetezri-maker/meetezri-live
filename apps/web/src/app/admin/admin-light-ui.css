@@ -70,8 +70,22 @@ html[data-solace-admin][data-theme="light"] .admin-sidebar-section--active svg {
   color: var(--admin-nav-active-icon) !important;
 }
 
-html[data-solace-admin][data-theme="light"] button.admin-sidebar-section:not(.admin-sidebar-section--active) svg {
+html[data-solace-admin][data-theme="light"] button.admin-sidebar-section:not(.admin-sidebar-section--active) svg,
+html[data-solace-admin][data-theme="light"] aside nav svg.text-zinc-500,
+html[data-solace-admin][data-theme="light"] aside nav .text-zinc-500 {
   color: var(--admin-sidebar-icon) !important;
+  stroke: currentColor;
+}
+
+html[data-solace-admin][data-theme="light"] button.admin-sidebar-section:hover:not(.admin-sidebar-section--active) svg {
+  color: #475467 !important;
+}
+
+html[data-solace-admin][data-theme="light"] aside nav svg.text-violet-300,
+html[data-solace-admin][data-theme="light"] aside [class*="text-violet-300"]:not([class*="text-violet-300/"]),
+html[data-solace-admin][data-theme="light"] aside nav svg.text-violet-300\/80,
+html[data-solace-admin][data-theme="light"] aside [class*="text-violet-300/80"] {
+  color: var(--admin-nav-active-icon) !important;
 }
 
 /* ── Inner nav links ── */
@@ -176,6 +190,172 @@ html[data-solace-admin][data-theme="light"] [class*="text-white/"] {
   color: var(--admin-text) !important;
 }
 
+/* Keep white icons on vivid gradient KPI / stat chips (saturated stops only — not /20 opacity) */
+html[data-solace-admin][data-theme="light"] [class*="bg-gradient-to-br"]:not([class*="/"]) .text-white,
+html[data-solace-admin][data-theme="light"] [class*="bg-gradient-to-br"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-blue-5"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-green-5"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-yellow-5"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-purple-5"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-orange-5"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-indigo-6"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="from-emerald-6"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [class*="bg-red-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-orange-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-green-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-gray-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-emerald-500"][class*="text-white"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-500"] .text-white,
+html[data-solace-admin][data-theme="light"] [class*="bg-orange-500"] .text-white,
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-500"] .text-white,
+html[data-solace-admin][data-theme="light"] [class*="bg-green-500"] .text-white {
+  color: #ffffff !important;
+}
+
+/* Darken muted / decorative icons across admin pages */
+html[data-solace-admin][data-theme="light"] main svg.text-gray-400,
+html[data-solace-admin][data-theme="light"] main .text-gray-400 svg,
+html[data-solace-admin][data-theme="light"] main [class*="text-gray-400"] svg {
+  color: #475467 !important;
+}
+
+html[data-solace-admin][data-theme="light"] main .text-gray-600 svg,
+html[data-solace-admin][data-theme="light"] main [class*="text-gray-600"] svg {
+  color: #344054 !important;
+}
+
+html[data-solace-admin][data-theme="light"] main svg.text-blue-600,
+html[data-solace-admin][data-theme="light"] main .text-blue-600 svg,
+html[data-solace-admin][data-theme="light"] main svg.text-green-600,
+html[data-solace-admin][data-theme="light"] main .text-green-600 svg,
+html[data-solace-admin][data-theme="light"] main svg.text-red-600,
+html[data-solace-admin][data-theme="light"] main .text-red-600 svg {
+  color: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-blue-600,
+html[data-solace-admin][data-theme="light"] [class*="text-blue-600"] {
+  color: #1d4ed8 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-green-600,
+html[data-solace-admin][data-theme="light"] [class*="text-green-600"] {
+  color: #047857 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-red-600,
+html[data-solace-admin][data-theme="light"] [class*="text-red-600"] {
+  color: #dc2626 !important;
+}
+
+/* Semantic status text — undo dark-admin pastel remaps app-wide */
+html[data-solace-admin][data-theme="light"] .text-red-700,
+html[data-solace-admin][data-theme="light"] [class*="text-red-700"] {
+  color: #b91c1c !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-red-800,
+html[data-solace-admin][data-theme="light"] [class*="text-red-800"] {
+  color: #991b1b !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-red-900,
+html[data-solace-admin][data-theme="light"] [class*="text-red-900"] {
+  color: #7f1d1d !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-green-700,
+html[data-solace-admin][data-theme="light"] [class*="text-green-700"] {
+  color: #15803d !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-green-800,
+html[data-solace-admin][data-theme="light"] [class*="text-green-800"] {
+  color: #166534 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-yellow-700,
+html[data-solace-admin][data-theme="light"] [class*="text-yellow-700"] {
+  color: #a16207 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-yellow-800,
+html[data-solace-admin][data-theme="light"] [class*="text-yellow-800"] {
+  color: #854d0e !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-orange-700,
+html[data-solace-admin][data-theme="light"] [class*="text-orange-700"] {
+  color: #c2410c !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-orange-800,
+html[data-solace-admin][data-theme="light"] [class*="text-orange-800"] {
+  color: #9a3412 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-purple-700,
+html[data-solace-admin][data-theme="light"] [class*="text-purple-700"] {
+  color: #6d28d9 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-amber-700,
+html[data-solace-admin][data-theme="light"] [class*="text-amber-700"],
+html[data-solace-admin][data-theme="light"] .text-amber-800,
+html[data-solace-admin][data-theme="light"] [class*="text-amber-800"] {
+  color: #92400e !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-emerald-700,
+html[data-solace-admin][data-theme="light"] [class*="text-emerald-700"] {
+  color: #047857 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .text-rose-700,
+html[data-solace-admin][data-theme="light"] [class*="text-rose-700"] {
+  color: #be123c !important;
+}
+
+/* Row action icon buttons — clear icon on hover tint only */
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-blue-50"],
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-green-50"],
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-red-50"] {
+  background-color: transparent !important;
+}
+
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-blue-50"]:hover {
+  background-color: #eff6ff !important;
+}
+
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-green-50"]:hover {
+  background-color: #ecfdf5 !important;
+}
+
+html[data-solace-admin][data-theme="light"] button[class*="hover:bg-red-50"]:hover {
+  background-color: #fff1f2 !important;
+}
+
+html[data-solace-admin][data-theme="light"] main [class*="text-zinc-400"],
+html[data-solace-admin][data-theme="light"] main [class*="text-zinc-500"] {
+  color: #475467 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="text-gray-400"],
+html[data-solace-admin][data-theme="light"] [class*="text-zinc-400"],
+html[data-solace-admin][data-theme="light"] [class*="text-slate-400"] {
+  color: #475467 !important;
+}
+
+html[data-solace-admin][data-theme="light"] main svg.text-gray-300,
+html[data-solace-admin][data-theme="light"] main .text-gray-300 svg {
+  color: #667085 !important;
+}
+
+html[data-solace-admin][data-theme="light"] header svg {
+  color: #475467 !important;
+}
+
 html[data-solace-admin][data-theme="light"] .text-zinc-50,
 html[data-solace-admin][data-theme="light"] .text-zinc-100,
 html[data-solace-admin][data-theme="light"] .text-zinc-200,
@@ -185,6 +365,15 @@ html[data-solace-admin][data-theme="light"] .text-slate-200,
 html[data-solace-admin][data-theme="light"] .text-gray-50,
 html[data-solace-admin][data-theme="light"] .text-gray-100 {
   color: var(--admin-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="text-gray-600"],
+html[data-solace-admin][data-theme="light"] [class*="text-gray-500"],
+html[data-solace-admin][data-theme="light"] [class*="text-zinc-600"],
+html[data-solace-admin][data-theme="light"] [class*="text-zinc-500"],
+html[data-solace-admin][data-theme="light"] [class*="text-slate-600"],
+html[data-solace-admin][data-theme="light"] [class*="text-slate-500"] {
+  color: #344054 !important;
 }
 
 html[data-solace-admin][data-theme="light"] h1,
@@ -260,8 +449,10 @@ html[data-solace-admin][data-theme="light"] table tbody tr:hover {
 }
 
 html[data-solace-admin][data-theme="light"] [class*="bg-white"],
-html[data-solace-admin][data-theme="light"] [class*="bg-gray-50"],
-html[data-solace-admin][data-theme="light"] [class*="bg-slate-50"] {
+html[data-solace-admin][data-theme="light"] .bg-gray-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-gray-50"],
+html[data-solace-admin][data-theme="light"] .bg-slate-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-slate-50"] {
   background-color: var(--admin-surface) !important;
 }
 
@@ -347,6 +538,78 @@ html[data-solace-admin][data-theme="light"] [data-slot="alert-dialog-title"],
 html[data-solace-admin][data-theme="light"] [data-slot="dialog-description"],
 html[data-solace-admin][data-theme="light"] [data-slot="alert-dialog-description"] {
   color: var(--admin-text) !important;
+}
+
+/* Legacy custom modals — hardcoded bg-[#0b0d14] panels across admin pages */
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] {
+  background: #ffffff !important;
+  background-image: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 244, 255, 0.94) 100%
+  ) !important;
+  border-color: #e7ddfb !important;
+  box-shadow: var(--admin-shadow-modal) !important;
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] h1,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] h2,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] h3,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] h4 {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] p,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] span.font-medium,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .font-medium:not([class*="text-red"]):not([class*="text-green"]) {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .text-gray-900,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .text-gray-800,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .text-gray-700 {
+  color: var(--admin-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .text-gray-600,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .text-gray-500 {
+  color: var(--admin-text-secondary) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] label {
+  color: var(--admin-text-secondary) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] input,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] textarea,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] select {
+  background-color: var(--admin-input-bg) !important;
+  border-color: var(--admin-input-border) !important;
+  color: var(--admin-input-text) !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .bg-gray-200,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] button.bg-gray-200 {
+  background: #f6f0ff !important;
+  color: #5b21b6 !important;
+  border: 1px solid #d8c7f7 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] .bg-gray-200:hover,
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] button.bg-gray-200:hover {
+  background: #f3ecff !important;
+  color: #4c1d95 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-[#0b0d14]"] button[class*="hover:bg-gray-100"]:hover {
+  background: #f8f4ff !important;
+  color: var(--admin-text) !important;
+}
+
+/* Legacy modal overlays */
+html[data-solace-admin][data-theme="light"] .fixed.inset-0[class*="bg-black/"] {
+  background: var(--admin-modal-backdrop) !important;
 }
 
 /* ── Dropdowns / selects / popovers ── */
@@ -436,9 +699,121 @@ html[data-solace-admin][data-theme="light"] .admin-kpi-icon-teal {
   color: var(--admin-icon-teal-fg) !important;
 }
 
+/* ── Card KPI / stat icon chips ── */
+/* Vivid gradient chips (Usage Overview etc.) — white icons only when explicitly text-white */
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl[class*="bg-gradient-to-br"]:not([class*="/"]) svg.text-white,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl[class*="from-"][class*="to-"]:not([class*="/"]) svg.text-white {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+/* Pale gradient stat chips (StatsCard) — vivid icons on soft backgrounds */
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"].text-primary svg {
+  color: #0d9488 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"].text-secondary svg {
+  color: #7c3aed !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"].text-accent svg {
+  color: #6d28d9 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"][class*="text-green-600"] svg {
+  color: #047857 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"][class*="text-yellow-600"] svg {
+  color: #ca8a04 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"][class*="text-red-600"] svg {
+  color: #dc2626 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-gradient-to-br[class*="/"] svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+/* Trend pills on KPI cards — vivid arrow + label */
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-full[class*="bg-green-100"] svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-full[class*="bg-green-100"] {
+  color: #15803d !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-full[class*="bg-red-100"] svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-full[class*="bg-red-100"] {
+  color: #b91c1c !important;
+  stroke: currentColor !important;
+}
+
 html[data-solace-admin][data-theme="light"] .admin-kpi-icon svg,
 html[data-solace-admin][data-theme="light"] .admin-kpi-icon-teal svg {
   color: inherit !important;
+  opacity: 1 !important;
+}
+
+/* Matte solid icon blocks inside cards (pale chip + vivid icon) */
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-cyan-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-green-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-emerald-500 svg {
+  color: #0f766e !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-blue-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-indigo-500 svg {
+  color: #2563eb !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-purple-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-violet-500 svg {
+  color: #7c3aed !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-orange-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-amber-500 svg {
+  color: #b45309 !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-red-500 svg,
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-rose-500 svg {
+  color: #be123c !important;
+  stroke: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [data-slot="card"] .rounded-xl.bg-pink-500 svg {
+  color: #db2777 !important;
+  stroke: currentColor !important;
 }
 
 /* ── Role badge ── */
@@ -449,9 +824,320 @@ html[data-solace-admin][data-theme="light"] .admin-role-badge {
 }
 
 /* ── Crisis / health cards ── */
-html[data-solace-admin][data-theme="light"] .admin-crisis-card,
-html[data-solace-admin][data-theme="light"] [class*="border-red"][class*="bg-red"] {
+html[data-solace-admin][data-theme="light"] .admin-crisis-card {
+  background: var(--admin-crisis-surface) !important;
+  border-color: var(--admin-crisis-border) !important;
   color: #be123c !important;
+}
+
+/* ── Solid semantic badges (risk levels, priority pills) ── */
+html[data-solace-admin][data-theme="light"] .bg-red-500,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-500"] {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-orange-500,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-500"] {
+  background-color: #f97316 !important;
+  color: #ffffff !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-yellow-500,
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-500"] {
+  background-color: #eab308 !important;
+  color: #ffffff !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-green-500,
+html[data-solace-admin][data-theme="light"] [class~="bg-green-500"] {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-gray-500,
+html[data-solace-admin][data-theme="light"] [class~="bg-gray-500"] {
+  background-color: #6b7280 !important;
+  color: #ffffff !important;
+}
+
+/* ── System alerts & pastel status tiles (undo dark -50 remaps) ── */
+/* Use [class~="…"] so bg-*-50 does not match bg-*-500 / bg-*-500-style classes */
+html[data-solace-admin][data-theme="light"] .bg-green-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-green-50"],
+html[data-solace-admin][data-theme="light"] [class*="hover:bg-green-50"]:hover {
+  background-color: #ecfdf5 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-red-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"],
+html[data-solace-admin][data-theme="light"] [class*="hover:bg-red-50"]:hover {
+  background-color: #ffe4e6 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-rose-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-rose-50"] {
+  background-color: #ffe4e6 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-pink-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-pink-50"] {
+  background-color: #fce7f3 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-amber-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"],
+html[data-solace-admin][data-theme="light"] .bg-orange-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] {
+  background-color: #fff7d6 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-yellow-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"] {
+  background-color: #fff8dd !important;
+}
+
+/* AI avatar rating strip: ensure stars stay visible in light mode */
+html[data-solace-admin][data-theme="light"] .bg-yellow-50 svg.text-yellow-400,
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"] svg.text-yellow-400 {
+  color: #f59e0b !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-yellow-50 svg.text-gray-200,
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"] svg.text-gray-200 {
+  color: #fbbf24 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-yellow-50 svg.fill-gray-200,
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"] svg.fill-gray-200 {
+  fill: #fcd34d !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-emerald-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-emerald-50"],
+html[data-solace-admin][data-theme="light"] .bg-teal-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-teal-50"] {
+  background-color: #e6fffb !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-sky-50,
+html[data-solace-admin][data-theme="light"] .bg-cyan-50,
+html[data-solace-admin][data-theme="light"] .bg-blue-50,
+html[data-solace-admin][data-theme="light"] [class*="hover:bg-blue-50"]:hover {
+  background-color: #eff6ff !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-indigo-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-indigo-50"],
+html[data-solace-admin][data-theme="light"] .bg-purple-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-purple-50"],
+html[data-solace-admin][data-theme="light"] .bg-violet-50,
+html[data-solace-admin][data-theme="light"] [class~="bg-violet-50"] {
+  background-color: #f3ecff !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-red-100"] {
+  background-color: #fecdd3 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-red-200"] {
+  background-color: #fecaca !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-green-100"] {
+  background-color: #dcfce7 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-green-200"] {
+  background-color: #bbf7d0 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-orange-100"] {
+  background-color: #fde68a !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-amber-100"] {
+  background-color: #fde68a !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-100"] {
+  background-color: #fef08a !important;
+}
+
+/* Pastel badge chips — same-element text + icon contrast */
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"][class*="text-red-700"],
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"][class*="text-red-800"],
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"][class*="text-red-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-100"][class*="text-red-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-100"][class*="text-red-800"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-100"][class*="text-red-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-200"][class*="text-red-800"],
+html[data-solace-admin][data-theme="light"] [class*="bg-red-200"][class*="text-red-900"] {
+  color: #991b1b !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class~="bg-green-50"][class*="text-green-700"],
+html[data-solace-admin][data-theme="light"] [class~="bg-green-50"][class*="text-green-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-green-100"][class*="text-green-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-green-100"][class*="text-green-800"],
+html[data-solace-admin][data-theme="light"] [class*="bg-green-100"][class*="text-green-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-green-200"][class*="text-green-800"] {
+  color: #166534 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"][class*="text-yellow-700"],
+html[data-solace-admin][data-theme="light"] [class~="bg-yellow-50"][class*="text-yellow-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-100"][class*="text-yellow-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-100"][class*="text-yellow-800"],
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-100"][class*="text-yellow-600"],
+html[data-solace-admin][data-theme="light"] [class*="bg-amber-100"][class*="text-amber-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-orange-100"][class*="text-orange-700"] {
+  color: #92400e !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"][class*="text-red"] svg,
+html[data-solace-admin][data-theme="light"] [class*="bg-red-100"][class*="text-red"] svg,
+html[data-solace-admin][data-theme="light"] [class*="bg-green-100"][class*="text-green"] svg,
+html[data-solace-admin][data-theme="light"] [class*="bg-yellow-100"][class*="text-yellow"] svg {
+  color: currentColor !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"] {
+  background-color: #dbeafe !important;
+}
+
+/* Improve readability for light-blue chips/badges */
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"] .text-blue-700,
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"] [class*="text-blue-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"] .text-blue-600,
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"] [class*="text-blue-600"] {
+  color: #1e3a8a !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"][class*="text-blue-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-blue-100"][class*="text-blue-600"] {
+  color: #1e3a8a !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"] .text-indigo-700,
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"] [class*="text-indigo-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"] .text-indigo-600,
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"] [class*="text-indigo-600"] {
+  color: #3730a3 !important;
+}
+
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"][class*="text-indigo-700"],
+html[data-solace-admin][data-theme="light"] [class*="bg-indigo-100"][class*="text-indigo-600"] {
+  color: #3730a3 !important;
+}
+
+/* Alert message text */
+html[data-solace-admin][data-theme="light"] .bg-red-50 .font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] .font-medium,
+html[data-solace-admin][data-theme="light"] .bg-red-50 p.font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] p.font-medium {
+  color: #991b1b !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-orange-50 .font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] .font-medium,
+html[data-solace-admin][data-theme="light"] .bg-orange-50 p.font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] p.font-medium {
+  color: #9a3412 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .font-medium,
+html[data-solace-admin][data-theme="light"] .bg-amber-50 p.font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] p.font-medium {
+  color: #92400e !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-blue-50 .font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] .font-medium,
+html[data-solace-admin][data-theme="light"] .bg-blue-50 p.font-medium,
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] p.font-medium {
+  color: #1e40af !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-red-50 .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] .bg-orange-50 .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] .bg-blue-50 .text-muted-foreground,
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] .text-muted-foreground {
+  color: #667085 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .text-amber-900,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .text-amber-900 {
+  color: #78350f !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .text-amber-800,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .text-amber-800 {
+  color: #92400e !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .text-amber-700,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .text-amber-700,
+html[data-solace-admin][data-theme="light"] .bg-amber-50 .text-amber-600,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] .text-amber-600 {
+  color: #b45309 !important;
+}
+
+/* Left accent borders on alert rows */
+html[data-solace-admin][data-theme="light"] .border-red-500 {
+  border-color: #ef4444 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .border-orange-500 {
+  border-color: #f97316 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .border-amber-500 {
+  border-color: #f59e0b !important;
+}
+
+html[data-solace-admin][data-theme="light"] .border-blue-500 {
+  border-color: #3b82f6 !important;
+}
+
+/* Review / action buttons inside alert tiles */
+html[data-solace-admin][data-theme="light"] .bg-red-50 [data-slot="button"],
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] [data-slot="button"],
+html[data-solace-admin][data-theme="light"] .bg-amber-50 [data-slot="button"],
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] [data-slot="button"],
+html[data-solace-admin][data-theme="light"] .bg-orange-50 [data-slot="button"],
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] [data-slot="button"],
+html[data-solace-admin][data-theme="light"] .bg-blue-50 [data-slot="button"],
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] [data-slot="button"],
+html[data-solace-admin][data-theme="light"] .bg-red-50 button,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] button,
+html[data-solace-admin][data-theme="light"] .bg-amber-50 button,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] button,
+html[data-solace-admin][data-theme="light"] .bg-orange-50 button,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] button,
+html[data-solace-admin][data-theme="light"] .bg-blue-50 button,
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] button {
+  background: #ffffff !important;
+  border-color: #e7ddfb !important;
+  color: #475467 !important;
+}
+
+html[data-solace-admin][data-theme="light"] .bg-red-50 button:hover,
+html[data-solace-admin][data-theme="light"] [class~="bg-red-50"] button:hover,
+html[data-solace-admin][data-theme="light"] .bg-amber-50 button:hover,
+html[data-solace-admin][data-theme="light"] [class~="bg-amber-50"] button:hover,
+html[data-solace-admin][data-theme="light"] .bg-orange-50 button:hover,
+html[data-solace-admin][data-theme="light"] [class~="bg-orange-50"] button:hover,
+html[data-solace-admin][data-theme="light"] .bg-blue-50 button:hover,
+html[data-solace-admin][data-theme="light"] [class~="bg-blue-50"] button:hover {
+  background: #f8f4ff !important;
+  border-color: rgba(167, 139, 250, 0.45) !important;
+  color: #101828 !important;
 }
 
 html[data-solace-admin][data-theme="light"] [class*="bg-gradient-to-br"][class*="from-blue"][class*="to-purple"] svg.text-white {

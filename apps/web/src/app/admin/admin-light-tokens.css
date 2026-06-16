@@ -24,7 +24,7 @@ html[data-solace-admin][data-theme="light"] .solace-admin {
   /* Typography */
   --admin-text: #101828;
   --admin-text-secondary: #475467;
-  --admin-text-muted: #667085;
+  --admin-text-muted: #475467;
   --admin-text-soft: #7a728e;
 
   /* Surfaces */
@@ -107,7 +107,8 @@ html[data-solace-admin][data-theme="light"] .solace-admin {
   --admin-sidebar-bg: rgba(255, 255, 255, 0.88);
   --admin-sidebar-border: #e7ddfb;
   --admin-sidebar-text: #475467;
-  --admin-sidebar-icon: #667085;
+  --admin-sidebar-icon: #344054;
+  --admin-sidebar-icon-muted: #475467;
 
   /* Topbar */
   --admin-topbar-bg: rgba(255, 255, 255, 0.82);
