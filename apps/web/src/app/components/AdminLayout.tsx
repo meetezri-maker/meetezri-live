@@ -368,7 +368,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 transition={{ duration: 0.5 }}
                 className="flex items-center justify-center"
               >
-                <BrandLogo heightClass="h-10" />
+                <BrandLogo heightClass="h-10" themeAware />
               </motion.div>
               <div>
                 <h1 className="font-bold text-lg">Solace Admin</h1>

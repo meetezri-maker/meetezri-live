@@ -453,8 +453,12 @@ html[data-solace-admin] .hover\:text-gray-700:hover {
 
 /* ── Pastel tile/card backgrounds (legacy admin pages) ──
    Mirrors theme.css .dark pastel remaps, scoped to admin shell. */
-.solace-admin [class*="bg-red-50"],
-html[data-solace-admin] [class*="bg-red-50"] {
+.solace-admin .bg-red-50,
+html[data-solace-admin] .bg-red-50 {
+  background-color: rgba(80, 10, 10, 0.55) !important;
+}
+
+html[data-solace-admin] [class*="hover:bg-red-50"]:hover {
   background-color: rgba(80, 10, 10, 0.55) !important;
 }
 
@@ -612,9 +616,11 @@ html[data-solace-admin] .text-gray-700 {
 }
 
 .solace-admin .bg-blue-50,
-html[data-solace-admin] .bg-blue-50,
-.solace-admin [class*="bg-blue-50"],
-html[data-solace-admin] [class*="bg-blue-50"] {
+html[data-solace-admin] .bg-blue-50 {
+  background-color: rgba(10, 30, 90, 0.55) !important;
+}
+
+html[data-solace-admin] [class*="hover:bg-blue-50"]:hover {
   background-color: rgba(10, 30, 90, 0.55) !important;
 }
 
@@ -656,9 +662,11 @@ html[data-solace-admin] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
 
 /* Status badges — keep semantic color, matte not neon */
 .solace-admin .bg-green-50,
-html[data-solace-admin] .bg-green-50,
-.solace-admin [class*="bg-green-50"],
-html[data-solace-admin] [class*="bg-green-50"] {
+html[data-solace-admin] .bg-green-50 {
+  background-color: rgba(5, 60, 30, 0.55) !important;
+}
+
+html[data-solace-admin] [class*="hover:bg-green-50"]:hover {
   background-color: rgba(5, 60, 30, 0.55) !important;
 }
 
@@ -668,9 +676,11 @@ html[data-solace-admin] .text-green-600 {
 }
 
 .solace-admin .bg-red-50,
-html[data-solace-admin] .bg-red-50,
-.solace-admin [class*="bg-red-50"],
-html[data-solace-admin] [class*="bg-red-50"] {
+html[data-solace-admin] .bg-red-50 {
+  background-color: rgba(80, 10, 10, 0.55) !important;
+}
+
+html[data-solace-admin] [class*="hover:bg-red-50"]:hover {
   background-color: rgba(80, 10, 10, 0.55) !important;
 }
 

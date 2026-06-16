@@ -395,7 +395,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           {/* Header */}
           <div className="relative border-b border-[color:var(--admin-border)] px-5 py-4">
             <Link to={`/admin/super-admin-dashboard`} className="flex items-center gap-2.5">
-              <BrandLogo heightClass="h-8" variant="onDark" />
+              <BrandLogo heightClass="h-8" themeAware />
               <div>
                 <h1 className="text-sm font-semibold tracking-tight text-[var(--admin-text)]">Solace Admin</h1>
                 <span className={adminRoleBadge}>{currentRoleInfo.name}</span>
