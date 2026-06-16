@@ -188,6 +188,18 @@ export function AuthCallback() {
         } catch (e) {
           console.warn("AuthCallback: refreshProfile after verify", e);
         }
+
+        // Paid plan: go straight to onboarding. ProtectedRoute also trusts `user.email_confirmed_at`
+        // so we don't bounce through /verify-email while profile cache catches up.
+        if (flow !== "trial") {
+          const destination =
+            requested && isSafeRedirectPath(requested)
+              ? requested
+              : "/onboarding/welcome";
+          clearStoredCallbackParams();
+          navigate(destination, { replace: true });
+          return;
+        }
       }
 
       // Trial user soft-verification: land on profile.
