@@ -262,6 +262,8 @@ export async function confirmEmailHandler(
 
     if (error) throw error;
 
+    userService.invalidateUserProfileCache(userId);
+
     return reply.code(200).send({ success: true });
   } catch (error: any) {
     request.log.error({ error, userId }, 'Failed to confirm email');

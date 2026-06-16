@@ -134,8 +134,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   // Onboarding access control (server-derived, not client heuristics)
   const onboardingCompleted = profile?.onboarding_completed === true;
-  const emailVerified = profile?.email_verified === true;
   const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
+  // After a magic-link verify, Supabase session is confirmed immediately but `/users/me`
+  // can still return a cached profile with `email_verified: false` for a moment.
+  const sessionEmailVerified = Boolean(user.email_confirmed_at);
+  const emailVerified =
+    profile?.email_verified === true ||
+    (signupType !== 'trial' && sessionEmailVerified);
   const onboardingStartRoute =
     signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
   const isAppRoute = location.pathname.startsWith('/app');

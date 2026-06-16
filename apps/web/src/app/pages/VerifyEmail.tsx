@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Loader2, Mail, Menu, X } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
@@ -321,6 +321,7 @@ function VerifyNextStepsPanel({ className }: VerifyNextStepsPanelProps) {
 
 export function VerifyEmail() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -329,6 +330,23 @@ export function VerifyEmail() {
   }, [user?.email]);
 
   const maskedEmail = verificationEmail ? maskEmail(verificationEmail) : null;
+
+  const isVerifiedForPlanFlow = useMemo(() => {
+    if (!user) return false;
+    const signupType = profile?.signup_type === "trial" ? "trial" : "plan";
+    if (signupType === "trial") {
+      return profile?.email_verified === true && profile?.needs_email_verification !== true;
+    }
+    return profile?.email_verified === true || Boolean(user.email_confirmed_at);
+  }, [profile?.email_verified, profile?.needs_email_verification, profile?.signup_type, user]);
+
+  useEffect(() => {
+    if (!isVerifiedForPlanFlow) return;
+    const signupType = profile?.signup_type === "trial" ? "trial" : "plan";
+    const destination =
+      signupType === "trial" ? "/app/user-profile" : "/onboarding/welcome";
+    navigate(destination, { replace: true });
+  }, [isVerifiedForPlanFlow, navigate, profile?.signup_type]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
