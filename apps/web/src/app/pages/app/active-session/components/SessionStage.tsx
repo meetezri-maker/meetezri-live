@@ -153,35 +153,27 @@ export const SessionStage = memo(function SessionStage({
         </div>
         {isEzriSpeaking && (
           <motion.div
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-[3]"
+            className="pointer-events-none absolute bottom-[6.25rem] left-1/2 z-[3] flex -translate-x-1/2 items-end gap-1.5 sm:bottom-[6.75rem] md:bottom-[7.25rem] md:gap-2"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div
-              className="absolute inset-x-0 bottom-0 h-16 md:h-[4.5rem]"
-              style={{
-                background: sessionBackdropLayers.speakingBottomVignette,
-              }}
-            />
-            <div className="absolute bottom-[6.25rem] left-1/2 flex -translate-x-1/2 items-end gap-1.5 sm:bottom-[6.75rem] md:bottom-[7.25rem] md:gap-2">
-              {[...Array(5)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="w-0.5 rounded-full opacity-[0.92] md:w-1"
-                  style={{
-                    backgroundColor: sessionBackdropLayers.voiceBar,
-                  }}
-                  animate={{ height: [10, 30, 15, 25, 10] }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: i * 0.1,
-                    ease: "easeInOut",
-                  }}
-                />
-              ))}
-            </div>
+            {[...Array(5)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="w-0.5 rounded-full opacity-[0.92] md:w-1"
+                style={{
+                  backgroundColor: sessionBackdropLayers.voiceBar,
+                }}
+                animate={{ height: [10, 30, 15, 25, 10] }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  delay: i * 0.1,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
           </motion.div>
         )}
       </div>
