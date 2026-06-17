@@ -353,25 +353,25 @@ html[data-solace-admin] .hover\:bg-gray-100:hover {
   background-color: rgba(255, 255, 255, 0.04) !important;
 }
 
-/* Light gradient cards → matte admin surface */
-.solace-admin [class*="from-gray-50"][class*="to-white"],
-.solace-admin [class*="from-purple-50"][class*="to-white"],
-.solace-admin [class*="from-cyan-50"][class*="to-white"],
-.solace-admin [class*="from-green-50"][class*="to-white"],
-.solace-admin [class*="from-red-50"][class*="to-white"],
-.solace-admin [class*="from-emerald-50"][class*="to-white"],
-.solace-admin [class*="from-purple-50"][class*="to-pink-50"],
+/* Light gradient cards → matte admin surface (exact -50 tokens only; avoid matching -500) */
+.solace-admin [class~="from-gray-50"][class~="to-white"],
+.solace-admin [class~="from-purple-50"][class~="to-white"],
+.solace-admin [class~="from-cyan-50"][class~="to-white"],
+.solace-admin [class~="from-green-50"][class~="to-white"],
+.solace-admin [class~="from-red-50"][class~="to-white"],
+.solace-admin [class~="from-emerald-50"][class~="to-white"],
+.solace-admin [class~="from-purple-50"][class~="to-pink-50"],
 .solace-admin [class*="from-white"][class*="via-purple"],
 .solace-admin [class*="from-white"][class*="via-cyan"],
 .solace-admin [class*="from-white"][class*="via-emerald"],
 .solace-admin [class*="from-white"][class*="via-blue"],
-html[data-solace-admin] [class*="from-gray-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-purple-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-cyan-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-green-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-red-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-emerald-50"][class*="to-white"],
-html[data-solace-admin] [class*="from-purple-50"][class*="to-pink-50"],
+html[data-solace-admin] [class~="from-gray-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-purple-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-cyan-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-green-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-red-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-emerald-50"][class~="to-white"],
+html[data-solace-admin] [class~="from-purple-50"][class~="to-pink-50"],
 html[data-solace-admin] [class*="from-white"][class*="via-purple"],
 html[data-solace-admin] [class*="from-white"][class*="via-cyan"],
 html[data-solace-admin] [class*="from-white"][class*="via-emerald"],
@@ -462,99 +462,99 @@ html[data-solace-admin] [class*="hover:bg-red-50"]:hover {
   background-color: rgba(80, 10, 10, 0.55) !important;
 }
 
-.solace-admin [class*="bg-rose-50"],
-html[data-solace-admin] [class*="bg-rose-50"] {
+.solace-admin [class~="bg-rose-50"],
+html[data-solace-admin] [class~="bg-rose-50"] {
   background-color: rgba(80, 10, 30, 0.55) !important;
 }
 
-.solace-admin [class*="bg-pink-50"],
-html[data-solace-admin] [class*="bg-pink-50"] {
+.solace-admin [class~="bg-pink-50"],
+html[data-solace-admin] [class~="bg-pink-50"] {
   background-color: rgba(80, 10, 40, 0.55) !important;
 }
 
-.solace-admin [class*="bg-orange-50"],
-html[data-solace-admin] [class*="bg-orange-50"] {
+.solace-admin [class~="bg-orange-50"],
+html[data-solace-admin] [class~="bg-orange-50"] {
   background-color: rgba(90, 40, 5, 0.55) !important;
 }
 
-.solace-admin [class*="bg-yellow-50"],
-html[data-solace-admin] [class*="bg-yellow-50"] {
+.solace-admin [class~="bg-yellow-50"],
+html[data-solace-admin] [class~="bg-yellow-50"] {
   background-color: rgba(80, 60, 5, 0.55) !important;
 }
 
-.solace-admin [class*="bg-lime-50"],
-html[data-solace-admin] [class*="bg-lime-50"] {
+.solace-admin [class~="bg-lime-50"],
+html[data-solace-admin] [class~="bg-lime-50"] {
   background-color: rgba(40, 60, 5, 0.55) !important;
 }
 
-.solace-admin [class*="bg-emerald-50"],
-html[data-solace-admin] [class*="bg-emerald-50"] {
+.solace-admin [class~="bg-emerald-50"],
+html[data-solace-admin] [class~="bg-emerald-50"] {
   background-color: rgba(5, 60, 35, 0.55) !important;
 }
 
-.solace-admin [class*="bg-teal-50"],
-html[data-solace-admin] [class*="bg-teal-50"] {
+.solace-admin [class~="bg-teal-50"],
+html[data-solace-admin] [class~="bg-teal-50"] {
   background-color: rgba(5, 55, 55, 0.55) !important;
 }
 
-.solace-admin [class*="bg-sky-50"],
-html[data-solace-admin] [class*="bg-sky-50"] {
+.solace-admin [class~="bg-sky-50"],
+html[data-solace-admin] [class~="bg-sky-50"] {
   background-color: rgba(8, 50, 90, 0.55) !important;
 }
 
-.solace-admin [class*="bg-cyan-50"],
-html[data-solace-admin] [class*="bg-cyan-50"] {
+.solace-admin [class~="bg-cyan-50"],
+html[data-solace-admin] [class~="bg-cyan-50"] {
   background-color: rgba(5, 55, 80, 0.55) !important;
 }
 
-.solace-admin [class*="bg-indigo-50"],
-html[data-solace-admin] [class*="bg-indigo-50"] {
+.solace-admin [class~="bg-indigo-50"],
+html[data-solace-admin] [class~="bg-indigo-50"] {
   background-color: rgba(30, 20, 100, 0.55) !important;
 }
 
-.solace-admin [class*="bg-purple-50"],
-html[data-solace-admin] [class*="bg-purple-50"] {
+.solace-admin [class~="bg-purple-50"],
+html[data-solace-admin] [class~="bg-purple-50"] {
   background-color: rgba(55, 10, 100, 0.55) !important;
 }
 
-.solace-admin [class*="bg-violet-50"],
-html[data-solace-admin] [class*="bg-violet-50"] {
+.solace-admin [class~="bg-violet-50"],
+html[data-solace-admin] [class~="bg-violet-50"] {
   background-color: rgba(60, 10, 100, 0.55) !important;
 }
 
-.solace-admin [class*="bg-fuchsia-50"],
-html[data-solace-admin] [class*="bg-fuchsia-50"] {
+.solace-admin [class~="bg-fuchsia-50"],
+html[data-solace-admin] [class~="bg-fuchsia-50"] {
   background-color: rgba(80, 10, 90, 0.55) !important;
 }
 
-.solace-admin [class*="bg-red-100"],
-html[data-solace-admin] [class*="bg-red-100"] {
+.solace-admin [class~="bg-red-100"],
+html[data-solace-admin] [class~="bg-red-100"] {
   background-color: rgba(100, 15, 15, 0.6) !important;
 }
 
-.solace-admin [class*="bg-orange-100"],
-html[data-solace-admin] [class*="bg-orange-100"] {
+.solace-admin [class~="bg-orange-100"],
+html[data-solace-admin] [class~="bg-orange-100"] {
   background-color: rgba(110, 50, 8, 0.6) !important;
 }
 
-.solace-admin [class*="bg-yellow-100"],
-html[data-solace-admin] [class*="bg-yellow-100"] {
+.solace-admin [class~="bg-yellow-100"],
+html[data-solace-admin] [class~="bg-yellow-100"] {
   background-color: rgba(100, 75, 8, 0.6) !important;
 }
 
-.solace-admin [class*="bg-blue-100"],
-html[data-solace-admin] [class*="bg-blue-100"] {
+.solace-admin [class~="bg-blue-100"],
+html[data-solace-admin] [class~="bg-blue-100"] {
   background-color: rgba(15, 40, 110, 0.6) !important;
 }
 
-.solace-admin [class*="bg-indigo-100"],
-html[data-solace-admin] [class*="bg-indigo-100"] {
+.solace-admin [class~="bg-indigo-100"],
+html[data-solace-admin] [class~="bg-indigo-100"] {
   background-color: rgba(40, 25, 120, 0.6) !important;
 }
 
 /* Light gradient tiles (e.g. from-blue-50 to-purple-50) */
-.solace-admin [class*="from-blue-50"][class*="to-purple-50"],
-html[data-solace-admin] [class*="from-blue-50"][class*="to-purple-50"] {
+.solace-admin [class~="from-blue-50"][class~="to-purple-50"],
+html[data-solace-admin] [class~="from-blue-50"][class~="to-purple-50"] {
   background-color: var(--admin-surface) !important;
   background-image: none !important;
 }
