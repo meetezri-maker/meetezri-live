@@ -377,7 +377,7 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
 // Health check routes
 app.get('/health', async () => ({ ok: true }));
 app.get('/api/health', async () => ({ ok: true }));
-app.get('/', async () => ({ message: 'MeetEzri API' }));
+app.get('/', async () => ({ message: 'Solace API' }));
 
 // Secured cron: streak reminders (configure CRON_SECRET + Vercel cron hitting this URL).
 // Register both paths: some Vercel/serverless setups pass `req.url` with or without the `/api` prefix.

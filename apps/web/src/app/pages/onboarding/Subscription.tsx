@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { OnboardingLayout } from "../../components/OnboardingLayout";
 import { Button } from "../../components/ui/button";
-import { Card } from "../../components/ui/card";
 import { SUBSCRIPTION_PLANS, PlanTier } from "../../utils/subscriptionPlans";
 import { Check, Loader2, Sparkles, Zap, Crown } from "lucide-react";
 import { motion } from "motion/react";
@@ -11,6 +10,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormControl, FormMessage } from "../../components/ui/form";
+import { cn } from "@/lib/utils";
 
 import {
   Select,
@@ -73,23 +73,23 @@ export function OnboardingSubscription() {
 
   const planStyles: Record<string, { border: string; bg: string; badge: string; text: string }> = {
     gray: {
-      border: "border-gray-500",
-      bg: "bg-gray-500/5",
-      badge: "bg-gray-500",
-      text: "text-gray-500"
+      border: "border-zinc-400/55",
+      bg: "bg-zinc-500/10",
+      badge: "bg-zinc-500",
+      text: "text-zinc-300",
     },
     blue: {
-      border: "border-blue-500",
-      bg: "bg-blue-500/5",
+      border: "border-blue-400/55",
+      bg: "bg-blue-500/10",
       badge: "bg-blue-500",
-      text: "text-blue-500"
+      text: "text-blue-300",
     },
     purple: {
-      border: "border-purple-500",
-      bg: "bg-purple-500/5",
+      border: "border-purple-400/55",
+      bg: "bg-purple-500/10",
       badge: "bg-purple-500",
-      text: "text-purple-500"
-    }
+      text: "text-purple-300",
+    },
   };
 
   const renderPlanCard = (tier: PlanTier) => {
@@ -104,12 +104,13 @@ export function OnboardingSubscription() {
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
-        <Card 
-          className={`p-4 cursor-pointer relative overflow-hidden transition-all duration-200 border-2 ${
-            isSelected 
-              ? `${styles.border} ${styles.bg}` 
-              : "border-transparent hover:border-border/50 bg-card/50"
-          }`}
+        <div
+          className={cn(
+            "relative cursor-pointer overflow-hidden rounded-2xl border-2 p-4 transition-all duration-200",
+            isSelected
+              ? `${styles.border} ${styles.bg} shadow-[0_0_24px_-12px_rgba(139,92,246,0.35)]`
+              : "border-white/[0.08] bg-black/28 hover:border-violet-400/25 hover:bg-black/35",
+          )}
           onClick={() => form.setValue("selectedPlan", tier)}
         >
           {isSelected && (
@@ -126,33 +127,33 @@ export function OnboardingSubscription() {
             <div className="flex-1">
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <h3 className="font-semibold text-lg">{plan.displayName}</h3>
-                  <p className="text-sm text-muted-foreground">{plan.allowanceDescription}</p>
+                  <h3 className="text-lg font-semibold text-zinc-100">{plan.displayName}</h3>
+                  <p className="text-sm text-violet-200/65">{plan.allowanceDescription}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-xl font-bold">
+                  <div className="text-xl font-bold text-zinc-100">
                     {plan.price === 0 ? "$0" : `$${plan.price}`}
                   </div>
-                  {plan.price > 0 && <div className="text-xs text-muted-foreground">/month</div>}
+                  {plan.price > 0 ? <div className="text-xs text-violet-200/55">/month</div> : null}
                 </div>
               </div>
               
               <div className="space-y-2 mt-3">
                 {plan.features.slice(0, 3).map((feature, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div key={i} className="flex items-center gap-2 text-sm text-violet-200/70">
                     <Check className={`w-3 h-3 ${styles.text}`} />
                     <span>{feature}</span>
                   </div>
                 ))}
                 {plan.features.length > 3 && (
-                  <div className="text-xs text-muted-foreground mt-1 ml-5">
+                  <div className="mt-1 ml-5 text-xs text-violet-200/55">
                     + {plan.features.length - 3} more features
                   </div>
                 )}
               </div>
             </div>
           </div>
-        </Card>
+        </div>
       </motion.div>
     );
   };
@@ -182,15 +183,15 @@ export function OnboardingSubscription() {
                     <div className="max-w-md mx-auto space-y-6">
                       {renderPlanCard(selectedPlan)}
                       
-                      <div className="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-medium text-slate-700">Want to switch plans?</p>
+                      <div className="space-y-2 rounded-2xl border border-white/[0.08] bg-black/28 p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-sm font-medium text-zinc-100">Want to switch plans?</p>
                         </div>
-                        <Select 
-                          value={selectedPlan} 
+                        <Select
+                          value={selectedPlan}
                           onValueChange={(val) => form.setValue("selectedPlan", val as PlanTier)}
                         >
-                          <SelectTrigger className="w-full bg-white">
+                          <SelectTrigger className="w-full border-white/12 bg-white/[0.045] text-zinc-100">
                             <SelectValue placeholder="Select a plan" />
                           </SelectTrigger>
                           <SelectContent>
@@ -206,7 +207,7 @@ export function OnboardingSubscription() {
                           <button 
                             type="button"
                             onClick={() => setViewMode('list')}
-                            className="text-xs text-muted-foreground hover:text-primary underline decoration-dotted transition-colors"
+                            className="text-xs text-violet-200/65 underline decoration-dotted transition-colors hover:text-violet-200"
                           >
                             Compare all features
                           </button>

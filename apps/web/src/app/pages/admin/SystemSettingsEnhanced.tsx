@@ -138,7 +138,7 @@ export type SystemSettingsEnhancedState = {
 
 const DEFAULT_SETTINGS: SystemSettingsEnhancedState = {
   general: {
-    platformName: "Ezri Health",
+    platformName: "Solace Health",
     supportEmail: "support@ezri.health",
     companyWebsite: "https://ezri.health",
     timezone: "UTC",
@@ -154,7 +154,7 @@ const DEFAULT_SETTINGS: SystemSettingsEnhancedState = {
     smtpUser: "apikey",
     smtpPassword: "",
     fromEmail: "noreply@ezri.health",
-    fromName: "Ezri Health",
+    fromName: "Solace Health",
   },
   notifications: {
     emailNotif: true,

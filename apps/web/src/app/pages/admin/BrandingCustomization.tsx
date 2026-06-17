@@ -40,7 +40,7 @@ interface BrandingState {
 }
 
 const DEFAULT_BRANDING: BrandingState = {
-  appName: "Ezri Mental Health",
+  appName: "Solace Mental Health",
   tagline: "Your journey to wellness starts here",
   logoUrl: "",
   faviconUrl: "",
@@ -113,7 +113,7 @@ export function BrandingCustomization() {
     passwordReset: true,
     sessionReminder: true,
     weeklyDigest: true,
-    customFooter: "© 2024 Ezri Mental Health. All rights reserved.",
+    customFooter: "© 2024 Solace Mental Health. All rights reserved.",
   });
 
   const [whiteLabelSettings, setWhiteLabelSettings] = useState({

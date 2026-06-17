@@ -17,8 +17,8 @@ async function main() {
   try {
     await emailService.sendEmail(
       to,
-      'Test Email from MeetEzri',
-      '<h1>Success!</h1><p>This is a test email from the MeetEzri backend.</p>'
+      'Test Email from Solace',
+      '<h1>Success!</h1><p>This is a test email from the Solace backend.</p>'
     );
     console.log('Email sent successfully!');
   } catch (error) {

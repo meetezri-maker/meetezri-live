@@ -1,6 +1,5 @@
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { useNavigate, useLocation } from "react-router-dom";
 import { KeyRound, CheckCircle, Mail, Loader2 } from "lucide-react";
@@ -10,6 +9,22 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { cn } from "@/lib/utils";
+
+const INVITE_PANEL_SHELL = cn(
+  "relative w-full overflow-visible rounded-[20px] border border-[#e879a9]/20 sm:rounded-[22px]",
+  "bg-[rgba(12,10,24,0.72)] p-6 backdrop-blur-[20px] sm:p-8",
+  "shadow-[0_0_0_1px_rgba(236,72,153,0.08),0_0_24px_-18px_rgba(168,85,247,0.16),0_16px_40px_-28px_rgba(0,0,0,0.82)]",
+  "supports-[backdrop-filter]:bg-[rgba(12,10,24,0.68)]",
+);
+
+const glassInput = cn(
+  "h-10 w-full rounded-xl border border-white/12 bg-white/[0.045] text-[13px] text-white",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-[box-shadow,border-color]",
+  "placeholder:text-violet-200/35 focus:border-[#E91E63]/45 focus:ring-2 focus:ring-[#E91E63]/28 sm:text-[14px]",
+);
+
+const glassLabel = "text-[13px] font-medium text-violet-200/75";
 
 export function InviteCreatePassword() {
   const navigate = useNavigate();
@@ -149,64 +164,71 @@ export function InviteCreatePassword() {
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-purple-50/30 to-white">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      <div className="solace-login-page flex min-h-screen items-center justify-center bg-[#050612] text-[#f4f4f8]">
+        <Loader2 className="h-10 w-10 animate-spin text-violet-400" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white">
-      <PublicNav />
+    <div className="solace-login-page relative flex min-h-screen flex-col overflow-x-hidden bg-[#050612] text-[#f4f4f8]">
+      <PublicNav variant="cinematic" />
 
-      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <KeyRound className="w-8 h-8 text-primary" />
+      <main className="relative z-10 flex flex-1 flex-col justify-center py-10 sm:py-16">
+        <div className="mx-auto w-full max-w-md px-4 sm:px-6">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/10 shadow-[0_0_24px_-8px_rgba(139,92,246,0.45)]">
+              <KeyRound className="h-8 w-8 text-violet-300" />
+            </div>
+            <h1 className="mb-2 text-3xl font-bold text-[#faf8fc]">Create your password</h1>
+            <p className="text-sm leading-relaxed text-violet-200/75">
+              You were invited to Ezri. Set a password to finish activating your account.
+            </p>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Create your password</h1>
-          <p className="text-muted-foreground">
-            You were invited to Ezri. Set a password to finish activating your account.
-          </p>
-        </div>
 
-        <Card className="p-8">
+          <div className={INVITE_PANEL_SHELL}>
+            <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#E91E63]/[0.06] via-transparent to-[#9C27B0]/[0.05]" />
+            <div className="relative">
           {isSuccess ? (
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+            <div className="space-y-4 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20">
+                <CheckCircle className="h-6 w-6 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-semibold">You&apos;re all set</h3>
-              <p className="text-muted-foreground">Redirecting to your dashboard…</p>
-              <Button className="w-full mt-4" onClick={() => navigate("/app/dashboard", { replace: true })}>
+              <h3 className="text-xl font-semibold text-[#faf8fc]">You&apos;re all set</h3>
+              <p className="text-sm text-violet-200/75">Redirecting to your dashboard…</p>
+              <Button className="mt-4 w-full" onClick={() => navigate("/app/dashboard", { replace: true })}>
                 Go to dashboard
               </Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="invite-email">Email</Label>
+                <Label htmlFor="invite-email" className={glassLabel}>
+                  Email
+                </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-200/42" />
                   <Input
                     id="invite-email"
                     type="email"
                     readOnly
                     value={email}
-                    className="bg-muted/50 pl-10"
+                    className={cn(glassInput, "pl-10")}
                     autoComplete="username"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">This is the account your admin invited.</p>
+                <p className="text-xs text-violet-200/55">This is the account your admin invited.</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className={glassLabel}>
+                  Password
+                </Label>
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
-                  className="bg-input-background"
+                  className={glassInput}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -217,12 +239,14 @@ export function InviteCreatePassword() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm password</Label>
+                <Label htmlFor="confirmPassword" className={glassLabel}>
+                  Confirm password
+                </Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   placeholder="••••••••"
-                  className="bg-input-background"
+                  className={glassInput}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
@@ -231,13 +255,15 @@ export function InviteCreatePassword() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading || !email}>
-                {isLoading ? "Saving…" : "Create password & continue"}
+              <Button type="submit" className="w-full" disabled={isLoading || !email} isLoading={isLoading}>
+                Create password & continue
               </Button>
             </form>
           )}
-        </Card>
-      </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -422,7 +422,7 @@ export function AccountSettings() {
 
       const enrollWithRetry = async (attempt = 0): Promise<any> => {
         try {
-          const friendlyName = attempt === 0 ? 'MeetEzri' : `MeetEzri (${attempt})`;
+          const friendlyName = attempt === 0 ? 'Solace' : `Solace (${attempt})`;
           return await supabase.auth.mfa.enroll({
             factorType: 'totp',
             friendlyName,
