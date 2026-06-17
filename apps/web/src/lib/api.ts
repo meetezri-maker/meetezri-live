@@ -3006,5 +3006,21 @@ export const api = {
       const res = await fetch(`${API_URL}/ai-avatars/${id}/users`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch avatar users');
     },
-  }
+  },
+
+  geo: {
+    async getRegion(): Promise<{
+      region: string;
+      countryCode: string | null;
+      source: 'ip' | 'unknown';
+      ip?: string;
+    }> {
+      const res = await fetch(`${API_URL}/geo/region`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to detect region');
+    },
+  },
 };

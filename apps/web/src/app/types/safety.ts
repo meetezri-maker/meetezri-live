@@ -3,7 +3,9 @@
  * Type definitions for the safety state machine
  */
 
-export type SafetyState = 
+import type { Region } from '@/app/utils/safetyResources';
+
+export type SafetyState =
   | 'NORMAL'           // STATE A: Default conversation flow
   | 'ELEVATED_CONCERN' // STATE B: Strong emotional distress without unsafe intent
   | 'HIGH_RISK'        // STATE C: Unsafe or alarming intent without immediacy
@@ -65,9 +67,12 @@ export interface SafetyContext {
   stateChangedAt: number;
   sessionId: string;
   consent: SafetyConsent;
+  userRegion: Region;
   updateConsent: (partial: Partial<SafetyConsent>) => void;
   updateState: (newState: SafetyState, trigger: string, signals: string[]) => void;
   resetToNormal: () => void;
   getStateDescription: () => string;
   canTransitionTo: (targetState: SafetyState) => boolean;
+  refreshUserRegion: () => Promise<Region>;
+  setUserRegionPreference: (region: Region) => void;
 }
