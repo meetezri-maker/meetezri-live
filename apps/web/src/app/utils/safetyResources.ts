@@ -10,6 +10,89 @@ export type Region = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'GLOBAL';
 
 const DETECTED_REGION_STORAGE_KEY = 'ezri_detected_region';
 const USER_REGION_STORAGE_KEY = 'ezri_user_region';
+const GEO_DETECTION_STORAGE_KEY = 'ezri_geo_detection';
+
+export type GeoDetectionSource = 'ip' | 'timezone' | 'unknown';
+
+export interface GeoDetection {
+  region: Region;
+  countryCode: string | null;
+  countryName: string | null;
+  ip: string | null;
+  source: GeoDetectionSource;
+}
+
+function getCountryDisplayName(countryCode: string): string | null {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode.toUpperCase()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function storeGeoDetection(detection: GeoDetection): void {
+  sessionStorage.setItem(GEO_DETECTION_STORAGE_KEY, JSON.stringify(detection));
+  sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, detection.region);
+}
+
+export function getStoredGeoDetection(): GeoDetection | null {
+  try {
+    const raw = sessionStorage.getItem(GEO_DETECTION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GeoDetection;
+    if (!parsed?.region || !isValidRegion(parsed.region)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch geo from API and cache IP, country, and crisis region for the session. */
+export async function fetchUserGeo(): Promise<GeoDetection> {
+  try {
+    const geo = await api.geo.getRegion();
+    const region = geo?.region && isValidRegion(geo.region) ? (geo.region as Region) : 'GLOBAL';
+    const detection: GeoDetection = {
+      region,
+      countryCode: geo.countryCode ?? null,
+      countryName: geo.countryCode ? getCountryDisplayName(geo.countryCode) : null,
+      ip: geo.ip ?? null,
+      source: geo.source === 'ip' ? 'ip' : 'unknown',
+    };
+    storeGeoDetection(detection);
+    return detection;
+  } catch (e) {
+    console.warn('Could not detect region from IP:', e);
+  }
+
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const region = getRegionFromTimezone(timezone);
+    if (region) {
+      const detection: GeoDetection = {
+        region,
+        countryCode: null,
+        countryName: null,
+        ip: null,
+        source: 'timezone',
+      };
+      storeGeoDetection(detection);
+      return detection;
+    }
+  } catch (e) {
+    console.warn('Could not detect timezone:', e);
+  }
+
+  const fallback: GeoDetection = {
+    region: 'GLOBAL',
+    countryCode: null,
+    countryName: null,
+    ip: null,
+    source: 'unknown',
+  };
+  storeGeoDetection(fallback);
+  return fallback;
+}
 
 export type CrisisHotlineVariant = 'lifeline' | 'text' | 'emergency' | 'samhsa';
 
@@ -41,29 +124,8 @@ export async function detectUserRegion(): Promise<Region> {
     return stored as Region;
   }
 
-  try {
-    const geo = await api.geo.getRegion();
-    if (geo?.region && isValidRegion(geo.region)) {
-      sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, geo.region);
-      return geo.region as Region;
-    }
-  } catch (e) {
-    console.warn('Could not detect region from IP:', e);
-  }
-
-  try {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const region = getRegionFromTimezone(timezone);
-    if (region) {
-      sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, region);
-      return region;
-    }
-  } catch (e) {
-    console.warn('Could not detect timezone:', e);
-  }
-
-  sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, 'GLOBAL');
-  return 'GLOBAL';
+  const detection = await fetchUserGeo();
+  return detection.region;
 }
 
 /**

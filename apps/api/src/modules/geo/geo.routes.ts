@@ -10,8 +10,7 @@ export async function geoRoutes(app: FastifyInstance) {
     const { ip, ...result } = resolveGeoRegionFromRequest(request);
     return {
       ...result,
-      // Expose IP only for debugging in non-production; omit in prod for privacy.
-      ...(process.env.NODE_ENV !== 'production' && ip ? { ip } : {}),
+      ip: ip ?? null,
     };
   });
 }

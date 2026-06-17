@@ -3013,7 +3013,7 @@ export const api = {
       region: string;
       countryCode: string | null;
       source: 'ip' | 'unknown';
-      ip?: string;
+      ip: string | null;
     }> {
       const res = await fetch(`${API_URL}/geo/region`, {
         method: 'GET',
