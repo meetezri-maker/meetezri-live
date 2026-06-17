@@ -18,6 +18,8 @@ import {
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useSafety } from "@/app/contexts/SafetyContext";
+import { getPrimaryEmergencyResource, getSafetyResources, getTelHrefForPhone } from "@/app/utils/safetyResources";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -93,6 +95,9 @@ import {
 
 export function SafetyPlan() {
   const { user } = useAuth();
+  const { userRegion } = useSafety();
+  const crisisLine = getSafetyResources(userRegion).find((r) => r.type === "crisis_line");
+  const emergencyResource = getPrimaryEmergencyResource(userRegion);
   const [editor, setEditor] = useState<WellnessPlanEditorState>(() =>
     createInitialWellnessPlanEditorState()
   );
@@ -395,26 +400,30 @@ export function SafetyPlan() {
                       </h2>
                     </div>
                     <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <a href="tel:988" className={wellnessPlanResourceTile}>
+                      {crisisLine?.phone ? (
+                      <a href={getTelHrefForPhone(crisisLine.phone)} className={wellnessPlanResourceTile}>
                         <div className={wellnessPlanIconChip("rose")}>
                           <Phone className="h-4 w-4" aria-hidden />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-white">
-                            988 Suicide &amp; Crisis Lifeline
+                            {crisisLine.name}
                           </p>
-                          <p className="mt-0.5 text-xs text-rose-200/70">Call or Text 988</p>
+                          <p className="mt-0.5 text-xs text-rose-200/70">{crisisLine.phone}</p>
                         </div>
                       </a>
-                      <a href="tel:911" className={wellnessPlanResourceTile}>
+                      ) : null}
+                      {emergencyResource?.phone ? (
+                      <a href={getTelHrefForPhone(emergencyResource.phone)} className={wellnessPlanResourceTile}>
                         <div className={wellnessPlanIconChip("rose")}>
                           <Phone className="h-4 w-4" aria-hidden />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-white">Emergency Services</p>
-                          <p className="mt-0.5 text-xs text-rose-200/70">Call 911</p>
+                          <p className="text-sm font-semibold text-white">{emergencyResource.name}</p>
+                          <p className="mt-0.5 text-xs text-rose-200/70">{emergencyResource.phone}</p>
                         </div>
                       </a>
+                      ) : null}
                     </div>
                   </motion.section>
 

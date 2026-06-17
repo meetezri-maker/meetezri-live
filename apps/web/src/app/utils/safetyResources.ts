@@ -4,8 +4,26 @@
  */
 
 import { SafetyResource } from '@/app/types/safety';
+import { api } from '@/lib/api';
 
 export type Region = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'GLOBAL';
+
+const DETECTED_REGION_STORAGE_KEY = 'ezri_detected_region';
+const USER_REGION_STORAGE_KEY = 'ezri_user_region';
+
+export type CrisisHotlineVariant = 'lifeline' | 'text' | 'emergency' | 'samhsa';
+
+export interface CrisisHotlineDisplay {
+  name: string;
+  phone: string;
+  description: string;
+  resourceId: string;
+  resourceLabel: string;
+  resourceType: SafetyResource['type'];
+  interactionOnDial: 'call' | 'text';
+  telHref?: string;
+  variant: CrisisHotlineVariant;
+}
 
 interface RegionInfo {
   code: Region;
@@ -15,50 +33,60 @@ interface RegionInfo {
 }
 
 /**
- * Detect user's region based on various methods
+ * Detect user's region: manual preference → IP (API) → timezone → GLOBAL.
  */
 export async function detectUserRegion(): Promise<Region> {
-  // Try to get from localStorage first (user preference)
-  const stored = localStorage.getItem('ezri_user_region');
+  const stored = localStorage.getItem(USER_REGION_STORAGE_KEY);
   if (stored && isValidRegion(stored)) {
     return stored as Region;
   }
 
-  // Try to detect from timezone
+  try {
+    const geo = await api.geo.getRegion();
+    if (geo?.region && isValidRegion(geo.region)) {
+      sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, geo.region);
+      return geo.region as Region;
+    }
+  } catch (e) {
+    console.warn('Could not detect region from IP:', e);
+  }
+
   try {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const region = getRegionFromTimezone(timezone);
     if (region) {
+      sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, region);
       return region;
     }
   } catch (e) {
     console.warn('Could not detect timezone:', e);
   }
 
-  // Try to detect from IP (in production, call a geolocation API)
-  // For now, we'll use a mock implementation
-  // In production: const response = await fetch('https://ipapi.co/json/');
-  
-  // Default to US
-  return 'US';
+  sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, 'GLOBAL');
+  return 'GLOBAL';
 }
 
 /**
  * Set user's region preference
  */
 export function setUserRegion(region: Region): void {
-  localStorage.setItem('ezri_user_region', region);
+  localStorage.setItem(USER_REGION_STORAGE_KEY, region);
+  sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, region);
 }
 
 /**
- * Get user's current region (sync, uses cached value)
+ * Get user's current region (sync): manual preference → auto-detected session → GLOBAL.
  */
 export function getCurrentRegion(): Region {
-  const stored = localStorage.getItem('ezri_user_region');
+  const stored = localStorage.getItem(USER_REGION_STORAGE_KEY);
   if (stored && isValidRegion(stored)) {
     return stored as Region;
   }
-  return 'US';
+  const detected = sessionStorage.getItem(DETECTED_REGION_STORAGE_KEY);
+  if (detected && isValidRegion(detected)) {
+    return detected as Region;
+  }
+  return 'GLOBAL';
 }
 
 function isValidRegion(value: string): boolean {
@@ -384,7 +412,60 @@ export function getSafetyResources(region?: Region): SafetyResource[] {
     ],
   };
 
-  return resourcesByRegion[userRegion] || resourcesByRegion.US;
+  return resourcesByRegion[userRegion] || resourcesByRegion.GLOBAL;
+}
+
+const HOTLINE_TYPE_ORDER: SafetyResource['type'][] = [
+  'emergency',
+  'crisis_line',
+  'text_line',
+  'support_group',
+];
+
+function variantForResource(resource: SafetyResource): CrisisHotlineVariant {
+  if (resource.type === 'emergency') return 'emergency';
+  if (resource.type === 'text_line') return 'text';
+  if (resource.type === 'support_group') return 'samhsa';
+  return 'lifeline';
+}
+
+export function getTelHrefForPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length >= 3) return `tel:${digits}`;
+  return `tel:${phone}`;
+}
+
+/**
+ * Crisis UI hotline cards derived from region-aware safety resources.
+ */
+export function getCrisisHotlineDisplayResources(region?: Region): CrisisHotlineDisplay[] {
+  const resources = getSafetyResources(region);
+  const sorted = [...resources].sort(
+    (a, b) => HOTLINE_TYPE_ORDER.indexOf(a.type) - HOTLINE_TYPE_ORDER.indexOf(b.type),
+  );
+
+  return sorted.slice(0, 4).map((resource) => ({
+    name: resource.name,
+    phone: resource.phone ?? resource.url ?? 'See website',
+    description: resource.description,
+    resourceId: resource.id,
+    resourceLabel: resource.name,
+    resourceType: resource.type,
+    interactionOnDial: resource.type === 'text_line' ? 'text' : 'call',
+    telHref: resource.phone ? getTelHrefForPhone(resource.phone) : undefined,
+    variant: variantForResource(resource),
+  }));
+}
+
+/**
+ * Primary emergency number for immediate-danger callouts.
+ */
+export function getPrimaryEmergencyResource(region?: Region): SafetyResource | undefined {
+  const resources = getSafetyResources(region);
+  return (
+    resources.find((r) => r.type === 'emergency') ??
+    resources.find((r) => r.type === 'crisis_line')
+  );
 }
 
 /**

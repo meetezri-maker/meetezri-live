@@ -32,6 +32,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { PasswordStrengthMeter } from "@/app/components/ui/PasswordStrengthMeter";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useSafety } from "@/app/contexts/SafetyContext";
+import { RegionSelector } from "@/app/components/safety/RegionSelector";
 import { toast } from "sonner";
 import {
   birthIsoToAgeYears,
@@ -290,6 +292,7 @@ const PasswordInput = ({
 export function AccountSettings() {
   const navigate = useNavigate();
   const { user, profile: authProfile } = useAuth();
+  const { setUserRegionPreference } = useSafety();
   const [loading, setLoading] = useState(() => !authProfile);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1608,6 +1611,13 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div className="pt-2">
+                <RegionSelector
+                  showDetectedRegion
+                  onRegionChange={(region) => setUserRegionPreference(region)}
+                />
               </div>
             </div>
             </motion.section>

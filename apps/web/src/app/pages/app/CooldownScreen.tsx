@@ -10,6 +10,9 @@ import { GroundingExercises } from "@/app/components/safety/GroundingExercises";
 import { BreathingExercises } from "@/app/components/safety/BreathingExercises";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import { trackResourceInteraction } from "@/app/utils/resourceTracking";
+import {
+  getCrisisHotlineDisplayResources,
+} from "@/app/utils/safetyResources";
 import { cn } from "@/lib/utils";
 import {
   Heart,
@@ -165,6 +168,11 @@ interface HelpfulResourcesCardProps {
 }
 
 function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
+  const { userRegion } = useSafety();
+  const hotlines = getCrisisHotlineDisplayResources(userRegion);
+  const textLine = hotlines.find((r) => r.variant === "text");
+  const supportLine = hotlines.find((r) => r.variant === "lifeline" || r.variant === "samhsa");
+
   const trackDial = (
     resourceId: string,
     resourceLabel: string,
@@ -260,24 +268,40 @@ function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
           </Link>
 
           <a
-            href="tel:741741"
-            onClick={() => trackDial("us_crisis_text", "Crisis Text Line", "text_line", "text")}
+            href={textLine?.telHref ?? "/app/emergency-resources"}
+            onClick={() =>
+              textLine
+                ? trackDial(
+                    textLine.resourceId,
+                    textLine.resourceLabel,
+                    "text_line",
+                    "text",
+                  )
+                : trackDial("cooldown_view_all", "Emergency Resources", "emergency", "visit")
+            }
             className={cooldownResourceCard}
           >
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 ring-1 ring-cyan-400/30">
               <MessageCircle className="size-5 text-cyan-200" aria-hidden />
             </div>
             <motion.div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white">Crisis Text Line</p>
-              <p className="text-xs text-white/65">Text HOME to 741741</p>
+              <p className="text-sm font-semibold text-white">{textLine?.name ?? "Crisis Text Line"}</p>
+              <p className="text-xs text-white/65">{textLine?.phone ?? "View regional options"}</p>
             </motion.div>
             <ChevronRight className="size-5 shrink-0 text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white/70" aria-hidden />
           </a>
 
           <a
-            href="tel:+18006624357"
+            href={supportLine?.telHref ?? "/app/emergency-resources"}
             onClick={() =>
-              trackDial("us_samhsa_helpline", "SAMHSA National Helpline", "crisis_line", "call")
+              supportLine
+                ? trackDial(
+                    supportLine.resourceId,
+                    supportLine.resourceLabel,
+                    "crisis_line",
+                    "call",
+                  )
+                : trackDial("cooldown_view_all", "Emergency Resources", "emergency", "visit")
             }
             className={cooldownResourceCard}
           >
@@ -285,8 +309,8 @@ function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
               <Phone className="size-5 text-violet-200" aria-hidden />
             </motion.div>
             <motion.div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white">Support Helpline</p>
-              <p className="text-xs text-white/65">1-800-662-4357</p>
+              <p className="text-sm font-semibold text-white">{supportLine?.name ?? "Support Helpline"}</p>
+              <p className="text-xs text-white/65">{supportLine?.phone ?? "View regional options"}</p>
             </motion.div>
             <ChevronRight className="size-5 shrink-0 text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white/70" aria-hidden />
           </a>

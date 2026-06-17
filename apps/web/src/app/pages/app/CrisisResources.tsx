@@ -25,6 +25,12 @@ import { cn } from "@/lib/utils";
 import { trackResourceInteraction } from "@/app/utils/resourceTracking";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import {
+  getCrisisHotlineDisplayResources,
+  getPrimaryEmergencyResource,
+  getRegionInfo,
+  type CrisisHotlineVariant,
+} from "@/app/utils/safetyResources";
+import {
   categoryVisualsForReading,
   fetchReadingLibraryArticles,
   type ReadingLibraryArticle,
@@ -96,53 +102,15 @@ function contactInitials(name: string): string {
   );
 }
 
-const HOTLINE_RESOURCES = [
-  {
-    name: "National Suicide Prevention Lifeline",
-    phone: "988",
-    description: "24/7 emotional support",
-    icon: Phone,
-    variant: "lifeline" as const,
-    resourceId: "us_988",
-    resourceLabel: "988 Suicide & Crisis Lifeline",
-    resourceType: "crisis_line" as const,
-    interactionOnDial: "call" as const,
-  },
-  {
-    name: "Crisis Text Line",
-    phone: "Text HOME to 741741",
-    description: "24/7 text-based support",
-    icon: MessageCircle,
-    variant: "text" as const,
-    resourceId: "us_crisis_text",
-    resourceLabel: "Crisis Text Line",
-    resourceType: "text_line" as const,
-    interactionOnDial: "text" as const,
-    telHref: "tel:741741",
-  },
-  {
-    name: "Emergency Services",
-    phone: "911",
-    description: "Immediate emergency assistance",
-    icon: AlertTriangle,
-    variant: "emergency" as const,
-    resourceId: "us_emergency",
-    resourceLabel: "Emergency Services",
-    resourceType: "emergency" as const,
-    interactionOnDial: "call" as const,
-  },
-  {
-    name: "SAMHSA National Helpline",
-    phone: "1-800-662-4357",
-    description: "Mental health & substance abuse",
-    icon: HeartPulse,
-    variant: "samhsa" as const,
-    resourceId: "us_samhsa_helpline",
-    resourceLabel: "SAMHSA National Helpline",
-    resourceType: "crisis_line" as const,
-    interactionOnDial: "call" as const,
-  },
-];
+const HOTLINE_ICON_BY_VARIANT: Record<
+  CrisisHotlineVariant,
+  typeof Phone
+> = {
+  lifeline: Phone,
+  text: MessageCircle,
+  emergency: AlertTriangle,
+  samhsa: HeartPulse,
+};
 
 const SAFETY_PLAN_STEPS = [
   {
@@ -201,7 +169,14 @@ const RESOURCE_GUIDANCE = [
 
 export function CrisisResources() {
   const navigate = useNavigate();
-  const { currentState } = useSafety();
+  const { currentState, userRegion } = useSafety();
+  const regionInfo = getRegionInfo(userRegion);
+  const primaryEmergency = getPrimaryEmergencyResource(userRegion);
+  const hotlineResources = getCrisisHotlineDisplayResources(userRegion);
+  const emergencyNumber = primaryEmergency?.phone ?? regionInfo.emergencyNumber;
+  const emergencyTelHref = primaryEmergency?.phone
+    ? `tel:${primaryEmergency.phone.replace(/\D/g, "")}`
+    : undefined;
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
@@ -327,18 +302,19 @@ export function CrisisResources() {
                     If you&apos;re in immediate danger:
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-rose-100/75">
-                    Call 911 or go to your nearest emergency room. Your safety is the top
-                    priority.
+                    Call {emergencyNumber} or go to your nearest emergency room. Your safety is the
+                    top priority.
                   </p>
+                  {emergencyTelHref ? (
                   <motion.a
-                    href="tel:911"
+                    href={emergencyTelHref}
                     className={cn(crisisDangerCta, "mt-4")}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() =>
                       trackResourceInteraction(
-                        "us_emergency",
-                        "Emergency Services",
+                        primaryEmergency?.id ?? "emergency",
+                        primaryEmergency?.name ?? "Emergency Services",
                         "emergency",
                         "call",
                         undefined,
@@ -347,8 +323,9 @@ export function CrisisResources() {
                     }
                   >
                     <Phone className="h-5 w-5" aria-hidden />
-                    Call 911 Now
+                    Call {emergencyNumber} Now
                   </motion.a>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -359,8 +336,8 @@ export function CrisisResources() {
                 24/7 Emergency Hotlines
               </h2>
               <motion.div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {HOTLINE_RESOURCES.map((contact, index) => {
-                  const Icon = contact.icon;
+                {hotlineResources.map((contact, index) => {
+                  const Icon = HOTLINE_ICON_BY_VARIANT[contact.variant];
                   return (
                     <motion.article
                       key={contact.resourceId}

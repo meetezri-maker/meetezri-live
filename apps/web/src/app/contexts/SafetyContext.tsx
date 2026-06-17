@@ -8,6 +8,7 @@ import { SafetyState, SafetyConsent, SafetyContext as SafetyContextType } from '
 import { logSafetyEvent } from '@/app/utils/safetyLogger';
 import { isValidStateTransition } from '@/app/utils/safetyDetection';
 import { notifyTrustedContacts, shouldNotifyContacts } from '@/app/utils/trustedContactNotifications';
+import { detectUserRegion, getCurrentRegion, setUserRegion, type Region } from '@/app/utils/safetyResources';
 import { useAuth } from './AuthContext';
 
 const CONSENT_STORAGE_KEY = 'ezri_safety_consent';
@@ -23,6 +24,7 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
   const [currentState, setCurrentState] = useState<SafetyState>('NORMAL');
   const [previousState, setPreviousState] = useState<SafetyState | null>(null);
   const [stateChangedAt, setStateChangedAt] = useState<number>(Date.now());
+  const [userRegion, setUserRegionState] = useState<Region>(() => getCurrentRegion());
   const [sessionId] = useState(() => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [consent, setConsent] = useState<SafetyConsent>(() => {
     try {
@@ -51,6 +53,21 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
       console.error('Failed to save safety consent:', error);
     }
   }, [consent]);
+
+  const refreshUserRegion = useCallback(async () => {
+    const region = await detectUserRegion();
+    setUserRegionState(region);
+    return region;
+  }, []);
+
+  const setUserRegionPreference = useCallback((region: Region) => {
+    setUserRegion(region);
+    setUserRegionState(region);
+  }, []);
+
+  useEffect(() => {
+    void refreshUserRegion();
+  }, [refreshUserRegion]);
 
   const updateState = useCallback(async (
     newState: SafetyState,
@@ -143,11 +160,14 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
     stateChangedAt,
     sessionId,
     consent,
+    userRegion,
     updateConsent,
     updateState,
     resetToNormal,
     getStateDescription,
     canTransitionTo,
+    refreshUserRegion,
+    setUserRegionPreference,
   };
 
   return (

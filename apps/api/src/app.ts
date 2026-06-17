@@ -30,6 +30,8 @@ import { customAchievementRoutes } from './modules/custom-achievements/custom-ac
 import { supportTicketsRoutes } from './modules/support-tickets/support-tickets.routes';
 import { sttRoutes } from './modules/stt/stt.routes';
 import { safetyResourceInteractionsRoutes } from './modules/safety-resource-interactions/safety-resource-interactions.routes';
+import { geoRoutes } from './modules/geo/geo.routes';
+import { getClientIp } from './lib/client-ip';
 import jwkToPem from 'jwk-to-pem';
 import prisma from './lib/prisma';
 const jwtLib = require('jsonwebtoken');
@@ -54,7 +56,11 @@ if (DEBUG_API) {
   });
 }
 
-const app = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
+const app = Fastify({
+  logger: true,
+  // Required on Vercel so request.ip and x-forwarded-for resolve to the real client.
+  trustProxy: true,
+}).withTypeProvider<ZodTypeProvider>();
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
@@ -283,6 +289,7 @@ app.register(customAchievementRoutes, { prefix: '/api/custom-achievements' });
 app.register(supportTicketsRoutes, { prefix: '/api/support' });
 app.register(sttRoutes);
 app.register(safetyResourceInteractionsRoutes, { prefix: '/api/safety-resource-interactions' });
+app.register(geoRoutes, { prefix: '/api/geo' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.
@@ -341,9 +348,7 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
         method: request.method,
         status_code: statusCode,
         requestId: request.id,
-        ip:
-          (typeof request.headers['x-forwarded-for'] === 'string' && request.headers['x-forwarded-for']) ||
-          request.ip,
+        ip: getClientIp(request),
         // If auth plugin attaches a user object, record it.
         user_id:
           (request as any)?.user?.sub ||
