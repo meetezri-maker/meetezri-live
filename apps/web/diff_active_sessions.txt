@@ -2509,7 +2509,7 @@
 +    } catch (e: any) {
 +      // Don’t crash the whole session UI if env is missing; surface actionable error.
 +      console.error(e);
-+      toast.error(e?.message || "Ezri env is missing/misconfigured.");
++      toast.error(e?.message || "Solace env is missing/misconfigured.");
 +      return null;
 +    }
 +  }, []);

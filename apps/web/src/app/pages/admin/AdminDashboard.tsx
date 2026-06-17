@@ -47,7 +47,7 @@ export function AdminDashboard() {
         >
           <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back! Here's what's happening with Ezri today.
+            Welcome back! Here's what's happening with Solace today.
           </p>
         </motion.div>
 

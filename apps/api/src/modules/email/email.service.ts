@@ -164,11 +164,11 @@ export class EmailService {
     console.log(`Attempting to send email to ${to}...`);
     try {
       const info = await this.transporter.sendMail({
-        // Brand as Ezri; override with SMTP_FROM if your mail host requires a specific envelope.
-        from: process.env.SMTP_FROM || '"Ezri" <noreply@meetezri.com>',
+        // Brand as Solace; override with SMTP_FROM if your mail host requires a specific envelope.
+        from: process.env.SMTP_FROM || '"Solace" <noreply@Solace.com>',
         to,
         subject,
-        html,
+        html, // HTML email content
         text: text || html.replace(/<[^>]*>?/gm, ''), // fallback text generation
       });
       console.log(`Email sent successfully: ${info.messageId}`);
@@ -194,8 +194,8 @@ export class EmailService {
     footerNote,
     audience = 'trial',
     spotlight,
-    brandName = 'MeetEzri',
-    logoLetter = 'E',
+    brandName = 'Solace',
+    logoLetter = 'S',
   }: TemplateLayoutOptions) {
     const theme = getTheme(audience);
     const greetingHtml = greeting
@@ -301,6 +301,9 @@ export class EmailService {
               .hero-title {
                 color: #f8fafc !important;
               }
+              .brand-tagline {
+                color: #f8fafc !important;
+              }
               .helper-copy, .detail-label, .spotlight-label, .footer-copy {
                 color: #cbd5e1 !important;
               }
@@ -341,7 +344,7 @@ export class EmailService {
                                 </td>
                                 <td style="padding-left:16px;">
                                   <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${theme.mutedText};font-weight:700;">${escapeHtml(brandName)}</div>
-                                  <div style="margin-top:4px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
+                                  <div class="brand-tagline" style="margin-top:4px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
                                 </td>
                               </tr>
                             </table>
@@ -513,15 +516,16 @@ export class EmailService {
   }: {
     resetLink: string;
   }): EmailTemplatePayload {
-    const subject = 'Reset Your Password - MeetEzri';
+    const subject = 'Reset Your Password - Solace';
     return {
       subject,
       html: this.renderTemplate({
-        preheader: 'Use this secure link to reset your MeetEzri password.',
+        ...SOLACE_EMAIL_BRAND,
+        preheader: 'Use this secure link to reset your Solace password.',
         eyebrow: 'Password Reset',
         title: 'Create a new password',
         intro:
-          'We received a request to reset the password for your MeetEzri account. Use the secure button below to choose a new password and get back in quickly.',
+          'We received a request to reset the password for your Solace account. Use the secure button below to choose a new password and get back in quickly.',
         audience: 'plan',
         spotlight: 'A secure reset flow helps protect your private conversations and account access.',
         highlights: [
@@ -531,14 +535,14 @@ export class EmailService {
         ],
         ctaLabel: 'Reset Password',
         ctaUrl: resetLink,
-        ctaHint: 'For the best experience, open the link on the device where you use MeetEzri.',
+        ctaHint: 'For the best experience, open the link on the device where you use Solace.',
         supportingText:
           'If you did not request a password reset, you can ignore this email and your existing password will stay the same.',
         footerNote:
           'Never share password reset links with anyone, including support staff.',
       }),
       text: [
-        'Reset your MeetEzri password.',
+        'Reset your Solace password.',
         '',
         `Reset link: ${resetLink}`,
         '',
@@ -555,16 +559,17 @@ export class EmailService {
     sessionTitle: string;
     formattedDateTime: string;
   }): EmailTemplatePayload {
-    const subject = 'Your Ezri session is scheduled';
+    const subject = 'Your Solace session is scheduled';
     return {
       subject,
       html: this.renderTemplate({
-        preheader: 'Your next MeetEzri session is on the calendar.',
+        ...SOLACE_EMAIL_BRAND,
+        preheader: 'Your next Solace session is on the calendar.',
         eyebrow: 'Session Scheduled',
         title: 'Your session is booked',
         greeting: 'Hi there,',
         intro:
-          'Your next MeetEzri session is officially scheduled. We saved the details below so you know exactly when to return.',
+          'Your next Solace session is officially scheduled. We saved the details below so you know exactly when to return.',
         audience: 'trial',
         spotlight: 'A calm moment is reserved for you. Everything you need is already set.',
         details: [
@@ -573,7 +578,7 @@ export class EmailService {
         ],
         highlights: [
           'Come back a few minutes early so you can settle in',
-          'You can manage or reschedule from your MeetEzri dashboard',
+          'You can manage or reschedule from your Solace dashboard',
         ],
         supportingText:
           'If this change was not made by you, please sign in and review your account activity.',
@@ -581,12 +586,12 @@ export class EmailService {
           'We will keep sending thoughtful reminders so you never miss a session.',
       }),
       text: [
-        'Your MeetEzri session is scheduled.',
+        'Your Solace session is scheduled.',
         '',
         `Session: ${sessionTitle}`,
         `Starts: ${formattedDateTime}`,
         '',
-        'If you need to make changes, visit your MeetEzri dashboard.',
+        'If you need to make changes, visit your Solace dashboard.',
       ].join('\n'),
     };
   }
@@ -598,16 +603,17 @@ export class EmailService {
     sessionTitle: string;
     formattedDateTime: string;
   }): EmailTemplatePayload {
-    const subject = 'Reminder: Your Ezri session is coming up';
+    const subject = 'Reminder: Your Solace session is coming up';
     return {
       subject,
       html: this.renderTemplate({
-        preheader: 'Your MeetEzri session starts in about one hour.',
+        ...SOLACE_EMAIL_BRAND,
+        preheader: 'Your Solace session starts in about one hour.',
         eyebrow: 'Friendly Reminder',
         title: 'Your session starts soon',
         greeting: 'Hi there,',
         intro:
-          'Just a gentle reminder that your upcoming MeetEzri session begins in about one hour. We are sharing the timing below so you can arrive calm and ready.',
+          'Just a gentle reminder that your upcoming Solace session begins in about one hour. We are sharing the timing below so you can arrive calm and ready.',
         audience: 'trial',
         spotlight: 'Take a breath, settle in, and come back when you are ready.',
         details: [
@@ -619,17 +625,17 @@ export class EmailService {
           'Open your dashboard a few minutes early to join without stress',
         ],
         supportingText:
-          'If your plans changed, visit MeetEzri as soon as possible to review your session details.',
+          'If your plans changed, visit Solace as soon as possible to review your session details.',
         footerNote:
           'Small reminders can make a big difference in showing up for yourself.',
       }),
       text: [
-        'Reminder: your MeetEzri session is coming up.',
+        'Reminder: your Solace session is coming up.',
         '',
         `Session: ${sessionTitle}`,
         `Starts: ${formattedDateTime}`,
         '',
-        'Open your MeetEzri dashboard a few minutes early to join.',
+        'Open your Solace dashboard a few minutes early to join.',
       ].join('\n'),
     };
   }
@@ -657,6 +663,7 @@ export class EmailService {
     return {
       subject,
       html: this.renderTemplate({
+        ...SOLACE_EMAIL_BRAND,
         preheader: message,
         eyebrow: 'Streak reminder',
         title,
@@ -669,7 +676,7 @@ export class EmailService {
             : 'A short journal entry helps you stay consistent with your wellness goals.',
         highlights: [
           'It only takes a minute to keep your progress going',
-          'Open MeetEzri on web or your device to continue',
+          'Open Solace on web or your device to continue',
         ],
         ctaLabel: streakType === 'mood' ? 'Mood check-in' : 'Open journal',
         ctaUrl,
@@ -677,7 +684,7 @@ export class EmailService {
         supportingText:
           'You are receiving this because streak reminders are enabled in your notification settings.',
         footerNote:
-          'Manage email and push preferences anytime in MeetEzri notification settings.',
+          'Manage email and push preferences anytime in Solace notification settings.',
       }),
       text: [
         `Hi ${firstName.trim() || 'there'},`,
@@ -686,7 +693,7 @@ export class EmailService {
         '',
         message,
         '',
-        `Open MeetEzri: ${ctaUrl}`,
+        `Open Solace: ${ctaUrl}`,
         '',
         'You can change reminder settings in the app under Notification settings.',
       ].join('\n'),
@@ -735,7 +742,7 @@ export class EmailService {
       },
       {
         name: 'password_reset',
-        subject: 'Reset Your Password - MeetEzri',
+        subject: 'Reset Your Password - Solace',
         body: this.buildPasswordResetEmail({
           resetLink: '{{reset_link}}',
         }).html,
@@ -743,7 +750,7 @@ export class EmailService {
       },
       {
         name: 'session_scheduled',
-        subject: 'Your Ezri session is scheduled',
+        subject: 'Your Solace session is scheduled',
         body: this.buildSessionScheduledEmail({
           sessionTitle: '{{session_title}}',
           formattedDateTime: '{{session_time}}',
@@ -752,7 +759,7 @@ export class EmailService {
       },
       {
         name: 'session_reminder',
-        subject: 'Reminder: Your Ezri session is coming up',
+        subject: 'Reminder: Your Solace session is coming up',
         body: this.buildSessionReminderEmail({
           sessionTitle: '{{session_title}}',
           formattedDateTime: '{{session_time}}',

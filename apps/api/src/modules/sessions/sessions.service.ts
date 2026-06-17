@@ -191,7 +191,7 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
         })
       : 'the scheduled time';
 
-    const sessionTitle = session.title || 'Your Ezri session';
+    const sessionTitle = session.title || 'Your Solace session';
 
     const sessionScheduledEmail = emailService.buildSessionScheduledEmail({
       sessionTitle,
@@ -498,8 +498,8 @@ export async function createMessage(userId: string, sessionId: string, input: Cr
       data: {
         session_id: sessionId,
         user_id: userId,
-        app_name: 'Ezri Session',
-        window_title: 'AI Therapy Session',
+        app_name: 'Solace Session',
+        window_title: 'Solace Session',
         metadata: {
           type: 'session',
           status: 'active',

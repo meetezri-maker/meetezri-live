@@ -624,7 +624,7 @@ async function sendRenewalConfirmationEmail({
     const invoiceUrl = invoice.hosted_invoice_url as string | undefined;
     const billingUrl = `${process.env.CLIENT_URL || 'https://meetezri-live-web.vercel.app'}/app/billing`;
 
-    const subject = 'Your MeetEzri plan has renewed successfully';
+    const subject = 'Your Solace plan has renewed successfully';
     const html = `
       <p>Hi there,</p>
       <p>Your <strong>${planType}</strong> plan has renewed successfully.</p>
@@ -635,10 +635,10 @@ async function sendRenewalConfirmationEmail({
         <a href="${billingUrl}" target="_blank" rel="noopener noreferrer">Open Billing</a>
         ${invoiceUrl ? ` | <a href="${invoiceUrl}" target="_blank" rel="noopener noreferrer">View Invoice</a>` : ''}
       </p>
-      <p>Thank you for being with MeetEzri.</p>
+      <p>Thank you for being with Solace.</p>
     `;
     const text = [
-      'Your MeetEzri plan has renewed successfully.',
+      'Your Solace plan has renewed successfully.',
       `Plan: ${planType}`,
       `Amount: ${currency} ${amountUsd}`,
       `Next billing date: ${nextBillingDate}`,

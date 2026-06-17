@@ -300,7 +300,7 @@ export async function requestKnowledgeTwoFactorRecovery(userId: string) {
 
   await emailService.sendEmail(
     email,
-    'Your Ezri 2FA Recovery Code',
+    'Your Solace 2FA Recovery Code',
     `<p>Your one-time recovery code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
     `Your one-time recovery code is ${code}. It expires in 10 minutes.`
   );
@@ -384,7 +384,7 @@ export async function requestKnowledgeTwoFactorLoginCode(userId: string) {
 
   await emailService.sendEmail(
     email,
-    'Your Ezri Login Authentication Code',
+    'Your Solace Login Authentication Code',
     `<p>Your one-time login authentication code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
     `Your one-time login authentication code is ${code}. It expires in 10 minutes.`
   );

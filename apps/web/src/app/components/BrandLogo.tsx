@@ -110,7 +110,7 @@ export function BrandLogo({
   return (
     <span
       role="img"
-      aria-label={customLogoUrl ? "App Logo" : "MeetEzri"}
+      aria-label={customLogoUrl ? "App Logo" : "Solace"}
       className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
     >
       <img

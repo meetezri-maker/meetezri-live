@@ -1,8 +1,9 @@
 import { ReactNode } from "react";
 import { motion } from "motion/react";
-import { Check, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { FloatingElement } from "./FloatingElement";
+import { cn } from "@/lib/utils";
 
 interface OnboardingLayoutProps {
   children: ReactNode;
@@ -14,87 +15,88 @@ interface OnboardingLayoutProps {
   onBack?: () => void;
 }
 
-export function OnboardingLayout({ 
-  children, 
-  currentStep, 
-  totalSteps, 
+export function OnboardingLayout({
+  children,
+  currentStep,
+  totalSteps,
   title,
   subtitle,
   showBack,
-  onBack
+  onBack,
 }: OnboardingLayoutProps) {
   const progress = (currentStep / totalSteps) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white relative overflow-hidden">
-      {/* Floating background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="relative min-h-screen overflow-hidden bg-[#050612] text-[#f4f4f8]">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <FloatingElement delay={0} duration={4}>
-          <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
+          <div className="absolute left-10 top-20 h-32 w-32 rounded-full bg-violet-500/10 blur-3xl" />
         </FloatingElement>
         <FloatingElement delay={1.5} duration={5}>
-          <div className="absolute bottom-40 right-20 w-40 h-40 bg-accent/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-40 right-20 h-40 w-40 rounded-full bg-fuchsia-500/10 blur-3xl" />
         </FloatingElement>
       </div>
 
-      {/* Header with Logo and Progress */}
-      <div className="relative z-10 border-b border-border bg-white/80 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between mb-3">
+      <header
+        className={cn(
+          "relative z-10 border-b border-white/[0.08] bg-[#070815]/72 backdrop-blur-2xl",
+          "shadow-[inset_0_-1px_0_rgba(255,78,145,0.12)] supports-[backdrop-filter]:bg-[#070815]/50",
+        )}
+      >
+        <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {showBack && onBack && (
-                <button 
+              {showBack && onBack ? (
+                <button
                   onClick={onBack}
-                  className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="-ml-2 rounded-full p-2 text-violet-200/75 transition-colors hover:bg-white/[0.06] hover:text-white"
                   aria-label="Go back"
                 >
-                  <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  <ArrowLeft className="h-5 w-5" />
                 </button>
-              )}
+              ) : null}
               <motion.div
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="flex items-center gap-2"
               >
-                <BrandLogo heightClass="h-8" variant="onLight" />
-                <span className="font-semibold">Solace</span>
+                <BrandLogo heightClass="h-8" variant="onDark" />
+                <span className="font-semibold text-white/90">Solace</span>
               </motion.div>
             </div>
-            
+
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="text-sm text-muted-foreground"
+              className="text-sm text-violet-200/65"
             >
               Step {currentStep} of {totalSteps}
             </motion.div>
           </div>
-          
-          {/* Progress Bar */}
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/[0.04]">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="h-full bg-gradient-to-r from-primary via-accent to-secondary rounded-full"
+              className="h-full rounded-full bg-gradient-to-r from-[#FF4E91] via-[#d946ef] to-[#8A4FFF] shadow-[0_0_16px_-2px_rgba(255,78,145,0.55)]"
             />
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <div className="relative z-10 mx-auto max-w-3xl px-4 py-8 sm:px-6 md:py-12 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-8"
+          className="mb-8 text-center"
         >
-          <h1 className="text-3xl md:text-4xl font-bold mb-2 inline-flex flex-wrap items-center justify-center gap-2">{title}</h1>
-          {subtitle && (
-            <p className="text-muted-foreground text-lg">{subtitle}</p>
-          )}
+          <h1 className="mb-2 inline-flex flex-wrap items-center justify-center gap-2 text-3xl font-bold text-[#faf8fc] md:text-4xl">
+            {title}
+          </h1>
+          {subtitle ? <p className="text-lg text-violet-200/75">{subtitle}</p> : null}
         </motion.div>
 
         <motion.div
@@ -106,8 +108,7 @@ export function OnboardingLayout({
         </motion.div>
       </div>
 
-      {/* Step Indicators (Mobile) */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-border p-4 md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-white/[0.08] bg-[#070815]/80 p-4 backdrop-blur-md md:hidden">
         <div className="flex justify-center gap-2">
           {Array.from({ length: totalSteps }).map((_, index) => (
             <motion.div
@@ -115,11 +116,12 @@ export function OnboardingLayout({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: index * 0.05 }}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={cn(
+                "h-2 rounded-full transition-all",
                 index + 1 <= currentStep
-                  ? "bg-primary w-6"
-                  : "bg-gray-300"
-              }`}
+                  ? "w-6 bg-gradient-to-r from-[#FF4E91] to-[#8A4FFF]"
+                  : "w-2 bg-white/15",
+              )}
             />
           ))}
         </div>
