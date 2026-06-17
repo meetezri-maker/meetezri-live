@@ -4,47 +4,104 @@
  */
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { 
-  Globe, 
-  Check, 
-  MapPin, 
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
+import {
+  Globe,
+  Check,
+  MapPin,
   AlertCircle,
-  ChevronDown
+  ChevronDown,
 } from 'lucide-react';
-import { 
-  Region, 
-  getCurrentRegion, 
-  setUserRegion, 
-  detectUserRegion,
-  getRegionInfo 
+import {
+  Region,
+  getCurrentRegion,
+  setUserRegion,
+  fetchUserGeo,
+  getRegionInfo,
+  getStoredGeoDetection,
+  type GeoDetection,
 } from '@/app/utils/safetyResources';
+import { cn } from '@/lib/utils';
 
 interface RegionSelectorProps {
   onRegionChange?: (region: Region) => void;
   showDetectedRegion?: boolean;
 }
 
+const REGIONS: Array<{
+  code: Region;
+  name: string;
+  flag: string;
+  description: string;
+}> = [
+  {
+    code: 'US',
+    name: 'United States',
+    flag: '🇺🇸',
+    description: '988, Crisis Text Line, NAMI',
+  },
+  {
+    code: 'CA',
+    name: 'Canada',
+    flag: '🇨🇦',
+    description: '988, Kids Help Phone, Wellness Together',
+  },
+  {
+    code: 'UK',
+    name: 'United Kingdom',
+    flag: '🇬🇧',
+    description: 'Samaritans, Shout, PAPYRUS',
+  },
+  {
+    code: 'AU',
+    name: 'Australia',
+    flag: '🇦🇺',
+    description: 'Lifeline, Beyond Blue, Kids Helpline',
+  },
+  {
+    code: 'EU',
+    name: 'European Union',
+    flag: '🇪🇺',
+    description: '112, European Support Lines',
+  },
+  {
+    code: 'GLOBAL',
+    name: 'Global / Other',
+    flag: '🌍',
+    description: 'International crisis resources',
+  },
+];
+
+function regionLabel(region: Region): string {
+  return REGIONS.find((r) => r.code === region)?.name ?? region;
+}
+
+function formatGeoSource(source: GeoDetection['source']): string {
+  if (source === 'ip') return 'IP address';
+  if (source === 'timezone') return 'device timezone';
+  return 'fallback';
+}
+
 export function RegionSelector({ onRegionChange, showDetectedRegion = true }: RegionSelectorProps) {
   const [currentRegion, setCurrentRegion] = useState<Region>(getCurrentRegion());
-  const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
+  const [geoDetection, setGeoDetection] = useState<GeoDetection | null>(() => getStoredGeoDetection());
   const [isOpen, setIsOpen] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
 
-  // Detect region on mount if showDetectedRegion is true
   useEffect(() => {
     if (showDetectedRegion) {
-      detectRegion();
+      void detectRegion();
     }
   }, [showDetectedRegion]);
 
   const detectRegion = async () => {
     setIsDetecting(true);
     try {
-      const detected = await detectUserRegion();
-      setDetectedRegion(detected);
+      const detection = await fetchUserGeo();
+      setGeoDetection(detection);
     } catch (error) {
       console.error('Error detecting region:', error);
     } finally {
@@ -56,202 +113,189 @@ export function RegionSelector({ onRegionChange, showDetectedRegion = true }: Re
     setCurrentRegion(region);
     setUserRegion(region);
     setIsOpen(false);
-    
-    if (onRegionChange) {
-      onRegionChange(region);
-    }
+    onRegionChange?.(region);
   };
 
-  const regions: Array<{
-    code: Region;
-    name: string;
-    flag: string;
-    description: string;
-  }> = [
-    {
-      code: 'US',
-      name: 'United States',
-      flag: '🇺🇸',
-      description: '988, Crisis Text Line, NAMI'
-    },
-    {
-      code: 'CA',
-      name: 'Canada',
-      flag: '🇨🇦',
-      description: '988, Kids Help Phone, Wellness Together'
-    },
-    {
-      code: 'UK',
-      name: 'United Kingdom',
-      flag: '🇬🇧',
-      description: 'Samaritans, Shout, PAPYRUS'
-    },
-    {
-      code: 'AU',
-      name: 'Australia',
-      flag: '🇦🇺',
-      description: 'Lifeline, Beyond Blue, Kids Helpline'
-    },
-    {
-      code: 'EU',
-      name: 'European Union',
-      flag: '🇪🇺',
-      description: '112, European Support Lines'
-    },
-    {
-      code: 'GLOBAL',
-      name: 'Global / Other',
-      flag: '🌍',
-      description: 'International crisis resources'
-    }
-  ];
-
-  const currentRegionInfo = regions.find(r => r.code === currentRegion);
+  const currentRegionInfo = REGIONS.find((r) => r.code === currentRegion);
   const regionInfo = getRegionInfo(currentRegion);
+  const detectedRegion = geoDetection?.region ?? null;
+  const detectedRegionInfo = detectedRegion ? REGIONS.find((r) => r.code === detectedRegion) : null;
 
   return (
     <div className="relative">
-      {/* Current Region Display */}
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="w-full"
-      >
-        <Card className="p-4 cursor-pointer hover:shadow-lg transition-all border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center text-white">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <div className="text-xs text-purple-600 font-medium">Your Region</div>
-                <div className="font-bold text-gray-900 flex items-center gap-2">
-                  <span className="text-2xl">{currentRegionInfo?.flag}</span>
-                  <span>{currentRegionInfo?.name}</span>
-                </div>
-                <div className="text-xs text-gray-600">
-                  Emergency: {regionInfo.emergencyNumber}
-                </div>
-              </div>
-            </div>
-            <motion.div
-              animate={{ rotate: isOpen ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            className="w-full text-left"
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
+          >
+            <Card
+              className={cn(
+                'cursor-pointer p-4 transition-all',
+                'border border-white/10 bg-white/[0.04] backdrop-blur-sm',
+                'hover:bg-white/[0.06] hover:shadow-[0_18px_60px_-28px_rgba(168,85,247,0.55)]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60',
+              )}
             >
-              <ChevronDown className="w-5 h-5 text-purple-600" />
-            </motion.div>
-          </div>
-        </Card>
-      </motion.button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 ring-1 ring-violet-400/30">
+                    <MapPin className="h-5 w-5 text-violet-100" aria-hidden />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-white/60">Your Region</div>
+                    <div className="flex items-center gap-2 font-semibold text-white">
+                      <span className="text-2xl" aria-hidden>
+                        {currentRegionInfo?.flag}
+                      </span>
+                      <span>{currentRegionInfo?.name}</span>
+                    </div>
+                    <div className="text-xs text-white/50">
+                      Emergency: {regionInfo.emergencyNumber}
+                    </div>
+                    {showDetectedRegion && geoDetection ? (
+                      <div className="mt-2 space-y-0.5 border-t border-white/10 pt-2 text-xs text-white/55">
+                        <p>
+                          <span className="text-white/45">Detected IP:</span>{' '}
+                          <span className="font-mono text-white/80">
+                            {geoDetection.ip ?? 'Unavailable'}
+                          </span>
+                        </p>
+                        <p>
+                          <span className="text-white/45">Country:</span>{' '}
+                          <span className="text-white/80">
+                            {geoDetection.countryCode
+                              ? `${geoDetection.countryCode}${geoDetection.countryName ? ` (${geoDetection.countryName})` : ''}`
+                              : 'Unknown'}
+                          </span>
+                        </p>
+                        <p>
+                          <span className="text-white/45">Detected region:</span>{' '}
+                          <span className="text-white/80">
+                            {detectedRegionInfo
+                              ? `${detectedRegionInfo.flag} ${detectedRegionInfo.name}`
+                              : regionLabel(geoDetection.region)}
+                          </span>
+                          <span className="text-white/40"> · via {formatGeoSource(geoDetection.source)}</span>
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <motion.div
+                  animate={{ rotate: isOpen ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  aria-hidden
+                >
+                  <ChevronDown className="h-5 w-5 text-white/70" />
+                </motion.div>
+              </div>
+            </Card>
+          </motion.button>
+        </PopoverTrigger>
 
-      {/* Auto-detection notice */}
-      {showDetectedRegion && detectedRegion && detectedRegion !== currentRegion && (
+        <PopoverContent
+          align="start"
+          sideOffset={8}
+          className={cn(
+            'z-[250] w-[var(--radix-popover-trigger-width)] max-h-96 overflow-y-auto p-2',
+            'border border-white/10 bg-[#0B0613]/98 text-white shadow-2xl backdrop-blur-xl',
+          )}
+        >
+          <div className="space-y-1" role="listbox" aria-label="Select your region">
+            {REGIONS.map((region) => (
+              <button
+                type="button"
+                key={region.code}
+                role="option"
+                aria-selected={currentRegion === region.code}
+                onClick={() => handleRegionSelect(region.code)}
+                className={cn(
+                  'w-full rounded-lg p-3 text-left transition-colors',
+                  currentRegion === region.code
+                    ? 'border border-violet-300/30 bg-violet-500/10'
+                    : 'border border-transparent hover:bg-white/[0.06]',
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-3xl shrink-0" aria-hidden>
+                      {region.flag}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 font-semibold text-white">
+                        <span>{region.name}</span>
+                        {detectedRegion === region.code ? (
+                          <span className="rounded-full border border-cyan-300/20 bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-100">
+                            Detected
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-white/55">{region.description}</div>
+                    </div>
+                  </div>
+                  {currentRegion === region.code ? (
+                    <Check className="h-5 w-5 shrink-0 text-violet-200" aria-hidden />
+                  ) : null}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {showDetectedRegion ? (
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void detectRegion()}
+                disabled={isDetecting}
+                className="w-full border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.06]"
+              >
+                <Globe className="mr-2 h-4 w-4" aria-hidden />
+                {isDetecting ? 'Detecting...' : 'Auto-Detect My Region'}
+              </Button>
+            </div>
+          ) : null}
+
+          <p className="mt-2 border-t border-white/10 pt-2 text-center text-xs text-white/50">
+            <Globe className="mr-1 inline h-3 w-3 text-white/50" aria-hidden />
+            Resources are tailored to your selected region
+          </p>
+        </PopoverContent>
+      </Popover>
+
+      {showDetectedRegion && geoDetection && detectedRegion && detectedRegion !== currentRegion ? (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-2"
         >
-          <Card className="p-3 bg-blue-50 border-blue-200">
+          <Card className="border border-cyan-300/20 bg-cyan-500/10 p-3">
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
               <div className="flex-1 text-sm">
-                <p className="text-blue-900 font-medium mb-1">
-                  Detected: {regions.find(r => r.code === detectedRegion)?.name}
+                <p className="mb-1 font-medium text-white/90">
+                  Detected {regionLabel(detectedRegion)}
+                  {geoDetection.countryCode ? ` (${geoDetection.countryCode})` : ''}
+                  {geoDetection.ip ? ` from ${geoDetection.ip}` : ''}
                 </p>
                 <button
+                  type="button"
                   onClick={() => handleRegionSelect(detectedRegion)}
-                  className="text-blue-600 hover:text-blue-700 font-medium underline"
+                  className="font-medium text-cyan-200 underline underline-offset-2 hover:text-cyan-100"
                 >
-                  Switch to {regions.find(r => r.code === detectedRegion)?.name}
+                  Switch to {regionLabel(detectedRegion)}
                 </button>
               </div>
             </div>
           </Card>
         </motion.div>
-      )}
-
-      {/* Region Dropdown */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="absolute top-full left-0 right-0 mt-2 z-50"
-          >
-            <Card className="p-2 shadow-2xl border-2 border-purple-200 max-h-96 overflow-y-auto">
-              <div className="space-y-1">
-                {regions.map((region) => (
-                  <motion.button
-                    key={region.code}
-                    onClick={() => handleRegionSelect(region.code)}
-                    whileHover={{ scale: 1.02, x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`w-full p-3 rounded-lg text-left transition-colors ${
-                      currentRegion === region.code
-                        ? 'bg-purple-100 border-2 border-purple-500'
-                        : 'hover:bg-gray-100 border-2 border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl">{region.flag}</span>
-                        <div>
-                          <div className="font-bold text-gray-900 flex items-center gap-2">
-                            {region.name}
-                            {detectedRegion === region.code && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                Detected
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-600">{region.description}</div>
-                        </div>
-                      </div>
-                      {currentRegion === region.code && (
-                        <Check className="w-5 h-5 text-purple-600" />
-                      )}
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Auto-detect button */}
-              {showDetectedRegion && (
-                <div className="mt-2 pt-2 border-t">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={detectRegion}
-                    disabled={isDetecting}
-                    className="w-full"
-                  >
-                    <Globe className="w-4 h-4 mr-2" />
-                    {isDetecting ? 'Detecting...' : 'Auto-Detect My Region'}
-                  </Button>
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="mt-2 pt-2 border-t">
-                <p className="text-xs text-gray-600 text-center">
-                  <Globe className="w-3 h-3 inline mr-1" />
-                  Resources are tailored to your selected region
-                </p>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-40"
-        />
-      )}
+      ) : null}
     </div>
   );
 }
