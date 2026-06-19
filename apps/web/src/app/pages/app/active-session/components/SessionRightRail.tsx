@@ -64,9 +64,9 @@ function SessionRightRailComponent({
   return (
     <aside
       aria-label="Talking controls and stats"
-      className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain pb-28 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
+      className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-20 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
     >
-      <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 md:gap-3">
+      <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 md:gap-2.5">
         <motion.button
           type="button"
           whileHover={{ scale: 1.02 }}
@@ -113,20 +113,20 @@ function SessionRightRailComponent({
 
       <div
         id="session-widgets-panel"
-        className={`pointer-events-auto flex flex-col gap-3 ${sessionStatsOpen ? "" : "hidden"}`}
+        className={`pointer-events-auto flex flex-col gap-1 ${sessionStatsOpen ? "" : "hidden"}`}
         aria-hidden={!sessionStatsOpen}
       >
-        <div className={`${glassPanel} shrink-0 flex items-center gap-3 px-3 py-2.5`}>
+        <div className={`${glassPanel} shrink-0 flex items-center gap-2 px-2.5 py-1.5`}>
           {ezriWsStatus === "connected" ? (
-            <Wifi className="size-8 shrink-0 text-emerald-300" aria-hidden />
+            <Wifi className="size-7 shrink-0 text-emerald-300" aria-hidden />
           ) : ezriWsStatus === "connecting" ||
             ezriWsStatus === "reconnecting" ? (
             <Loader2
-              className="size-8 shrink-0 animate-spin text-amber-300"
+              className="size-7 shrink-0 animate-spin text-amber-300"
               aria-hidden
             />
           ) : (
-            <WifiOff className="size-8 shrink-0 text-white/45" aria-hidden />
+            <WifiOff className="size-7 shrink-0 text-white/45" aria-hidden />
           )}
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-xs font-medium text-white/60">
@@ -146,22 +146,22 @@ function SessionRightRailComponent({
           </div>
         </div>
 
-        <div className={`${glassPanel} shrink-0 p-3`}>
-          <div className="mb-2 flex items-center justify-between gap-2">
+        <div className={`${glassPanel} shrink-0 p-2`}>
+          <div className="mb-1 flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-white">Talking snapshot</span>
             <span className="flex items-center gap-1 text-xs text-emerald-300">
               <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
               Live
             </span>
           </div>
-          <ul className="space-y-2 text-sm">
-            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-2 first:pt-0">
+          <ul className="space-y-0 text-sm">
+            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-1.5 first:pt-0">
               <span className="text-white/70">Talk time</span>
               <span className="font-mono font-semibold text-white">
                 {formatSessionTime(sessionTime)}
               </span>
             </li>
-            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-2">
+            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-1.5">
               <span className="text-white/70">Minutes left</span>
               <span
                 className={`font-mono font-semibold ${remainingWholeMinutes !== null && remainingWholeMinutes <= 10
@@ -172,7 +172,7 @@ function SessionRightRailComponent({
                 {remainingSeconds !== null ? formatSessionTime(remainingSeconds) : "—"}
               </span>
             </li>
-            <li className="flex justify-between gap-2 py-2">
+            <li className="flex justify-between gap-2 py-1.5">
               <span className="text-white/70">Quality</span>
               <span className={`font-medium capitalize ${connectionQualityColor}`}>
                 {connectionQuality}
@@ -181,8 +181,8 @@ function SessionRightRailComponent({
           </ul>
         </div>
 
-        <div className={`${glassPanel} shrink-0 p-4`}>
-          <div className="mb-3 flex items-center gap-2">
+        <div className={`${glassPanel} shrink-0 p-2`}>
+          <div className="mb-1 flex items-center gap-2">
             <Smile className="size-4 shrink-0 text-amber-200" aria-hidden />
             <span className="text-sm font-semibold text-white">Feelings</span>
           </div>
@@ -194,18 +194,18 @@ function SessionRightRailComponent({
             </p>
           ) : (
             <>
-              <div className="mb-4 min-h-[7.5rem] rounded-2xl border border-violet-400/[0.09] bg-gradient-to-br from-violet-500/[0.035] to-sky-600/[0.025] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.018)]">
-                <div className="flex items-start justify-between gap-3">
+              <div className="mb-2 min-h-[5.75rem] rounded-xl border border-violet-400/[0.09] bg-gradient-to-br from-violet-500/[0.035] to-sky-600/[0.025] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.018)]">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
                       Latest check-in
                     </p>
-                    <p className="mt-2 text-2xl font-bold capitalize leading-tight tracking-tight text-white md:text-[1.65rem]">
+                    <p className="mt-1 text-xl font-bold capitalize leading-tight tracking-tight text-white md:text-2xl">
                       {String(sortedMoodPreview[0]?.mood ?? "")
                         .replace(/-/g, " ")
                         .trim() || "—"}
                     </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/65">
                       <time dateTime={sortedMoodPreview[0].created_at}>
                         {new Date(sortedMoodPreview[0].created_at).toLocaleString(
                           undefined,
@@ -226,7 +226,7 @@ function SessionRightRailComponent({
                     </div>
                   </div>
                   <span
-                    className="shrink-0 select-none text-[2rem] leading-none [font-family:ui-sans-serif,system-ui,'Segoe_UI_Emoji','Apple_Color_Emoji','Noto_Color_Emoji',sans-serif]"
+                    className="shrink-0 select-none text-[1.75rem] leading-none [font-family:ui-sans-serif,system-ui,'Segoe_UI_Emoji','Apple_Color_Emoji','Noto_Color_Emoji',sans-serif]"
                     role="img"
                     aria-label={`Mood: ${String(sortedMoodPreview[0]?.mood ?? "").replace(/-/g, " ")}`}
                   >
@@ -236,14 +236,14 @@ function SessionRightRailComponent({
               </div>
               {sortedMoodPreview.length > 1 ? (
                 <>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/45">
                     Recent
                   </p>
-                  <ul className="max-h-44 space-y-2 overflow-y-auto text-sm">
+                  <ul className="max-h-36 space-y-1 overflow-y-auto text-sm">
                     {sortedMoodPreview.slice(1, 3).map((m, idx) => (
                       <li
                         key={`${m.created_at}-${idx}`}
-                        className="flex items-center gap-2 rounded-lg border border-white/[0.028] bg-black/[0.035] px-2.5 py-2"
+                        className="flex items-center gap-2 rounded-lg border border-white/[0.028] bg-black/[0.035] px-2 py-1.5"
                       >
                         <span className="min-w-0 flex-1 truncate font-medium capitalize text-white">
                           {String(m.mood || "").replace(/-/g, " ") || "—"}
