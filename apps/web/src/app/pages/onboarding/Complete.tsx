@@ -676,7 +676,7 @@ export function OnboardingComplete() {
                 </>
               ) : (
                 <>
-                  Start Your First Session
+                  Start Your First Talk
                   <ArrowRight className="h-5 w-5" aria-hidden />
                 </>
               )}

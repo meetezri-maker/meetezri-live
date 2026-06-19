@@ -1020,7 +1020,7 @@ export function Signup() {
                             </>
                           ) : (
                             <>
-                              Start Your First Session
+                              Start Your First Talk
                               <ArrowRight className="ml-2 h-4 w-4" aria-hidden />
                             </>
                           )}
