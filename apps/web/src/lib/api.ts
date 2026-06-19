@@ -3014,6 +3014,23 @@ export const api = {
       countryCode: string | null;
       source: 'ip' | 'unknown';
       ip: string | null;
+      hotlines?: Array<{
+        id: string;
+        type: string;
+        name: string;
+        description: string;
+        phone?: string;
+        url?: string;
+        availability: string;
+        region: string;
+      }>;
+      hotlineMeta?: {
+        countryCode: string;
+        countryName: string;
+        dialCode: string;
+        emergencyPhone: string | null;
+        source: 'database' | 'static';
+      } | null;
     }> {
       const res = await fetch(`${API_URL}/geo/region`, {
         method: 'GET',
@@ -3021,6 +3038,40 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to detect region');
+    },
+  },
+
+  crisisHotlines: {
+    async get(countryCode: string) {
+      const res = await fetch(
+        `${API_URL}/crisis-hotlines?countryCode=${encodeURIComponent(countryCode)}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        },
+      );
+      return handleResponse(res, 'Failed to load crisis hotlines');
+    },
+
+    async getForMe() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/crisis-hotlines/me`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load your crisis hotlines');
+    },
+
+    async setCountry(countryCode: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/crisis-hotlines/country`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ countryCode }),
+      });
+      return handleResponse(res, 'Failed to save crisis country');
     },
   },
 };

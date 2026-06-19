@@ -68,6 +68,7 @@ export interface SafetyContext {
   sessionId: string;
   consent: SafetyConsent;
   userRegion: Region;
+  userCountryCode: string | null;
   updateConsent: (partial: Partial<SafetyConsent>) => void;
   updateState: (newState: SafetyState, trigger: string, signals: string[]) => void;
   resetToNormal: () => void;

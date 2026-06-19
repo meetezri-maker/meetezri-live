@@ -5,12 +5,20 @@
 
 import { SafetyResource } from '@/app/types/safety';
 import { api } from '@/lib/api';
+import {
+  buildSafetyResourcesForCountry,
+  countryCodeFromPhoneValue,
+  getCountryHotlineEntry,
+  isSupportedCrisisCountry,
+} from '@/app/data/crisisHotlinesByCountry';
 
 export type Region = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'PK' | 'GLOBAL';
 
 const DETECTED_REGION_STORAGE_KEY = 'ezri_detected_region';
 const USER_REGION_STORAGE_KEY = 'ezri_user_region';
+const USER_COUNTRY_STORAGE_KEY = 'ezri_user_country';
 const GEO_DETECTION_STORAGE_KEY = 'ezri_geo_detection';
+const DB_HOTLINES_STORAGE_KEY = 'ezri_db_hotlines';
 
 export type GeoDetectionSource = 'ip' | 'timezone' | 'unknown';
 
@@ -20,6 +28,46 @@ export interface GeoDetection {
   countryName: string | null;
   ip: string | null;
   source: GeoDetectionSource;
+}
+
+function cacheDbHotlines(countryCode: string, resources: SafetyResource[]): void {
+  sessionStorage.setItem(
+    DB_HOTLINES_STORAGE_KEY,
+    JSON.stringify({ countryCode: countryCode.toUpperCase(), resources }),
+  );
+}
+
+function getCachedDbHotlines(countryCode: string): SafetyResource[] | null {
+  try {
+    const raw = sessionStorage.getItem(DB_HOTLINES_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { countryCode: string; resources: SafetyResource[] };
+    if (parsed.countryCode === countryCode.toUpperCase() && Array.isArray(parsed.resources) && parsed.resources.length > 0) {
+      return parsed.resources;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** Load hotlines from API (database) for a country and cache for the session. */
+export async function refreshHotlinesForCountry(countryCode: string): Promise<SafetyResource[]> {
+  const code = countryCode.trim().toUpperCase();
+  if (!code) return [];
+  try {
+    const data = await api.crisisHotlines.get(code);
+    const resources = data.resources as SafetyResource[];
+    if (resources.length > 0) {
+      cacheDbHotlines(code, resources);
+      return resources;
+    }
+  } catch (e) {
+    console.warn('Could not load crisis hotlines from API:', e);
+  }
+  const fallback = buildSafetyResourcesForCountry(code);
+  if (fallback.length > 0) cacheDbHotlines(code, fallback);
+  return fallback;
 }
 
 function getCountryDisplayName(countryCode: string): string | null {
@@ -51,14 +99,25 @@ export function getStoredGeoDetection(): GeoDetection | null {
 export async function fetchUserGeo(): Promise<GeoDetection> {
   try {
     const geo = await api.geo.getRegion();
-    const region = geo?.region && isValidRegion(geo.region) ? (geo.region as Region) : 'GLOBAL';
+    const countryCode = geo.countryCode ?? null;
+    const region =
+      countryCode != null
+        ? countryCodeToRegionBucket(countryCode)
+        : geo?.region && isValidRegion(geo.region)
+          ? (geo.region as Region)
+          : 'GLOBAL';
     const detection: GeoDetection = {
       region,
-      countryCode: geo.countryCode ?? null,
-      countryName: geo.countryCode ? getCountryDisplayName(geo.countryCode) : null,
+      countryCode,
+      countryName:
+        geo.hotlineMeta?.countryName ??
+        (geo.countryCode ? getCountryDisplayName(geo.countryCode) : null),
       ip: geo.ip ?? null,
       source: geo.source === 'ip' ? 'ip' : 'unknown',
     };
+    if (countryCode && Array.isArray(geo.hotlines) && geo.hotlines.length > 0) {
+      cacheDbHotlines(countryCode, geo.hotlines as SafetyResource[]);
+    }
     storeGeoDetection(detection);
     return detection;
   } catch (e) {
@@ -129,11 +188,100 @@ export async function detectUserRegion(): Promise<Region> {
 }
 
 /**
- * Set user's region preference
+ * Set user's region preference (legacy bucket — also sets primary country).
  */
 export function setUserRegion(region: Region): void {
   localStorage.setItem(USER_REGION_STORAGE_KEY, region);
   sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, region);
+  const country = regionToPrimaryCountry(region);
+  if (country) {
+    localStorage.setItem(USER_COUNTRY_STORAGE_KEY, country);
+  }
+}
+
+/** Persist ISO country from phone picker or explicit user choice. */
+export function setUserCountryCode(countryCode: string): void {
+  const code = countryCode.trim().toUpperCase();
+  if (!code) return;
+  localStorage.setItem(USER_COUNTRY_STORAGE_KEY, code);
+  const region = countryCodeToRegionBucket(code);
+  sessionStorage.setItem(DETECTED_REGION_STORAGE_KEY, region);
+  void refreshHotlinesForCountry(code);
+  void api.crisisHotlines.setCountry(code).catch(() => {
+    /* guest / offline — local cache only */
+  });
+}
+
+export function getUserCountryCode(): string | null {
+  const stored = localStorage.getItem(USER_COUNTRY_STORAGE_KEY);
+  return stored ? stored.toUpperCase() : null;
+}
+
+/** Infer and persist country when user picks a phone dial code. */
+export function setUserCountryFromPhone(phone: string): void {
+  const code = countryCodeFromPhoneValue(phone);
+  if (code) setUserCountryCode(code);
+}
+
+function regionToPrimaryCountry(region: Region): string | null {
+  const map: Partial<Record<Region, string>> = {
+    US: 'US',
+    CA: 'CA',
+    UK: 'GB',
+    AU: 'AU',
+    PK: 'PK',
+  };
+  return map[region] ?? null;
+}
+
+/** Map ISO country → legacy region bucket for AI / backward compat. */
+export function countryCodeToRegionBucket(countryCode: string | null | undefined): Region {
+  if (!countryCode) return 'GLOBAL';
+  const code = countryCode.trim().toUpperCase();
+  if (code === 'US') return 'US';
+  if (code === 'CA') return 'CA';
+  if (code === 'GB' || code === 'UK') return 'UK';
+  if (code === 'AU') return 'AU';
+  if (code === 'PK') return 'PK';
+  const euCountries = new Set([
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU',
+    'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES',
+    'SE', 'IS', 'LI', 'NO', 'CH',
+  ]);
+  if (euCountries.has(code)) return 'EU';
+  return isSupportedCrisisCountry(code) ? 'GLOBAL' : 'GLOBAL';
+}
+
+/**
+ * Resolve active ISO country: manual country → manual region → geo IP → timezone.
+ */
+export function resolveActiveCountryCode(): string | null {
+  const manualCountry = getUserCountryCode();
+  if (manualCountry && isSupportedCrisisCountry(manualCountry)) {
+    return manualCountry;
+  }
+
+  const manualRegion = localStorage.getItem(USER_REGION_STORAGE_KEY);
+  if (manualRegion && isValidRegion(manualRegion)) {
+    const fromRegion = regionToPrimaryCountry(manualRegion as Region);
+    if (fromRegion) return fromRegion;
+  }
+
+  const geo = getStoredGeoDetection();
+  if (geo?.countryCode && isSupportedCrisisCountry(geo.countryCode)) {
+    return geo.countryCode.toUpperCase();
+  }
+
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const region = getRegionFromTimezone(timezone);
+    const fromTz = region ? regionToPrimaryCountry(region) : null;
+    if (fromTz) return fromTz;
+  } catch {
+    /* ignore */
+  }
+
+  return null;
 }
 
 /**
@@ -174,9 +322,22 @@ function getRegionFromTimezone(timezone: string): Region | null {
 }
 
 /**
- * Get region information
+ * Get region information (uses active country when available).
  */
-export function getRegionInfo(region: Region): RegionInfo {
+export function getRegionInfo(region?: Region): RegionInfo {
+  const countryCode = resolveActiveCountryCode();
+  if (countryCode) {
+    const entry = getCountryHotlineEntry(countryCode);
+    if (entry) {
+      return {
+        code: countryCodeToRegionBucket(countryCode),
+        name: entry.countryName,
+        emergencyNumber: entry.emergencyPhone ?? entry.crisisLine.phone,
+      };
+    }
+  }
+
+  const activeRegion = region || getCurrentRegion();
   const regions: Record<Region, RegionInfo> = {
     US: { code: 'US', name: 'United States', emergencyNumber: '911' },
     CA: { code: 'CA', name: 'Canada', emergencyNumber: '911' },
@@ -186,13 +347,21 @@ export function getRegionInfo(region: Region): RegionInfo {
     EU: { code: 'EU', name: 'European Union', emergencyNumber: '112' },
     GLOBAL: { code: 'GLOBAL', name: 'Global', emergencyNumber: 'Varies by country' }
   };
-  return regions[region];
+  return regions[activeRegion];
 }
 
 /**
- * Get region-aware safety resources
+ * Country-aware safety resources (preferred). Falls back to legacy region buckets.
  */
 export function getSafetyResources(region?: Region): SafetyResource[] {
+  const countryCode = resolveActiveCountryCode();
+  if (countryCode) {
+    const cached = getCachedDbHotlines(countryCode);
+    if (cached?.length) return cached;
+    const countryResources = buildSafetyResourcesForCountry(countryCode);
+    if (countryResources.length > 0) return countryResources;
+  }
+
   const userRegion = region || getCurrentRegion();
   
   const resourcesByRegion: Record<Region, SafetyResource[]> = {

@@ -562,7 +562,7 @@ export function Signup() {
                     <p className="mt-1.5 text-[13px] leading-relaxed text-violet-200/75 sm:text-[14px]">
                       {phase === "form"
                         ? "Begin your journey to a better you"
-                        : "One more step before your first session"}
+                        : "One more step before your first talk"}
                     </p>
                   </div>
 
@@ -1020,7 +1020,7 @@ export function Signup() {
                             </>
                           ) : (
                             <>
-                              Start Your First Session
+                              Start Your First Talk
                               <ArrowRight className="ml-2 h-4 w-4" aria-hidden />
                             </>
                           )}

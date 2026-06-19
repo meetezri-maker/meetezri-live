@@ -8,7 +8,8 @@ import { SafetyState, SafetyConsent, SafetyContext as SafetyContextType } from '
 import { logSafetyEvent } from '@/app/utils/safetyLogger';
 import { isValidStateTransition } from '@/app/utils/safetyDetection';
 import { notifyTrustedContacts, shouldNotifyContacts } from '@/app/utils/trustedContactNotifications';
-import { detectUserRegion, getCurrentRegion, setUserRegion, type Region } from '@/app/utils/safetyResources';
+import { detectUserRegion, getCurrentRegion, setUserRegion, resolveActiveCountryCode, refreshHotlinesForCountry, type Region } from '@/app/utils/safetyResources';
+import { api } from '@/lib/api';
 import { useAuth } from './AuthContext';
 
 const CONSENT_STORAGE_KEY = 'ezri_safety_consent';
@@ -25,6 +26,7 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
   const [previousState, setPreviousState] = useState<SafetyState | null>(null);
   const [stateChangedAt, setStateChangedAt] = useState<number>(Date.now());
   const [userRegion, setUserRegionState] = useState<Region>(() => getCurrentRegion());
+  const [userCountryCode, setUserCountryCodeState] = useState<string | null>(() => resolveActiveCountryCode());
   const [sessionId] = useState(() => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [consent, setConsent] = useState<SafetyConsent>(() => {
     try {
@@ -57,17 +59,37 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
   const refreshUserRegion = useCallback(async () => {
     const region = await detectUserRegion();
     setUserRegionState(region);
+    setUserCountryCodeState(resolveActiveCountryCode());
     return region;
   }, []);
 
   const setUserRegionPreference = useCallback((region: Region) => {
     setUserRegion(region);
     setUserRegionState(region);
+    setUserCountryCodeState(resolveActiveCountryCode());
   }, []);
 
   useEffect(() => {
-    void refreshUserRegion();
-  }, [refreshUserRegion]);
+    void (async () => {
+      await refreshUserRegion();
+      if (profile?.crisis_country_code) {
+        const code = profile.crisis_country_code.toUpperCase();
+        localStorage.setItem('ezri_user_country', code);
+        await refreshHotlinesForCountry(code);
+        setUserCountryCodeState(code);
+      } else {
+        try {
+          const me = await api.crisisHotlines.getForMe();
+          if (me?.resources?.length) {
+            await refreshHotlinesForCountry(me.countryCode);
+            setUserCountryCodeState(me.countryCode);
+          }
+        } catch {
+          /* guest */
+        }
+      }
+    })();
+  }, [refreshUserRegion, profile?.crisis_country_code]);
 
   const updateState = useCallback(async (
     newState: SafetyState,
@@ -161,6 +183,7 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
     sessionId,
     consent,
     userRegion,
+    userCountryCode,
     updateConsent,
     updateState,
     resetToNormal,
