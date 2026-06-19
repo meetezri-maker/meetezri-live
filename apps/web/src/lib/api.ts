@@ -1,11 +1,7 @@
 import { supabase } from './supabase';
 
-/** Base path for REST calls (no trailing slash). In local dev, defaults to `/api` and Vite proxies to the API server — see `apps/web/vite.config.ts`. */
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV
-    ? '/api'
-    : 'https://sub.talktosolace2.ai/api');
+/** Base path for REST calls (no trailing slash). Defaults to same-origin `/api` (Vite proxy in dev, Vercel rewrite in prod). */
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 async function getHeaders(accessToken?: string): Promise<Record<string, string>> {
   const token =

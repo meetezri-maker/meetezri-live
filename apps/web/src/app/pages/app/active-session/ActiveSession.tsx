@@ -4406,9 +4406,7 @@ export function ActiveSession() {
 
   const SESSION_API_BASE =
     import.meta.env.VITE_API_URL ||
-    (import.meta.env.DEV
-      ? "http://localhost:3001/api"
-      : "https://sub.talktosolace2.ai/api");
+    (import.meta.env.DEV ? "http://localhost:3001/api" : "/api");
 
   const teardownLocalResources = () => {
     if (sessionFullyCleanedRef.current) return;
