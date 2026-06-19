@@ -67,4 +67,19 @@ export const UserProfileSchema = z.object({
   full_name: z.string().optional(),
 });
 
+export {
+  CRISIS_HOTLINES_BY_COUNTRY,
+  DIAL_CODE_TO_COUNTRY,
+  SUPPORTED_CRISIS_COUNTRY_CODES,
+  buildCrisisResourcesForCountry,
+  countryCodeFromPhoneValue,
+  dialCodeToCountryCode,
+  getCountryHotlineEntry,
+  isSupportedCrisisCountry,
+  type CountryHotlineEntry,
+  type CrisisHotlineExtra,
+  type CrisisResourceDto,
+  type CrisisResourceType,
+} from './crisisHotlines';
+
 export type UserProfile = z.infer<typeof UserProfileSchema>;

@@ -17,7 +17,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { type ReactNode, useState, useEffect } from "react";
+import { type ReactNode, useState, useEffect, useMemo } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useOnboardingResume } from "@/app/hooks/useOnboardingResume";
@@ -52,6 +52,15 @@ import { ONBOARDING_EMERGENCY_CONTACT_BG } from "@/lib/solace/referenceImagery";
 import { cn } from "@/lib/utils";
 import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 import { SolaceSelect } from "@/app/solace";
+import {
+  fetchUserGeo,
+  getSafetyResources,
+  resolveActiveCountryCode,
+  setUserCountryCode,
+  setUserCountryFromPhone,
+} from "@/app/utils/safetyResources";
+import { getCountryHotlineEntry } from "@/app/data/crisisHotlinesByCountry";
+import type { SafetyResource } from "@/app/types/safety";
 
 const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
@@ -171,44 +180,63 @@ const onboardingPhoneButtonClass = cn(
 const phoneFieldHint =
   "Select country code, then number (exactly 12 digits including code).";
 
-const crisisResources = [
-  {
-    icon: Phone,
-    label: "988 Suicide & Emergency Lifeline:",
-    detail: "Call or text 988",
-    iconClass: "text-[#fda4cf]",
-    ring: "from-[#FF4E91]/45 to-pink-900/20",
-  },
-  {
-    icon: MessageCircle,
-    label: "Emergency Text Line:",
-    detail: "Text HOME to 741741",
-    iconClass: "text-violet-300",
-    ring: "from-violet-400/50 to-purple-900/25",
-  },
-  {
-    icon: Siren,
-    label: "Emergency:",
-    detail: "Call 911",
-    iconClass: "text-rose-300",
-    ring: "from-rose-400/50 to-rose-900/20",
-  },
-] as const;
+type CrisisDisplayItem = {
+  icon: typeof Phone;
+  label: string;
+  detail: string;
+  iconClass: string;
+  ring: string;
+};
 
-const moreCrisisResources = [
-  {
-    label: "SAMHSA:",
-    detail: "1-800-662-4357 (Treatment referral)",
-  },
-  {
-    label: "Veterans:",
-    detail: "1-800-273-8255 (Press 1)",
-  },
-  {
-    label: "LGBTQ+:",
-    detail: "1-866-488-7386 (Trevor Project)",
-  },
-] as const;
+function resourceToCrisisItem(resource: SafetyResource, index: number): CrisisDisplayItem {
+  const icon =
+    resource.type === "text_line"
+      ? MessageCircle
+      : resource.type === "emergency"
+        ? Siren
+        : Phone;
+  const styles = [
+    {
+      iconClass: "text-[#fda4cf]",
+      ring: "from-[#FF4E91]/45 to-pink-900/20",
+    },
+    {
+      iconClass: "text-violet-300",
+      ring: "from-violet-400/50 to-purple-900/25",
+    },
+    {
+      iconClass: "text-rose-300",
+      ring: "from-rose-400/50 to-rose-900/20",
+    },
+  ];
+  const style = styles[index % styles.length];
+  return {
+    icon,
+    label: `${resource.name}:`,
+    detail: resource.phone
+      ? resource.type === "text_line"
+        ? `Text or call ${resource.phone}`
+        : `Call ${resource.phone}`
+      : resource.description,
+    ...style,
+  };
+}
+
+function buildOnboardingCrisisLists(resources: SafetyResource[]) {
+  const urgentResources = resources
+    .filter((r) => r.type === "emergency" || r.type === "crisis_line" || r.type === "text_line")
+    .slice(0, 3);
+  const urgentIds = new Set(urgentResources.map((r) => r.id));
+  const urgent = urgentResources.map(resourceToCrisisItem);
+  const more = resources
+    .filter((r) => !urgentIds.has(r.id))
+    .slice(0, 4)
+    .map((r) => ({
+      label: `${r.name}:`,
+      detail: r.phone ? r.phone : r.description,
+    }));
+  return { urgent, more };
+}
 
 function EmergencyContactSceneBackdrop() {
   return (
@@ -465,7 +493,33 @@ export function OnboardingEmergencyContact() {
 
   const { isValid: isFormValid } = form.formState;
   const relationshipChoice = form.watch("emergencyRelationship");
+  const watchedPhone = form.watch("emergencyPhone");
   form.watch(["emergencyName", "emergencyPhone", "emergencyRelationship", "emergencyRelationshipCustom"]);
+
+  const [countryHint, setCountryHint] = useState<string | null>(() => {
+    const code = resolveActiveCountryCode();
+    return code ? getCountryHotlineEntry(code)?.countryName ?? null : null;
+  });
+
+  useEffect(() => {
+    void fetchUserGeo().then(() => {
+      const code = resolveActiveCountryCode();
+      setCountryHint(code ? getCountryHotlineEntry(code)?.countryName ?? null : null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (watchedPhone) {
+      setUserCountryFromPhone(watchedPhone);
+      const code = resolveActiveCountryCode();
+      setCountryHint(code ? getCountryHotlineEntry(code)?.countryName ?? null : null);
+    }
+  }, [watchedPhone]);
+
+  const { urgent: crisisResources, more: moreCrisisResources } = useMemo(
+    () => buildOnboardingCrisisLists(getSafetyResources()),
+    [countryHint, watchedPhone],
+  );
 
   useEffect(() => {
     if (!resume || !profile) return;
@@ -579,7 +633,8 @@ export function OnboardingEmergencyContact() {
                   </motion.div>
                   <motion.div className="min-w-0">
                     <p className="mb-4 text-center text-[16px] font-semibold text-white/94 md:text-left sm:text-[17px]">
-                      If you&apos;re in an Emergency right now:
+                      If you&apos;re in an Emergency right now
+                      {countryHint ? ` (${countryHint})` : ""}:
                     </p>
                     <ul className="space-y-3.5">
                       {crisisResources.map((item) => {
@@ -684,6 +739,10 @@ export function OnboardingEmergencyContact() {
                             <PhoneInput
                               value={field.value}
                               onChange={field.onChange}
+                              onCountryCodeChange={(code) => {
+                                setUserCountryCode(code);
+                                setCountryHint(getCountryHotlineEntry(code)?.countryName ?? null);
+                              }}
                               onBlur={field.onBlur}
                               name={field.name}
                               placeholder="Phone number"
@@ -844,7 +903,12 @@ export function OnboardingEmergencyContact() {
                     </h2>
                   </motion.div>
                   <ul className="divide-y divide-white/[0.06]">
-                    {moreCrisisResources.map((item) => (
+                    {moreCrisisResources.length === 0 ? (
+                      <li className="py-3 text-[14px] text-violet-100/65">
+                        See Emergency Resources in the app for additional support lines.
+                      </li>
+                    ) : (
+                      moreCrisisResources.map((item) => (
                       <li key={item.label}>
                         <div
                           className={cn(
@@ -863,7 +927,8 @@ export function OnboardingEmergencyContact() {
                           />
                         </div>
                       </li>
-                    ))}
+                      ))
+                    )}
                   </ul>
                 </div>
               </motion.section>

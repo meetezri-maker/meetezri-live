@@ -68,12 +68,24 @@ const countries = [
   { value: "+56", label: "Chile (+56)", code: "CL", flag: "🇨🇱" },
   { value: "+57", label: "Colombia (+57)", code: "CO", flag: "🇨🇴" },
   { value: "+51", label: "Peru (+51)", code: "PE", flag: "🇵🇪" },
+  { value: "+45", label: "Denmark (+45)", code: "DK", flag: "🇩🇰" },
+  { value: "+358", label: "Finland (+358)", code: "FI", flag: "🇫🇮" },
+  { value: "+852", label: "Hong Kong (+852)", code: "HK", flag: "🇭🇰" },
+  { value: "+974", label: "Qatar (+974)", code: "QA", flag: "🇶🇦" },
+  { value: "+965", label: "Kuwait (+965)", code: "KW", flag: "🇰🇼" },
+  { value: "+961", label: "Lebanon (+961)", code: "LB", flag: "🇱🇧" },
+  { value: "+256", label: "Uganda (+256)", code: "UG", flag: "🇺🇬" },
+  { value: "+880", label: "Bangladesh (+880)", code: "BD", flag: "🇧🇩" },
+  { value: "+94", label: "Sri Lanka (+94)", code: "LK", flag: "🇱🇰" },
+  { value: "+66", label: "Thailand (+66)", code: "TH", flag: "🇹🇭" },
   { value: "+58", label: "Venezuela (+58)", code: "VE", flag: "🇻🇪" },
 ]
 
 export interface PhoneInputProps {
   value?: string
   onChange?: (value: string) => void
+  /** Called when user selects a country dial code (ISO alpha-2, e.g. PK). */
+  onCountryCodeChange?: (countryCode: string) => void
   onBlur?: React.FocusEventHandler<HTMLInputElement>
   name?: string
   id?: string
@@ -114,6 +126,7 @@ const limitLocalPhoneDigits = (value: string, countryCode: string) => {
 export function PhoneInput({
   value = "",
   onChange,
+  onCountryCodeChange,
   onBlur,
   name,
   id,
@@ -159,6 +172,7 @@ export function PhoneInput({
     setOpen(false)
     const limitedNumber = limitLocalPhoneDigits(phoneNumber, newCountry.value)
     setPhoneNumber(limitedNumber)
+    onCountryCodeChange?.(newCountry.code)
     if (onChange) {
       onChange(newCountry.value + limitedNumber)
     }
