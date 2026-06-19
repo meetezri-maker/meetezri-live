@@ -62,6 +62,12 @@ const REGIONS: Array<{
     description: 'Lifeline, Beyond Blue, Kids Helpline',
   },
   {
+    code: 'PK',
+    name: 'Pakistan',
+    flag: '🇵🇰',
+    description: 'Umang, Rozan, Emergency 15',
+  },
+  {
     code: 'EU',
     name: 'European Union',
     flag: '🇪🇺',

@@ -12,6 +12,10 @@ export type EzriRealtimeConnectArgs = {
   sttProvider: string;
   /** TTS voice id for the server (e.g. `af_heart`, `am_echo`, `af_sky`). */
   voice: string;
+  /** Crisis helpline region bucket (US, CA, UK, AU, EU, PK, GLOBAL). */
+  crisisRegion?: string;
+  /** ISO country code from geo detection (e.g. PK). */
+  countryCode?: string | null;
 };
 
 export type EzriTimestampedPhoneme = {
@@ -161,7 +165,13 @@ export class EzriRealtimeClient {
       `&stt_provider=${encodeURIComponent(args.sttProvider)}` +
       `&userid=${encodeURIComponent(args.userid)}` +
       `&session_id=${encodeURIComponent(args.sessionId)}` +
-      `&voice=${encodeURIComponent(args.voice)}`;
+      `&voice=${encodeURIComponent(args.voice)}` +
+      (args.crisisRegion
+        ? `&crisis_region=${encodeURIComponent(args.crisisRegion)}`
+        : "") +
+      (args.countryCode
+        ? `&country_code=${encodeURIComponent(args.countryCode)}`
+        : "");
 
     try {
       this.ws = new WebSocket(url);

@@ -131,6 +131,24 @@ function escapeAttribute(value: string) {
   return escapeHtml(value);
 }
 
+function getEmailAssetBaseUrl(): string {
+  return (
+    process.env.EMAIL_ASSET_BASE_URL ||
+    process.env.CLIENT_URL ||
+    process.env.WEB_BASE_URL ||
+    process.env.APP_URL ||
+    'https://meetezri-live-web.vercel.app'
+  ).replace(/\/$/, '');
+}
+
+function getEmailLogoUrls() {
+  const base = getEmailAssetBaseUrl();
+  return {
+    onDark: `${base}/logos/logo%20black.png`,
+    onLight: `${base}/logos/logo%20white.png`,
+  };
+}
+
 export class EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -198,6 +216,7 @@ export class EmailService {
     logoLetter = 'S',
   }: TemplateLayoutOptions) {
     const theme = getTheme(audience);
+    const { onDark: logoOnDarkUrl, onLight: logoOnLightUrl } = getEmailLogoUrls();
     const greetingHtml = greeting
       ? `<p class="body-copy" style="margin:0 0 16px;font-size:16px;line-height:28px;color:${theme.bodyText};">${escapeHtml(greeting)}</p>`
       : '';
@@ -304,6 +323,12 @@ export class EmailService {
               .brand-tagline {
                 color: #f8fafc !important;
               }
+              .brand-logo-light {
+                display: none !important;
+              }
+              .brand-logo-dark {
+                display: block !important;
+              }
               .helper-copy, .detail-label, .spotlight-label, .footer-copy {
                 color: #cbd5e1 !important;
               }
@@ -337,17 +362,23 @@ export class EmailService {
                       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
                         <tr>
                           <td align="left" valign="middle">
-                            <table role="presentation" cellpadding="0" cellspacing="0">
-                              <tr>
-                                <td style="height:52px;width:52px;border-radius:18px;background:${theme.logoCore};box-shadow:0 0 0 10px ${theme.logoRing};text-align:center;font-size:22px;font-weight:700;color:#ffffff;">
-                                  ${escapeHtml(logoLetter)}
-                                </td>
-                                <td style="padding-left:16px;">
-                                  <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${theme.mutedText};font-weight:700;">${escapeHtml(brandName)}</div>
-                                  <div class="brand-tagline" style="margin-top:4px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
-                                </td>
-                              </tr>
-                            </table>
+                            <img
+                              src="${escapeAttribute(logoOnLightUrl)}"
+                              alt="${escapeAttribute(brandName)}"
+                              width="160"
+                              height="48"
+                              class="brand-logo brand-logo-light"
+                              style="display:block;max-width:160px;width:160px;height:auto;border:0;"
+                            />
+                            <img
+                              src="${escapeAttribute(logoOnDarkUrl)}"
+                              alt="${escapeAttribute(brandName)}"
+                              width="160"
+                              height="48"
+                              class="brand-logo brand-logo-dark"
+                              style="display:none;max-width:160px;width:160px;height:auto;border:0;"
+                            />
+                            <div class="brand-tagline" style="margin-top:8px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
                           </td>
                           <td align="right" valign="middle">
                             <div style="display:inline-block;height:72px;width:72px;border-radius:24px;background:${theme.accentGradient};opacity:0.94;box-shadow:0 14px 36px ${theme.artworkGlow};"></div>
@@ -371,7 +402,7 @@ export class EmailService {
                       <p class="footer-copy" style="margin:0;font-size:13px;line-height:22px;color:${theme.mutedText};">${escapeHtml(
                         footerNote
                       )}</p>
-                      <p class="footer-copy" style="margin:12px 0 0;font-size:12px;line-height:20px;color:${theme.mutedText};opacity:0.82;">${escapeHtml(brandName)} · Calm support, beautifully delivered</p>
+                      <p class="footer-copy" style="margin:12px 0 0;font-size:12px;line-height:20px;color:${theme.mutedText};opacity:0.82;">${escapeHtml(brandName)} · Your AI-Powered Wellness Companion</p>
                     </td>
                   </tr>
                 </table>

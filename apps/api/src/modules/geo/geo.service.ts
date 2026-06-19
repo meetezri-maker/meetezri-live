@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { getClientIp, getCountryCodeFromRequest } from '../../lib/client-ip';
 
-export type CrisisRegion = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'GLOBAL';
+export type CrisisRegion = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'PK' | 'GLOBAL';
 
 export type GeoRegionSource = 'ip' | 'unknown';
 
@@ -54,6 +54,7 @@ export function countryCodeToCrisisRegion(countryCode: string | null | undefined
   if (code === 'CA') return 'CA';
   if (code === 'GB' || code === 'UK') return 'UK';
   if (code === 'AU') return 'AU';
+  if (code === 'PK') return 'PK';
   if (EU_COUNTRY_CODES.has(code)) return 'EU';
 
   return 'GLOBAL';

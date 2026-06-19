@@ -7,6 +7,9 @@
   Redirect URLs: add your invite landing page, e.g.
   http://localhost:5173/invite/create-password and https://your-domain.com/invite/create-password
 
+  Site URL (Authentication → URL Configuration) must match your web app so logo images load:
+  {{ .SiteURL }}/logos/logo black.png
+
   Subject (set in dashboard): You're invited to Solace
 -->
 <!DOCTYPE html>
@@ -59,6 +62,12 @@
         }
         .brand-tagline {
           color: #f8fafc !important;
+        }
+        .brand-logo-light {
+          display: none !important;
+        }
+        .brand-logo-dark {
+          display: block !important;
         }
         .helper-copy,
         .detail-label,
@@ -115,29 +124,23 @@
                 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 24px">
                   <tr>
                     <td align="left" valign="middle">
-                      <table role="presentation" cellpadding="0" cellspacing="0">
-                        <tr>
-                          <td
-                            style="
-                              height: 52px;
-                              width: 52px;
-                              border-radius: 18px;
-                              background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-                              box-shadow: 0 0 0 10px rgba(139, 92, 246, 0.12);
-                              text-align: center;
-                              font-size: 22px;
-                              font-weight: 700;
-                              color: #ffffff;
-                            "
-                          >
-                            S
-                          </td>
-                          <td style="padding-left: 16px">
-                            <div style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #64748b; font-weight: 700">Solace</div>
-                            <div style="margin-top: 4px; font-size: 18px; line-height: 24px; color: #111827; font-weight: 700" class="brand-tagline">Calm support for every step</div>
-                          </td>
-                        </tr>
-                      </table>
+                      <img
+                        src="{{ .SiteURL }}/logos/logo%20white.png"
+                        alt="Solace"
+                        width="160"
+                        height="48"
+                        class="brand-logo brand-logo-light"
+                        style="display: block; max-width: 160px; width: 160px; height: auto; border: 0"
+                      />
+                      <img
+                        src="{{ .SiteURL }}/logos/logo%20black.png"
+                        alt="Solace"
+                        width="160"
+                        height="48"
+                        class="brand-logo brand-logo-dark"
+                        style="display: none; max-width: 160px; width: 160px; height: auto; border: 0"
+                      />
+                      <div style="margin-top: 8px; font-size: 18px; line-height: 24px; color: #111827; font-weight: 700" class="brand-tagline">Calm support for every step</div>
                     </td>
                     <td align="right" valign="middle">
                       <div

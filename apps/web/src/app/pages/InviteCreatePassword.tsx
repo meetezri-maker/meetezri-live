@@ -149,7 +149,7 @@ export function InviteCreatePassword() {
       }
 
       setIsSuccess(true);
-      toast.success("Your password is set. Welcome to Ezri!");
+      toast.success("Your password is set. Welcome to Solace!");
       setTimeout(() => {
         navigate("/app/dashboard", { replace: true });
       }, 2000);
@@ -182,7 +182,7 @@ export function InviteCreatePassword() {
             </div>
             <h1 className="mb-2 text-3xl font-bold text-[#faf8fc]">Create your password</h1>
             <p className="text-sm leading-relaxed text-violet-200/75">
-              You were invited to Ezri. Set a password to finish activating your account.
+              You were invited to Solace. Set a password to finish activating your account.
             </p>
           </div>
 

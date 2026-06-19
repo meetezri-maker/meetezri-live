@@ -6,7 +6,7 @@
 import { SafetyResource } from '@/app/types/safety';
 import { api } from '@/lib/api';
 
-export type Region = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'GLOBAL';
+export type Region = 'US' | 'CA' | 'UK' | 'AU' | 'EU' | 'PK' | 'GLOBAL';
 
 const DETECTED_REGION_STORAGE_KEY = 'ezri_detected_region';
 const USER_REGION_STORAGE_KEY = 'ezri_user_region';
@@ -152,7 +152,7 @@ export function getCurrentRegion(): Region {
 }
 
 function isValidRegion(value: string): boolean {
-  return ['US', 'CA', 'UK', 'AU', 'EU', 'GLOBAL'].includes(value);
+  return ['US', 'CA', 'UK', 'AU', 'EU', 'PK', 'GLOBAL'].includes(value);
 }
 
 function getRegionFromTimezone(timezone: string): Region | null {
@@ -182,6 +182,7 @@ export function getRegionInfo(region: Region): RegionInfo {
     CA: { code: 'CA', name: 'Canada', emergencyNumber: '911' },
     UK: { code: 'UK', name: 'United Kingdom', emergencyNumber: '999 or 112' },
     AU: { code: 'AU', name: 'Australia', emergencyNumber: '000 or 112' },
+    PK: { code: 'PK', name: 'Pakistan', emergencyNumber: '15 or 1122' },
     EU: { code: 'EU', name: 'European Union', emergencyNumber: '112' },
     GLOBAL: { code: 'GLOBAL', name: 'Global', emergencyNumber: 'Varies by country' }
   };
@@ -407,6 +408,44 @@ export function getSafetyResources(region?: Region): SafetyResource[] {
         url: 'https://mensline.org.au',
         availability: '24/7',
         region: 'AU',
+      },
+    ],
+    PK: [
+      {
+        id: 'pk_emergency',
+        type: 'emergency',
+        name: 'Emergency Services',
+        description: 'For immediate life-threatening emergencies',
+        phone: '15',
+        availability: '24/7',
+        region: 'PK',
+      },
+      {
+        id: 'pk_umang',
+        type: 'crisis_line',
+        name: 'Umang Mental Health Helpline',
+        description: '24/7 mental health support',
+        phone: '0311 7786264',
+        availability: '24/7',
+        region: 'PK',
+      },
+      {
+        id: 'pk_rozan',
+        type: 'crisis_line',
+        name: 'Rozan Counseling Helpline',
+        description: 'Counseling and emotional support',
+        phone: '0800-22444',
+        availability: 'Varies',
+        region: 'PK',
+      },
+      {
+        id: 'pk_rescue',
+        type: 'emergency',
+        name: 'Rescue Services',
+        description: 'Emergency rescue assistance',
+        phone: '1122',
+        availability: '24/7',
+        region: 'PK',
       },
     ],
     EU: [
