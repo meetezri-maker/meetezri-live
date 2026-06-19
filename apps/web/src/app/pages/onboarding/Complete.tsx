@@ -77,7 +77,7 @@ const quickTips = [
 
 const whatsNextItems = [
   "Your profile is complete and saved",
-  "Solace is ready for your first session",
+  "Solace is ready for your first talk",
   "You can customize settings anytime",
   "Emergency resources are available 24/7",
 ] as const;
@@ -542,7 +542,7 @@ export function OnboardingComplete() {
               </h2>
               <p className="mt-3 text-[15px] leading-relaxed text-violet-100/78 sm:text-base">
                 We&apos;ve personalized Solace based on your preferences. You&apos;re ready to start
-                your first session!
+                your first talk!
               </p>
             </motion.div>
           </motion.article>
