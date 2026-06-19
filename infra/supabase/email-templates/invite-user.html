@@ -5,10 +5,10 @@
   - {{ .ConfirmationURL }} — magic link (required for button + fallback link)
 
   Redirect URLs: add your invite landing page, e.g.
-  http://localhost:5173/invite/create-password and https://your-domain.com/invite/create-password
+  http://localhost:5173/invite/create-password and https://sub.talktosolace2.ai/invite/create-password
 
-  Site URL (Authentication → URL Configuration) must match your web app so logo images load:
-  {{ .SiteURL }}/logos/logo black.png
+  Site URL (Authentication → URL Configuration) should be your web app, e.g. https://sub.talktosolace2.ai
+  Logo images are loaded from the deployed web app /public/logos/ folder.
 
   Subject (set in dashboard): You're invited to Solace
 -->
@@ -63,12 +63,6 @@
         .brand-tagline {
           color: #f8fafc !important;
         }
-        .brand-logo-light {
-          display: none !important;
-        }
-        .brand-logo-dark {
-          display: block !important;
-        }
         .helper-copy,
         .detail-label,
         .spotlight-label,
@@ -121,43 +115,20 @@
                   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
                 "
               >
-                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 24px">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 28px">
                   <tr>
-                    <td align="left" valign="middle">
+                    <td align="center" style="padding: 0 0 8px">
                       <img
-                        src="{{ .SiteURL }}/logos/logo%20white.png"
+                        src="https://sub.talktosolace2.ai/logos/logo%20black.png"
                         alt="Solace"
-                        width="160"
-                        height="48"
-                        class="brand-logo brand-logo-light"
-                        style="display: block; max-width: 160px; width: 160px; height: auto; border: 0"
+                        width="200"
+                        height="60"
+                        style="display: block; max-width: 200px; width: 200px; height: auto; border: 0; margin: 0 auto"
                       />
-                      <img
-                        src="{{ .SiteURL }}/logos/logo%20black.png"
-                        alt="Solace"
-                        width="160"
-                        height="48"
-                        class="brand-logo brand-logo-dark"
-                        style="display: none; max-width: 160px; width: 160px; height: auto; border: 0"
-                      />
-                      <div style="margin-top: 8px; font-size: 18px; line-height: 24px; color: #111827; font-weight: 700" class="brand-tagline">Calm support for every step</div>
-                    </td>
-                    <td align="right" valign="middle">
-                      <div
-                        style="
-                          display: inline-block;
-                          height: 72px;
-                          width: 72px;
-                          border-radius: 24px;
-                          background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-                          opacity: 0.94;
-                          box-shadow: 0 14px 36px rgba(168, 85, 247, 0.16);
-                        "
-                      ></div>
+                      <div style="margin-top: 12px; font-size: 16px; line-height: 24px; color: #111827; font-weight: 600; text-align: center" class="brand-tagline">Calm support for every step</div>
                     </td>
                   </tr>
                 </table>
-                <div style="height: 8px; width: 96px; border-radius: 999px; background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); margin: 0 auto 28px"></div>
                 <h1 class="hero-title" style="margin: 0 0 18px; font-size: 34px; line-height: 42px; text-align: center; color: #111827">Join your team on Solace</h1>
                 <p class="body-copy" style="margin: 0 0 16px; font-size: 16px; line-height: 28px; color: #334155">Hi there,</p>
                 <p class="body-copy" style="margin: 0; font-size: 16px; line-height: 28px; color: #334155">

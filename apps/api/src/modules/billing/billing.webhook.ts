@@ -622,7 +622,7 @@ async function sendRenewalConfirmationEmail({
       ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US')
       : '–';
     const invoiceUrl = invoice.hosted_invoice_url as string | undefined;
-    const billingUrl = `${process.env.CLIENT_URL || 'https://meetezri-live-web.vercel.app'}/app/billing`;
+    const billingUrl = `${process.env.CLIENT_URL || 'https://sub.talktosolace2.ai'}/app/billing`;
 
     const subject = 'Your Solace plan has renewed successfully';
     const html = `
