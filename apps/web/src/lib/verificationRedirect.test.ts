@@ -31,10 +31,10 @@ describe("verificationRedirect (trial) local vs prod base URL", () => {
     const mod = await import("./verificationRedirect");
     const resolved = mod.resolveWebBaseUrlFromInputs({
       dev: false,
-      envBaseUrl: "https://meetezri-live-web.vercel.app",
+      envBaseUrl: "https://sub.talktosolace2.ai",
       windowOrigin: "https://some-other-origin.example",
     });
-    expect(resolved.baseUrl).toBe("https://meetezri-live-web.vercel.app");
+    expect(resolved.baseUrl).toBe("https://sub.talktosolace2.ai");
     expect(resolved.isLocal).toBe(false);
     expect(resolved.source).toBe("VITE_WEB_BASE_URL");
   });
@@ -43,7 +43,7 @@ describe("verificationRedirect (trial) local vs prod base URL", () => {
     const mod = await import("./verificationRedirect");
     const resolved = mod.resolveWebBaseUrlFromInputs({
       dev: true,
-      envBaseUrl: "https://meetezri-live-web.vercel.app",
+      envBaseUrl: "https://sub.talktosolace2.ai",
       windowOrigin: "http://192.168.1.50:5173",
     });
     expect(resolved.baseUrl).toBe("http://192.168.1.50:5173");

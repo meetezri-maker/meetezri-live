@@ -137,7 +137,7 @@ function getEmailAssetBaseUrl(): string {
     process.env.CLIENT_URL ||
     process.env.WEB_BASE_URL ||
     process.env.APP_URL ||
-    'https://meetezri-live-web.vercel.app'
+    'https://sub.talktosolace2.ai'
   ).replace(/\/$/, '');
 }
 
@@ -323,12 +323,6 @@ export class EmailService {
               .brand-tagline {
                 color: #f8fafc !important;
               }
-              .brand-logo-light {
-                display: none !important;
-              }
-              .brand-logo-dark {
-                display: block !important;
-              }
               .helper-copy, .detail-label, .spotlight-label, .footer-copy {
                 color: #cbd5e1 !important;
               }
@@ -359,33 +353,20 @@ export class EmailService {
                   </tr>
                   <tr>
                     <td class="hero-card" style="background:${theme.heroBackground};border-radius:28px;padding:40px 32px;border:1px solid ${theme.heroBorder};box-shadow:0 24px 60px rgba(15,23,42,0.18);">
-                      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 28px;">
                         <tr>
-                          <td align="left" valign="middle">
-                            <img
-                              src="${escapeAttribute(logoOnLightUrl)}"
-                              alt="${escapeAttribute(brandName)}"
-                              width="160"
-                              height="48"
-                              class="brand-logo brand-logo-light"
-                              style="display:block;max-width:160px;width:160px;height:auto;border:0;"
-                            />
+                          <td align="center" style="padding:0 0 8px;">
                             <img
                               src="${escapeAttribute(logoOnDarkUrl)}"
                               alt="${escapeAttribute(brandName)}"
-                              width="160"
-                              height="48"
-                              class="brand-logo brand-logo-dark"
-                              style="display:none;max-width:160px;width:160px;height:auto;border:0;"
+                              width="200"
+                              height="60"
+                              style="display:block;max-width:200px;width:200px;height:auto;border:0;margin:0 auto;"
                             />
-                            <div class="brand-tagline" style="margin-top:8px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
-                          </td>
-                          <td align="right" valign="middle">
-                            <div style="display:inline-block;height:72px;width:72px;border-radius:24px;background:${theme.accentGradient};opacity:0.94;box-shadow:0 14px 36px ${theme.artworkGlow};"></div>
+                            <div class="brand-tagline" style="margin-top:12px;font-size:16px;line-height:24px;color:${theme.headline};font-weight:600;text-align:center;">Calm support for every step</div>
                           </td>
                         </tr>
                       </table>
-                      <div style="height:8px;width:96px;border-radius:999px;background:${theme.accentGradient};margin:0 auto 28px;"></div>
                       <h1 class="hero-title" style="margin:0 0 18px;font-size:34px;line-height:42px;text-align:center;color:${theme.headline};">${escapeHtml(title)}</h1>
                       ${greetingHtml}
                       <p class="body-copy" style="margin:0;font-size:16px;line-height:28px;color:${theme.bodyText};">${escapeHtml(intro)}</p>

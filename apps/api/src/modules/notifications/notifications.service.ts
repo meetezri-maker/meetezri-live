@@ -95,7 +95,7 @@ function getAppBaseUrl() {
     process.env.WEB_APP_URL ||
     process.env.PUBLIC_APP_URL ||
     process.env.VITE_APP_URL ||
-    'https://meetezri-live-web.vercel.app'
+    'https://sub.talktosolace2.ai'
   );
 }
 

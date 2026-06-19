@@ -5,7 +5,7 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
     ? '/api'
-    : 'https://meetezri-live-api.vercel.app/api');
+    : 'https://sub.talktosolace2.ai/api');
 
 async function getHeaders(accessToken?: string): Promise<Record<string, string>> {
   const token =
