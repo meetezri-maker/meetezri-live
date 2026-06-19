@@ -139,17 +139,12 @@ export function OnboardingSubscription() {
               </div>
               
               <div className="space-y-2 mt-3">
-                {plan.features.slice(0, 3).map((feature, i) => (
+                {plan.features.map((feature, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm text-violet-200/70">
                     <Check className={`w-3 h-3 ${styles.text}`} />
                     <span>{feature}</span>
                   </div>
                 ))}
-                {plan.features.length > 3 && (
-                  <div className="mt-1 ml-5 text-xs text-violet-200/55">
-                    + {plan.features.length - 3} more features
-                  </div>
-                )}
               </div>
             </div>
           </div>

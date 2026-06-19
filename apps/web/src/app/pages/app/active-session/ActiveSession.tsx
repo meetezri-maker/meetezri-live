@@ -24,7 +24,7 @@ import { toast } from "sonner";
 // import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
 import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
 import { getSafetyResources } from "@/app/utils/safetyResources";
-import { getCurrentRegion, getEmergencyResources, getRegionInfo } from "@/app/utils/safetyResources";
+import { getEmergencyResources, getRegionInfo, getStoredGeoDetection } from "@/app/utils/safetyResources";
 import { getEzriConfig } from "@/lib/ezri/config";
 import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
 import { createEzriApiClient } from "@/lib/ezri/apiClient";
@@ -559,7 +559,7 @@ export function ActiveSession() {
     restoreMediaPermissions();
   }, [permissionStorageKey, requestMediaAccess]);
 
-  const { currentState, updateState } = useSafety();
+  const { currentState, updateState, userRegion } = useSafety();
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSoundOff, setIsSoundOff] = useState(false);
@@ -2564,7 +2564,6 @@ export function ActiveSession() {
     return fallback.length >= 3 ? fallback : null;
   };
   const getEmergencyDialTarget = (): string | null => {
-    const userRegion = getCurrentRegion();
     const emergencyByRegion = getRegionInfo(userRegion).emergencyNumber;
     const emergencyResources = getEmergencyResources(userRegion);
     const emergencyNumber =
@@ -4076,6 +4075,8 @@ export function ActiveSession() {
       ttsProvider: ezriConfig.defaults.ttsProvider,
       sttProvider: ezriConfig.defaults.sttProvider,
       voice: ezriTtsVoiceId,
+      crisisRegion: userRegion,
+      countryCode: getStoredGeoDetection()?.countryCode ?? undefined,
     });
 
     return () => {
@@ -4093,6 +4094,7 @@ export function ActiveSession() {
     companionAvatarLabel,
     companionCanonicalId,
     ezriTtsVoiceId,
+    userRegion,
     updateSaraGreetingDiagnostics,
   ]);
 
@@ -4265,7 +4267,7 @@ export function ActiveSession() {
     status: "listening",
   };
 
-  const safetyResources = getSafetyResources();
+  const safetyResources = getSafetyResources(userRegion);
 
   useEffect(() => {
     if (currentState !== lastSafetyState) {

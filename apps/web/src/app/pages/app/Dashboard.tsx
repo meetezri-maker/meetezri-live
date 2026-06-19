@@ -422,8 +422,8 @@ export function Dashboard() {
 
   const portraitUrl = resolveCompanionPortraitUrl(profile?.selected_avatar);
   const companionDisplayName =
-    (profile?.selected_avatar && profile.selected_avatar.trim()) || "Ezri";
-  const companionShort = companionDisplayName.split(/\s+/)[0] || "Ezri";
+    (profile?.selected_avatar && profile.selected_avatar.trim()) || "Solace";
+  const companionShort = companionDisplayName.split(/\s+/)[0] || "Solace";
   const companionTag = `Your companion, ${companionShort}`;
 
   const mindfulMinutesDisplay = useMemo(() => {
