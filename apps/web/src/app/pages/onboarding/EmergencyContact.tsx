@@ -61,6 +61,7 @@ import {
 } from "@/app/utils/safetyResources";
 import { getCountryHotlineEntry } from "@/app/data/crisisHotlinesByCountry";
 import type { SafetyResource } from "@/app/types/safety";
+import "./onboarding-sanctuary-ui.css";
 
 const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
@@ -164,17 +165,50 @@ const onboardingInputClass = cn(
 );
 
 const onboardingSelectClass = cn(
-  "h-11 w-full cursor-pointer appearance-none rounded-[16px] border border-violet-400/22 bg-[#0b0c20]/60 pl-11 pr-10 text-[15px] text-white/92",
+  "!h-11 !w-full cursor-pointer appearance-none rounded-[16px] !border-violet-400/22 !bg-[#0b0c20]/60 pl-11 pr-10 text-[15px] !text-white/92",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
   "transition-[border-color,box-shadow,background-color] duration-200",
-  "focus:border-[#FF4E91]/50 focus:bg-[#10122a]/75 focus:outline-none focus:ring-2 focus:ring-[#FF4E91]/18",
+  "hover:!border-[#FF4E91]/35 hover:!bg-[#12132e]/75",
+  "focus:!border-[#FF4E91]/50 focus:!bg-[#10122a]/75 focus:outline-none focus:ring-2 focus:ring-[#FF4E91]/18",
+  "data-[placeholder]:!text-violet-300/38",
+  "[&>svg:last-child]:!text-violet-300/80",
 );
 
 const onboardingLabelClass = "text-[13px] font-medium tracking-wide text-white/88";
 
 const onboardingPhoneButtonClass = cn(
-  "h-11 shrink-0 justify-between rounded-[16px] border-violet-400/22 bg-[#0b0c20]/60 px-3 text-white/90",
-  "hover:bg-[#12132e]/75 hover:text-white focus-visible:border-[#FF4E91]/50 focus-visible:ring-[#FF4E91]/18",
+  "!h-11 shrink-0 justify-between rounded-[16px] !border-violet-400/22 !bg-[#0b0c20]/60 px-3 !text-white/90",
+  "hover:!bg-[#12132e]/75 hover:!text-white focus-visible:!border-[#FF4E91]/50 focus-visible:ring-[#FF4E91]/18",
+);
+
+const onboardingDropdownPopover = cn(
+  "onboarding-sanctuary-popover z-[200] overflow-visible rounded-xl border border-white/[0.1] p-1 pb-0 backdrop-blur-xl",
+  "shadow-[0_28px_60px_-12px_rgba(0,0,0,0.9),0_0_40px_rgba(139,92,246,0.12)]",
+);
+
+const onboardingDropdownCommand = "overflow-visible rounded-lg !bg-transparent !text-zinc-200";
+
+const onboardingDropdownCommandInput = cn(
+  "h-10 border-0 border-b border-white/10 !bg-transparent text-sm !text-zinc-100",
+  "placeholder:!text-zinc-500",
+  "[&_[cmdk-input-wrapper]]:rounded-t-lg [&_[cmdk-input-wrapper]]:border-white/10",
+  "[&_[cmdk-input-wrapper]_svg]:text-zinc-500",
+);
+
+const onboardingDropdownCommandList = "max-h-[min(280px,50vh)]";
+
+const onboardingDropdownCommandItem = cn(
+  "rounded-lg !text-zinc-200",
+  "data-[selected=true]:!bg-violet-500/20 data-[selected=true]:!text-violet-50",
+  "aria-selected:!bg-violet-500/20 aria-selected:!text-violet-50",
+);
+
+const onboardingDropdownCommandEmpty = "py-6 text-center text-sm !text-zinc-500";
+
+const onboardingSelectContentClass = cn(
+  "onboarding-sanctuary-select-content",
+  "z-[200] max-h-[min(280px,var(--radix-select-content-available-height))] overflow-hidden rounded-xl border border-white/[0.1] p-1.5 backdrop-blur-xl",
+  "shadow-[0_28px_60px_-12px_rgba(0,0,0,0.9),0_0_40px_rgba(139,92,246,0.12)]",
 );
 
 const phoneFieldHint =
@@ -748,6 +782,12 @@ export function OnboardingEmergencyContact() {
                               placeholder="Phone number"
                               buttonClassName={onboardingPhoneButtonClass}
                               inputClassName={cn(onboardingInputClass, "pl-4")}
+                              popoverClassName={onboardingDropdownPopover}
+                              commandClassName={onboardingDropdownCommand}
+                              commandInputClassName={onboardingDropdownCommandInput}
+                              commandListClassName={onboardingDropdownCommandList}
+                              commandItemClassName={onboardingDropdownCommandItem}
+                              commandEmptyClassName={onboardingDropdownCommandEmpty}
                             />
                           </FormControl>
                           <FormMessage className="text-[13px] text-[#ff8ab8]" />
@@ -785,7 +825,12 @@ export function OnboardingEmergencyContact() {
                                 ariaLabel="Relationship"
                                 placeholder="Select relationship"
                                 variant="form"
-                                triggerClassName={cn(onboardingSelectClass, "pl-10")}
+                                triggerClassName={cn(
+                                  onboardingSelectClass,
+                                  "onboarding-sanctuary-select-trigger pl-10",
+                                )}
+                                contentClassName={onboardingSelectContentClass}
+                                itemClassName="!text-zinc-200 data-[highlighted]:!bg-violet-500/20 data-[highlighted]:!text-violet-50 data-[state=checked]:!bg-violet-500/22 data-[state=checked]:!text-violet-50"
                                 options={RELATIONSHIP_PRESETS.map((option) => ({
                                   value: option.value,
                                   label: option.label,
