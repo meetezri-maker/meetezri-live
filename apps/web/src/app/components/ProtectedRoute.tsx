@@ -56,7 +56,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!profile) {
+  if (profileStatus !== 'ready' || !profile) {
     if (profileStatus === 'error') {
       return (
         <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 px-4 text-center">
@@ -241,17 +241,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <>{children}</>;
   }
 
-  // Trial flow requirement:
-  // - allow `/app/dashboard` even when onboarding is not complete yet (email verification popup may be shown)
-  // - redirect other app routes to the trial onboarding start route.
+  // Trial users were handled above. Paid users enter the app only after the
+  // server has explicitly confirmed onboarding completion.
   if (isAppRoute && onboardingIncomplete) {
-    const isDashboardRoute = location.pathname === "/app/dashboard";
-    const isTrialUserProfileRoute =
-      location.pathname === "/app/user-profile" ||
-      location.pathname.startsWith("/app/user-profile?");
-    if (isDashboardRoute || (signupType === "trial" && isTrialUserProfileRoute)) {
-      return <>{children}</>;
-    }
     return <Navigate to={onboardingStartRoute} replace />;
   }
 
