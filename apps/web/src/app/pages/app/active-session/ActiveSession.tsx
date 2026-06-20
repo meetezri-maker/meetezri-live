@@ -571,7 +571,11 @@ export function ActiveSession() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
+  // const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
+  const [sessionStatsOpen, setSessionStatsOpen] = useState(() => {
+  if (typeof window === "undefined") return true;
+  return window.innerWidth >= 768;
+});
   const [sessionBackdropPreference, setSessionBackdropPreference] =
     useState<SessionBackdropPreference>(() =>
       typeof window !== "undefined"

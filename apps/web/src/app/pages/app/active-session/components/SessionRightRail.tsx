@@ -72,7 +72,7 @@ function SessionRightRailComponent({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onToggleSessionStats}
-          className={`flex size-10 shrink-0 items-center justify-center rounded-full ${glassControlBtn} transition-transform ${sessionStatsOpen ? "ring-2 ring-white/35" : ""
+          className={`flex size-10 shrink-0 items-center shaz justify-center rounded-full ${glassControlBtn} transition-transform ${sessionStatsOpen ? "ring-2 ring-white/35" : ""
             }`}
           aria-expanded={sessionStatsOpen}
           aria-controls="session-widgets-panel"

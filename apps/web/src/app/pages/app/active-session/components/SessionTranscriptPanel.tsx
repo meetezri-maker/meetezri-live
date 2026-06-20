@@ -130,7 +130,7 @@ function SessionTranscriptPanelComponent({
   );
 
   return (
-    <div className="flex min-h-0 shrink-0 flex-col">
+    <div className="hidden md:block flex min-h-0 shrink-0 flex-col shaz">
       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">
         Transcript
       </p>

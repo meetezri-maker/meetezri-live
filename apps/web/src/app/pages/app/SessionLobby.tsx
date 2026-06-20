@@ -1169,14 +1169,16 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowCustomizeModal(false)}
-              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
+              // className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
+              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen pb-[88px] md:pb-0")}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.94 }}
                 onClick={(e) => e.stopPropagation()}
-                className={cn(modalPanelLg, "flex max-h-[85vh] flex-col rounded-[1.25rem]")}
+                // className={cn(modalPanelLg, "flex max-h-[85vh] flex-col rounded-[1.25rem]")}
+                className={cn(modalPanelLg, "flex max-h-[calc(90dvh-88px)] flex-col overflow-hidden rounded-[1.25rem]")}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="customize-voice-avatar-title"
@@ -1203,7 +1205,7 @@ export function SessionLobby() {
                   </motion.button>
                 </div>
 
-                <div className={cn(modalPanelBody, "solace-scroll min-h-0 flex-1 overflow-y-auto")}>
+                <div className={cn(modalPanelBody, "solace-scroll min-h-0 flex-1 overflow-y-auto pb-28")}>
                       {/* Voice Selection */}
                       <div ref={voiceSectionRef} className="mb-8 scroll-mt-4">
                         <div className="mb-4 flex items-center gap-2">
