@@ -10,10 +10,12 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: any | null;
+  profileStatus: 'idle' | 'loading' | 'ready' | 'error';
   isLoading: boolean;
   signOut: () => Promise<void>;
   hasRole: (role: string | string[]) => boolean;
   refreshProfile: () => Promise<any>;
+  updateProfileState: (profile: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
+  const [profileStatus, setProfileStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
   const profileRef = useRef<any | null>(null);
@@ -145,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setProfile(null);
+        setProfileStatus('idle');
         setIsLoading(false);
         lastUserIdRef.current = null;
         applyAppearanceForUser(null);
@@ -188,24 +192,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const fetchProfile = async () => {
+    if (!profileRef.current) {
+      setProfileStatus('loading');
+    }
+
     try {
-      const data = await api.getMe();
-      setProfile(data);
-      return data;
-    } catch (error: any) {
-      console.error('Error fetching profile:', error);
-      if (error.message === 'Profile not found') {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          // Attempt to initialize profile if it doesn't exist
-          const newProfile = await api.initProfile();
-          setProfile(newProfile);
-          return newProfile;
-        } catch (initError) {
-          console.error('Failed to initialize profile:', initError);
-          // Do not sign out here. Allow the user to proceed to onboarding
-          // where the profile can be created via completeOnboarding.
+          const data = await api.getMe();
+          setProfile(data);
+          setProfileStatus('ready');
+          return data;
+        } catch (error: any) {
+          if (error.message === 'Profile not found') {
+            try {
+              const newProfile = await api.initProfile();
+              setProfile(newProfile);
+              setProfileStatus('ready');
+              return newProfile;
+            } catch (initError) {
+              console.error('Failed to initialize profile:', initError);
+              break;
+            }
+          }
+
+          console.error('Error fetching profile:', error);
+          if (attempt < 2) {
+            api.clearMeCache();
+            await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
+            continue;
+          }
         }
       }
+
+      setProfileStatus(profileRef.current ? 'ready' : 'error');
+      return null;
+    } catch (error: any) {
+      console.error('Error fetching profile:', error);
+      setProfileStatus(profileRef.current ? 'ready' : 'error');
       return null;
     } finally {
       setIsLoading(false);
@@ -213,13 +237,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshProfile = async () => {
+    api.clearMeCache();
     return await fetchProfile();
+  };
+
+  const updateProfileState = (updatedProfile: any) => {
+    setProfile(updatedProfile);
+    setProfileStatus('ready');
   };
 
   const signOut = async () => {
     applyAppearanceForUser(null);
     await supabase.auth.signOut();
     setProfile(null);
+    setProfileStatus('idle');
     setUser(null);
     setSession(null);
 
@@ -236,10 +267,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     profile,
+    profileStatus,
     isLoading,
     signOut,
     hasRole,
     refreshProfile,
+    updateProfileState,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

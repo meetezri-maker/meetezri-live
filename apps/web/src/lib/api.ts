@@ -573,7 +573,10 @@ export const api = {
       headers,
       body: JSON.stringify(data),
     });
-    return handleResponse(res, 'Failed to complete onboarding');
+    const profile = await handleResponse(res, 'Failed to complete onboarding');
+    shortGetCache.delete('GET:/users/me');
+    getMeInFlight = null;
+    return profile;
   },
 
   async deleteAccount() {

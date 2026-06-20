@@ -24,7 +24,15 @@ interface ProtectedRouteProps {
 const ALLOW_EXPIRED_PLAN_ROUTES = new Set(['/app/dashboard', '/app/billing']);
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, profile, isLoading, hasRole, signOut } = useAuth();
+  const {
+    user,
+    profile,
+    profileStatus,
+    isLoading,
+    hasRole,
+    signOut,
+    refreshProfile,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
@@ -36,13 +44,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   const isAccountInactive = profile?.account_status === 'inactive';
 
-  if (isLoading) {
-    // If we already have a signed-in user, never unmount the entire route tree.
-    // Background auth refreshes (often triggered by tab switching) should be silent.
-    // Do NOT redirect away from /onboarding during hydration — paid users land here right after email verify.
-    if (user) {
-      return <>{children}</>;
-    }
+  if (isLoading && !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -52,6 +54,25 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!profile) {
+    if (profileStatus === 'error') {
+      return (
+        <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 px-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            We could not restore your profile yet. Your onboarding status has not changed.
+          </p>
+          <Button onClick={() => void refreshProfile()}>Try again</Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-screen w-full items-center justify-center" aria-label="Restoring profile">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   if (isAccountInactive) {
@@ -133,7 +154,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // Onboarding access control (server-derived, not client heuristics)
-  const onboardingCompleted = profile?.onboarding_completed === true;
+  const onboardingCompleted = profile.onboarding_completed === true;
+  const onboardingIncomplete = profile.onboarding_completed === false;
   const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
   // After a magic-link verify, Supabase session is confirmed immediately but `/users/me`
   // can still return a cached profile with `email_verified: false` for a moment.
@@ -222,7 +244,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // Trial flow requirement:
   // - allow `/app/dashboard` even when onboarding is not complete yet (email verification popup may be shown)
   // - redirect other app routes to the trial onboarding start route.
-  if (isAppRoute && !onboardingCompleted) {
+  if (isAppRoute && onboardingIncomplete) {
     const isDashboardRoute = location.pathname === "/app/dashboard";
     const isTrialUserProfileRoute =
       location.pathname === "/app/user-profile" ||
@@ -246,14 +268,14 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // Never allow paid onboarding steps until email is verified.
   // Trial flow should allow the "complete profile" step from the dashboard stage,
   // so we do NOT block trial onboarding routes on email verification.
-  if (isOnboardingRoute && !onboardingCompleted && !emailVerified && signupType !== 'trial') {
+  if (isOnboardingRoute && onboardingIncomplete && !emailVerified && signupType !== 'trial') {
     return <Navigate to="/verify-email" replace />;
   }
 
   // Flow-specific: trial users should not begin at the welcome landing.
   if (
     isOnboardingRoute &&
-    !onboardingCompleted &&
+    onboardingIncomplete &&
     signupType === 'trial' &&
     location.pathname === '/onboarding/welcome'
   ) {
@@ -262,7 +284,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   // Trial flow isolation: while trial profile is incomplete, only allow the
   // Trial "complete profile" route. Prevent entry into the paid onboarding steps.
-  if (isOnboardingRoute && !onboardingCompleted && signupType === 'trial') {
+  if (isOnboardingRoute && onboardingIncomplete && signupType === 'trial') {
     if (!location.pathname.startsWith(onboardingStartRoute)) {
       return <Navigate to={onboardingStartRoute} replace />;
     }

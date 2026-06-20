@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/contexts/AuthContext';
@@ -66,8 +66,9 @@ function getDefaultOnboardingData(userId?: string, signupType?: 'trial' | 'plan'
 }
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth();
+  const { user, profile, updateProfileState } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const resumeHydratedRef = React.useRef(false);
   
   const [data, setData] = useState<OnboardingData>(() => {
@@ -174,7 +175,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         ...data,
         ...overrides,
       };
-      await api.completeOnboarding({
+      const updatedProfile = await api.completeOnboarding({
         full_name: `${finalData.firstName} ${finalData.lastName}`.trim(),
         role: finalData.role,
         pronouns: finalData.pronouns,
@@ -201,13 +202,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         permissions: finalData.permissions,
         notification_preferences: finalData.notificationPreferences,
       });
+
+      updateProfileState(updatedProfile);
       
       // Clear storage on success
       localStorage.removeItem(STORAGE_KEY);
       
       toast.success("Onboarding completed!");
-      // Force reload to ensure AuthContext fetches the new profile
-      window.location.href = redirectPath;
+      navigate(redirectPath, { replace: true });
     } catch (error: any) {
       toast.error(error.message || "Failed to complete onboarding");
     } finally {
