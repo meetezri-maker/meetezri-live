@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
   const profileRef = useRef<any | null>(null);
+  const profileFetchInFlightRef = useRef<Promise<any> | null>(null);
   profileRef.current = profile;
 
   const hasRole = (role: string | string[]) => {
@@ -132,7 +133,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastUserIdRef.current = incomingUserId;
 
         // Token refresh does not change profile; refetching here caused duplicate /users/me traffic.
-        const shouldLoadProfile = event === 'SIGNED_IN' || event === 'USER_UPDATED';
+        const shouldLoadProfile =
+          event === 'SIGNED_IN' ||
+          event === 'USER_UPDATED' ||
+          (event === 'TOKEN_REFRESHED' && !profileRef.current);
 
         if (shouldLoadProfile) {
           if (typeof window !== 'undefined' && isPublicAuthPath(window.location.pathname)) {
@@ -191,50 +195,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = () => {
+    if (profileFetchInFlightRef.current) {
+      return profileFetchInFlightRef.current;
+    }
+
     if (!profileRef.current) {
       setProfileStatus('loading');
     }
 
-    try {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          const data = await api.getMe();
-          setProfile(data);
-          setProfileStatus('ready');
-          return data;
-        } catch (error: any) {
-          if (error.message === 'Profile not found') {
-            try {
-              const newProfile = await api.initProfile();
-              setProfile(newProfile);
-              setProfileStatus('ready');
-              return newProfile;
-            } catch (initError) {
-              console.error('Failed to initialize profile:', initError);
-              break;
+    const request = (async () => {
+      try {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const data = await api.getMe();
+            setProfile(data);
+            setProfileStatus('ready');
+            return data;
+          } catch (error: any) {
+            if (error.message === 'Profile not found') {
+              try {
+                const newProfile = await api.initProfile();
+                setProfile(newProfile);
+                setProfileStatus('ready');
+                return newProfile;
+              } catch (initError) {
+                console.error('Failed to initialize profile:', initError);
+                break;
+              }
+            }
+
+            console.error('Error fetching profile:', error);
+            if (attempt < 2) {
+              api.clearMeCache();
+              await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
+              continue;
             }
           }
-
-          console.error('Error fetching profile:', error);
-          if (attempt < 2) {
-            api.clearMeCache();
-            await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
-            continue;
-          }
         }
-      }
 
-      setProfileStatus(profileRef.current ? 'ready' : 'error');
-      return null;
-    } catch (error: any) {
-      console.error('Error fetching profile:', error);
-      setProfileStatus(profileRef.current ? 'ready' : 'error');
-      return null;
-    } finally {
+        setProfileStatus(profileRef.current ? 'ready' : 'error');
+        return null;
+      } catch (error: any) {
+        console.error('Error fetching profile:', error);
+        setProfileStatus(profileRef.current ? 'ready' : 'error');
+        return null;
+      }
+    })().finally(() => {
+      profileFetchInFlightRef.current = null;
       setIsLoading(false);
-    }
+    });
+
+    profileFetchInFlightRef.current = request;
+    return request;
   };
+
+  useEffect(() => {
+    if (!user || profile || profileStatus !== 'idle') return;
+    void fetchProfile();
+  }, [user, profile, profileStatus]);
 
   const refreshProfile = async () => {
     api.clearMeCache();
