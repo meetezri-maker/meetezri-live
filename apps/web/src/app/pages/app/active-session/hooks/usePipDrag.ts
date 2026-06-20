@@ -89,14 +89,37 @@ export function usePipDrag({
   const anchorPipBelowTranscriptOnce = useCallback(() => {
     if (pipDefaultPlacedRef.current) return;
     const root = sessionContainerRef.current;
+    if (root) {
+  setPipPos({
+    left: Math.max(8, root.clientWidth - 160 - 8),
+    bottom: 8,
+  });
+}
     const card = leftSessionChromeRef.current;
     if (!root) return;
 
     const margin = 8;
     const gap = 12;
-    const pipW = PIP_LAYOUT_W;
-    const pipH = PIP_LAYOUT_H;
+    // const pipW = PIP_LAYOUT_W;
+    // const pipH = PIP_LAYOUT_H;
+
+    const isMobile =
+  typeof window !== "undefined" &&
+  window.matchMedia("(max-width: 767.98px)").matches;
+
+const pipW = isMobile ? 160 : PIP_LAYOUT_W;
+const pipH = isMobile ? 120 : PIP_LAYOUT_H;
+
     const rootRect = root.getBoundingClientRect();
+
+    if (isMobile) {
+  setPipPos({
+    left: Math.max(margin, root.clientWidth - pipW - margin),
+    bottom: 70,
+  });
+  pipDefaultPlacedRef.current = true;
+  return;
+}
 
     if (card) {
       const cardRect = card.getBoundingClientRect();
@@ -124,7 +147,11 @@ export function usePipDrag({
       typeof window !== "undefined" &&
       window.matchMedia("(max-width: 767.98px)").matches
     ) {
-      setPipPos({ left: margin, bottom: margin });
+      // setPipPos({ left: margin, bottom: margin });
+      setPipPos({
+  left: Math.max(margin, root.clientWidth - pipW - margin),
+  bottom: margin,
+});
       pipDefaultPlacedRef.current = true;
     }
   }, [leftSessionChromeRef, pipClamp, sessionContainerRef]);
@@ -150,7 +177,11 @@ export function usePipDrag({
 
     const safety = window.setTimeout(() => {
       if (!pipDefaultPlacedRef.current) {
-        setPipPos({ left: 8, bottom: 8 });
+        // setPipPos({ left: 8, bottom: 8 });
+        setPipPos({
+  left: Math.max(8, sessionContainerRef.current.clientWidth - PIP_LAYOUT_W - 8),
+  bottom: 8,
+});
         pipDefaultPlacedRef.current = true;
       }
     }, 2500);

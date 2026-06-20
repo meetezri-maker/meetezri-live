@@ -32,7 +32,8 @@ function UserCameraPipComponent({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, type: "spring", stiffness: 260, damping: 28 }}
-        className="pointer-events-auto absolute z-10 w-[15.5rem] max-w-[calc(100%-1rem)] cursor-grab overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-lg backdrop-blur-md touch-none select-none active:cursor-grabbing h-[11.5rem] sm:h-48"
+        // className="pointer-events-auto absolute z-10 w-[15.5rem] max-w-[calc(100%-1rem)] cursor-grab overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-lg backdrop-blur-md touch-none select-none active:cursor-grabbing h-[11.5rem] sm:h-48"
+        className="pointer-events-auto absolute z-10 w-[10rem] h-[7.5rem] sm:w-[12rem] sm:h-[9rem] md:w-[15.5rem] md:h-[11.5rem] max-w-[calc(100%-1rem)] cursor-grab overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-lg backdrop-blur-md touch-none select-none active:cursor-grabbing"
         style={{ left: pipPos.left, bottom: pipPos.bottom }}
         aria-label="Your camera preview — drag to move anywhere on screen"
         onPointerDown={onPointerDown}
