@@ -168,35 +168,6 @@ export function SolaceSidebar() {
           </motion.div>
         )}
 
-        {(location.pathname === "/app/user-profile" || location.pathname.startsWith("/app/user-profile?")) && (
-          <div
-            className="relative overflow-hidden rounded-xl border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_32px_-8px_rgba(139,92,246,0.2)]"
-            aria-label="Supportive reminder"
-          >
-            <img
-              src="/community/scene-forest.jpg"
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover brightness-[0.55] saturate-[1.05]"
-              width={320}
-              height={180}
-            />
-            <div
-              className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,10,35,0.25)_0%,rgba(8,8,20,0.88)_72%)]"
-              aria-hidden
-            />
-            <motion.div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_85%,rgba(251,191,36,0.16),transparent_55%)]"
-              aria-hidden
-            />
-            <div className="relative px-3.5 py-3.5">
-              <p className="text-[11px] font-medium tracking-wide text-[rgba(255,255,255,0.92)]">You matter here.</p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.62)]">
-                Your wellness journey is important. We&apos;re here with you, every step.
-              </p>
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

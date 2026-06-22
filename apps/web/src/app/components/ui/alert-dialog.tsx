@@ -4,10 +4,12 @@ import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import {
+  modalBodyText,
   modalDialogContent,
   modalDialogOverlay,
   modalPrimaryButton,
   modalSecondaryButton,
+  modalTitle,
 } from "@/lib/modalTheme";
 
 import { cn } from "./utils";
@@ -99,7 +101,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-lg font-semibold text-zinc-50", className)}
+      className={cn(modalTitle, className)}
       {...props}
     />
   );
@@ -112,7 +114,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-sm text-zinc-400", className)}
+      className={cn(modalBodyText, className)}
       {...props}
     />
   );

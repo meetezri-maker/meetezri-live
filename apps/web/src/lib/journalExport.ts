@@ -79,7 +79,7 @@ export function buildJournalJsonExport(
 ): string {
   const payload = {
     exportVersion: 1,
-    app: "Ezri Journal",
+    app: "Solace Journal",
     exportedAt: exportedAt.toISOString(),
     entryCount: entries.length,
     entries: entries
@@ -193,7 +193,7 @@ export async function buildJournalPdf(entries: JournalExportEntry[]): Promise<Js
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text("Ezri Journal Export", PDF_MARGIN, y);
+  doc.text("Solace Journal Export", PDF_MARGIN, y);
   y = nextY(doc, y, 7);
 
   doc.setFont("helvetica", "normal");

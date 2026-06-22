@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 
-import { modalDialogContent, modalDialogOverlay } from "@/lib/modalTheme";
+import { modalBodyText, modalDialogContent, modalDialogOverlay, modalTitle } from "@/lib/modalTheme";
 
 import { cn } from "./utils";
 
@@ -98,7 +98,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold text-zinc-50", className)}
+      className={cn(modalTitle, "leading-none", className)}
       {...props}
     />
   );
@@ -111,7 +111,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-zinc-400", className)}
+      className={cn(modalBodyText, className)}
       {...props}
     />
   );

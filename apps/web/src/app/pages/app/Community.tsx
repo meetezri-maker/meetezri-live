@@ -2308,7 +2308,7 @@ export function Community() {
 
               <CinematicEnter delay={0.1}>
                 <div className={cn(communityRailPanel, "p-6")}>
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 community-rail-heading [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
                     Active Now
                   </h3>
                   <div className="flex items-baseline gap-2">
@@ -2330,8 +2330,8 @@ export function Community() {
               <CinematicEnter delay={0.12}>
                 <div className={cn(communityRailPanel, "p-6")}>
                   <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
-                      <TrendingUp className="h-4 w-4 text-fuchsia-300/80" aria-hidden />
+                    <h3 className="community-rail-heading flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
+                      <TrendingUp className="community-trending-heading-icon h-4 w-4 text-fuchsia-300/80" aria-hidden />
                       Trending Topics
                     </h3>
                     {trendingTopics.length > 0 ? (
@@ -2348,14 +2348,14 @@ export function Community() {
                     {trendingTopics.slice(0, 5).map((topic) => (
                       <div key={topic.tag}>
                         <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate font-medium text-violet-100/90 [html[data-ezri-theme=light]_&]:text-violet-900 [html[data-theme=light]_&]:text-violet-900">
+                          <span className="community-trending-tag truncate font-medium text-violet-100/90 [html[data-ezri-theme=light]_&]:text-violet-900 [html[data-theme=light]_&]:text-violet-900">
                             #{topic.tag}
                           </span>
-                          <span className="shrink-0 tabular-nums text-violet-300/45 [html[data-ezri-theme=light]_&]:text-violet-600/80 [html[data-theme=light]_&]:text-violet-600/80">
+                          <span className="community-trending-count shrink-0 tabular-nums text-violet-300/45 [html[data-ezri-theme=light]_&]:text-violet-600/80 [html[data-theme=light]_&]:text-violet-600/80">
                             {topic.posts}
                           </span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                        <div className="community-trending-bar-track h-1.5 overflow-hidden rounded-full bg-white/5">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_0_12px_rgba(167,139,250,0.5)]"
                             style={{ width: `${Math.max(8, (topic.posts / trendingBarMax) * 100)}%` }}
@@ -2374,7 +2374,7 @@ export function Community() {
 
               <CinematicEnter delay={0.14}>
                 <div className={cn(communityRailPanel, "p-6")}>
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
+                  <h3 className="community-rail-heading mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70 [html[data-ezri-theme=light]_&]:text-violet-700/80 [html[data-theme=light]_&]:text-violet-700/80">
                     Support Circles Happening Now
                   </h3>
                   {supportCirclesPreview.length === 0 ? (
@@ -2388,17 +2388,17 @@ export function Community() {
                         return (
                           <li
                             key={g.id}
-                            className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2.5 [html[data-ezri-theme=light]_&]:border-violet-200/50 [html[data-ezri-theme=light]_&]:bg-violet-50/80 [html[data-theme=light]_&]:border-violet-200/50 [html[data-theme=light]_&]:bg-violet-50/80"
+                            className="community-support-circle-row flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2.5 [html[data-ezri-theme=light]_&]:border-violet-200/50 [html[data-ezri-theme=light]_&]:bg-violet-50/80 [html[data-theme=light]_&]:border-violet-200/50 [html[data-theme=light]_&]:bg-violet-50/80"
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-500/10 text-violet-100 [html[data-ezri-theme=light]_&]:border-violet-300/40 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:border-violet-300/40 [html[data-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:text-violet-700">
+                              <div className="community-support-circle-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-500/10 text-violet-100 [html[data-ezri-theme=light]_&]:border-violet-300/40 [html[data-ezri-theme=light]_&]:bg-violet-100 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:border-violet-300/40 [html[data-theme=light]_&]:bg-violet-100 [html[data-theme=light]_&]:text-violet-700">
                                 <RowIcon className="h-5 w-5" aria-hidden />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-white [html[data-ezri-theme=light]_&]:text-violet-950 [html[data-theme=light]_&]:text-violet-950">
+                                <p className="community-support-circle-name truncate text-sm font-medium text-white [html[data-ezri-theme=light]_&]:text-violet-950 [html[data-theme=light]_&]:text-violet-950">
                                   {g.name}
                                 </p>
-                                <p className="truncate text-xs text-violet-300/50 [html[data-ezri-theme=light]_&]:text-violet-600/75 [html[data-theme=light]_&]:text-violet-600/75">
+                                <p className="community-support-circle-members truncate text-xs text-violet-300/50 [html[data-ezri-theme=light]_&]:text-violet-600/75 [html[data-theme=light]_&]:text-violet-600/75">
                                   {g.members > 0 ? `${g.members.toLocaleString()} members` : "Open circle"}
                                 </p>
                               </div>

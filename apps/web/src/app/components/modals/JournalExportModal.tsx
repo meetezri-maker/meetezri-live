@@ -57,7 +57,7 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
     try {
       const stamp = new Date();
       const day = stamp.toISOString().split("T")[0];
-      const filename = `ezri-journal-${day}.${exportFormat}`;
+      const filename = `solace-journal-${day}.${exportFormat}`;
 
       let blob: Blob;
       if (exportFormat === "json") {
