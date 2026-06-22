@@ -915,10 +915,7 @@ html.a11y-lh-loose #root :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th) {
   display: none !important;
 }
 
-.focus-indicators *:focus-visible {
-  outline: 3px solid #facc15;
-  outline-offset: 3px;
-}
+/* focus-indicators: off by default; interactive elements use component focus-visible rings */
 
 .large-click-targets button,
 .large-click-targets a {

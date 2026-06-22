@@ -8,7 +8,7 @@ interface LandingHeroSceneProps {
 /** Night lake hero backdrop — scoped to hero height only. */
 export function LandingHeroScene({ children }: LandingHeroSceneProps) {
   return (
-    <section className="relative flex min-h-[min(72vh,760px)] max-h-[760px] items-center justify-center overflow-hidden">
+    <section className="relative flex min-h-[min(88vh,900px)] items-center justify-center overflow-hidden py-8 sm:py-12">
       <img
         src={LANDING_HERO_BG}
         alt=""

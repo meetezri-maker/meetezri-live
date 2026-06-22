@@ -53,7 +53,7 @@ export function defaultAccessibilitySettings(): AccessibilitySettings {
     screenReader: false,
     closedCaptions: true,
     keyboardNav: true,
-    focusIndicators: true,
+    focusIndicators: false,
     autoPlay: false,
     largeClickTargets: false,
     dyslexiaFont: false,

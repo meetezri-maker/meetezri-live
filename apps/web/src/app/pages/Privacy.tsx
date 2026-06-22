@@ -1,346 +1,821 @@
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   Shield,
-  Lock,
   Heart,
-  Accessibility,
-  Info,
+  MessageCircle,
+  Lightbulb,
+  CloudMoon,
+  CheckCircle2,
+  ArrowRight,
+  Zap,
+  HelpCircle,
+  AlertTriangle,
+  UserCheck,
+  Volume2,
+  RotateCcw,
+  HandHeart,
+  Scale,
+  Phone,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { PublicNav } from "../components/PublicNav";
 import { PublicFooter } from "../components/PublicFooter";
 import { LandingBackground } from "../landing/LandingBackground";
-import { LANDING_HERO_BG } from "../landing/landingImagery";
-import {
-  PRIVACY_HOLOGRAM_ACCESSIBILITY,
-  PRIVACY_HOLOGRAM_SAFETY,
-  PRIVACY_HOLOGRAM_SHIELD,
-} from "../landing/privacyImagery";
+import { LandingHeroScene } from "../landing/LandingHeroScene";
+import { LandingGlowCard } from "../landing/LandingGlowCard";
+import { LANDING_CTA_CARD_BG } from "../landing/landingImagery";
 import { cn } from "@/lib/utils";
 
-type AccentTone = "pink" | "cyan" | "purple";
+const HERO_TRUST = [
+  "Private by Design",
+  "Safety First",
+  "User Control",
+  "No Credit Card Required",
+] as const;
 
-interface PrivacySection {
+const FIRST_RESPONSIBILITY_MOMENTS = [
+  { text: "A conversation they keep replaying.", icon: MessageCircle, glow: "pink" as const, iconClass: "from-pink-500/90 to-fuchsia-600/90" },
+  { text: "A decision they can't stop thinking about.", icon: Lightbulb, glow: "amber" as const, iconClass: "from-amber-400/90 to-orange-500/90" },
+  { text: "A worry they haven't shared.", icon: CloudMoon, glow: "purple" as const, iconClass: "from-violet-500/90 to-fuchsia-600/90" },
+  { text: "A feeling they don't know how to explain.", icon: Heart, glow: "green" as const, iconClass: "from-emerald-400/90 to-green-600/90" },
+] as const;
+
+const TRUST_EARNED_PILLARS = [
+  "Through transparency.",
+  "Through safety.",
+  "Through clear boundaries.",
+  "Through user control.",
+  "And through creating an experience that always puts people before technology.",
+] as const;
+
+const UNDERSTANDING_SAFETY = [
+  {
+    question: "What does safety mean at Solace?",
+    answer:
+      "Safety means creating an experience that feels respectful, supportive, private, and designed around user wellbeing. It means helping people express what they're carrying without judgment, pressure, or expectations.",
+    icon: Shield,
+    glow: "green" as const,
+    iconClass: "from-emerald-400/90 to-green-600/90",
+  },
+  {
+    question: "Is Solace therapy?",
+    answer:
+      "No. Solace is a conversation experience designed to support reflection, expression, and emotional processing. It is not therapy and is not a replacement for professional mental health care.",
+    icon: AlertTriangle,
+    glow: "amber" as const,
+    iconClass: "from-amber-400/90 to-orange-500/90",
+  },
+  {
+    question: "How does Solace support user safety?",
+    answer:
+      "Solace includes user controls, built-in safeguards, and access to crisis resources when appropriate. The goal is to create a space that feels emotionally safe while maintaining clear boundaries around what Solace is designed to do.",
+    icon: UserCheck,
+    glow: "cyan" as const,
+    iconClass: "from-cyan-400/90 to-teal-500/90",
+  },
+] as const;
+
+const BUILT_AROUND_SAFETY = [
+  {
+    title: "Calm",
+    description: "A space where conversations can happen at your own pace.",
+    icon: Volume2,
+    glow: "purple" as const,
+    iconClass: "from-violet-500/90 to-fuchsia-600/90",
+  },
+  {
+    title: "Respectful",
+    description: "Your thoughts are met with curiosity, not criticism.",
+    icon: HandHeart,
+    glow: "pink" as const,
+    iconClass: "from-pink-500/90 to-fuchsia-600/90",
+  },
+  {
+    title: "Supportive",
+    description: "The experience is designed to encourage reflection rather than judgment.",
+    icon: Heart,
+    glow: "green" as const,
+    iconClass: "from-emerald-400/90 to-green-600/90",
+  },
+  {
+    title: "Consistent",
+    description: "You can return whenever you need a place to talk things through.",
+    icon: RotateCcw,
+    glow: "cyan" as const,
+    iconClass: "from-cyan-400/90 to-teal-500/90",
+  },
+] as const;
+
+const PRIVACY_CHOICES = [
+  "You decide what you choose to share.",
+  "You decide what stays private.",
+  "You decide when conversations begin.",
+  "You decide when conversations end.",
+  "You remain in control of your experience.",
+] as const;
+
+const WHAT_SOLACE_IS = [
+  "A place to talk through thoughts.",
+  "A space for reflection.",
+  "A conversation experience designed to help people express what's on their mind.",
+  "A tool that supports emotional processing and personal reflection.",
+] as const;
+
+const WHAT_SOLACE_IS_NOT = [
+  "Solace is not therapy.",
+  "Solace is not a replacement for professional mental health care.",
+  "Solace is not emergency support.",
+  "Solace is not crisis intervention.",
+  "Solace is not designed to diagnose, treat, or provide medical advice.",
+] as const;
+
+const CRISIS_RESPONSE =
+  "If conversations suggest someone may need additional support, Solace may surface crisis resources and encourage connection with trusted people, professional care providers, local support services, or emergency resources when appropriate." as const;
+
+const YOUR_CONTROL = [
+  "When to start a conversation.",
+  "What to talk about.",
+  "What to share.",
+  "When to pause.",
+  "When to stop.",
+  "When to return.",
+] as const;
+
+const FAQ_ITEMS = [
+  {
+    question: "Is Solace therapy?",
+    answer:
+      "No. Solace is a conversation experience designed to support reflection and emotional processing. It is not therapy and is not a replacement for professional mental health care.",
+  },
+  {
+    question: "Is Solace available during a crisis?",
+    answer:
+      "Solace is not a crisis intervention service. If someone may need immediate support, Solace can encourage access to crisis resources and appropriate emergency services.",
+  },
+  {
+    question: "Can I use Solace without talking about deeply personal things?",
+    answer:
+      "Absolutely. People use Solace for everyday stress, life decisions, overthinking, relationship concerns, work challenges, and many other topics.",
+  },
+  {
+    question: "Do I have control over my experience?",
+    answer: "Yes. You decide when to talk, what to share, and when to return.",
+  },
+  {
+    question: "What if I don't trust AI yet?",
+    answer:
+      "That's okay. Many people begin cautiously. You don't need to share anything you're uncomfortable sharing. Trust develops over time, and you remain in control of your experience every step of the way.",
+  },
+  {
+    question: "Why does Solace focus so much on trust?",
+    answer:
+      "Because meaningful conversations only happen when people feel safe enough to have them.",
+  },
+] as const;
+
+interface SectionHeadingProps {
   title: string;
-  description: string;
-  bullets: string[];
-  icon: LucideIcon;
-  tone: AccentTone;
-  hologramSrc: string;
-  hologramAlt: string;
-  importantNote?: string;
+  highlight?: string;
+  subtitle?: string;
 }
 
-const SECTIONS: PrivacySection[] = [
-  {
-    title: "Privacy & Security",
-    description:
-      "At Solace, we take your privacy seriously. All conversations are encrypted end-to-end, and your personal data is protected with industry-standard security measures.",
-    bullets: [
-      "End-to-end encryption for all sessions",
-      "HIPAA-compliant data storage",
-      "No third-party data sharing without your consent",
-      "Regular security audits and updates",
-      "You control your data and can delete it anytime",
-    ],
-    icon: Lock,
-    tone: "pink",
-    hologramSrc: PRIVACY_HOLOGRAM_SHIELD,
-    hologramAlt: "Glowing holographic shield protecting your data",
-  },
-  {
-    title: "Safety Features",
-    description:
-      "Your safety is paramount. Solace includes several features to ensure you get the help you need:",
-    bullets: [
-      "Emergency detection and immediate resource provision",
-      "Emergency contact integration",
-      "24/7 access to emergency and mental-health hotlines",
-      "Content moderation and safety protocols",
-      "Option to pause or end sessions anytime",
-    ],
-    icon: Heart,
-    tone: "cyan",
-    hologramSrc: PRIVACY_HOLOGRAM_SAFETY,
-    hologramAlt: "Glowing hands gently holding a heart of light",
-    importantNote:
-      "Important: Solace is not a replacement for professional medical or mental health services. In case of emergency, please call 911 or your local emergency services.",
-  },
-  {
-    title: "Accessibility",
-    description: "We're committed to making Solace accessible to everyone:",
-    bullets: [
-      "Screen reader compatibility",
-      "Keyboard navigation support",
-      "Adjustable text sizes and contrast",
-      "Closed captions for video sessions",
-      "Multiple language support",
-    ],
-    icon: Accessibility,
-    tone: "purple",
-    hologramSrc: PRIVACY_HOLOGRAM_ACCESSIBILITY,
-    hologramAlt: "Accessibility hologram with captions, text, and language indicators",
-  },
-];
-
-const TONE: Record<
-  AccentTone,
-  {
-    border: string;
-    borderHover: string;
-    shadowRgb: string;
-    iconBorder: string;
-    iconGlow: string;
-    iconColor: string;
-    bullet: string;
-    hologramWash: string;
-  }
-> = {
-  pink: {
-    border: "border-pink-400/26",
-    borderHover: "group-hover:border-pink-400/38",
-    shadowRgb: "236, 72, 153",
-    iconBorder: "border-pink-400/28",
-    iconGlow: "shadow-[0_0_22px_rgba(236,72,153,0.22)]",
-    iconColor: "text-pink-200/90",
-    bullet: "bg-pink-300/90 shadow-[0_0_6px_rgba(236,72,153,0.55)]",
-    hologramWash: "rgba(236, 72, 153, 0.14)",
-  },
-  cyan: {
-    border: "border-cyan-400/24",
-    borderHover: "group-hover:border-cyan-400/36",
-    shadowRgb: "34, 211, 238",
-    iconBorder: "border-cyan-400/26",
-    iconGlow: "shadow-[0_0_22px_rgba(34,211,238,0.2)]",
-    iconColor: "text-cyan-200/90",
-    bullet: "bg-cyan-300/90 shadow-[0_0_6px_rgba(34,211,238,0.5)]",
-    hologramWash: "rgba(34, 211, 238, 0.12)",
-  },
-  purple: {
-    border: "border-violet-400/26",
-    borderHover: "group-hover:border-violet-400/38",
-    shadowRgb: "168, 85, 247",
-    iconBorder: "border-violet-400/28",
-    iconGlow: "shadow-[0_0_22px_rgba(168,85,247,0.22)]",
-    iconColor: "text-violet-200/90",
-    bullet: "bg-violet-300/90 shadow-[0_0_6px_rgba(168,85,247,0.5)]",
-    hologramWash: "rgba(168, 85, 247, 0.13)",
-  },
-};
-
-function HologramArt({
-  src,
-  alt,
-  tone,
-}: {
-  src: string;
-  alt: string;
-  tone: AccentTone;
-}) {
-  const t = TONE[tone];
-
+function SectionHeading({ title, highlight, subtitle }: SectionHeadingProps) {
   return (
-    <div
-      className="relative flex min-h-[140px] w-full items-center justify-center sm:min-h-[160px] lg:min-h-[180px]"
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="mb-10 text-center"
     >
-      <div
-        className="pointer-events-none absolute inset-0 rounded-xl"
-        style={{
-          background: `radial-gradient(ellipse 75% 70% at 50% 50%, ${t.hologramWash} 0%, transparent 72%)`,
-        }}
-        aria-hidden
-      />
-      <motion.img
-        src={src}
-        alt={alt}
-        width={480}
-        height={480}
-        className="relative z-[1] h-auto w-full max-w-[min(240px,88%)] object-contain object-center sm:max-w-[min(260px,90%)] lg:max-w-[min(220px,100%)]"
-        loading="lazy"
-        decoding="async"
-        animate={{ y: [0, -5, 0] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-      />
-    </div>
+      <h2 className="landing-serif text-3xl font-semibold tracking-tight text-white md:text-4xl">
+        {title}
+        {highlight ? (
+          <>
+            {" "}
+            <span className="bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
+              {highlight}
+            </span>
+          </>
+        ) : null}
+      </h2>
+      {subtitle ? (
+        <p className="mt-3 text-base text-[var(--solace-ds-text-muted)] md:text-lg">{subtitle}</p>
+      ) : null}
+    </motion.div>
   );
 }
 
-interface PrivacySectionCardProps {
-  section: PrivacySection;
+interface FaqCardProps {
+  question: string;
+  answer: string;
   index: number;
 }
 
-function PrivacySectionCard({ section, index }: PrivacySectionCardProps) {
-  const tone = TONE[section.tone];
-  const Icon = section.icon;
-
+function FaqCard({ question, answer, index }: FaqCardProps) {
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 16 }}
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-48px" }}
-      transition={{ delay: index * 0.06, duration: 0.45 }}
-      className={cn(
-        "group relative overflow-hidden rounded-[24px] border bg-[rgba(8,10,26,0.48)] backdrop-blur-[16px] transition-[transform,box-shadow,border-color] duration-400 ease-out",
-        tone.border,
-        tone.borderHover,
-        "hover:-translate-y-0.5",
-      )}
-      style={{
-        boxShadow: `0 8px 48px -16px rgba(0,0,0,0.55), 0 0 40px rgba(${tone.shadowRgb}, 0.14), inset 0 1px 0 rgba(255,255,255,0.06)`,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = `0 12px 56px -14px rgba(0,0,0,0.58), 0 0 52px rgba(${tone.shadowRgb}, 0.2), inset 0 1px 0 rgba(255,255,255,0.08)`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = `0 8px 48px -16px rgba(0,0,0,0.55), 0 0 40px rgba(${tone.shadowRgb}, 0.14), inset 0 1px 0 rgba(255,255,255,0.06)`;
-      }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.05 }}
     >
-      <motion.div
-        className="pointer-events-none absolute inset-0 opacity-90 transition-opacity duration-400 group-hover:opacity-100"
-        style={{
-          background: `radial-gradient(ellipse 48% 55% at 6% 8%, rgba(${tone.shadowRgb}, 0.11) 0%, transparent 58%), radial-gradient(ellipse 40% 50% at 96% 88%, rgba(${tone.shadowRgb}, 0.07) 0%, transparent 55%)`,
-        }}
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent"
-        aria-hidden
-      />
-
-      <motion.div className="relative z-[1] flex flex-col gap-6 p-6 sm:p-8 md:gap-7 lg:flex-row lg:items-center lg:gap-8 lg:p-9">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-4 flex items-center gap-4">
-            <div
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-[rgba(6,8,22,0.55)] backdrop-blur-sm",
-                tone.iconBorder,
-                tone.iconGlow,
-              )}
-            >
-              <Icon className={cn("h-5 w-5", tone.iconColor)} strokeWidth={1.65} />
-            </div>
-            <h2 className="landing-serif min-w-0 text-xl font-semibold leading-snug text-white sm:text-[1.5rem] md:text-[1.65rem]">
-              {section.title}
-            </h2>
+      <LandingGlowCard glow="purple" className="p-5 sm:p-6">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/90 to-fuchsia-600/90">
+            <HelpCircle className="h-4 w-4 text-white" />
           </div>
-          <p className="mb-5 max-w-xl text-sm leading-[1.7] text-white/62 sm:text-[0.9375rem]">
-            {section.description}
-          </p>
-
-          <ul className="space-y-2.5 text-sm leading-relaxed text-white/72 sm:text-[0.9375rem]">
-            {section.bullets.map((bullet) => (
-              <li key={bullet} className="flex items-start gap-3.5">
-                <span
-                  className={cn("mt-[0.55rem] h-1.5 w-1.5 shrink-0 rounded-full", tone.bullet)}
-                />
-                {bullet}
-              </li>
-            ))}
-          </ul>
-
-          {section.importantNote ? (
-            <div className="mt-5 flex gap-3 rounded-lg border border-cyan-400/22 bg-[rgba(6,14,22,0.62)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-8px_rgba(34,211,238,0.22)]">
-              <Info
-                className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200/85"
-                strokeWidth={1.65}
-                aria-hidden
-              />
-              <p className="text-sm leading-[1.7] text-cyan-50/78">{section.importantNote}</p>
-            </div>
-          ) : null}
+          <h3 className="pt-1 text-left text-base font-semibold leading-snug text-white sm:text-lg">
+            {question}
+          </h3>
         </div>
-
-        <div className="flex min-w-0 shrink-0 items-center justify-center lg:w-[min(34%,260px)] lg:max-w-[260px]">
-          <HologramArt src={section.hologramSrc} alt={section.hologramAlt} tone={section.tone} />
-        </div>
-      </motion.div>
-    </motion.article>
+        <p className="text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+          {answer}
+        </p>
+      </LandingGlowCard>
+    </motion.div>
   );
 }
 
 export function Privacy() {
   return (
-    <motion.div
-      className="solace-landing relative min-h-screen overflow-x-hidden"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35 }}
-    >
+    <div className="solace-landing relative min-h-screen overflow-x-hidden">
       <LandingBackground />
-
-      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
-        <img
-          src={LANDING_HERO_BG}
-          alt=""
-          className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[center_42%] opacity-[0.24] blur-[0.5px]"
-          width={2400}
-          height={1350}
-        />
-        <div className="absolute inset-0 bg-[rgba(5,8,20,0.48)]" />
-        <motion.div
-          className="absolute inset-0 bg-[radial-gradient(ellipse_75%_48%_at_50%_8%,rgba(88,28,135,0.16)_0%,transparent_58%)]"
-          animate={{ opacity: [0.88, 1, 0.88] }}
-          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute inset-0 bg-[radial-gradient(ellipse_36%_40%_at_6%_52%,rgba(251,191,36,0.1)_0%,transparent_52%)]"
-          animate={{ opacity: [0.7, 0.95, 0.7] }}
-          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute inset-0 bg-[radial-gradient(ellipse_36%_40%_at_94%_52%,rgba(251,191,36,0.09)_0%,transparent_52%)]"
-          animate={{ opacity: [0.65, 0.9, 0.65] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_120%_90%_at_50%_50%,transparent_42%,rgba(4,6,16,0.42)_78%,rgba(3,5,14,0.72)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,20,0.28)_0%,rgba(5,8,20,0.52)_48%,rgba(4,6,14,0.78)_100%)]" />
-      </div>
 
       <div className="relative z-10">
         <PublicNav variant="cinematic" />
 
-        <main className="mx-auto w-full max-w-[1080px] px-5 pb-20 pt-14 sm:px-8 sm:pt-16 lg:px-10 lg:pb-24">
-          <section className="relative mx-auto mb-10 max-w-2xl text-center sm:mb-12 md:mb-14">
-            <div
-              className="pointer-events-none absolute left-1/2 top-2 h-44 w-[min(100%,28rem)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.1)_0%,transparent_72%)] blur-3xl"
-              aria-hidden
-            />
+        {/* Hero */}
+        <LandingHeroScene>
+          <div className="landing-section flex flex-col items-center justify-center gap-5 px-4 text-center sm:gap-6">
+            <motion.h1
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
+              className="landing-serif landing-hero-title text-white"
+            >
+              The things that matter most
+              <span className="landing-hero-title-accent bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
+                deserve a safe place to be said.
+              </span>
+            </motion.h1>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="flex w-full max-w-3xl flex-col gap-4"
+            >
+              <p className="text-[15px] leading-relaxed text-white/88 sm:text-lg">
+                When people talk about what&apos;s really on their mind, trust matters.
+              </p>
+              <LandingGlowCard glow="purple" className="px-5 py-4 sm:px-8 sm:py-5">
+                <p className="text-sm leading-relaxed text-white/85 sm:text-base">
+                  That&apos;s why safety, privacy, and user control are not features inside Solace.
+                </p>
+                <p className="landing-serif mt-2 text-base font-medium text-white sm:text-lg">
+                  They&apos;re part of the foundation everything else is built on.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex justify-center"
+            >
+              <div onClick={() => localStorage.setItem("selectedPlan", "trial")}>
+                <Link to="/signup">
+                  <motion.span
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="landing-cta-glow inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-8 py-3.5 text-base font-semibold text-white"
+                  >
+                    Start With 30 Free Minutes
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.span>
+                </Link>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="flex max-w-3xl flex-wrap items-center justify-center gap-2"
+            >
+              {HERO_TRUST.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-[11px] font-medium text-white/70 backdrop-blur-sm sm:text-xs"
+                >
+                  <CheckCircle2 className="landing-check-glow h-3 w-3 shrink-0 text-emerald-400/90 sm:h-3.5 sm:w-3.5" />
+                  {item}
+                </span>
+              ))}
+            </motion.div>
+          </div>
+        </LandingHeroScene>
+
+        {/* Our First Responsibility */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading title="Our First Responsibility" />
+
+          <div className="mx-auto flex max-w-4xl flex-col gap-8 md:gap-10">
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="landing-serif mx-auto max-w-2xl text-center text-lg leading-relaxed text-white/88 sm:text-xl md:text-2xl md:leading-snug"
+            >
+              Before someone can feel heard, they need to feel safe.
+            </motion.p>
+
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base"
+            >
+              Many people come to Solace carrying thoughts they&apos;ve never fully expressed.
+            </motion.p>
+
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+              {FIRST_RESPONSIBILITY_MOMENTS.map((moment, index) => (
+                <motion.div
+                  key={moment.text}
+                  initial={{ opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <LandingGlowCard
+                    glow={moment.glow}
+                    className="flex h-full w-full flex-row items-center gap-2.5 p-3 sm:gap-3 sm:p-3.5"
+                  >
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+                        moment.iconClass,
+                      )}
+                    >
+                      <moment.icon className="h-4 w-4 text-white" />
+                    </div>
+                    <p className="min-w-0 flex-1 text-left text-sm leading-snug text-white/85 sm:text-[15px]">
+                      {moment.text}
+                    </p>
+                  </LandingGlowCard>
+                </motion.div>
+              ))}
+            </div>
+
             <motion.div
               initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45 }}
-              className="relative"
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
             >
-              <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-400/22 bg-[rgba(8,12,24,0.5)] shadow-[0_0_20px_rgba(34,211,238,0.14)] backdrop-blur-md">
-                <Shield className="h-6 w-6 text-cyan-200/90" strokeWidth={1.55} />
-              </div>
-              <h1 className="landing-serif mb-4 text-[2rem] font-semibold leading-[1.12] tracking-tight text-white sm:text-[2.5rem] md:text-[2.85rem]">
-                Privacy,{" "}
-                <span className="text-[#f4a4c8] drop-shadow-[0_0_20px_rgba(244,164,200,0.18)]">
-                  Safety &amp; Accessibility
-                </span>
-              </h1>
-              <p className="mx-auto max-w-xl text-base leading-relaxed text-white/58 sm:text-[1.05rem]">
-                Your privacy and safety are our top priorities
-              </p>
+              <LandingGlowCard glow="purple" className="p-6 sm:p-8">
+                <p className="mb-4 text-center text-sm font-medium text-white/88 sm:text-base">
+                  We believe those moments deserve care.
+                </p>
+                <p className="mb-4 text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                  That&apos;s why every part of Solace is designed around creating an experience
+                  that feels calm, welcoming, respectful, and judgment-free.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2.5">
+                  <span className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-xs font-semibold text-white/75 sm:text-sm">
+                    Trust isn&apos;t something we add later.
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-xs font-semibold text-white/75 sm:text-sm">
+                    Trust comes first.
+                  </span>
+                </div>
+              </LandingGlowCard>
             </motion.div>
-          </section>
+          </div>
+        </section>
+
+        {/* Trust Has to Be Earned */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading title="Trust Has to Be Earned" />
+
+          <div className="mx-auto flex max-w-3xl flex-col gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="pink" className="space-y-4 p-6 sm:p-8">
+                <p className="text-center text-sm leading-relaxed text-white/85 sm:text-base">
+                  We understand why people are cautious. Sharing personal thoughts can feel
+                  vulnerable. Sharing them with technology can feel even more vulnerable.
+                </p>
+                <p className="text-center text-base font-medium text-white sm:text-lg">
+                  That&apos;s a reasonable concern.
+                </p>
+                <p className="text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                  Trust isn&apos;t something Solace expects from people. It&apos;s something we work
+                  to earn.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="green" className="p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {TRUST_EARNED_PILLARS.map((line) => (
+                    <span
+                      key={line}
+                      className="rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-xs font-medium text-white/80 sm:text-sm"
+                    >
+                      {line}
+                    </span>
+                  ))}
+                </div>
+              </LandingGlowCard>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Understanding Safety at Solace */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading title="Understanding Safety at Solace" />
+
+          <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-3 lg:gap-6">
+            {UNDERSTANDING_SAFETY.map((item, index) => (
+              <motion.div
+                key={item.question}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.08 }}
+                className="flex"
+              >
+                <LandingGlowCard
+                  glow={item.glow}
+                  className="flex h-full w-full flex-row items-start gap-3 p-4 sm:gap-4 sm:p-5"
+                >
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br",
+                      item.iconClass,
+                    )}
+                  >
+                    <item.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <h3 className="mb-2 text-base font-semibold leading-snug text-white sm:text-lg">
+                      {item.question}
+                    </h3>
+                    <p className="text-sm leading-[1.7] text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+                      {item.answer}
+                    </p>
+                  </div>
+                </LandingGlowCard>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Built Around Safety */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading
+            title="Built Around Safety"
+            subtitle="Safety is part of the experience, not an afterthought."
+          />
 
           <motion.div
-            className="flex flex-col gap-7 sm:gap-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.45, delay: 0.08 }}
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mx-auto mb-8 max-w-2xl"
           >
-            {SECTIONS.map((section, index) => (
-              <PrivacySectionCard key={section.title} section={section} index={index} />
-            ))}
+            <LandingGlowCard glow="purple" className="p-6 sm:p-8">
+              <p className="text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                The goal of Solace is simple.
+              </p>
+              <p className="mt-3 text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                To provide a place where people can talk through what&apos;s on their mind without
+                feeling judged, pressured, or rushed.
+              </p>
+              <p className="mt-4 text-center text-sm font-medium text-white/88 sm:text-base">
+                That means creating an environment that feels:
+              </p>
+            </LandingGlowCard>
           </motion.div>
-        </main>
+
+          <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 sm:auto-rows-[128px] sm:gap-4 [&>*]:min-w-0">
+            {BUILT_AROUND_SAFETY.map((item, index) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.06 }}
+                className="flex h-[128px] w-full min-w-0 sm:h-full"
+              >
+                <LandingGlowCard
+                  glow={item.glow}
+                  className="box-border flex h-full w-full flex-row items-center gap-2.5 p-3 sm:gap-3 sm:p-3.5"
+                >
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+                      item.iconClass,
+                    )}
+                  >
+                    <item.icon className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
+                    <h3 className="mb-0.5 text-sm font-semibold leading-tight text-white sm:text-[15px]">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs leading-snug text-[var(--solace-ds-text-muted)] sm:text-sm">
+                      {item.description}
+                    </p>
+                  </div>
+                </LandingGlowCard>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Your Privacy */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading
+            title="Your Privacy"
+            subtitle="Your thoughts belong to you."
+          />
+
+          <div className="mx-auto flex max-w-3xl flex-col gap-6">
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base"
+            >
+              When people open up, privacy matters. We believe personal conversations should be
+              treated with care and respect.
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="blue" className="p-6 sm:p-8">
+                <p className="mb-5 text-center text-sm font-semibold text-white sm:text-base">
+                  What this means
+                </p>
+                <ul className="space-y-3">
+                  {PRIVACY_CHOICES.map((choice) => (
+                    <li key={choice} className="flex items-start gap-2.5">
+                      <CheckCircle2 className="landing-check-glow mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                      <span className="text-sm text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+                        {choice}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-6 text-center text-sm leading-relaxed text-white/82 sm:text-base">
+                  Because meaningful conversations require trust.
+                </p>
+                <p className="mt-2 text-center text-sm leading-relaxed text-white/82 sm:text-base">
+                  And trust requires choice.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* What Solace Is and Is Not */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading
+            title="What Solace Is and Is Not"
+            subtitle="Clear boundaries create better trust."
+          />
+
+          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-2 md:gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="green" className="h-full p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400/90 to-green-600/90">
+                    <CheckCircle2 className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">What Solace Is</h3>
+                </div>
+                <ul className="space-y-2.5">
+                  {WHAT_SOLACE_IS.map((line) => (
+                    <li key={line} className="flex items-start gap-2.5 text-sm text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80" />
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </LandingGlowCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.06 }}
+            >
+              <LandingGlowCard glow="amber" className="h-full p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90">
+                    <Scale className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">What Solace Is Not</h3>
+                </div>
+                <ul className="space-y-2.5">
+                  {WHAT_SOLACE_IS_NOT.map((line) => (
+                    <li key={line} className="flex items-start gap-2.5 text-sm text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80" />
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </LandingGlowCard>
+            </motion.div>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mx-auto mt-6 max-w-2xl text-center text-sm text-[var(--solace-ds-text-muted)] sm:text-base"
+          >
+            Being clear about these boundaries helps people use Solace in the way it was intended.
+          </motion.p>
+        </section>
+
+        {/* When Someone Needs More Than Solace */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading title="When Someone Needs More Than Solace" />
+
+          <div className="mx-auto flex max-w-3xl flex-col gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="pink" className="space-y-4 p-6 sm:p-8">
+                <p className="text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                  Some situations require additional support. There are moments when talking things
+                  through is not enough. Moments when someone may need immediate help, professional
+                  care, or crisis support.
+                </p>
+                <p className="text-center text-sm leading-relaxed text-white/85 sm:text-base">
+                  In those moments, Solace is designed to encourage connection with appropriate
+                  support resources.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="purple" className="p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/90 to-fuchsia-600/90">
+                    <Phone className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-base font-semibold text-white sm:text-lg">How Solace Responds</h3>
+                </div>
+                <p className="text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-[15px]">
+                  {CRISIS_RESPONSE}
+                </p>
+                <p className="mt-5 text-sm leading-relaxed text-white/82 sm:text-[15px]">
+                  Because some situations deserve more than a conversation.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Your Control */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading
+            title="Your Control"
+            subtitle="You decide what happens next."
+          />
+
+          <div className="mx-auto max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <LandingGlowCard glow="cyan" className="p-6 sm:p-8">
+                <p className="mb-5 text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base">
+                  One of the most important principles behind Solace is user choice.
+                </p>
+                <p className="mb-4 text-center text-sm font-semibold text-white sm:text-base">
+                  You decide:
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {YOUR_CONTROL.map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+                    >
+                      <UserCheck className="h-4 w-4 shrink-0 text-cyan-300" />
+                      <span className="text-sm text-white/82 sm:text-[15px]">{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                  {["There is no pressure.", "No obligation.", "No expectation."].map((line) => (
+                    <span
+                      key={line}
+                      className="rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-xs font-medium text-white/80 sm:text-sm"
+                    >
+                      {line}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-5 text-center text-sm text-[var(--solace-ds-text-muted)] sm:text-base">
+                  Just a place to talk when you need it.
+                </p>
+              </LandingGlowCard>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Frequent Questions */}
+        <section className="landing-section py-12 md:py-16">
+          <SectionHeading title="Frequent Questions" />
+
+          <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            {FAQ_ITEMS.map((item, index) => (
+              <FaqCard key={item.question} question={item.question} answer={item.answer} index={index} />
+            ))}
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="landing-section py-10 md:py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <LandingGlowCard
+              glow="pink"
+              className="landing-cta-card-image relative mx-auto max-w-[720px] text-center"
+              style={
+                {
+                  "--landing-cta-card-bg": `url("${LANDING_CTA_CARD_BG}")`,
+                } as React.CSSProperties
+              }
+            >
+              <div className="relative z-[2] px-6 py-10 sm:px-10 sm:py-12">
+                <Zap className="mx-auto mb-3 h-6 w-6 text-pink-300" />
+                <h2 className="text-2xl font-bold text-white md:text-3xl">
+                  The things that matter most deserve a safe place to be said.
+                </h2>
+                <p className="mx-auto mt-3 max-w-lg text-sm text-[var(--solace-ds-text-muted)] md:text-base">
+                  If you&apos;ve been carrying something that feels difficult to put down, you
+                  don&apos;t have to carry it alone.
+                </p>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-[var(--solace-ds-text-muted)] md:text-base">
+                  Start with 30 free minutes.
+                </p>
+                <div
+                  className="mt-6"
+                  onClick={() => localStorage.setItem("selectedPlan", "trial")}
+                >
+                  <Link to="/signup" className="inline-block w-full sm:w-auto">
+                    <motion.span
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="landing-cta-glow inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-10 py-3.5 text-base font-semibold text-white sm:w-auto"
+                    >
+                      Start With 30 Free Minutes
+                    </motion.span>
+                  </Link>
+                </div>
+                <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
+                  No credit card required • No pressure to continue • Just a safe place to start.
+                </p>
+              </div>
+            </LandingGlowCard>
+          </motion.div>
+        </section>
 
         <PublicFooter />
       </div>
-    </motion.div>
+    </div>
   );
 }

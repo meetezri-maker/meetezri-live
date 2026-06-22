@@ -87,14 +87,6 @@ export function PublicFooter() {
                 </Link>
               </li>
               <li>
-                <Link
-                  to="/admin/credentials"
-                  className="font-semibold text-violet-300 hover:text-violet-200"
-                >
-                  Admin Credentials
-                </Link>
-              </li>
-              <li>
                 <Link to="/admin/login" className="text-violet-300/90 hover:text-violet-200">
                   Admin Portal
                 </Link>
