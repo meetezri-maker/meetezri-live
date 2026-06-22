@@ -382,8 +382,21 @@ function HabitRailCard({ habit, onToggleToday, onDotPress, onEdit, onDelete, isD
                     <span>{habit.completedToday ? "Logged today" : "Tap when you showed up"}</span>
                   </motion.button>
 
-                  <span className="inline-flex items-center rounded-full border border-orange-400/15 bg-orange-400/[0.06] px-3.5 py-2 text-[12px] tabular-nums text-orange-50/92">
-                    <Flame className="mr-1.5 h-3.5 w-3.5 text-orange-300/95" aria-hidden />
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full border border-orange-400/15 bg-orange-400/[0.06] px-3.5 py-2 text-[12px] tabular-nums text-orange-50/92",
+                      "[html[data-ezri-theme=light]_&]:border-orange-300/50 [html[data-ezri-theme=light]_&]:bg-orange-50 [html[data-ezri-theme=light]_&]:text-orange-800",
+                      "[html[data-theme=light]_&]:border-orange-300/50 [html[data-theme=light]_&]:bg-orange-50 [html[data-theme=light]_&]:text-orange-800"
+                    )}
+                  >
+                    <Flame
+                      className={cn(
+                        "mr-1.5 h-3.5 w-3.5 text-orange-300/95",
+                        "[html[data-ezri-theme=light]_&]:text-orange-600",
+                        "[html[data-theme=light]_&]:text-orange-600"
+                      )}
+                      aria-hidden
+                    />
                     <span>{habit.currentStreak} day streak</span>
                   </span>
                   <span className="inline-flex rounded-full border border-white/[0.06] bg-black/25 px-3.5 py-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-zinc-400">

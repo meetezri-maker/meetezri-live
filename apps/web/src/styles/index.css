@@ -13,9 +13,11 @@
 @import '../components/ui/coming-soon-overlay.css';
 @import '../app/pages/app/resources-library/resources-library-ui.css';
 @import '../app/pages/app/emergency-contacts/emergency-contacts-ui.css';
+@import '../app/pages/app/crisis-resources/crisis-resources-ui.css';
 @import '../app/pages/app/wellness-plan-settings/wellness-plan-ui.css';
 @import '../app/pages/app/dashboard/dashboard-ui.css';
 @import '../app/pages/app/talk-it-out/talk-it-out-ui.css';
+@import '../app/pages/app/community/community-ui.css';
 @import '../app/pages/app/mood-check-in/mood-check-in-ui.css';
 @import '../app/pages/app/journal/journal-ui.css';
 @import '../app/pages/app/sleep-tracker/sleep-tracker-ui.css';

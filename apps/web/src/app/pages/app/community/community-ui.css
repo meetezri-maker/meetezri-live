@@ -1,0 +1,58 @@
+/**
+ * Community (/app/community) — light theme rail readability.
+ */
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-rail-heading,
+html[data-theme="light"] .solace-app .community-page .community-rail-heading {
+  color: #6d28d9 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-trending-heading-icon,
+html[data-theme="light"] .solace-app .community-page .community-trending-heading-icon {
+  color: #c026d3 !important;
+  stroke: #c026d3 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-trending-tag,
+html[data-theme="light"] .solace-app .community-page .community-trending-tag {
+  color: #5b21b6 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-trending-count,
+html[data-theme="light"] .solace-app .community-page .community-trending-count {
+  color: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-trending-bar-track,
+html[data-theme="light"] .solace-app .community-page .community-trending-bar-track {
+  background: rgba(167, 139, 250, 0.18) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-support-circle-row,
+html[data-theme="light"] .solace-app .community-page .community-support-circle-row {
+  background: var(--card-muted, #f8f3ff) !important;
+  border-color: var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-support-circle-icon,
+html[data-theme="light"] .solace-app .community-page .community-support-circle-icon {
+  color: #7c3aed !important;
+  background: #f5eeff !important;
+  border-color: rgba(167, 139, 250, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-support-circle-icon svg,
+html[data-theme="light"] .solace-app .community-page .community-support-circle-icon svg {
+  color: #7c3aed !important;
+  stroke: #7c3aed !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-support-circle-name,
+html[data-theme="light"] .solace-app .community-page .community-support-circle-name {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .community-page .community-support-circle-members,
+html[data-theme="light"] .solace-app .community-page .community-support-circle-members {
+  color: var(--text-muted, #667085) !important;
+}

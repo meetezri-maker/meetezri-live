@@ -89,10 +89,25 @@ export const communityFeedPostCinematic = cn(
 );
 
 export const communityRailPanel = cn(
-  "community-rail-panel",
-  solaceDarkPanel,
-  "[html[data-ezri-theme=light]_&]:solace-rail-card [html[data-ezri-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-ezri-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-ezri-theme=light]_&]:!text-[var(--solace-text)] [html[data-ezri-theme=light]_&]:!shadow-[var(--solace-card-shadow)]",
-  "[html[data-theme=light]_&]:solace-rail-card [html[data-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))] [html[data-theme=light]_&]:!bg-[var(--rail-card-bg)] [html[data-theme=light]_&]:!text-[var(--solace-text)] [html[data-theme=light]_&]:!shadow-[var(--solace-card-shadow)]"
+  "community-rail-panel rounded-[26px]",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:solace-on-dark",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:solace-dark-panel",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:border",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:border-white/10",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:bg-[rgba(15,18,32,0.82)]",
+  "[html:not([data-theme=light]):not([data-ezri-theme=light])]:backdrop-blur-xl",
+  "[html[data-ezri-theme=light]_&]:solace-rail-card",
+  "[html[data-ezri-theme=light]_&]:solace-surface-light",
+  "[html[data-ezri-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))]",
+  "[html[data-ezri-theme=light]_&]:!bg-[var(--rail-card-bg)]",
+  "[html[data-ezri-theme=light]_&]:!text-[var(--solace-text)]",
+  "[html[data-ezri-theme=light]_&]:!shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:solace-rail-card",
+  "[html[data-theme=light]_&]:solace-surface-light",
+  "[html[data-theme=light]_&]:!border-[color:var(--rail-card-border,var(--solace-card-border))]",
+  "[html[data-theme=light]_&]:!bg-[var(--rail-card-bg)]",
+  "[html[data-theme=light]_&]:!text-[var(--solace-text)]",
+  "[html[data-theme=light]_&]:!shadow-[var(--solace-card-shadow)]"
 );
 
 /** Wrap full-bleed hero sections — enables light-theme image + overlay fixes */

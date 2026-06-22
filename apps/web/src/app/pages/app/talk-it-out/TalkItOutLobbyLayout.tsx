@@ -333,12 +333,12 @@ export function TalkItOutLobbyLayout({
                       type="button"
                       onClick={onClick}
                       className={cn(
-                        mattePanelClass(
-                          "talk-it-out-start-card group min-h-[44px] w-full overflow-hidden p-0 text-left transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 hover:shadow-[0_24px_64px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
-                        )
+                        "talk-it-out-start-card group min-h-[44px] w-full overflow-hidden rounded-[1.2rem] border border-white/[0.065] p-0 text-left shadow-[0_24px_72px_-52px_rgba(0,0,0,0.88)] transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+                        "[html[data-ezri-theme=light]_&]:border-[color:var(--border)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+                        "[html[data-theme=light]_&]:border-[color:var(--border)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                       )}
                     >
-                      <span className="solace-media-card relative block aspect-[16/6.3] w-full overflow-hidden">
+                      <span className="solace-media-card relative block aspect-[16/9] w-full overflow-hidden">
                         <img
                           src={imageSrc}
                           alt=""
@@ -346,13 +346,16 @@ export function TalkItOutLobbyLayout({
                           loading="lazy"
                           decoding="async"
                         />
-                        <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/10" />
-                      </span>
-                      <span className="block px-4 py-4">
-                        <p className="talk-it-out-start-card-title font-medium">{title}</p>
-                        <p className="talk-it-out-start-card-body mt-2 text-[12.5px] leading-relaxed">
-                          {body}
-                        </p>
+                        <span
+                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/88 via-black/35 to-black/5"
+                          aria-hidden
+                        />
+                        <span className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-10">
+                          <p className="talk-it-out-start-card-title font-medium">{title}</p>
+                          <p className="talk-it-out-start-card-body mt-1.5 text-[12.5px] leading-relaxed">
+                            {body}
+                          </p>
+                        </span>
                       </span>
                     </button>
                   ))}

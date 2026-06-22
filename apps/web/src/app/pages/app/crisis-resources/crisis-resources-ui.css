@@ -1,0 +1,176 @@
+/**
+ * Emergency Resources (/app/emergency-resources) — light sanctuary theme.
+ */
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .emergency-hero-subtitle,
+html[data-theme="light"] .solace-app .crisis-resources-page .emergency-hero-subtitle {
+  color: var(--text-secondary, #475467) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .emergency-hero-card .solace-hero-light-scrim,
+html[data-theme="light"] .solace-app .crisis-resources-page .emergency-hero-card .solace-hero-light-scrim {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* Immediate danger alert */
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-danger-card,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-danger-card {
+  border-color: rgba(254, 205, 211, 0.9) !important;
+  background: linear-gradient(135deg, #fff1f2 0%, #fff7ed 52%, #ffffff 100%) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-danger-shield,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-danger-shield {
+  opacity: 0.35 !important;
+}
+
+/* You Are Not Alone banner — pastel panel in light theme (no cinematic image stack) */
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner {
+  background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 42%, #ffffff 100%) !important;
+  background-image: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 42%, #ffffff 100%) !important;
+  border-color: rgba(236, 72, 153, 0.22) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner [class*="bg-[linear-gradient"],
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner [class*="bg-[linear-gradient"] {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--lifeline,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--lifeline {
+  border-color: rgba(251, 146, 60, 0.35) !important;
+  background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 52%, #ffffff 100%) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--text,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--text {
+  border-color: rgba(34, 211, 238, 0.35) !important;
+  background: linear-gradient(145deg, #ecfeff 0%, #e0f2fe 52%, #ffffff 100%) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--emergency,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--emergency {
+  border-color: rgba(244, 63, 94, 0.32) !important;
+  background: linear-gradient(145deg, #fff1f2 0%, #ffe4e6 52%, #ffffff 100%) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--samhsa,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card--samhsa {
+  border-color: rgba(168, 85, 247, 0.32) !important;
+  background: linear-gradient(145deg, #f5f3ff 0%, #ede9fe 52%, #ffffff 100%) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-name,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-name,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-phone,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-phone {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-desc,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-hotline-card .crisis-hotline-desc {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner .crisis-alone-title,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner .crisis-alone-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner .crisis-alone-body,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-alone-banner .crisis-alone-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-wrap,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-wrap {
+  background: linear-gradient(135deg, rgba(192, 132, 252, 0.18) 0%, rgba(236, 72, 153, 0.12) 100%) !important;
+  box-shadow: 0 0 24px -8px rgba(167, 139, 250, 0.35) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-icon,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-icon.lucide,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page svg.crisis-rail-heart-icon,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-icon,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-heart-icon.lucide,
+html[data-theme="light"] .solace-app .crisis-resources-page svg.crisis-rail-heart-icon {
+  color: #e11d48 !important;
+  stroke: #e11d48 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-body,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-item-title,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-item-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-rail-item-body,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-rail-item-body {
+  color: var(--text-muted, #667085) !important;
+}
+
+/* Need help right now? — reuse scenic banner light treatment */
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner {
+  background: linear-gradient(145deg, #fff7ed 0%, #fce7f3 48%, #f5f3ff 100%) !important;
+  border-color: rgba(244, 63, 94, 0.22) !important;
+  box-shadow: var(--solace-card-shadow, 0 18px 45px rgba(88, 28, 135, 0.08)) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-banner-img,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-banner-img {
+  display: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-overlays-dark,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-overlays-dark,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-light-scrim,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-scenic-light-scrim {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-title,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-body,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-title,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-body {
+  color: var(--text-primary, #101828) !important;
+  text-shadow: none !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-body,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-scenic-banner .crisis-banner-body {
+  color: var(--text-secondary, #475467) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-article-category,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-article-category {
+  color: var(--text-muted, #667085) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-article-title,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-article-title {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-article-desc,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-article-desc,
+html[data-ezri-theme="light"] .solace-app .crisis-resources-page .crisis-article-meta,
+html[data-theme="light"] .solace-app .crisis-resources-page .crisis-article-meta {
+  color: var(--text-secondary, #475467) !important;
+}

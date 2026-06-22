@@ -38,23 +38,55 @@ import {
 import {
   EMERGENCY_HERO_IMG,
   EMERGENCY_RAIL_IMG,
-  CRISIS_ALONE_BANNER_IMG,
   crisisAloneBanner,
   crisisAloneBannerContent,
-  crisisAloneBannerImage,
-  crisisAloneBannerOverlay,
+  crisisAloneBody,
+  crisisAloneTitle,
+  crisisArticleCategory,
+  crisisArticleChevron,
+  crisisArticleDesc,
+  crisisArticleMeta,
   crisisArticleRow,
+  crisisArticleTitle,
+  crisisBannerBody,
+  crisisBannerContent,
+  crisisBannerTitle,
+  crisisBodyText,
   crisisContactRow,
+  crisisDangerBody,
   crisisDangerCard,
   crisisDangerCta,
+  crisisDangerShield,
+  crisisDangerTitle,
+  crisisEmptyState,
+  crisisExternalLink,
+  crisisHeroShield,
   crisisHotlineCard,
+  crisisHotlineDesc,
   crisisHotlineDial,
+  crisisHotlineName,
+  crisisHotlinePhone,
+  crisisLabelText,
+  crisisLoadingText,
+  crisisMutedText,
   crisisOutlineBtn,
+  crisisPageAtmosphere,
   crisisPanelCard,
+  crisisRailBody,
   crisisRailHeartWrap,
+  crisisRailHeartIcon,
+  crisisRailItemBody,
+  crisisRailItemTitle,
+  crisisRailTitle,
   crisisSafetyStep,
+  crisisScenicBanner,
+  crisisScenicBannerImage,
+  crisisScenicLightScrim,
+  crisisScenicOverlayDark,
+  crisisScenicOverlayWarm,
   crisisSectionTitle,
   crisisStepBadge,
+  crisisSubLabelText,
   crisisViewAllLink,
   emergencyActionBtn,
   emergencyBackLink,
@@ -67,9 +99,9 @@ import {
   emergencyHeroOverlayAccent,
   emergencyHeroOverlayBottom,
   emergencyHeroOverlayReadability,
+  emergencyHeroSubtitle,
   emergencyHeroTitle,
   emergencyIconChip,
-  emergencyPageAtmosphere,
   emergencyPageFogMid,
   emergencyPageGlowTop,
   emergencyPageVignette,
@@ -223,7 +255,7 @@ export function CrisisResources() {
 
   return (
     <motion.div
-      className={emergencyPageAtmosphere}
+      className={crisisPageAtmosphere}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
@@ -262,7 +294,7 @@ export function CrisisResources() {
                   <motion.div className="mt-5 max-w-2xl">
                     <div className="flex flex-wrap items-center gap-3">
                       <Shield
-                        className="h-8 w-8 shrink-0 text-fuchsia-300/90 drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]"
+                        className={crisisHeroShield}
                         strokeWidth={1.5}
                         aria-hidden
                       />
@@ -270,7 +302,7 @@ export function CrisisResources() {
                         Emergency <span className={emergencyHeroAccent}>Resources</span>
                       </h1>
                     </div>
-                    <p className="mt-3 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+                    <p className={emergencyHeroSubtitle}>
                       24/7 support when you need it most. You&apos;re not alone.
                     </p>
                   </motion.div>
@@ -281,7 +313,7 @@ export function CrisisResources() {
             {/* 2. Immediate danger alert */}
             <section className={crisisDangerCard} aria-labelledby="immediate-danger-heading">
               <Shield
-                className="pointer-events-none absolute right-4 top-1/2 hidden h-28 w-28 -translate-y-1/2 text-rose-200/10 sm:block"
+                className={crisisDangerShield}
                 strokeWidth={1}
                 aria-hidden
               />
@@ -297,11 +329,11 @@ export function CrisisResources() {
                 <div className="min-w-0 flex-1">
                   <h2
                     id="immediate-danger-heading"
-                    className="text-lg font-semibold text-rose-50/95 sm:text-xl"
+                    className={crisisDangerTitle}
                   >
                     If you&apos;re in immediate danger:
                   </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-rose-100/75">
+                  <p className={crisisDangerBody}>
                     Call {emergencyNumber} or go to your nearest emergency room. Your safety is the
                     top priority.
                   </p>
@@ -364,8 +396,8 @@ export function CrisisResources() {
                           <Icon className="h-5 w-5" aria-hidden />
                         </motion.div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-white">{contact.name}</h3>
-                          <p className="mt-0.5 text-sm text-[rgba(255,255,255,0.58)]">
+                          <h3 className={crisisHotlineName}>{contact.name}</h3>
+                          <p className={crisisHotlineDesc}>
                             {contact.description}
                           </p>
                         </div>
@@ -390,13 +422,13 @@ export function CrisisResources() {
                         }
                       >
                         <motion.div className={crisisHotlineDial}>
-                          <span className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+                          <span className={crisisHotlinePhone}>
                             {contact.phone}
                           </span>
                           <span
                             className={cn(
                               emergencyActionBtn,
-                              "h-10 w-10 border-white/15 bg-white/10"
+                              "h-10 w-10 [html[data-ezri-theme=light]_&]:border-[color:var(--border,#e7ddfb)] [html[data-ezri-theme=light]_&]:bg-[var(--surface-lavender,#f5eeff)] [html[data-theme=light]_&]:border-[color:var(--border,#e7ddfb)] [html[data-theme=light]_&]:bg-[var(--surface-lavender,#f5eeff)]"
                             )}
                             aria-hidden
                           >
@@ -434,14 +466,14 @@ export function CrisisResources() {
 
                 <div>
                   {isLoadingContacts ? (
-                    <div className="flex items-center justify-center gap-2 py-8 text-sm text-[rgba(255,255,255,0.48)]">
+                    <div className={cn(crisisLoadingText, "flex items-center justify-center gap-2 py-8")}>
                       <Loader2 className="h-4 w-4 animate-spin text-violet-300/70" aria-hidden />
                       Loading your emergency contacts…
                     </div>
                   ) : null}
 
                   {!isLoadingContacts && contacts.length === 0 ? (
-                    <p className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
+                    <p className={crisisEmptyState}>
                       You haven&apos;t added any emergency contacts yet. Add someone you trust
                       so their real phone number is available here during an emergency.
                     </p>
@@ -454,23 +486,23 @@ export function CrisisResources() {
                           {contactInitials(contact.name)}
                         </motion.div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">
+                          <p className={cn(crisisLabelText, "truncate text-sm font-semibold")}>
                             {contact.name}
                           </p>
-                          <p className="text-xs text-[rgba(255,255,255,0.42)]">
+                          <p className={crisisSubLabelText}>
                             {contact.relationship || "Emergency contact"}
                           </p>
                           {contact.phone ? (
-                            <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.62)]">
+                            <p className={cn(crisisBodyText, "mt-0.5 text-xs")}>
                               {contact.phone}
                             </p>
                           ) : (
-                            <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.38)]">
+                            <p className={cn(crisisMutedText, "mt-0.5 text-xs")}>
                               No phone number saved
                             </p>
                           )}
                           {contact.phone ? (
-                            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-[rgba(255,255,255,0.32)]">
+                            <p className={cn(crisisMutedText, "mt-0.5 flex items-center gap-1 text-[10px]")}>
                               <Clock className="h-3 w-3" aria-hidden />
                               Available as listed
                             </p>
@@ -541,8 +573,8 @@ export function CrisisResources() {
                     <div key={item.step} className={crisisSafetyStep}>
                       <div className={crisisStepBadge}>{item.step}</div>
                       <div className="min-w-0 pt-0.5">
-                        <p className="text-sm font-medium text-white">{item.title}</p>
-                        <p className="mt-0.5 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">
+                        <p className={crisisLabelText}>{item.title}</p>
+                        <p className={cn(crisisSubLabelText, "mt-0.5 leading-relaxed")}>
                           {item.content}
                         </p>
                       </div>
@@ -572,7 +604,7 @@ export function CrisisResources() {
                       Articles & readings
                     </h2>
                   </div>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
+                  <p className={cn(crisisMutedText, "mt-2 max-w-xl")}>
                     Short reads and guided reflections from Solace, organized by topic.
                   </p>
                 </div>
@@ -582,12 +614,12 @@ export function CrisisResources() {
               </div>
 
               {isLoadingLibrary ? (
-                <div className="flex items-center justify-center gap-2 py-14 text-sm text-[rgba(255,255,255,0.48)]">
+                <div className={cn(crisisLoadingText, "flex items-center justify-center gap-2 py-14")}>
                   <Loader2 className="h-5 w-5 animate-spin text-violet-300/70" aria-hidden />
                   Loading your resources…
                 </div>
               ) : libraryArticles.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-[rgba(255,255,255,0.45)]">
+                <p className={cn(crisisEmptyState, "px-4 py-10 text-center")}>
                   No articles published yet. When your team adds wellness readings, they&apos;ll
                   appear here automatically.
                 </p>
@@ -637,30 +669,30 @@ export function CrisisResources() {
                             <Icon className="h-4 w-4" aria-hidden />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[rgba(255,255,255,0.38)]">
+                            <span className={crisisArticleCategory}>
                               <FileText className="h-3 w-3" aria-hidden />
                               {article.category}
                             </span>
-                            <span className="mt-1 block font-semibold leading-snug text-white group-hover:text-fuchsia-100/95">
+                            <span className={crisisArticleTitle}>
                               {article.title}
                             </span>
-                            <span className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">
+                            <span className={crisisArticleDesc}>
                               {article.description}
                             </span>
-                            <span className="mt-2 inline-flex items-center gap-1 text-[11px] text-[rgba(255,255,255,0.38)]">
+                            <span className={crisisArticleMeta}>
                               <Clock className="h-3.5 w-3.5" aria-hidden />
                               {article.duration}
                             </span>
                           </span>
                           <ChevronRight
-                            className="h-4 w-4 shrink-0 self-center text-violet-300/40 transition group-hover:text-fuchsia-300/80"
+                            className={crisisArticleChevron}
                             aria-hidden
                           />
                         </Link>
                         {article.contentUrl ? (
                           <button
                             type="button"
-                            className="mt-1 inline-flex items-center gap-1 px-1 text-[11px] font-medium text-fuchsia-300/75 hover:text-fuchsia-200"
+                            className={crisisExternalLink}
                             onClick={openExternal}
                           >
                             <ExternalLink className="h-3 w-3" aria-hidden />
@@ -676,7 +708,7 @@ export function CrisisResources() {
               {!isLoadingLibrary && libraryArticles.length > 0 ? (
                 <div className="mt-6 flex flex-col items-center gap-3">
                   {hasMoreArticles ? (
-                    <p className="text-center text-sm text-[rgba(255,255,255,0.45)]">
+                    <p className={cn(crisisMutedText, "text-center")}>
                       Showing {displayedArticles.length} of {libraryArticles.length} articles.
                     </p>
                   ) : null}
@@ -689,26 +721,16 @@ export function CrisisResources() {
 
             {/* 6. You Are Not Alone banner */}
             <section className={crisisAloneBanner} aria-labelledby="not-alone-heading">
-              <img
-                src={CRISIS_ALONE_BANNER_IMG}
-                alt=""
-                className={crisisAloneBannerImage}
-                width={1200}
-                height={400}
-                loading="lazy"
-                decoding="async"
-              />
-              <div className={crisisAloneBannerOverlay} aria-hidden />
               <div className={crisisAloneBannerContent}>
                 <div className="flex items-start gap-4">
                   <div className={crisisRailHeartWrap}>
-                    <Heart className="h-7 w-7 text-fuchsia-100/95" aria-hidden />
+                    <Heart className={crisisRailHeartIcon} aria-hidden />
                   </div>
                   <div>
-                    <h2 id="not-alone-heading" className="text-lg font-semibold text-white sm:text-xl">
+                    <h2 id="not-alone-heading" className={crisisAloneTitle}>
                       You Are Not Alone
                     </h2>
-                    <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.72)]">
+                    <p className={crisisAloneBody}>
                       Reaching out for help is a sign of strength, not weakness. These resources are
                       here for you 24/7. Your life matters, and there are people who care and want to
                       help.
@@ -729,10 +751,10 @@ export function CrisisResources() {
               transition={{ delay: 0.08 }}
             >
               <div className={cn(crisisRailHeartWrap, "mb-4")}>
-                <Heart className="h-7 w-7 text-fuchsia-100/95" aria-hidden />
+                <Heart className={crisisRailHeartIcon} aria-hidden />
               </div>
-              <h2 className="font-serif text-lg font-light text-white">You&apos;re not alone</h2>
-              <p className="mt-3 text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
+              <h2 className={crisisRailTitle}>You&apos;re not alone</h2>
+              <p className={crisisRailBody}>
                 Reaching out for help is a sign of strength, not weakness. These resources are here
                 for you 24/7.
               </p>
@@ -745,7 +767,7 @@ export function CrisisResources() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12 }}
             >
-              <h2 className="font-serif text-lg font-light text-white">
+              <h2 className={crisisRailTitle}>
                 How to use these resources
               </h2>
               <div className="mt-4">
@@ -755,10 +777,10 @@ export function CrisisResources() {
                       <item.icon className="h-4 w-4" aria-hidden />
                     </div>
                     <motion.div className="min-w-0">
-                      <p className="text-sm font-medium text-[rgba(255,255,255,0.92)]">
+                      <p className={crisisRailItemTitle}>
                         {item.title}
                       </p>
-                      <p className="mt-1 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">
+                      <p className={crisisRailItemBody}>
                         {item.description}
                       </p>
                     </motion.div>
@@ -769,7 +791,7 @@ export function CrisisResources() {
 
             {/* 3. Need help right now? */}
             <motion.div
-              className={cn(emergencyRailCard, "relative overflow-hidden")}
+              className={crisisScenicBanner}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.16 }}
@@ -777,22 +799,21 @@ export function CrisisResources() {
               <img
                 src={EMERGENCY_RAIL_IMG}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover object-[center_70%] brightness-[0.38] saturate-[1.1]"
+                className={crisisScenicBannerImage}
+                width={800}
+                height={600}
+                loading="lazy"
+                decoding="async"
               />
-              <div
-                className="absolute inset-0 bg-gradient-to-t from-[#0a0b18]/95 via-[#0a0b18]/70 to-[#0a0b18]/35"
-                aria-hidden
-              />
-              <motion.div
-                className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_100%,rgba(251,146,60,0.18)_0%,transparent_60%)]"
-                aria-hidden
-              />
+              <div className={crisisScenicLightScrim} aria-hidden />
+              <div className={crisisScenicOverlayDark} aria-hidden />
+              <div className={crisisScenicOverlayWarm} aria-hidden />
 
-              <div className="relative">
-                <h2 className="font-serif text-lg font-light text-white">
+              <div className={crisisBannerContent}>
+                <h2 className={crisisBannerTitle}>
                   Need help right now?
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.58)]">
+                <p className={crisisBannerBody}>
                   You don&apos;t have to go through this alone.
                 </p>
                 <Link
