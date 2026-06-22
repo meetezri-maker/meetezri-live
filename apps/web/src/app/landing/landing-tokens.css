@@ -215,6 +215,52 @@
   font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
 }
 
+.landing-hero-title {
+  text-wrap: balance;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.06;
+  font-size: 1.5rem;
+  max-width: 20rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 640px) {
+  .landing-hero-title {
+    font-size: 1.875rem;
+    line-height: 1.05;
+    max-width: 28rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .landing-hero-title {
+    font-size: 2.125rem;
+    line-height: 1.06;
+    max-width: 32rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-hero-title {
+    font-size: 2.375rem;
+    max-width: 36rem;
+  }
+}
+
+.landing-hero-title-accent {
+  display: block;
+  margin-top: 0.06em;
+  line-height: 1.04;
+}
+
+@media (min-width: 640px) {
+  .landing-hero-title-accent {
+    margin-top: 0.04em;
+  }
+}
+
 .landing-step-visual {
   width: 100%;
   max-width: 320px;

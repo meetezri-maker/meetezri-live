@@ -29,11 +29,22 @@ export function LandingGlowCard({
   children,
   className,
   glow = "purple",
+  style,
   ...rest
 }: LandingGlowCardProps) {
+  const isCtaImage = Boolean(className?.includes("landing-cta-card-image"));
+
   return (
-    <div className={cn("landing-glass", glowClass[glow], className)} {...rest}>
-      <div className="relative z-[1]">{children}</div>
+    <div
+      className={cn(
+        "landing-glass h-full w-full min-w-0",
+        glowClass[glow],
+        isCtaImage && "landing-cta-card-image",
+      )}
+      style={style}
+      {...rest}
+    >
+      <div className={cn("relative z-[1] h-full w-full min-h-0 min-w-0", className)}>{children}</div>
     </div>
   );
 }
