@@ -42,27 +42,28 @@ html[data-theme="light"] .solace-app .solace-image-card.talk-it-out-hero button.
   color: #ffffff !important;
 }
 
-/* Start mode cards — copy on image scrim (no separate text panel) */
+/* Start mode cards — image on top, copy panel below */
 .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-title {
   color: rgba(255, 255, 255, 0.96);
-  text-shadow: none;
 }
 
 .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-body {
-  color: rgba(255, 255, 255, 0.72);
-  text-shadow: none;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-copy,
+html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-copy {
+  background: var(--card-muted, #f8f3ff) !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-title,
 html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-title {
-  color: rgba(255, 255, 255, 0.96) !important;
-  text-shadow: none !important;
+  color: #101828 !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-body,
 html[data-theme="light"] .solace-app .talk-it-out-page .talk-it-out-start-card .talk-it-out-start-card-body {
-  color: rgba(255, 255, 255, 0.72) !important;
-  text-shadow: none !important;
+  color: #475467 !important;
   opacity: 1 !important;
 }
 
