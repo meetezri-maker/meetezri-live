@@ -227,10 +227,46 @@ export function AuthCallback() {
       }
 
       const inviteFlow = sessionUser?.user_metadata?.invite_flow;
-      if (typeof inviteFlow === "string" && inviteFlow.startsWith("admin_")) {
-        clearStoredCallbackParams();
-        navigate("/invite/create-password", { replace: true });
-        return;
+      const invitePasswordSet = sessionUser?.user_metadata?.invite_password_set === true;
+      const hasGoogleIdentity = Array.isArray(sessionUser?.identities)
+        ? sessionUser.identities.some((identity: { provider?: string }) => identity.provider === "google")
+        : false;
+
+      const needsInvitePassword =
+        typeof inviteFlow === "string" &&
+        inviteFlow.startsWith("admin_") &&
+        !invitePasswordSet &&
+        !hasGoogleIdentity;
+
+      if (needsInvitePassword) {
+        try {
+          const me = await api.getMe();
+          if (me?.onboarding_completed === true) {
+            await supabase.auth
+              .updateUser({
+                data: { invite_password_set: true, invite_flow: null },
+              })
+              .catch(() => undefined);
+          } else {
+            clearStoredCallbackParams();
+            navigate("/invite/create-password", { replace: true });
+            return;
+          }
+        } catch {
+          clearStoredCallbackParams();
+          navigate("/invite/create-password", { replace: true });
+          return;
+        }
+      } else if (
+        typeof inviteFlow === "string" &&
+        inviteFlow.startsWith("admin_") &&
+        (invitePasswordSet || hasGoogleIdentity)
+      ) {
+        await supabase.auth
+          .updateUser({
+            data: { invite_password_set: true, invite_flow: null },
+          })
+          .catch(() => undefined);
       }
 
       try {

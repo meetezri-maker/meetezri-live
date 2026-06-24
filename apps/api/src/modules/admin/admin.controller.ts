@@ -46,6 +46,7 @@ import {
 import { updateUserSchema, createAdminUserSchema, bulkCreateAdminUsersSchema } from './admin.schema';
 import { z } from 'zod';
 import type { DashboardStatsQuery } from './admin.service';
+import { getInviteRedirectBaseUrl } from '../../lib/webBaseUrl';
 
 export async function getDashboardStatsHandler(
   request: FastifyRequest,
@@ -130,33 +131,9 @@ export async function getUserCountsHandler(
   }
 }
 
-function resolveWebBaseUrl(request: FastifyRequest): string {
-  const origin = request.headers.origin;
-  const referer = request.headers.referer;
-  if (origin && /^https?:\/\//i.test(origin)) {
-    try {
-      return new URL(origin).origin;
-    } catch {
-      /* fall through */
-    }
-  }
-  if (referer && /^https?:\/\//i.test(referer)) {
-    try {
-      return new URL(referer).origin;
-    } catch {
-      /* fall through */
-    }
-  }
-  return (
-    process.env.WEB_BASE_URL ||
-    process.env.APP_URL ||
-    'http://localhost:5173'
-  );
-}
-
 export async function createUserHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const webBaseUrl = resolveWebBaseUrl(request);
+    const webBaseUrl = getInviteRedirectBaseUrl(request);
     const body = createAdminUserSchema.parse(request.body);
     const user = await createUserByAdmin(body, webBaseUrl);
     return reply.code(201).send(user);
@@ -1046,7 +1023,7 @@ export async function addOrgTeamMemberHandler(request: FastifyRequest, reply: Fa
     if (!['org_admin', 'team_admin', 'user'].includes(profile_role)) {
       return reply.code(400).send({ message: 'Invalid profile_role' });
     }
-    const webBaseUrl = resolveWebBaseUrl(request);
+    const webBaseUrl = getInviteRedirectBaseUrl(request);
     const data = await addOrgTeamMember(
       user.sub,
       user.appRole,
@@ -1137,7 +1114,7 @@ export async function postCompanionHandler(request: FastifyRequest, reply: Fasti
       languages?: string[];
       availability?: string;
     };
-    const webBaseUrl = resolveWebBaseUrl(request);
+    const webBaseUrl = getInviteRedirectBaseUrl(request);
     const list = await createCompanionByAdmin(
       {
         email: String(body.email ?? ''),
