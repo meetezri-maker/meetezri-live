@@ -146,7 +146,7 @@ export async function createUserHandler(request: FastifyRequest, reply: FastifyR
 
 export async function createUsersBulkHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const webBaseUrl = getInviteRedirectBaseUrl(request);
+    const webBaseUrl = resolveWebBaseUrl(request);
     const body = bulkCreateAdminUsersSchema.parse(request.body);
     const result = await createUsersBulkByAdmin(body, webBaseUrl);
     return reply.code(201).send(result);
