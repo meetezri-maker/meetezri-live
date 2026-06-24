@@ -128,6 +128,7 @@ export const userListSchema = z.array(userSchema);
 export const updateUserSchema = z.object({
   status: z.enum(['active', 'suspended', 'inactive']).optional(),
   role: z.string().optional(),
+  subscription: z.enum(['trial', 'core', 'pro']).optional(),
 });
 
 export const createAdminUserSchema = z.object({
@@ -145,3 +146,15 @@ export const createAdminUserSchema = z.object({
 
 /** Output after validation/transform — use for services (not raw request body input). */
 export type CreateAdminUserInput = z.output<typeof createAdminUserSchema>;
+
+export const bulkCreateAdminUsersSchema = z.object({
+  users: z.array(createAdminUserSchema).min(1).max(50),
+  defaults: z
+    .object({
+      status: z.enum(['active', 'suspended', 'inactive']).optional(),
+      subscription: z.enum(['trial', 'core', 'pro']).optional(),
+    })
+    .optional(),
+});
+
+export type BulkCreateAdminUsersInput = z.output<typeof bulkCreateAdminUsersSchema>;

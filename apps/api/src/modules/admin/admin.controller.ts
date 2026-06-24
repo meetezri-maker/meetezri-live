@@ -1,7 +1,7 @@
 
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { 
-  getDashboardStats, getAllUsers, getUserStatusCounts, getUserById, createUserByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
+  getDashboardStats, getAllUsers, getUserStatusCounts, getUserById, createUserByAdmin, createUsersBulkByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
   getUserSegmentationDashboard, createUserSegment, deleteUserSegment, getUserSegmentUsers,
   getManualNotifications, createManualNotification, getNotificationAudienceCounts,
   getNudges, createNudge, updateNudge, deleteNudge,
@@ -43,7 +43,7 @@ import {
   getBrandingConfig,
   saveBrandingConfig,
 } from './admin-platform.service';
-import { updateUserSchema, createAdminUserSchema } from './admin.schema';
+import { updateUserSchema, createAdminUserSchema, bulkCreateAdminUsersSchema } from './admin.schema';
 import { z } from 'zod';
 import type { DashboardStatsQuery } from './admin.service';
 
@@ -101,11 +101,12 @@ export async function getUsersHandler(
   reply: FastifyReply
 ) {
   try {
-    const query = request.query as any;
+    const query = request.query as { page?: string; limit?: string; search?: string };
     const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
     const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 500;
-    
-    const users = await getAllUsers(page, limit);
+    const search = typeof query.search === 'string' ? query.search.trim() : undefined;
+
+    const users = await getAllUsers(page, limit, search);
     return reply.code(200).send(users);
   } catch (error) {
     request.log.error(error);
@@ -166,6 +167,19 @@ export async function createUserHandler(request: FastifyRequest, reply: FastifyR
   }
 }
 
+export async function createUsersBulkHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const webBaseUrl = resolveWebBaseUrl(request);
+    const body = bulkCreateAdminUsersSchema.parse(request.body);
+    const result = await createUsersBulkByAdmin(body, webBaseUrl);
+    return reply.code(201).send(result);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create users';
+    request.log.error({ error }, 'createUsersBulk failed');
+    return reply.code(400).send({ message });
+  }
+}
+
 export async function getUserHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply
@@ -203,12 +217,22 @@ export async function deleteUserHandler(
   reply: FastifyReply
 ) {
   try {
+    const actor = request.user as { sub?: string } | undefined;
     const { id } = request.params;
-    await deleteUser(id);
+    await deleteUser(id, { actorId: actor?.sub });
     return reply.code(200).send({ message: 'User deleted successfully' });
   } catch (error) {
     request.log.error(error);
-    return reply.code(500).send({ message: 'Failed to delete user' });
+    const message =
+      error instanceof Error ? error.message : 'Failed to delete user';
+    const statusCode =
+      (error as Error & { statusCode?: number }).statusCode ??
+      (message.includes('Cannot delete') ||
+      message.includes('cannot delete') ||
+      message.includes('You cannot delete')
+        ? 403
+        : 500);
+    return reply.code(statusCode).send({ message });
   }
 }
 

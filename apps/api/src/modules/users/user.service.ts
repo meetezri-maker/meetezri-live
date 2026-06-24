@@ -1782,25 +1782,96 @@ export async function confirmAccountActivation(token: string) {
   return { activated: true, account_status: 'active' as const };
 }
 
-export async function deleteUser(userId: string) {
-  // Delete from Prisma (application data)
-  // We use a transaction or just delete. Deleting profile usually cascades to related tables in Prisma schema
-  // But let's just delete the profile.
-  try {
-    await prisma.profiles.delete({
-      where: { id: userId },
-    });
-  } catch (error) {
-    // If record doesn't exist, we can proceed to delete from Auth
-    console.warn(`Failed to delete profile for user ${userId}:`, error);
-  }
+function purgeUserApplicationDataOps(userId: string) {
+  return [
+    prisma.audit_logs.updateMany({
+      where: { actor_id: userId },
+      data: { actor_id: null },
+    }),
+    prisma.admin_backup_records.updateMany({
+      where: { created_by: userId },
+      data: { created_by: null },
+    }),
+    prisma.crisis_events.updateMany({
+      where: { assigned_to: userId },
+      data: { assigned_to: null },
+    }),
+    prisma.moderation_queue.updateMany({
+      where: { reviewed_by: userId },
+      data: { reviewed_by: null },
+    }),
+    prisma.nudges.updateMany({
+      where: { created_by: userId },
+      data: { created_by: null },
+    }),
+    prisma.support_tickets.updateMany({
+      where: { assigned_to: userId },
+      data: { assigned_to: null },
+    }),
+    prisma.system_settings.updateMany({
+      where: { updated_by: userId },
+      data: { updated_by: null },
+    }),
+    prisma.wellness_tools.updateMany({
+      where: { created_by: userId },
+      data: { created_by: null },
+    }),
+    prisma.appointments.updateMany({
+      where: { companion_id: userId },
+      data: { companion_id: null },
+    }),
+    prisma.activity_events.deleteMany({ where: { user_id: userId } }),
+    prisma.idle_events.deleteMany({ where: { user_id: userId } }),
+    prisma.reports_daily.deleteMany({ where: { user_id: userId } }),
+    prisma.time_entries.deleteMany({ where: { user_id: userId } }),
+    prisma.companion_profiles.deleteMany({ where: { id: userId } }),
+    prisma.profiles.deleteMany({ where: { id: userId } }),
+  ] as const;
+}
 
-  // Delete from Supabase Auth
+function isPrismaTransactionPoolerError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    code === 'P2034' ||
+    msg.includes('Transaction not found') ||
+    msg.includes('Transaction API error')
+  );
+}
+
+export async function purgeUserApplicationData(userId: string): Promise<void> {
+  const ops = purgeUserApplicationDataOps(userId);
+
+  try {
+    // Batch transaction — avoids interactive `async (tx) =>` which breaks on PgBouncer.
+    await prisma.$transaction([...ops]);
+  } catch (error) {
+    if (!isPrismaTransactionPoolerError(error)) {
+      throw error;
+    }
+    // Fallback: run sequentially when the pooler cannot keep a transaction open.
+    for (const op of ops) {
+      await op;
+    }
+  }
+}
+
+export async function deleteUser(userId: string) {
+  await purgeUserApplicationData(userId);
+
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (error) {
-    throw new Error(`Failed to delete user from Supabase Auth: ${error.message}`);
+    const msg = error.message?.toLowerCase() ?? '';
+    const alreadyGone =
+      msg.includes('not found') ||
+      msg.includes('user not found') ||
+      msg.includes('does not exist');
+    if (!alreadyGone) {
+      throw new Error(`Failed to delete user from Supabase Auth: ${error.message}`);
+    }
   }
 
+  invalidateUserProfileCache(userId);
   return { success: true };
 }
 

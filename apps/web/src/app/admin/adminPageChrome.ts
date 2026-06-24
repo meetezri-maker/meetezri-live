@@ -44,8 +44,8 @@ export const adminKpiCard = cn(
 
 /** Uniform KPI tile — fixed height/width in admin-kpi-grid. */
 export const adminKpiTile = cn(
-  "admin-kpi-tile admin-card-hover h-[7.875rem] w-full p-5",
-  "flex flex-row items-start gap-5",
+  "admin-kpi-tile admin-card-hover w-full p-4 sm:p-5",
+  "flex flex-row items-start gap-3 sm:gap-5",
   "transition-[border-color,box-shadow,transform,background] duration-[180ms] ease-out"
 );
 
@@ -111,10 +111,29 @@ export const adminNavLinkActive = cn(
 
 export const adminSectionLabel = "admin-section-label";
 
-export const adminPageTitle = "admin-page-title";
+export const adminPageTitle = cn(
+  "admin-page-title text-xl font-semibold leading-tight tracking-tight sm:text-2xl lg:text-3xl"
+);
+
+/** Page header row — stacks title and actions on mobile. */
+export const adminPageHeader = cn(
+  "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+);
+
+export const adminPageHeaderTitle = cn("flex min-w-0 items-center gap-3");
+
+export const adminPageHeaderActions = cn(
+  "flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end"
+);
+
+export const adminPageHeading = cn(
+  "text-xl font-bold leading-tight sm:text-2xl lg:text-3xl"
+);
+
+export const adminPageSubtitle = cn("text-xs text-muted-foreground sm:text-sm");
 
 export const adminStatValue = cn(
-  "text-3xl font-semibold tabular-nums tracking-tight text-[var(--admin-text)]"
+  "text-xl font-semibold sm:text-2xl lg:text-3xl tabular-nums tracking-tight text-[var(--admin-text)]"
 );
 
 export const adminInput = cn(

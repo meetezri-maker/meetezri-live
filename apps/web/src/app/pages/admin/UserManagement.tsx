@@ -3,7 +3,7 @@ import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { BulkUserActionsModal } from "../../components/BulkUserActionsModal";
+import { BulkAddUsersModal } from "../../components/BulkAddUsersModal";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "../../components/ConfirmationModal";
 import {
@@ -27,13 +27,20 @@ import {
   X,
   RefreshCw,
   Trash2,
-  UserCheck,
+  CreditCard,
+  Upload,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import {
+  adminPageHeader,
+  adminPageHeaderActions,
+  adminPageHeading,
+  adminPageSubtitle,
+} from "@/app/admin/adminPageChrome";
 
 interface User {
   id: string;
@@ -75,6 +82,7 @@ export function UserManagement() {
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
   const [nextPage, setNextPage] = useState<number | null>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterType>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [subscriptionFilter, setSubscriptionFilter] = useState<SubscriptionFilter>("all");
@@ -85,7 +93,10 @@ export function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [addUserSubmitting, setAddUserSubmitting] = useState(false);
+  const [bulkAddSubmitting, setBulkAddSubmitting] = useState(false);
+  const [bulkPlan, setBulkPlan] = useState<"trial" | "core" | "pro">("trial");
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -115,36 +126,42 @@ export function UserManagement() {
   const fetchAbortRef = useRef<AbortController | null>(null);
   const hasStartedInitialFetchRef = useRef(false);
 
-  const mapApiUser = (u: any): User => ({
-    id: u.id,
-    name: u.full_name || u.email.split("@")[0],
-    email: u.email,
-    status: u.status || "active",
-    joinDate: u.created_at,
-    sessions: typeof u.session_count === "number" ? u.session_count : 0,
-    lastActive: u.last_active || u.updated_at,
-    riskLevel: (u.risk_level as User["riskLevel"]) || "low",
-    subscription: u.subscription || "trial",
-    organization: u.organization || "",
-  });
+  const mapApiUser = (u: any): User => {
+    const email = typeof u.email === "string" ? u.email : "";
+    const fullName = typeof u.full_name === "string" ? u.full_name.trim() : "";
+    return {
+      id: u.id,
+      name: fullName || email.split("@")[0] || "User",
+      email,
+      status: u.status || "active",
+      joinDate: u.created_at,
+      sessions: typeof u.session_count === "number" ? u.session_count : 0,
+      lastActive: u.last_active || u.updated_at,
+      riskLevel: (u.risk_level as User["riskLevel"]) || "low",
+      subscription: u.subscription || "trial",
+      organization: u.organization || "",
+    };
+  };
 
-  const fetchFirstPage = async () => {
+  const fetchUsers = async (search?: string) => {
     try {
-      // Cancel any in-flight fetch (e.g. refresh / re-mount).
       fetchAbortRef.current?.abort();
       fetchAbortRef.current = new AbortController();
 
+      const searchTerm = search?.trim() || undefined;
       if (usersFirstLoad.current) setIsLoading(true);
+      else setIsBackgroundLoading(true);
 
-      // Fetch real counts and first page of users in parallel.
-      const FIRST_PAGE_LIMIT = 100;
+      const FIRST_PAGE_LIMIT = searchTerm ? 250 : 100;
       const [first, counts] = await Promise.all([
-        api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT }),
-        api.admin.getUserCounts().catch(() => null),
+        api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT, search: searchTerm }),
+        searchTerm ? Promise.resolve(null) : api.admin.getUserCounts().catch(() => null),
       ]);
       const mappedFirst = (Array.isArray(first) ? first : []).map(mapApiUser);
       setUsers(mappedFirst);
-      setNextPage(mappedFirst.length < FIRST_PAGE_LIMIT ? null : 2);
+      setNextPage(
+        searchTerm ? null : mappedFirst.length < FIRST_PAGE_LIMIT ? null : 2
+      );
       if (counts) setRealCounts(counts);
 
       if (usersFirstLoad.current) {
@@ -185,14 +202,32 @@ export function UserManagement() {
   };
 
   useEffect(() => {
-    // React StrictMode in dev runs effects twice; guard to avoid duplicate API calls.
     if (hasStartedInitialFetchRef.current) return;
     hasStartedInitialFetchRef.current = true;
-    fetchFirstPage();
+    fetchUsers();
     return () => {
       fetchAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  const isInitialSearchEffect = useRef(true);
+  useEffect(() => {
+    if (isInitialSearchEffect.current) {
+      isInitialSearchEffect.current = false;
+      return;
+    }
+    fetchUsers(debouncedSearch || undefined);
+    return () => {
+      fetchAbortRef.current?.abort();
+    };
+  }, [debouncedSearch]);
 
   const refreshCounts = async () => {
     try {
@@ -209,6 +244,8 @@ export function UserManagement() {
         if (action === 'delete') {
           await api.admin.deleteUser(userId);
           setUsers(users.filter((u) => u.id !== userId));
+          setSelectedUsers((prev) => prev.filter((uid) => uid !== userId));
+          toast.success('User deleted from database and authentication');
           refreshCounts();
         } else if (action === 'suspend') {
           await api.admin.updateUser(userId, { status: 'suspended' });
@@ -231,10 +268,13 @@ export function UserManagement() {
         setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
       } catch (error) {
         console.error(`Failed to ${action} user:`, error);
+        const message =
+          error instanceof Error ? error.message : `Failed to ${action} user. Please try again.`;
+        toast.error(message);
         setConfirmationModal({
           isOpen: true,
           title: "Error",
-          message: `Failed to ${action} user. Please try again.`,
+          message,
           onConfirm: () =>
             setConfirmationModal((prev) => ({
               ...prev,
@@ -257,15 +297,12 @@ export function UserManagement() {
 
   const filteredUsers = useMemo(() => {
     const filtered = users.filter((user) => {
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === "all" || user.status === statusFilter;
       const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
       const matchesSubscription =
         subscriptionFilter === "all" || user.subscription === subscriptionFilter;
 
-      return matchesSearch && matchesStatus && matchesRisk && matchesSubscription;
+      return matchesStatus && matchesRisk && matchesSubscription;
     });
 
     return [...filtered].sort((a, b) => {
@@ -288,7 +325,6 @@ export function UserManagement() {
     });
   }, [
     users,
-    searchQuery,
     statusFilter,
     riskFilter,
     subscriptionFilter,
@@ -413,6 +449,71 @@ export function UserManagement() {
     window.URL.revokeObjectURL(url);
   };
 
+  const handlePlanChange = (userId: string, plan: User["subscription"]) => {
+    const user = users.find((u) => u.id === userId);
+    setConfirmationModal({
+      isOpen: true,
+      title: "Change subscription plan",
+      message: `Change ${user?.name ?? "this user"}'s plan to ${plan}? This updates the database subscription and credits.`,
+      onConfirm: async () => {
+        try {
+          await api.admin.updateUser(userId, { subscription: plan });
+          setUsers((prev) =>
+            prev.map((u) => (u.id === userId ? { ...u, subscription: plan } : u))
+          );
+          toast.success(`Plan updated to ${plan}`);
+          setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Failed to change plan";
+          toast.error(message);
+          setConfirmationModal({
+            isOpen: true,
+            title: "Error",
+            message,
+            onConfirm: () =>
+              setConfirmationModal((prev) => ({ ...prev, isOpen: false })),
+          });
+        }
+      },
+    });
+  };
+
+  const handleBulkAddUsers = async (
+    rows: { email: string; full_name: string }[],
+    defaults: { status: "active" | "suspended" | "inactive"; subscription: "trial" | "core" | "pro" }
+  ) => {
+    setBulkAddSubmitting(true);
+    try {
+      const result = await api.admin.createUsersBulk({
+        users: rows.map((r) => ({
+          email: r.email,
+          full_name: r.full_name,
+        })),
+        defaults,
+      });
+      const created = Array.isArray(result?.created) ? result.created : [];
+      const failed = Array.isArray(result?.failed) ? result.failed : [];
+      if (created.length > 0) {
+        toast.success(
+          `Invited ${created.length} user${created.length !== 1 ? "s" : ""} successfully`
+        );
+      }
+      if (failed.length > 0) {
+        toast.error(
+          `${failed.length} user${failed.length !== 1 ? "s" : ""} failed. ${failed[0]?.error ?? ""}`
+        );
+      }
+      setShowBulkAddModal(false);
+      await fetchUsers(debouncedSearch || undefined);
+      refreshCounts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bulk add failed");
+    } finally {
+      setBulkAddSubmitting(false);
+    }
+  };
+
   const handleAddUser = () => {
     // Demo add user functionality - in production this would open a modal or navigate to a form
     setShowAddUserModal(true);
@@ -451,6 +552,21 @@ export function UserManagement() {
               return api.sendEmail(user.email, subject, html, text);
             })
           );
+        } else if (action === "plan-trial" || action === "plan-core" || action === "plan-pro") {
+          const plan = action.replace("plan-", "") as User["subscription"];
+          await Promise.all(
+            selectedUsers.map((userId) =>
+              api.admin.updateUser(userId, { subscription: plan })
+            )
+          );
+          setUsers((prev) =>
+            prev.map((u) =>
+              selectedUsers.includes(u.id) ? { ...u, subscription: plan } : u
+            )
+          );
+          toast.success(
+            `Updated ${selectedUsers.length} user(s) to ${plan} plan`
+          );
         }
         setSelectedUsers([]);
         setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
@@ -475,7 +591,9 @@ export function UserManagement() {
       message:
         action === "email"
           ? `Are you sure you want to send an email to ${selectedUsers.length} users?`
-          : `Are you sure you want to ${action} ${selectedUsers.length} users?`,
+          : action.startsWith("plan-")
+            ? `Change plan to ${action.replace("plan-", "")} for ${selectedUsers.length} selected users?`
+            : `Are you sure you want to ${action} ${selectedUsers.length} users?`,
       onConfirm,
     });
   };
@@ -490,17 +608,26 @@ export function UserManagement() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-3xl font-bold">User Management</h1>
-              <p className="text-muted-foreground">
+          <div className={adminPageHeader}>
+            <div className="min-w-0">
+              <h1 className={adminPageHeading}>User Management</h1>
+              <p className={adminPageSubtitle}>
                 Manage and monitor all Ezri users
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className={adminPageHeaderActions}>
               <Button type="button" variant="outline" className="gap-2" onClick={handleExport}>
                 <Download className="w-4 h-4" />
                 Export
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowBulkAddModal(true)}
+              >
+                <Upload className="w-4 h-4" />
+                Bulk Add
               </Button>
               <Button type="button" className="gap-2" onClick={handleAddUser}>
                 <UserPlus className="w-4 h-4" />
@@ -512,7 +639,7 @@ export function UserManagement() {
 
         {/* Stats Overview */}
         <div
-          className={`grid grid-cols-1 md:grid-cols-5 gap-4 transition-opacity ${
+          className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 transition-opacity ${
             isLoading ? "opacity-40 pointer-events-none" : ""
           }`}
         >
@@ -743,14 +870,37 @@ export function UserManagement() {
               exit={{ opacity: 0, y: -20 }}
             >
               <Card className="p-4 bg-primary/5 border-primary/20">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <UserCheck className="w-5 h-5 text-primary" />
                     <span className="font-medium">
                       {selectedUsers.length} user{selectedUsers.length !== 1 ? "s" : ""} selected
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"
+                        value={bulkPlan}
+                        onChange={(e) =>
+                          setBulkPlan(e.target.value as "trial" | "core" | "pro")
+                        }
+                        aria-label="Bulk plan change"
+                      >
+                        <option value="trial">Trial</option>
+                        <option value="core">Core</option>
+                        <option value="pro">Pro</option>
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBulkAction(`plan-${bulkPlan}`)}
+                      >
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Set Plan
+                      </Button>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
@@ -979,6 +1129,20 @@ export function UserManagement() {
                               <DropdownMenuItem onClick={() => handleAction(user.id, 'email')}>
                                 <Mail className="w-4 h-4 mr-2" />
                                 Email User
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel>Change plan</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handlePlanChange(user.id, "trial")}>
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Set Trial
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePlanChange(user.id, "core")}>
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Set Core
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePlanChange(user.id, "pro")}>
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Set Pro
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {user.status === 'active' ? (
@@ -1242,7 +1406,7 @@ export function UserManagement() {
                           subscription: "trial",
                           organization: "",
                         });
-                        await fetchFirstPage();
+                        await fetchUsers(debouncedSearch || undefined);
                       } catch (e: unknown) {
                         const msg =
                           e instanceof Error ? e.message : "Could not create user.";
@@ -1262,6 +1426,12 @@ export function UserManagement() {
           </motion.div>
         )}
       </AnimatePresence>
+      <BulkAddUsersModal
+        isOpen={showBulkAddModal}
+        onClose={() => setShowBulkAddModal(false)}
+        onSubmit={handleBulkAddUsers}
+        isSubmitting={bulkAddSubmitting}
+      />
       <ConfirmationModal
         isOpen={confirmationModal.isOpen}
         onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}

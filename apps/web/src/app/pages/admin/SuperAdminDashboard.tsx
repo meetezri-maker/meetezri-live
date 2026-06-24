@@ -1,7 +1,7 @@
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { adminCard, adminBtnSecondary, adminQuickAction, adminBtnPrimary, adminKpiTile } from "@/app/admin/adminPageChrome";
+import { adminCard, adminBtnSecondary, adminQuickAction, adminBtnPrimary, adminKpiTile, adminPageHeader, adminPageHeaderTitle, adminPageHeaderActions, adminPageHeading, adminPageSubtitle } from "@/app/admin/adminPageChrome";
 import { cn } from "@/lib/utils";
 import { api } from "../../../lib/api";
 import { motion } from "motion/react";
@@ -671,19 +671,19 @@ export function SuperAdminDashboard() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                <Crown className="w-7 h-7 text-white" />
+          <div className={adminPageHeader}>
+            <div className={adminPageHeaderTitle}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg sm:h-12 sm:w-12">
+                <Crown className="h-5 w-5 text-white sm:h-7 sm:w-7" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
-                <p className="text-muted-foreground">
+              <div className="min-w-0">
+                <h1 className={adminPageHeading}>Super Admin Dashboard</h1>
+                <p className={adminPageSubtitle}>
                   Platform-wide overview • Real-time monitoring
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className={adminPageHeaderActions}>
               <Button variant="outline" size="sm" type="button" onClick={exportReport}>
                 <Download className="w-4 h-4 mr-2" />
                 Export Report
@@ -708,7 +708,7 @@ export function SuperAdminDashboard() {
         <div className="admin-kpi-grid">
           {/* Total Users */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0 }}
@@ -753,7 +753,7 @@ export function SuperAdminDashboard() {
 
           {/* Active Talk it out */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -795,7 +795,7 @@ export function SuperAdminDashboard() {
 
           {/* Revenue */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -830,7 +830,7 @@ export function SuperAdminDashboard() {
 
           {/* Crisis Alerts */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -880,7 +880,7 @@ export function SuperAdminDashboard() {
 
           {/* Total AI Talk it out */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
@@ -899,7 +899,7 @@ export function SuperAdminDashboard() {
 
           {/* Avg Session Duration */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
@@ -918,7 +918,7 @@ export function SuperAdminDashboard() {
 
           {/* Avg Mood Score */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45 }}
@@ -939,7 +939,7 @@ export function SuperAdminDashboard() {
 
           {/* API Uptime */}
           <motion.div
-            className="h-[7.875rem]"
+            className="min-h-[5.25rem] sm:h-[7.875rem]"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
