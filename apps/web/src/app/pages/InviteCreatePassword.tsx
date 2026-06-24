@@ -112,6 +112,11 @@ export function InviteCreatePassword() {
         return;
       }
 
+      if (session.user.user_metadata?.invite_password_set === true) {
+        navigate("/app/dashboard", { replace: true });
+        return;
+      }
+
       setReady(true);
     };
 
@@ -142,6 +147,10 @@ export function InviteCreatePassword() {
     try {
       const { error } = await supabase.auth.updateUser({
         password,
+        data: {
+          invite_password_set: true,
+          invite_flow: null,
+        },
       });
 
       if (error) {
