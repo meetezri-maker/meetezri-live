@@ -320,6 +320,10 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
     }
   }, [location.pathname]);
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
   const handleLogout = async () => {
     setShowLogoutModal(true);
   };
@@ -386,21 +390,36 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
       </AnimatePresence>
 
       {/* SIDEBAR — matte panel, environmental depth */}
-      <aside className={cn("fixed top-0 left-0 bottom-0 z-50 w-64 overflow-hidden", adminSidebar)}>
+      <aside
+        className={cn(
+          "fixed top-0 left-0 bottom-0 z-50 w-64 overflow-hidden transition-transform duration-300 ease-in-out",
+          adminSidebar,
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          "lg:translate-x-0"
+        )}
+      >
         <div className="relative flex h-full flex-col">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(167,139,250,0.08),transparent_70%)]"
             aria-hidden
           />
           {/* Header */}
-          <div className="relative border-b border-[color:var(--admin-border)] px-5 py-4">
-            <Link to={`/admin/super-admin-dashboard`} className="flex items-center gap-2.5">
+          <div className="relative flex items-center justify-between border-b border-[color:var(--admin-border)] px-5 py-4">
+            <Link to={`/admin/super-admin-dashboard`} className="flex min-w-0 items-center gap-2.5">
               <BrandLogo heightClass="h-8" themeAware />
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-sm font-semibold tracking-tight text-[var(--admin-text)]">Solace Admin</h1>
                 <span className={adminRoleBadge}>{currentRoleInfo.name}</span>
               </div>
             </Link>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="shrink-0 rounded-lg p-2 text-[var(--admin-text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--admin-text)] lg:hidden"
+              aria-label="Close navigation menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           {/* Navigation - Clean List */}
@@ -451,6 +470,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                             <Link
                               key={page.href}
                               to={page.href}
+                              onClick={() => setSidebarOpen(false)}
                               className={cn(adminNavLink, isActive && adminNavLinkActive)}
                             >
                               <span className="truncate">{page.name}</span>
@@ -502,10 +522,20 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <div className="relative min-h-screen w-full pl-64">
+      <div className="relative min-h-screen w-full lg:pl-64">
         <header className={adminTopBar}>
-          <div className="flex items-center justify-between px-8 py-4">
-            <h2 className="text-lg font-semibold tracking-tight text-[var(--admin-text)]">Admin Portal</h2>
+          <div className="flex items-center gap-3 px-4 py-4 lg:px-8">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="inline-flex shrink-0 items-center justify-center rounded-lg p-2 text-[var(--admin-text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--admin-text)] lg:hidden"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-[var(--admin-text)]">
+              Admin Portal
+            </h2>
             {/* <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
               View User App →
             </Link> */}
@@ -513,7 +543,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="relative p-8">{children}</main>
+        <main className="relative p-4 lg:p-8">{children}</main>
       </div>
 
       <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>

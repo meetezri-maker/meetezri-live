@@ -7,6 +7,7 @@ import { ConfirmationModal } from "../../components/ConfirmationModal";
 import { ArrowLeft, Mail, Phone, Calendar, Activity, MessageSquare, Heart, AlertTriangle, Ban, CheckCircle2, Clock, MapPin, Shield, Star, TrendingUp, TrendingDown, Edit, Trash2, Key, Send, Download, Eye, EyeOff, User, CreditCard, Bell, Settings, Moon, Sun } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../lib/api";
+import { toast } from "sonner";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 export function UserDetailsEnhanced() {
@@ -211,17 +212,32 @@ export function UserDetailsEnhanced() {
           setUserData((prev: any) =>
             prev ? { ...prev, status: "suspended" } : prev
           );
+        } else if (
+          action === "plan-trial" ||
+          action === "plan-core" ||
+          action === "plan-pro"
+        ) {
+          const plan = action.replace("plan-", "") as "trial" | "core" | "pro";
+          await api.admin.updateUser(userData.id, { subscription: plan });
+          setUserData((prev: any) =>
+            prev ? { ...prev, subscription: plan } : prev
+          );
+          toast.success(`Plan updated to ${plan}`);
         } else if (action === "delete") {
           await api.admin.deleteUser(userData.id);
+          toast.success("User deleted from database and authentication");
           window.location.href = "/admin/user-management";
         }
         setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
       } catch (err) {
         console.error("Failed to perform action", err);
+        const message =
+          err instanceof Error ? err.message : "Failed to perform action. Please try again.";
+        toast.error(message);
         setConfirmationModal({
           isOpen: true,
           title: "Error",
-          message: "Failed to perform action. Please try again.",
+          message,
           onConfirm: () =>
             setConfirmationModal((prev) => ({
               ...prev,
@@ -246,6 +262,9 @@ export function UserDetailsEnhanced() {
     } else if (action === "suspend") {
       title = "Suspend Account";
       message = `Suspend ${userData.name}'s account?`;
+    } else if (action.startsWith("plan-")) {
+      title = "Change subscription plan";
+      message = `Change ${userData.name}'s plan to ${action.replace("plan-", "")}?`;
     } else if (action === "delete") {
       title = "Delete Account";
       message = `Permanently delete ${userData.name}'s account and profile?`;
@@ -376,6 +395,21 @@ export function UserDetailsEnhanced() {
                   <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium capitalize">
                     {userData.subscription}
                   </span>
+                  <select
+                    className="rounded-lg border px-2 py-1 text-xs"
+                    value={userData.subscription || "trial"}
+                    onChange={(e) => {
+                      const next = e.target.value as "trial" | "core" | "pro";
+                      if (next !== userData.subscription) {
+                        handleAction(`plan-${next}`);
+                      }
+                    }}
+                    aria-label="Change subscription plan"
+                  >
+                    <option value="trial">Trial</option>
+                    <option value="core">Core</option>
+                    <option value="pro">Pro</option>
+                  </select>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
                     userData.riskLevel === "low" ? "bg-green-100 text-green-700" :
                     userData.riskLevel === "medium" ? "bg-yellow-100 text-yellow-700" :

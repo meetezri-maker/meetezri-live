@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { 
-  getDashboardStatsHandler, getUsersHandler, getUserCountsHandler, createUserHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
+  getDashboardStatsHandler, getUsersHandler, getUserCountsHandler, createUserHandler, createUsersBulkHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
   getUserSegmentsHandler, createUserSegmentHandler, deleteUserSegmentHandler, getUserSegmentUsersHandler,
   getManualNotificationsHandler, createManualNotificationHandler, getNotificationAudienceCountsHandler,
   getNudgesHandler, createNudgeHandler, updateNudgeHandler, deleteNudgeHandler,
@@ -33,6 +33,7 @@ import {
   userSchema,
   updateUserSchema,
   createAdminUserSchema,
+  bulkCreateAdminUsersSchema,
 } from './admin.schema';
 import { z } from 'zod';
 
@@ -87,6 +88,17 @@ export async function adminRoutes(fastify: FastifyInstance) {
       },
     },
     createUserHandler
+  );
+
+  fastify.post(
+    '/users/bulk',
+    {
+      preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])],
+      schema: {
+        body: bulkCreateAdminUsersSchema,
+      },
+    },
+    createUsersBulkHandler
   );
 
   fastify.get(

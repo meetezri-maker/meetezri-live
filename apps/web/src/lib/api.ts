@@ -1750,11 +1750,13 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user counts');
     },
 
-    async getUsers(params?: { page?: number; limit?: number }) {
+    async getUsers(params?: { page?: number; limit?: number; search?: string }) {
       const headers = await getHeaders();
       const search = new URLSearchParams();
       if (params?.page != null && params.page > 0) search.set('page', String(params.page));
       if (params?.limit != null && params.limit > 0) search.set('limit', String(params.limit));
+      const searchTerm = params?.search?.trim();
+      if (searchTerm) search.set('search', searchTerm);
       const qs = search.toString();
       const res = await fetch(`${API_URL}/admin/users${qs ? `?${qs}` : ''}`, {
         method: 'GET',
@@ -1779,6 +1781,27 @@ export const api = {
       return handleResponse(res, 'Failed to create user');
     },
 
+    async createUsersBulk(body: {
+      users: Array<{
+        email: string;
+        full_name: string;
+        status?: 'active' | 'suspended' | 'inactive';
+        subscription?: 'trial' | 'core' | 'pro';
+      }>;
+      defaults?: {
+        status?: 'active' | 'suspended' | 'inactive';
+        subscription?: 'trial' | 'core' | 'pro';
+      };
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/users/bulk`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create users');
+    },
+
     async getUserProfile(userId: string) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/users/${userId}`, {
@@ -1789,7 +1812,11 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user profile');
     },
 
-    async updateUser(userId: string, data: { status?: string; role?: string }) {
+    async updateUser(userId: string, data: {
+      status?: string;
+      role?: string;
+      subscription?: 'trial' | 'core' | 'pro';
+    }) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/users/${userId}`, {
         method: 'PATCH',

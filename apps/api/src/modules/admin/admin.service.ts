@@ -4,7 +4,7 @@ import { mergeCompanionAvatarCounts } from '../../lib/companionDisplayName';
 import { PLAN_LIMITS, PLAN_MONTHLY_LIST_PRICE_USD } from '../billing/billing.constants';
 import { Prisma, $Enums } from '@prisma/client';
 import { notificationsService } from '../notifications/notifications.service';
-import { CreateAdminUserInput, DashboardStats } from './admin.schema';
+import { CreateAdminUserInput, DashboardStats, BulkCreateAdminUsersInput } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { emailService } from '../email/email.service';
 import { supabaseAdmin } from '../../config/supabase';
@@ -846,8 +846,9 @@ export async function getUserStatusCounts(): Promise<{
   return { total, active, suspended, inactive: total - active - suspended };
 }
 
-export async function getAllUsers(page: number = 1, limit: number = 20) {
-  const cacheKey = `${page}_${limit}`;
+export async function getAllUsers(page: number = 1, limit: number = 20, search?: string) {
+  const searchTerm = search?.trim() ?? '';
+  const cacheKey = `${page}_${limit}_${searchTerm.toLowerCase()}`;
   const cached = usersCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < USERS_CACHE_TTL)) {
     return cached.data;
@@ -856,8 +857,19 @@ export async function getAllUsers(page: number = 1, limit: number = 20) {
   const skip = (page - 1) * limit;
   const take = Math.min(limit, 1000);
 
+  const where =
+    searchTerm.length > 0
+      ? {
+          OR: [
+            { full_name: { contains: searchTerm, mode: 'insensitive' as const } },
+            { email: { contains: searchTerm, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
+
   // Single query for list rows; latest mood per user is loaded in one batch (avoids per-row subqueries).
   const users = await prisma.profiles.findMany({
+    where,
     take,
     skip,
     orderBy: { created_at: 'desc' },
@@ -974,6 +986,12 @@ export async function getUserById(id: string) {
           organizations: true
         }
       },
+      subscriptions: {
+        where: { status: { in: ['active', 'trialing'] } },
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: { plan_type: true, status: true },
+      },
       _count: {
         select: {
           app_sessions: true,
@@ -994,12 +1012,15 @@ export async function getUserById(id: string) {
     status = 'active';
   }
 
+  const subscription = user.subscriptions[0]?.plan_type || 'trial';
+
   return {
     ...user,
     email: user.email || '',
     created_at: user.created_at,
     updated_at: user.updated_at,
     status,
+    subscription,
     // Map additional fields for frontend convenience
     organization: user.org_members[0]?.organizations.name || 'Individual',
     stats: {
@@ -1063,35 +1084,7 @@ export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl:
   });
 
   if (subscription !== 'trial') {
-    const trialSub = await prisma.subscriptions.findFirst({
-      where: { user_id: userId, plan_type: 'trial' },
-      orderBy: { created_at: 'desc' },
-    });
-    if (trialSub) {
-      await prisma.subscriptions.update({
-        where: { id: trialSub.id },
-        data: {
-          plan_type: subscription,
-          status: 'active',
-        },
-      });
-    }
-    // createProfile() always seeds trial minutes (30). Align wallet with chosen paid plan.
-    const planCredits =
-      subscription === 'core'
-        ? PLAN_LIMITS.core.credits
-        : subscription === 'pro'
-          ? PLAN_LIMITS.pro.credits
-          : PLAN_LIMITS.trial.credits;
-    await prisma.profiles.update({
-      where: { id: userId },
-      data: {
-        credits: planCredits,
-        credits_seconds: planCredits * 60,
-        signup_type: 'plan',
-      },
-    });
-    userService.invalidateUserProfileCache(userId);
+    await applyUserSubscriptionPlan(userId, subscription);
   }
 
   usersCache.clear();
@@ -1103,7 +1096,118 @@ export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl:
   return created;
 }
 
-export async function updateUser(id: string, data: { status?: string; role?: string }) {
+type AdminPlanType = 'trial' | 'core' | 'pro';
+
+/** Sync subscriptions row + profile credits/signup_type for admin plan changes. */
+export async function applyUserSubscriptionPlan(userId: string, subscription: AdminPlanType) {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!profile) {
+    throw new Error('User not found');
+  }
+
+  const planCredits =
+    subscription === 'core'
+      ? PLAN_LIMITS.core.credits
+      : subscription === 'pro'
+        ? PLAN_LIMITS.pro.credits
+        : PLAN_LIMITS.trial.credits;
+
+  const activeStatuses = ['active', 'trialing'];
+  let sub = await prisma.subscriptions.findFirst({
+    where: {
+      user_id: userId,
+      status: { in: activeStatuses },
+    },
+    orderBy: { created_at: 'desc' },
+  });
+
+  if (!sub) {
+    sub = await prisma.subscriptions.findFirst({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
+  const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  if (sub) {
+    await prisma.subscriptions.update({
+      where: { id: sub.id },
+      data: {
+        plan_type: subscription,
+        status: 'active',
+        updated_at: new Date(),
+        ...(subscription === 'trial' ? { end_date: trialEnd } : { end_date: null }),
+      },
+    });
+  } else {
+    await prisma.subscriptions.create({
+      data: {
+        user_id: userId,
+        plan_type: subscription,
+        status: 'active',
+        start_date: new Date(),
+        billing_cycle: 'monthly',
+        ...(subscription === 'trial' ? { end_date: trialEnd } : {}),
+      },
+    });
+  }
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: {
+      credits: planCredits,
+      credits_seconds: planCredits * 60,
+      signup_type: subscription === 'trial' ? 'trial' : 'plan',
+    },
+  });
+
+  userService.invalidateUserProfileCache(userId);
+}
+
+export async function createUsersBulkByAdmin(
+  input: BulkCreateAdminUsersInput,
+  webBaseUrl: string
+) {
+  const defaults = input.defaults ?? {};
+  const created: Awaited<ReturnType<typeof createUserByAdmin>>[] = [];
+  const failed: { email: string; full_name: string; error: string }[] = [];
+
+  for (const row of input.users) {
+    const payload: CreateAdminUserInput = {
+      email: row.email,
+      full_name: row.full_name,
+      status: row.status ?? defaults.status,
+      subscription: row.subscription ?? defaults.subscription,
+    };
+    try {
+      created.push(await createUserByAdmin(payload, webBaseUrl));
+    } catch (error) {
+      failed.push({
+        email: payload.email,
+        full_name: payload.full_name,
+        error: error instanceof Error ? error.message : 'Failed to create user',
+      });
+    }
+  }
+
+  usersCache.clear();
+  return {
+    created,
+    failed,
+    total: input.users.length,
+    successCount: created.length,
+    failedCount: failed.length,
+  };
+}
+
+export async function updateUser(
+  id: string,
+  data: { status?: string; role?: string; subscription?: AdminPlanType }
+) {
   const existing = await prisma.profiles.findUnique({
     where: { id },
     select: {
@@ -1115,11 +1219,11 @@ export async function updateUser(id: string, data: { status?: string; role?: str
     throw new Error('User not found');
   }
 
-  usersCache.clear(); // Invalidate cache
+  usersCache.clear();
 
   const adminRoles = ['super_admin', 'org_admin', 'team_admin'];
 
-  const updateData: any = {};
+  const updateData: Prisma.profilesUpdateInput = {};
 
   if (data.role) {
     updateData.role = data.role;
@@ -1132,51 +1236,66 @@ export async function updateUser(id: string, data: { status?: string; role?: str
     if (data.status === 'active' && existing.role === 'suspended') {
       updateData.role = 'user';
     }
+    if (data.status === 'inactive') {
+      updateData.account_status = 'inactive';
+    }
+    if (data.status === 'active') {
+      updateData.account_status = 'active';
+    }
   }
 
-  const user = await prisma.profiles.update({
-    where: { id },
-    data: updateData,
-    select: {
-      id: true,
-      email: true,
-      full_name: true,
-      avatar_url: true,
-      created_at: true,
-      updated_at: true,
-      role: true,
-    }
-  });
+  if (Object.keys(updateData).length > 0) {
+    await prisma.profiles.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  if (data.subscription) {
+    await applyUserSubscriptionPlan(id, data.subscription);
+  }
 
   if (data.role) {
     userService.invalidateUserProfileCache(id);
   }
 
-  let status = 'inactive';
-  if (user.role === 'suspended') {
-    status = 'suspended';
-  } else {
-    status = data.status || 'active';
+  const refreshed = await getUserById(id);
+  if (!refreshed) {
+    throw new Error('User not found after update');
   }
-
-  return {
-    ...user,
-    email: user.email || '',
-    status
-  };
+  return refreshed;
 }
 
-export async function deleteUser(id: string) {
-  // We should likely cascade delete or soft delete.
-  // For now, we'll try to delete the profile.
-  // Note: Foreign key constraints might prevent this if not handled.
-  // Since we have cascading deletes on many relations, this might work, 
-  // but 'users' table in auth schema might be the parent.
-  // However, we can only control the public.profiles here easily.
-  
-  return prisma.profiles.delete({
-    where: { id }
+export async function deleteUser(id: string, opts?: { actorId?: string }) {
+  const existing = await prisma.profiles.findUnique({
+    where: { id },
+    select: { id: true, role: true, email: true },
   });
+
+  if (!existing) {
+    const err = new Error('User not found');
+    (err as Error & { statusCode?: number }).statusCode = 404;
+    throw err;
+  }
+
+  const staffRoles = [
+    'super_admin',
+    'org_admin',
+    'team_admin',
+    'super',
+    'org',
+    'team',
+  ] as const;
+  if (existing.role && staffRoles.includes(existing.role as (typeof staffRoles)[number])) {
+    throw new Error('Cannot delete admin or staff accounts from user management');
+  }
+
+  if (opts?.actorId && opts.actorId === id) {
+    throw new Error('You cannot delete your own account from the admin panel');
+  }
+
+  await userService.deleteUser(id);
+  usersCache.clear();
 }
 
 export async function getUserAuditLogs(userId: string) {
