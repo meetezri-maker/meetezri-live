@@ -133,7 +133,7 @@ export function BulkAddUsersModal({
                     <Upload className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Bulk Add Users</h2>
+                    <h2 className="text-xl font-bold">Add Multiple Users</h2>
                     <p className="text-sm text-muted-foreground">
                       One user per line: Name, email@example.com
                     </p>

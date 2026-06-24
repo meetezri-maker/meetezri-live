@@ -627,7 +627,7 @@ export function UserManagement() {
                 onClick={() => setShowBulkAddModal(true)}
               >
                 <Upload className="w-4 h-4" />
-                Bulk Add
+                Add Multiple Users
               </Button>
               <Button type="button" className="gap-2" onClick={handleAddUser}>
                 <UserPlus className="w-4 h-4" />
