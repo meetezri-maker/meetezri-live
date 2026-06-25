@@ -1,3 +1,4 @@
+import { isValidRequiredAppPhone } from "@meetezri/shared";
 import { paidOnboardingStepPath } from "./onboardingResume";
 
 export type PaidOnboardingStepAction =
@@ -102,8 +103,7 @@ function hasValidAge(value: unknown): boolean {
 
 function hasValidEmergencyPhone(value: unknown): boolean {
   if (!hasText(value)) return false;
-  const digits = String(value).replace(/\D/g, "");
-  return digits.length === 12;
+  return isValidRequiredAppPhone(String(value));
 }
 
 export function isTrialPlanUser(profile: PaidPlanProfile | null | undefined): boolean {
@@ -158,11 +158,9 @@ export function getPaidOnboardingChecklistStatus(
 
   const healthMissing: string[] = [];
   if (isNotSpecified(profile.in_therapy)) healthMissing.push("Therapy status");
-  if (!hasText(profile.on_medication)) healthMissing.push("Medication status");
   if (triggers.length === 0) healthMissing.push("Triggers & sensitivities (optional)");
 
-  const healthCoreAnswered =
-    !isNotSpecified(profile.in_therapy) && hasText(profile.on_medication);
+  const healthCoreAnswered = !isNotSpecified(profile.in_therapy);
 
   const avatarMissing: string[] = [];
   if (!hasCompanionSelected(profile.selected_avatar)) avatarMissing.push("AI companion");

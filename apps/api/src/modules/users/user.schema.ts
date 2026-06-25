@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  isValidOptionalAppPhone,
+  isValidRequiredAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  REQUIRED_PHONE_VALIDATION_MESSAGE,
+} from '@meetezri/shared';
 
 /** Age as years ("24") or date of birth "YYYY-MM-DD" (stored in `profiles.age`). */
 function ageFromIsoDob(val: string): number | null {
@@ -39,12 +45,12 @@ const ageSchemaCoerced = z.preprocess(
 const emergencyPhoneSchema = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+\d{12}$/.test(value), 'Emergency contact phone must include country code and exactly 12 digits total');
+  .refine((value) => isValidRequiredAppPhone(value), REQUIRED_PHONE_VALIDATION_MESSAGE);
 
 const optionalPhoneSchema = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+\d{12}$/.test(value), 'Phone must include country code and exactly 12 digits total');
+  .refine((value) => isValidOptionalAppPhone(value), OPTIONAL_PHONE_VALIDATION_MESSAGE);
 
 /** Treat "" as omitted so partial clears don't fail validation. */
 const optionalEmergencyPhoneSchema = z.preprocess(

@@ -23,7 +23,6 @@ import {
   GitBranch,
   Bell,
   ShieldCheck,
-  Stethoscope,
   UsersRound,
   Check,
   type LucideIcon,
@@ -57,7 +56,6 @@ const PROGRESS_PERCENT = (CURRENT_STEP / TOTAL_STEPS) * 100;
 
 const healthBackgroundSchema = z.object({
   inTherapy: z.string().optional(),
-  onMedication: z.string().optional(),
   selectedTriggers: z.array(z.string()).default([]),
 });
 
@@ -71,17 +69,6 @@ const glassCardClass = cn(
 const therapyOptions = [
   { value: "yes", label: "Yes", subtext: "I am", icon: Heart },
   { value: "no", label: "No", subtext: "I am not", icon: User },
-  {
-    value: "prefer-not-to-say",
-    label: "Prefer Not To Say",
-    subtext: "I'd rather not share",
-    icon: Leaf,
-  },
-] as const;
-
-const medicationOptions = [
-  { value: "yes", label: "Yes", subtext: "I am", icon: Stethoscope },
-  { value: "no", label: "No", subtext: "I am not", icon: ShieldCheck },
   {
     value: "prefer-not-to-say",
     label: "Prefer Not To Say",
@@ -410,7 +397,7 @@ function HealthBackgroundTopBar({ progressPercent, onBack }: HealthBackgroundTop
 }
 
 interface TherapyOptionButtonProps {
-  option: (typeof therapyOptions)[number] | (typeof medicationOptions)[number];
+  option: (typeof therapyOptions)[number];
   isSelected: boolean;
   onSelect: () => void;
 }
@@ -518,7 +505,6 @@ export function OnboardingHealthBackground() {
     resolver: zodResolver(healthBackgroundSchema),
     defaultValues: {
       inTherapy: data.inTherapy || "",
-      onMedication: data.onMedication || "",
       selectedTriggers: data.selectedTriggers || [],
     },
   });
@@ -532,7 +518,6 @@ export function OnboardingHealthBackground() {
         : data.selectedTriggers || [];
     form.reset({
       inTherapy: profile.in_therapy && profile.in_therapy !== "Not specified" ? profile.in_therapy : "",
-      onMedication: profile.on_medication || "",
       selectedTriggers: triggers,
     });
   }, [resume, profile, data.selectedTriggers, form]);
@@ -543,12 +528,10 @@ export function OnboardingHealthBackground() {
       await api.updateProfile({
         selected_triggers: values.selectedTriggers ?? [],
         ...(values.inTherapy?.trim() ? { in_therapy: values.inTherapy.trim() } : {}),
-        ...(values.onMedication?.trim() ? { on_medication: values.onMedication.trim() } : {}),
       });
       await refreshProfile();
       updateData({
         inTherapy: values.inTherapy,
-        onMedication: values.onMedication,
         selectedTriggers: values.selectedTriggers,
       });
       finishStep("/onboarding/avatar-preferences");
@@ -681,40 +664,6 @@ export function OnboardingHealthBackground() {
                       )}
                     />
                   </div>
-                </div>
-              </motion.section>
-
-              <motion.section
-                className="w-full"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.13, duration: 0.55, ease: "easeOut" }}
-              >
-                <div className={cn(glassCardClass, "px-5 py-7 sm:px-9 sm:py-9")}>
-                  <FormField
-                    control={form.control}
-                    name="onMedication"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <p className="mb-5 text-center text-[clamp(1rem,2vw,1.12rem)] font-medium text-white/90 sm:text-left">
-                          Are you currently taking any medication?
-                        </p>
-                        <FormControl>
-                          <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
-                            {medicationOptions.map((option) => (
-                              <TherapyOptionButton
-                                key={option.value}
-                                option={option}
-                                isSelected={field.value === option.value}
-                                onSelect={() => field.onChange(option.value)}
-                              />
-                            ))}
-                          </div>
-                        </FormControl>
-                        <FormMessage className="mt-3 text-center text-[13px] text-[#ff8ab8] sm:text-left" />
-                      </FormItem>
-                    )}
-                  />
                 </div>
               </motion.section>
 

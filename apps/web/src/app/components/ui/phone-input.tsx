@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from "./popover"
 import { Input } from "./input"
+import { getMaxLocalDigitsForDialCode } from "@meetezri/shared"
 
 const countries = [
   { value: "+1", label: "United States (+1)", code: "US", flag: "🇺🇸" },
@@ -103,12 +104,8 @@ export interface PhoneInputProps {
   commandEmptyClassName?: string
 }
 
-const MAX_PHONE_DIGITS = 12
-
-const countDigits = (value: string) => (value.match(/\d/g) || []).length
-
 const limitLocalPhoneDigits = (value: string, countryCode: string) => {
-  const allowedDigits = Math.max(0, MAX_PHONE_DIGITS - countDigits(countryCode))
+  const allowedDigits = getMaxLocalDigitsForDialCode(countryCode)
   let localDigits = 0
   let limitedValue = ""
 

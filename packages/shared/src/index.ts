@@ -68,6 +68,18 @@ export const UserProfileSchema = z.object({
 });
 
 export {
+  PHONE_COUNTRY_RULES,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  REQUIRED_PHONE_VALIDATION_MESSAGE,
+  countPhoneDigits,
+  getMaxLocalDigitsForDialCode,
+  isValidOptionalAppPhone,
+  isValidRequiredAppPhone,
+  matchPhoneCountryRule,
+  type PhoneCountryRule,
+} from './phoneValidation';
+
+export {
   CRISIS_HOTLINES_BY_COUNTRY,
   DIAL_CODE_TO_COUNTRY,
   SUPPORTED_CRISIS_COUNTRY_CODES,
