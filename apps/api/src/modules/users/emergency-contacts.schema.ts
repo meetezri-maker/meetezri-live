@@ -1,10 +1,14 @@
 import { z } from 'zod';
+import {
+  isValidOptionalAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+} from '@meetezri/shared';
 
 const emergencyContactPhoneInner = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+\d{12}$/.test(value), {
-    message: 'Phone must include country code and exactly 12 digits total',
+  .refine((value) => isValidOptionalAppPhone(value), {
+    message: OPTIONAL_PHONE_VALIDATION_MESSAGE,
   });
 
 /** Same rules as profile `phone`: omit or include country code with exactly 12 digits. */

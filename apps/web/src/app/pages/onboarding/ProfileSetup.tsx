@@ -30,6 +30,10 @@ import {
 import { PhoneInput } from "../../components/ui/phone-input";
 import { Input } from "../../components/ui/input";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
+import {
+  isValidOptionalAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+} from "@meetezri/shared";
 import { cn } from "@/lib/utils";
 import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 import { ONBOARDING_PROFILE_SETUP_BG } from "@/lib/solace/referenceImagery";
@@ -41,8 +45,6 @@ const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 2;
 const TOTAL_STEPS = 8;
 const PROGRESS_PERCENT = (CURRENT_STEP / TOTAL_STEPS) * 100;
-
-const countPhoneDigits = (value: string) => (value.match(/\d/g) || []).length;
 
 const profileSetupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -57,12 +59,9 @@ const profileSetupSchema = z.object({
         if (!t) return true;
         return t.startsWith("+");
       }, { message: "Select a country from the dropdown first" })
-      .refine((v) => {
-        const t = v.trim();
-        if (!t) return true;
-        const n = countPhoneDigits(t);
-        return n === 12;
-      }, { message: "Enter exactly 12 digits total (country code + number)" }),
+      .refine((v) => isValidOptionalAppPhone(v), {
+        message: OPTIONAL_PHONE_VALIDATION_MESSAGE,
+      }),
   ),
   age: z.string().refine((val) => {
     const num = parseInt(val);

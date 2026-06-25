@@ -56,6 +56,10 @@ import {
   modalSecondaryButton,
   modalTitle,
 } from "@/lib/modalTheme";
+import {
+  isValidOptionalAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+} from "@meetezri/shared";
 
 const GRAD =
   "linear-gradient(135deg, #7c3aed 0%, #c026d3 48%, #a855f7 100%)";
@@ -177,9 +181,6 @@ const formatTimezoneOptionLabel = (timezone: string) => {
   }
 };
 
-const MAX_PHONE_DIGITS = 12;
-const countPhoneDigits = (v: string) => (v.match(/\d/g) || []).length;
-
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
@@ -188,7 +189,7 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal(""))
     .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
+    .refine((v) => !v || isValidOptionalAppPhone(v), OPTIONAL_PHONE_VALIDATION_MESSAGE),
   birthday: z
     .string()
     .optional()
@@ -214,7 +215,7 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal(""))
     .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
+    .refine((v) => !v || isValidOptionalAppPhone(v), OPTIONAL_PHONE_VALIDATION_MESSAGE),
   emergency_contact_relationship: z.string().optional(),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;

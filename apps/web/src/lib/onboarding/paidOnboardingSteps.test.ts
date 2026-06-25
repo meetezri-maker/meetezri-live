@@ -67,7 +67,7 @@ describe("getPaidOnboardingChecklistStatus", () => {
         selected_avatar: "Maya Chen",
         selected_environment: "twilight",
         emergency_contact_name: "Jamie Morgan",
-        emergency_contact_phone: "+112345678901",
+        emergency_contact_phone: "+14155552671",
         emergency_contact_relationship: "Parent",
         permissions: { camera: true, microphone: true },
         notification_preferences: { dailyCheckIn: true, sessionReminders: true },

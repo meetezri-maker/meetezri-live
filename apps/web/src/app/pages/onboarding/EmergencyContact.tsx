@@ -48,6 +48,10 @@ import {
 } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
+import {
+  isValidRequiredAppPhone,
+  REQUIRED_PHONE_VALIDATION_MESSAGE,
+} from "@meetezri/shared";
 import { ONBOARDING_EMERGENCY_CONTACT_BG } from "@/lib/solace/referenceImagery";
 import { cn } from "@/lib/utils";
 import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
@@ -68,8 +72,6 @@ const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 7;
 const TOTAL_STEPS = 8;
 const PROGRESS_PERCENT = (CURRENT_STEP / TOTAL_STEPS) * 100;
-
-const countPhoneDigits = (value: string) => (value.match(/\d/g) || []).length;
 
 const RELATIONSHIP_PRESETS = [
   { value: "parent", label: "Parent" },
@@ -105,15 +107,9 @@ const emergencyContactSchema = z
       .refine((v) => v.startsWith("+"), {
         message: "Select a country from the dropdown first",
       })
-      .refine(
-        (v) => {
-          const n = countPhoneDigits(v);
-          return n === 12;
-        },
-        {
-          message: "Enter exactly 12 digits total (country code + number)",
-        },
-      ),
+      .refine((v) => isValidRequiredAppPhone(v), {
+        message: REQUIRED_PHONE_VALIDATION_MESSAGE,
+      }),
     emergencyRelationship: z.string().trim().min(1, "Please select a relationship"),
     emergencyRelationshipCustom: z.string().trim().optional(),
   })
@@ -212,7 +208,7 @@ const onboardingSelectContentClass = cn(
 );
 
 const phoneFieldHint =
-  "Select country code, then number (exactly 12 digits including code).";
+  "Select country code, then enter the local number for that country.";
 
 type CrisisDisplayItem = {
   icon: typeof Phone;
