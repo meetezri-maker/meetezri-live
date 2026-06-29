@@ -113,3 +113,6 @@ export const OPTIONAL_PHONE_VALIDATION_MESSAGE =
 
 export const REQUIRED_PHONE_VALIDATION_MESSAGE =
   'Enter a valid phone number with country code for the selected country';
+
+export const PHONE_INPUT_HELPER_TEXT =
+  'Select your country from the dropdown, then enter your local number.';

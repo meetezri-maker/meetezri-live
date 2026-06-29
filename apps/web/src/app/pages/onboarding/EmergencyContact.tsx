@@ -50,6 +50,7 @@ import { Button } from "../../components/ui/button";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import {
   isValidRequiredAppPhone,
+  PHONE_INPUT_HELPER_TEXT,
   REQUIRED_PHONE_VALIDATION_MESSAGE,
 } from "@meetezri/shared";
 import { ONBOARDING_EMERGENCY_CONTACT_BG } from "@/lib/solace/referenceImagery";
@@ -208,7 +209,7 @@ const onboardingSelectContentClass = cn(
 );
 
 const phoneFieldHint =
-  "Select country code, then enter the local number for that country.";
+  PHONE_INPUT_HELPER_TEXT;
 
 type CrisisDisplayItem = {
   icon: typeof Phone;

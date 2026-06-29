@@ -38,6 +38,10 @@ import {
   isValidOptionalAppPhone,
 } from "@/lib/normalizeStoredPhone";
 import {
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  PHONE_INPUT_HELPER_TEXT,
+} from "@meetezri/shared";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -299,9 +303,7 @@ export function EmergencyContacts() {
       return;
     }
     if (!isValidOptionalAppPhone(formData.phone)) {
-      toast.error(
-        "Enter a valid phone with country code and exactly 12 digits total, or leave blank"
-      );
+      toast.error(OPTIONAL_PHONE_VALIDATION_MESSAGE);
       return;
     }
 
@@ -352,9 +354,7 @@ export function EmergencyContacts() {
       return;
     }
     if (!isValidOptionalAppPhone(formData.phone)) {
-      toast.error(
-        "Enter a valid phone with country code and exactly 12 digits total, or leave blank"
-      );
+      toast.error(OPTIONAL_PHONE_VALIDATION_MESSAGE);
       return;
     }
 
@@ -975,7 +975,7 @@ export function EmergencyContacts() {
                     Phone number
                   </label>
                   <p className={emergencyModalFieldHint}>
-                    Choose country code, then number (exactly 12 digits including code).
+                    {PHONE_INPUT_HELPER_TEXT}
                   </p>
                   <PhoneInput
                     value={formData.phone}

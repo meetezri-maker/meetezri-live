@@ -153,28 +153,30 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    // Force correct settings for debugging - STRICTLY HARDCODED
-    const port = 587; 
-    const isSecure = false;
+    const port = Number.parseInt(process.env.SMTP_PORT || '587', 10);
+    const isSecure =
+      process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1' || port === 465;
 
-    console.log(`[DEBUG] EmailService Config: Host=${process.env.SMTP_HOST} Port=${port} Secure=${isSecure} User=${process.env.SMTP_USER}`);
+    console.log(
+      `[DEBUG] EmailService Config: Host=${process.env.SMTP_HOST} Port=${port} Secure=${isSecure} User=${process.env.SMTP_USER}`
+    );
 
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'mail.marqnetworks.com',
-      port: port,
+      host: process.env.SMTP_HOST || 'smtp.resend.com',
+      port,
       secure: isSecure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
       },
       connectionTimeout: 30000,
       greetingTimeout: 30000,
       socketTimeout: 30000,
-      debug: true, // Enable debug
-      logger: true // Enable logger
+      debug: true,
+      logger: true,
     } as nodemailer.TransportOptions);
   }
 
