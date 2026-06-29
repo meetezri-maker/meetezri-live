@@ -1020,7 +1020,7 @@ export function SessionLobby() {
               onClick={() => setShowMinutesPicker(false)}
               className={cn(
                 modalOverlay,
-                "left-0 top-0 h-[100dvh] w-screen items-end pb-[5.5rem] sm:items-center sm:pb-4",
+                "left-0 top-0 h-[100dvh] w-screen items-center justify-center px-4 pb-[5.5rem] pt-4 sm:pb-4",
               )}
             >
               <motion.div
@@ -1030,7 +1030,7 @@ export function SessionLobby() {
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
                   modalPanel,
-                  "flex max-h-[calc(100dvh-6.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] sm:max-h-none",
+                  "flex max-h-[calc(100dvh-7rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] sm:max-h-[calc(100dvh-2rem)]",
                 )}
                 role="dialog"
                 aria-modal="true"
