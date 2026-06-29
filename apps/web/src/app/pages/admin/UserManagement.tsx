@@ -238,7 +238,7 @@ export function UserManagement() {
     }
   };
 
-  const handleAction = async (userId: string, action: 'suspend' | 'activate' | 'delete' | 'email') => {
+  const handleAction = async (userId: string, action: 'suspend' | 'activate' | 'deactivate' | 'delete' | 'email') => {
     const onConfirm = async () => {
       try {
         if (action === 'delete') {
@@ -249,12 +249,19 @@ export function UserManagement() {
           refreshCounts();
         } else if (action === 'suspend') {
           await api.admin.updateUser(userId, { status: 'suspended' });
-          setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'suspended' } : u)));
+          await fetchUsers(debouncedSearch || undefined);
           refreshCounts();
+          toast.success('User suspended');
         } else if (action === 'activate') {
           await api.admin.updateUser(userId, { status: 'active' });
-          setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'active' } : u)));
+          await fetchUsers(debouncedSearch || undefined);
           refreshCounts();
+          toast.success('User activated');
+        } else if (action === 'deactivate') {
+          await api.admin.updateUser(userId, { status: 'inactive' });
+          await fetchUsers(debouncedSearch || undefined);
+          refreshCounts();
+          toast.success('User marked inactive');
         } else if (action === 'email') {
           const user = users.find((u) => u.id === userId);
           if (!user) {
@@ -286,10 +293,12 @@ export function UserManagement() {
 
     setConfirmationModal({
       isOpen: true,
-      title: `Confirm ${action}`,
+      title: `Confirm ${action === 'deactivate' ? 'mark inactive' : action}`,
       message:
         action === "email"
           ? "Are you sure you want to send an email to this user?"
+          : action === "deactivate"
+            ? "Are you sure you want to mark this user as inactive?"
           : `Are you sure you want to ${action} this user?`,
       onConfirm,
     });
@@ -526,22 +535,16 @@ export function UserManagement() {
           await Promise.all(
             selectedUsers.map((userId) => api.admin.updateUser(userId, { status: "active" }))
           );
-          setUsers(
-            users.map((u) =>
-              selectedUsers.includes(u.id) ? { ...u, status: "active" } : u
-            )
-          );
+          await fetchUsers(debouncedSearch || undefined);
           refreshCounts();
+          toast.success(`Activated ${selectedUsers.length} user(s)`);
         } else if (action === "suspend") {
           await Promise.all(
             selectedUsers.map((userId) => api.admin.updateUser(userId, { status: "suspended" }))
           );
-          setUsers(
-            users.map((u) =>
-              selectedUsers.includes(u.id) ? { ...u, status: "suspended" } : u
-            )
-          );
+          await fetchUsers(debouncedSearch || undefined);
           refreshCounts();
+          toast.success(`Suspended ${selectedUsers.length} user(s)`);
         } else if (action === "email") {
           const usersToEmail = users.filter((u) => selectedUsers.includes(u.id));
           await Promise.all(
@@ -1145,16 +1148,23 @@ export function UserManagement() {
                                 Set Pro
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {user.status === 'active' ? (
-                                <DropdownMenuItem onClick={() => handleAction(user.id, 'suspend')} className="text-red-600">
-                                  <Ban className="w-4 h-4 mr-2" />
-                                  Suspend User
-                                </DropdownMenuItem>
-                              ) : (
+                              {(user.status === 'suspended' || user.status === 'inactive') && (
                                 <DropdownMenuItem onClick={() => handleAction(user.id, 'activate')} className="text-green-600">
                                   <CheckCircle2 className="w-4 h-4 mr-2" />
                                   Activate User
                                 </DropdownMenuItem>
+                              )}
+                              {user.status === 'active' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => handleAction(user.id, 'deactivate')} className="text-amber-600">
+                                    <UserX className="w-4 h-4 mr-2" />
+                                    Mark Inactive
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleAction(user.id, 'suspend')} className="text-red-600">
+                                    <Ban className="w-4 h-4 mr-2" />
+                                    Suspend User
+                                  </DropdownMenuItem>
+                                </>
                               )}
                               <DropdownMenuItem onClick={() => handleAction(user.id, 'delete')} className="text-red-600">
                                 <Trash2 className="w-4 h-4 mr-2" />

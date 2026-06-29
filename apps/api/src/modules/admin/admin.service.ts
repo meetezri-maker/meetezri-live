@@ -821,6 +821,16 @@ export async function getRecentActivity() {
   return result;
 }
 
+/** Admin user list status — uses `profiles.account_status` + `role`, not session counts. */
+function mapProfileToAdminUserStatus(p: {
+  role: string | null;
+  account_status: string | null;
+}): 'active' | 'suspended' | 'inactive' {
+  if (p.role === 'suspended') return 'suspended';
+  if (p.account_status === 'inactive') return 'inactive';
+  return 'active';
+}
+
 export async function getUserStatusCounts(): Promise<{
   total: number;
   active: number;
@@ -828,22 +838,28 @@ export async function getUserStatusCounts(): Promise<{
   inactive: number;
 }> {
   const rows = await prisma.$queryRaw<
-    { total: bigint; suspended: bigint; active: bigint }[]
+    { total: bigint; suspended: bigint; inactive: bigint; active: bigint }[]
   >`
     SELECT
-      COUNT(*)::bigint                                                                          AS total,
-      COUNT(*) FILTER (WHERE role = 'suspended')::bigint                                       AS suspended,
+      COUNT(*)::bigint AS total,
+      COUNT(*) FILTER (WHERE role = 'suspended')::bigint AS suspended,
       COUNT(*) FILTER (
         WHERE role IS DISTINCT FROM 'suspended'
-          AND id IN (SELECT DISTINCT user_id FROM app_sessions WHERE ended_at IS NOT NULL)
+          AND account_status = 'inactive'
+      )::bigint AS inactive,
+      COUNT(*) FILTER (
+        WHERE role IS DISTINCT FROM 'suspended'
+          AND COALESCE(account_status, 'active') <> 'inactive'
       )::bigint AS active
     FROM profiles
   `;
-  const r = rows[0] ?? { total: 0n, suspended: 0n, active: 0n };
-  const total = Number(r.total);
-  const suspended = Number(r.suspended);
-  const active = Number(r.active);
-  return { total, active, suspended, inactive: total - active - suspended };
+  const r = rows[0] ?? { total: 0n, suspended: 0n, inactive: 0n, active: 0n };
+  return {
+    total: Number(r.total),
+    active: Number(r.active),
+    suspended: Number(r.suspended),
+    inactive: Number(r.inactive),
+  };
 }
 
 export async function getAllUsers(page: number = 1, limit: number = 20, search?: string) {
@@ -881,6 +897,7 @@ export async function getAllUsers(page: number = 1, limit: number = 20, search?:
       created_at: true,
       updated_at: true,
       role: true,
+      account_status: true,
       signup_type: true,
       signup_source: true,
       _count: {
@@ -946,13 +963,11 @@ export async function getAllUsers(page: number = 1, limit: number = 20, search?:
     }
 
     const sessionCount = user._count.app_sessions || 0;
-    
-    let status = 'inactive';
-    if (user.role === 'suspended') {
-      status = 'suspended';
-    } else if (sessionCount > 0) {
-      status = 'active';
-    }
+
+    const status = mapProfileToAdminUserStatus({
+      role: user.role,
+      account_status: user.account_status,
+    });
 
     return {
       id: user.id,
@@ -1005,12 +1020,10 @@ export async function getUserById(id: string) {
 
   if (!user) return null;
 
-  let status = 'inactive';
-  if (user.role === 'suspended') {
-    status = 'suspended';
-  } else if (user._count.app_sessions > 0) {
-    status = 'active';
-  }
+  const status = mapProfileToAdminUserStatus({
+    role: user.role,
+    account_status: user.account_status,
+  });
 
   const subscription = user.subscriptions[0]?.plan_type || 'trial';
 
@@ -1232,15 +1245,22 @@ export async function updateUser(
   if (data.status && !adminRoles.includes(existing.role || '')) {
     if (data.status === 'suspended') {
       updateData.role = 'suspended';
+      updateData.account_status = 'active';
     }
     if (data.status === 'active' && existing.role === 'suspended') {
       updateData.role = 'user';
     }
     if (data.status === 'inactive') {
       updateData.account_status = 'inactive';
+      if (existing.role === 'suspended') {
+        updateData.role = 'user';
+      }
     }
     if (data.status === 'active') {
       updateData.account_status = 'active';
+      if (existing.role === 'suspended') {
+        updateData.role = 'user';
+      }
     }
   }
 
