@@ -22,6 +22,11 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { PhoneInput } from "../../components/ui/phone-input";
 import { normalizeStoredPhoneForInput, isValidOptionalAppPhone } from "@/lib/normalizeStoredPhone";
+import {
+  isValidRequiredAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  PHONE_INPUT_HELPER_TEXT,
+} from "@meetezri/shared";
 
 type Companion = {
   id: string;
@@ -255,8 +260,8 @@ export function CompanionManagement() {
     if (form.license.trim() && !isValidRequiredLicense(form.license)) errors.license = "Use format like LCSW-12345";
     if (!form.phone.trim()) {
       errors.phone = "Phone is required";
-    } else if (!isValidOptionalAppPhone(form.phone)) {
-      errors.phone = "Enter a valid phone with country code and exactly 12 digits";
+    } else if (!isValidRequiredAppPhone(form.phone)) {
+      errors.phone = OPTIONAL_PHONE_VALIDATION_MESSAGE;
     }
     if (!form.specializations) errors.specializations = "Select a specialization";
     if (!form.language) errors.language = "Select a language";
@@ -318,7 +323,7 @@ export function CompanionManagement() {
       return;
     }
     if (!isValidOptionalAppPhone(editForm.phone)) {
-      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
+      toast.error(OPTIONAL_PHONE_VALIDATION_MESSAGE);
       return;
     }
     setSaving(true);
@@ -770,7 +775,7 @@ export function CompanionManagement() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
+                    <p className="text-xs text-gray-500 mb-1.5">{PHONE_INPUT_HELPER_TEXT}</p>
                     <PhoneInput
                       value={createForm.phone}
                       onChange={(v) => {
@@ -989,7 +994,7 @@ export function CompanionManagement() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
+                    <p className="text-xs text-gray-500 mb-1.5">{PHONE_INPUT_HELPER_TEXT}</p>
                     <PhoneInput
                       value={editForm.phone}
                       onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}

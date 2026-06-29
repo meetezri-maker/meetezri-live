@@ -44,6 +44,11 @@ import { PhoneInput } from "@/app/components/ui/phone-input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/app/components/ui/input-otp";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import {
+  isValidOptionalAppPhone,
+  OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  PHONE_INPUT_HELPER_TEXT,
+} from "@meetezri/shared";
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -1074,6 +1079,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
         }
       }
 
+      if (!isValidOptionalAppPhone(profileData.phone)) {
+        toast.error(OPTIONAL_PHONE_VALIDATION_MESSAGE);
+        return;
+      }
+
       const patch: Record<string, unknown> = {
         full_name,
         phone: profileData.phone,
@@ -1415,7 +1425,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   Phone number
                 </label>
                 <p className={cn("mb-2", accountTextSubtle)}>
-                  Country code and number (exactly 12 digits including code).
+                  {PHONE_INPUT_HELPER_TEXT}
                 </p>
                 <PhoneInput
                   value={profileData.phone}

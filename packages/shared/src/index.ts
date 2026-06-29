@@ -70,6 +70,7 @@ export const UserProfileSchema = z.object({
 export {
   PHONE_COUNTRY_RULES,
   OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  PHONE_INPUT_HELPER_TEXT,
   REQUIRED_PHONE_VALIDATION_MESSAGE,
   countPhoneDigits,
   getMaxLocalDigitsForDialCode,

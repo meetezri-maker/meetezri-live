@@ -49,6 +49,7 @@ import {
   FormMessage,
 } from "@/app/components/ui/form";
 import { PhoneInput } from "@/app/components/ui/phone-input";
+import { PHONE_INPUT_HELPER_TEXT } from "@meetezri/shared";
 import {
   Command,
   CommandEmpty,
@@ -818,8 +819,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                             <div className="space-y-2 rounded-2xl border border-violet-400/25 bg-violet-500/[0.08] px-3.5 py-3">
                               <p className={`flex items-center gap-2 ${profileFieldLabel}`}>
                                 <Phone className={profileIconVioletSm} />
-                                Phone
+                                Phone <span className="text-violet-300/50 font-normal">(optional)</span>
                               </p>
+                              <p className="text-xs text-violet-300/45">{PHONE_INPUT_HELPER_TEXT}</p>
                               <PhoneInput
                                 value={field.value ?? ""}
                                 onChange={field.onChange}
@@ -1111,21 +1113,24 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
                             <p className={profileEmergencyLabel}>Phone</p>
                             {isEditing ? (
-                              <PhoneInput
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                disabled={isSaving}
-                                placeholder="Contact phone"
-                                className="w-full min-w-0"
-                                buttonClassName={profileEmergencyPhoneButton}
-                                inputClassName={profileEmergencyPhoneInput}
-                                popoverClassName={profileDropdownPopover}
-                                commandClassName={profileDropdownCommand}
-                                commandInputClassName={profileDropdownCommandInput}
-                                commandListClassName={profileDropdownCommandList}
-                                commandItemClassName={profileDropdownCommandItem}
-                                commandEmptyClassName={profileDropdownCommandEmpty}
-                              />
+                              <>
+                                <p className="mb-2 text-xs text-rose-200/45">{PHONE_INPUT_HELPER_TEXT}</p>
+                                <PhoneInput
+                                  value={field.value ?? ""}
+                                  onChange={field.onChange}
+                                  disabled={isSaving}
+                                  placeholder="Contact phone"
+                                  className="w-full min-w-0"
+                                  buttonClassName={profileEmergencyPhoneButton}
+                                  inputClassName={profileEmergencyPhoneInput}
+                                  popoverClassName={profileDropdownPopover}
+                                  commandClassName={profileDropdownCommand}
+                                  commandInputClassName={profileDropdownCommandInput}
+                                  commandListClassName={profileDropdownCommandList}
+                                  commandItemClassName={profileDropdownCommandItem}
+                                  commandEmptyClassName={profileDropdownCommandEmpty}
+                                />
+                              </>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <Phone className={profileIconRoseSm} />

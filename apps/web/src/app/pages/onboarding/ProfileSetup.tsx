@@ -33,6 +33,7 @@ import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import {
   isValidOptionalAppPhone,
   OPTIONAL_PHONE_VALIDATION_MESSAGE,
+  PHONE_INPUT_HELPER_TEXT,
 } from "@meetezri/shared";
 import { cn } from "@/lib/utils";
 import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
@@ -655,7 +656,7 @@ export function OnboardingProfileSetup() {
                       <FormItem>
                         <FormLabel className={onboardingLabelClass}>Phone (optional)</FormLabel>
                         <p className="-mt-0.5 mb-2 text-xs text-violet-200/48">
-                          Select your country from the dropdown, then enter your local number.
+                          {PHONE_INPUT_HELPER_TEXT}
                         </p>
                         <FormControl>
                           <PhoneInput

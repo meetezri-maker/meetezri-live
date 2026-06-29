@@ -11,7 +11,7 @@ const emergencyContactPhoneInner = z
     message: OPTIONAL_PHONE_VALIDATION_MESSAGE,
   });
 
-/** Same rules as profile `phone`: omit or include country code with exactly 12 digits. */
+/** Same rules as profile `phone`: omit or validate by selected country dial code. */
 const emergencyContactPhoneField = z.preprocess(
   (val) => (val === '' || val === null || val === undefined ? undefined : val),
   emergencyContactPhoneInner.optional()

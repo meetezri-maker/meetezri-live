@@ -26,6 +26,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
+import {
+  isValidRequiredAppPhone,
+  REQUIRED_PHONE_VALIDATION_MESSAGE,
+} from "@meetezri/shared";
 import { storePendingVerification } from "@/lib/pendingVerification";
 import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import {
@@ -310,10 +314,9 @@ export function Signup() {
   const [trialDetailsLoading, setTrialDetailsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const isExactContactPhone = (value: string) => /^\+\d{12}$/.test(value.trim());
   const contactValid =
     trialContact.name.trim().length >= 2 &&
-    isExactContactPhone(trialContact.phone) &&
+    isValidRequiredAppPhone(trialContact.phone) &&
     trialContact.relationship.trim().length >= 2;
 
   const form = useForm<SignupFormValues>({
@@ -815,9 +818,9 @@ export function Signup() {
                             }
                             placeholder="Phone number"
                           />
-                          {trialContact.phone && !isExactContactPhone(trialContact.phone) && (
+                          {trialContact.phone && !isValidRequiredAppPhone(trialContact.phone) && (
                             <p className="mt-1 text-xs text-[#fda4af]">
-                              Use country code and exactly 12 digits total
+                              {REQUIRED_PHONE_VALIDATION_MESSAGE}
                             </p>
                           )}
                         </div>
@@ -887,8 +890,8 @@ export function Signup() {
                                 const errors = [];
                                 if (trialContact.name.trim().length < 2)
                                   errors.push("name (minimum 2 characters)");
-                                if (!isExactContactPhone(trialContact.phone))
-                                  errors.push("phone (country code + exactly 12 digits)");
+                                if (!isValidRequiredAppPhone(trialContact.phone))
+                                  errors.push(`phone (${REQUIRED_PHONE_VALIDATION_MESSAGE.toLowerCase()})`);
                                 if (trialContact.relationship.trim().length < 2)
                                   errors.push("relationship (minimum 2 characters)");
                                 toast.error(
