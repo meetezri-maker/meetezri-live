@@ -382,7 +382,7 @@ export function SafetyInsights() {
 
   if (!dataReady) {
     return (
-      <motion.div className={wellnessPlanPageAtmosphere}>
+      <motion.div className={safetyInsightsPageAtmosphere}>
         <motion.div className={wellnessPlanPageGlowTop} aria-hidden />
         <div className="relative z-10 flex min-h-[50vh] flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-fuchsia-300/60" aria-label="Loading" />

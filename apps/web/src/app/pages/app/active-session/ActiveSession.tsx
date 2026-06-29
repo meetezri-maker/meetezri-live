@@ -336,9 +336,13 @@ export function ActiveSession() {
     () =>
       resolveEzriWsVoiceForCompanion(
         companionAvatarLabel,
-        typeof config?.voice === "string" ? config.voice : undefined
+        typeof config?.voice === "string"
+          ? config.voice
+          : typeof profile?.selected_voice === "string"
+            ? profile.selected_voice
+            : undefined,
       ),
-    [companionAvatarLabel, config?.voice]
+    [companionAvatarLabel, config?.voice, profile?.selected_voice],
   );
 
   const ezriConfig = useMemo(() => {
@@ -4811,7 +4815,7 @@ export function ActiveSession() {
       isSoundOff={isSoundOff}
       onToggleSoundOff={handleToggleSoundOff}
       onShowEndConfirm={handleShowEndConfirm}
-      pipOpen={Boolean(stream)}
+      pipOpen={Boolean(stream) && !isCameraOff}
       pipPos={pipPos}
       videoRef={videoRef}
       onPipPointerDown={handlePipPointerDown}
