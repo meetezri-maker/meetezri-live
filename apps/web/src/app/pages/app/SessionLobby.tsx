@@ -41,6 +41,9 @@ import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 import { cn } from "@/lib/utils";
 import {
+  resolveVoiceLabelForCompanion,
+} from "@/lib/ezri/voiceForCompanion";
+import {
   modalBadge,
   modalCloseButton,
   modalEmphasisText,
@@ -204,6 +207,17 @@ export function SessionLobby() {
       setTempSelectedEnvironment(profile.selected_environment);
     }
   }, [profile?.selected_environment]);
+
+  /** Keep lobby voice aligned with avatar gender (profile often still has default Voice 1). */
+  useEffect(() => {
+    const corrected = resolveVoiceLabelForCompanion(
+      selectedAvatar,
+      selectedVoice,
+    );
+    if (corrected === selectedVoice) return;
+    setSelectedVoice(corrected);
+    setTempSelectedVoice(corrected);
+  }, [selectedAvatar, selectedVoice]);
 
   useEffect(() => {
     if (!companionSessionUses3dModel(profile?.selected_avatar)) return;
@@ -483,6 +497,10 @@ export function SessionLobby() {
     setIsStarting(true);
     try {
       const avatarToUse = opts?.avatarOverride || selectedAvatar;
+      const voiceForSession = resolveVoiceLabelForCompanion(
+        avatarToUse,
+        selectedVoice,
+      );
 
       try {
         const fresh = await api.getCredits({ bypassCache: true });
@@ -505,7 +523,7 @@ export function SessionLobby() {
             type: "instant",
             duration_minutes: selectedDuration,
             config: {
-              voice: selectedVoice,
+              voice: voiceForSession,
               avatar: avatarToUse,
             },
           });
@@ -519,7 +537,7 @@ export function SessionLobby() {
           ? (session as { config?: Record<string, unknown> }).config
           : undefined;
       const mergedConfig = {
-        voice: selectedVoice,
+        voice: voiceForSession,
         avatar: avatarToUse,
         ...(sessionConfig && typeof sessionConfig === "object" ? sessionConfig : {}),
       };
@@ -567,6 +585,10 @@ export function SessionLobby() {
     try {
       const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
       const avatarToUse = scheduleAvatarOverride || selectedAvatar;
+      const voiceForSession = resolveVoiceLabelForCompanion(
+        avatarToUse,
+        selectedVoice,
+      );
       const nextComment = scheduleComment.trim();
       const nextIcon = scheduleIcon.trim();
       if (editingScheduledSessionId) {
@@ -574,7 +596,7 @@ export function SessionLobby() {
           duration_minutes: selectedDuration,
           scheduled_at: scheduledAt,
           config: {
-            voice: selectedVoice,
+            voice: voiceForSession,
             avatar: avatarToUse,
             comment: nextComment || undefined,
             icon: nextIcon || undefined,
@@ -595,7 +617,7 @@ export function SessionLobby() {
           duration_minutes: selectedDuration,
           scheduled_at: scheduledAt,
           config: {
-            voice: selectedVoice,
+            voice: voiceForSession,
             avatar: avatarToUse,
             comment: nextComment || undefined,
             icon: nextIcon || undefined,
@@ -996,52 +1018,70 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowMinutesPicker(false)}
-              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
+              className={cn(
+                modalOverlay,
+                "left-0 top-0 h-[100dvh] w-screen items-end pb-[5.5rem] sm:items-center sm:pb-4",
+              )}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.94 }}
                 onClick={(e) => e.stopPropagation()}
-                className={cn(modalPanel, "max-w-xl rounded-[1.25rem]")}
+                className={cn(
+                  modalPanel,
+                  "flex max-h-[calc(100dvh-6.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] sm:max-h-none",
+                )}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="talk-duration-title"
               >
-                <div className={modalPanelHeader}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                <div className={cn(modalPanelHeader, "shrink-0 px-4 py-3 sm:px-6 sm:py-5")}>
+                  <div className="flex items-start justify-between gap-2 sm:gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
                       <Clock
-                        className="h-5 w-5 shrink-0 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
+                        className="h-4 w-4 shrink-0 text-violet-300 sm:h-5 sm:w-5 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
                         aria-hidden
                       />
-                      <div>
-                        <h2 id="talk-duration-title" className={modalTitle}>
+                      <div className="min-w-0">
+                        <h2
+                          id="talk-duration-title"
+                          className={cn(modalTitle, "text-base sm:text-xl")}
+                        >
                           Choose talk duration
                         </h2>
-                        <p className={modalSubtitle}>Pick how long you want to talk today.</p>
+                        <p className={cn(modalSubtitle, "text-xs sm:text-sm")}>
+                          Pick how long you want to talk today.
+                        </p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setShowMinutesPicker(false)}
-                      className={cn(modalCloseButton, "rounded-full p-2")}
+                      className={cn(modalCloseButton, "shrink-0 rounded-full p-1.5 sm:p-2")}
                       aria-label="Close"
                     >
-                      <X className="h-5 w-5" aria-hidden />
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
                     </button>
                   </div>
                 </div>
 
-                <div className={modalPanelBody}>
-                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div
+                  className={cn(
+                    modalPanelBody,
+                    "space-y-3 overflow-hidden p-4 sm:space-y-5 sm:p-6",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
                     <p className={modalMutedText}>
                       Remaining: <span className={modalEmphasisText}>{minutesAvailable} min</span>
                     </p>
-                    <span className={modalBadge}>Selected: {selectedDuration} min</span>
+                    <span className={cn(modalBadge, "px-2 py-0.5 text-[10px] sm:px-3 sm:py-1 sm:text-xs")}>
+                      Selected: {selectedDuration} min
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {durations.map((duration, index) => {
                       const isDisabled = !!durationDisabled.get(duration);
                       const isSelected =
@@ -1060,18 +1100,23 @@ export function SessionLobby() {
                           disabled={isDisabled}
                           aria-pressed={isSelected}
                           className={cn(
+                            "relative min-h-0 rounded-xl px-2 py-2.5 text-center sm:rounded-2xl sm:p-4 sm:text-left",
                             isDisabled
                               ? modalOptionCardDisabled
                               : isSelected
                                 ? modalOptionCardSelected
-                                : modalOptionCard
+                                : modalOptionCard,
                           )}
                         >
-                          <div className="text-2xl font-semibold">{duration}</div>
-                          <div className={modalOptionCardMeta}>minutes</div>
+                          <div className="text-lg font-semibold leading-none sm:text-2xl">
+                            {duration}
+                          </div>
+                          <div className={cn(modalOptionCardMeta, "mt-0.5 text-[10px] sm:mt-1 sm:text-xs")}>
+                            minutes
+                          </div>
                           {isSelected ? (
                             <Check
-                              className="absolute right-3 top-3 h-4 w-4 text-violet-300 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
+                              className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-violet-300 sm:right-3 sm:top-3 sm:h-4 sm:w-4 [html[data-ezri-theme=light]_&]:text-[#7c3aed]"
                               aria-hidden
                             />
                           ) : null}
@@ -1080,12 +1125,12 @@ export function SessionLobby() {
                     })}
                   </div>
 
-                  <div className={modalInsetPanel}>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <p className={modalSectionTitle}>Custom minutes</p>
-                      <p className={cn(modalLabel, "text-xs")}>1 – {minutesAvailable} min</p>
+                  <div className={cn(modalInsetPanel, "p-3 sm:p-4")}>
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 sm:mb-2">
+                      <p className={cn(modalSectionTitle, "text-xs sm:text-sm")}>Custom minutes</p>
+                      <p className={cn(modalLabel, "text-[10px] sm:text-xs")}>1 – {minutesAvailable} min</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <input
                         type="number"
                         min={1}
@@ -1097,13 +1142,16 @@ export function SessionLobby() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter") applyCustomMinutes();
                         }}
-                        className={cn(modalInput, "h-11 min-w-[120px] max-w-[12rem] sm:w-auto")}
+                        className={cn(
+                          modalInput,
+                          "h-9 min-w-0 flex-1 px-3 py-2 text-sm sm:h-11 sm:min-w-[120px] sm:max-w-[12rem] sm:px-4 sm:py-3",
+                        )}
                         placeholder="e.g. 22"
                       />
                       <Button
                         type="button"
                         variant="outline"
-                        className={cn(modalSecondaryButton, "h-11 flex-none")}
+                        className={cn(modalSecondaryButton, "h-9 flex-none px-3 text-xs sm:h-11 sm:px-4 sm:text-sm")}
                         onClick={applyCustomMinutes}
                         disabled={!isCustomMinutesValid}
                       >
@@ -1111,7 +1159,9 @@ export function SessionLobby() {
                       </Button>
                     </div>
                     {customMinutesInput.trim() !== "" && !isCustomMinutesValid ? (
-                      <p className="mt-2 text-xs text-rose-500">Enter a valid value between 1 and {minutesAvailable}.</p>
+                      <p className="mt-1.5 text-[10px] text-rose-500 sm:mt-2 sm:text-xs">
+                        Enter a valid value between 1 and {minutesAvailable}.
+                      </p>
                     ) : null}
                   </div>
 
@@ -1120,27 +1170,40 @@ export function SessionLobby() {
                     onClick={() => selectFreeFlow()}
                     disabled={minutesAvailable <= 0}
                     aria-pressed={isOnOwnPace}
-                    className={isOnOwnPace ? modalFreeFlowCardSelected : modalFreeFlowCard}
+                    className={cn(
+                      isOnOwnPace ? modalFreeFlowCardSelected : modalFreeFlowCard,
+                      "rounded-xl px-3 py-2 sm:rounded-2xl sm:px-4 sm:py-3",
+                    )}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className={cn("flex items-center gap-2 font-semibold", modalSectionTitle)}>
+                    <div className="flex items-center justify-between gap-2 sm:gap-3">
+                      <span
+                        className={cn(
+                          "flex items-center gap-1.5 text-xs font-semibold sm:gap-2 sm:text-sm",
+                          modalSectionTitle,
+                        )}
+                      >
                         {isOnOwnPace ? (
                           <Check
-                            className="h-4 w-4 text-amber-300 [html[data-ezri-theme=light]_&]:text-[#b45309]"
+                            className="h-3.5 w-3.5 text-amber-300 sm:h-4 sm:w-4 [html[data-ezri-theme=light]_&]:text-[#b45309]"
                             aria-hidden
                           />
                         ) : null}
                         Free flow · use full balance
                       </span>
-                      <span className={modalMutedText}>{minutesAvailable} min</span>
+                      <span className={cn(modalMutedText, "text-xs sm:text-sm")}>
+                        {minutesAvailable} min
+                      </span>
                     </div>
                   </button>
 
-                  <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                  <div className="flex flex-row gap-2 pt-0.5 sm:flex-row sm:justify-end sm:pt-1">
                     <Button
                       type="button"
                       variant="outline"
-                      className={cn(modalSecondaryButton, "flex-none")}
+                      className={cn(
+                        modalSecondaryButton,
+                        "hidden h-10 flex-none px-4 sm:inline-flex sm:h-11",
+                      )}
                       onClick={() => setShowMinutesPicker(false)}
                     >
                       Cancel
@@ -1149,7 +1212,7 @@ export function SessionLobby() {
                       type="button"
                       onClick={() => void handleStartSession()}
                       disabled={sessionLobbyButtonDisabled}
-                      className={cn(modalPrimaryButton, "h-11 px-6")}
+                      className={cn(modalPrimaryButton, "h-10 flex-1 px-4 text-sm sm:h-11 sm:flex-none sm:px-6")}
                     >
                       <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                       Let&apos;s Talk Now
