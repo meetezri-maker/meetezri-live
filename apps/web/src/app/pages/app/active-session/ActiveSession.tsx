@@ -72,6 +72,7 @@ import { CRISIS_KEYWORD_MODAL_ENABLED, EZRI_PCM_BUFFER_SIZE } from "./constants"
 import { useLiveUserSpeechStore } from "./hooks/useLiveUserSpeechStore";
 import { moodEmojiForLabel } from "./utils/moodEmoji";
 import {
+  mergeAssistantSentenceIntoTurn,
   mergeUserTranscriptAppend,
   type TranscriptLine,
   USER_TRANSCRIPT_MERGE_WINDOW_MS,
@@ -504,6 +505,7 @@ export function ActiveSession() {
           src.connect(ctx.destination);
           src.start();
           audioUnlockedRef.current = true;
+          wsSchedulerRef.current?.bindAudioContext(ctx);
           console.log("[Audio] AudioContext unlocked via user gesture, state:", ctx.state);
         }
       } catch (unlockErr) {
@@ -699,6 +701,21 @@ export function ActiveSession() {
   const wsTtsDoneReceivedRef = useRef(false);
   const wsActiveTurnRef = useRef(0);
   const wsAudioSeenTurnRef = useRef(0);
+  /** Ezri_Avatar v2: audio arrives in avatar_data.audio_b64 — reorder by chunk_index. */
+  const wsAudioReorderBufferRef = useRef<Record<number, WsAudioQueueItem>>({});
+  const wsNextExpectedChunkIndexRef = useRef(0);
+  const processWsAudioReorderBufferRef = useRef<() => void>(() => {});
+  /** Merged assistant reply for current WS response (transcription_chunk stream). */
+  const wsAssistantTurnTextRef = useRef("");
+  const wsAssistantTurnIdRef = useRef(-1);
+  /** Monotonic id per assistant TTS response (greeting, reply, comfort phrase). */
+  const wsAssistantReplyIdRef = useRef(0);
+  /** Reply id bound to the last on-screen assistant bubble — new id → new bubble. */
+  const assistantBubbleReplyIdRef = useRef(-1);
+  const prePermissionAssistantBubbleReplyIdRef = useRef(-1);
+  /** True after beginNewAssistantReply until tts_done — avoids double-bump on speaking + chunk. */
+  const assistantReplyStartedRef = useRef(false);
+  const wsLastRawAssistantSentenceRef = useRef("");
   const wsSpeakFallbackTimerRef = useRef<number | null>(null);
   const wsTtsDoneGraceTimerRef = useRef<number | null>(null);
   const wsPendingFallbackTextRef = useRef<string>("");
@@ -712,7 +729,11 @@ export function ActiveSession() {
   const sessionBillingStartedRef = useRef(false);
 
   const TTS_SPEAK_FALLBACK_MS = 1000;
-  const TTS_DONE_GRACE_MS = 500;
+  const TTS_DONE_GRACE_MS = 200;
+  /** After last TTS sample — minimal echo guard; server VAD also filters speaker bleed. */
+  const ECHO_COOLDOWN_MS = 250;
+  /** Barge-in / interrupt — slightly longer than normal end-of-turn cooldown. */
+  const INTERRUPT_ECHO_COOLDOWN_MS = 500;
   const THINKING_STUCK_MS = 45_000;
 
   const clearSpeakFallbackTimer = () => {
@@ -978,7 +999,7 @@ export function ActiveSession() {
 
   /** Pass `delayMs: 0` after barge-in so the mic opens immediately â€” long delays clip the user's first words. */
   const resumeStt = (
-    delayMs = 150,
+    delayMs = 0,
     opts?: { ignoreSpeakingGate?: boolean },
   ) => {
     if (!browserSpeechRecognitionActive) return;
@@ -1049,6 +1070,8 @@ export function ActiveSession() {
     wsScheduledChunkMapRef.current.clear();
     wsChunkClockRef.current = null;
     wsAudioQueueRef.current = [];
+    wsAudioReorderBufferRef.current = {};
+    wsNextExpectedChunkIndexRef.current = 0;
     wsIsPlaybackActiveRef.current = false;
     wsTtsDoneReceivedRef.current = true; // treat as done so we don't get stuck waiting
     wsPendingFallbackTextRef.current = "";
@@ -1058,7 +1081,7 @@ export function ActiveSession() {
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
     sendPlaybackDoneAfterCooldown(
-      opts?.cooldownMs ?? 1500,
+      opts?.cooldownMs ?? INTERRUPT_ECHO_COOLDOWN_MS,
       opts?.bypassPlaybackDoneDebounce ?? false,
     );
   };
@@ -2040,6 +2063,112 @@ export function ActiveSession() {
     }
   };
 
+  const resetAssistantTurnAccumulation = () => {
+    wsAssistantTurnTextRef.current = "";
+    wsLastRawAssistantSentenceRef.current = "";
+  };
+
+  const beginNewAssistantReply = () => {
+    wsAssistantReplyIdRef.current += 1;
+    resetAssistantTurnAccumulation();
+    wsAssistantTurnIdRef.current = wsAssistantReplyIdRef.current;
+  };
+
+  const beginNewAssistantReplyIfNeeded = () => {
+    if (assistantReplyStartedRef.current) return;
+    assistantReplyStartedRef.current = true;
+    beginNewAssistantReply();
+  };
+
+  const upsertPrePermissionAssistantTranscript = (fullText: string) => {
+    const t = fullText.trim();
+    if (!t) return;
+    const replyId = wsAssistantReplyIdRef.current;
+    const pre = prePermissionTranscriptRef.current;
+    const last = pre[pre.length - 1];
+    if (
+      last?.role === "assistant" &&
+      prePermissionAssistantBubbleReplyIdRef.current === replyId
+    ) {
+      last.content = t;
+      return;
+    }
+    prePermissionAssistantBubbleReplyIdRef.current = replyId;
+    pre.push({ role: "assistant", content: t });
+  };
+
+  const resetWsAudioReorderBuffer = () => {
+    wsAudioReorderBufferRef.current = {};
+    wsNextExpectedChunkIndexRef.current = 0;
+  };
+
+  const processWsAudioReorderBuffer = () => {
+    if (suppressIncomingAudioRef.current) return;
+    let idx = wsNextExpectedChunkIndexRef.current;
+    while (wsAudioReorderBufferRef.current[idx] !== undefined) {
+      const item = wsAudioReorderBufferRef.current[idx]!;
+      delete wsAudioReorderBufferRef.current[idx];
+      scheduleWsChunkRef.current(item);
+      idx += 1;
+      wsNextExpectedChunkIndexRef.current = idx;
+    }
+  };
+  processWsAudioReorderBufferRef.current = processWsAudioReorderBuffer;
+
+  const enqueueWsAvatarAudioChunk = (data: EzriAvatarData) => {
+    if (suppressIncomingAudioRef.current || dropOldResponsesRef.current > 0) return;
+    const b64 = data.audio_b64?.trim();
+    if (!b64) return;
+    const chunkIndex =
+      typeof data.chunk_index === "number" ? data.chunk_index : wsNextExpectedChunkIndexRef.current;
+    const now = performance.now();
+    wsAudioReorderBufferRef.current[chunkIndex] = {
+      subtitle: data.sentence?.trim() || "…",
+      audio: { kind: "base64", base64: b64, mimeType: "audio/wav" },
+      avatarData: data,
+      audioReceived: now,
+      avatarDataReceived: now,
+    };
+    processWsAudioReorderBufferRef.current();
+  };
+
+  const accumulateAssistantSentence = (sentence: string): string => {
+    const s = sentence.trim();
+    if (!s) return wsAssistantTurnTextRef.current;
+    const replyId = wsAssistantReplyIdRef.current;
+    if (wsAssistantTurnIdRef.current !== replyId) {
+      wsAssistantTurnIdRef.current = replyId;
+      wsAssistantTurnTextRef.current = s;
+    } else {
+      wsAssistantTurnTextRef.current = mergeAssistantSentenceIntoTurn(
+        wsAssistantTurnTextRef.current,
+        s,
+      );
+    }
+    wsLastFinalTextRef.current = wsAssistantTurnTextRef.current;
+    wsPendingFallbackTextRef.current = wsAssistantTurnTextRef.current;
+    return wsAssistantTurnTextRef.current;
+  };
+
+  const upsertAssistantTranscript = (fullText: string) => {
+    const t = fullText.trim();
+    if (!t) return;
+    latestJordanTextRef.current = t;
+    ezriPlaybackTextRef.current = t;
+    const replyId = wsAssistantReplyIdRef.current;
+    setTranscript((prev) => {
+      const last = prev[prev.length - 1];
+      if (
+        last?.role === "assistant" &&
+        assistantBubbleReplyIdRef.current === replyId
+      ) {
+        return [...prev.slice(0, -1), { ...last, content: t }];
+      }
+      assistantBubbleReplyIdRef.current = replyId;
+      return [...prev, { role: "assistant", content: t, timestamp: Date.now() }];
+    });
+  };
+
   /** If WS text arrived but no audible playback started, speak via REST (fixes skipped TTS). */
   const scheduleAssistantSpeakFallback = (text: string) => {
     const trimmed = text.trim();
@@ -2050,11 +2179,8 @@ export function ActiveSession() {
       wsSpeakFallbackTimerRef.current = null;
       if (suppressIncomingAudioRef.current) return;
       if (turn !== wsActiveTurnRef.current) return;
-      if (ezriWsAudioPipelineActive()) return;
-      const line =
-        wsPendingFallbackTextRef.current.trim() ||
-        wsLastFinalTextRef.current.trim() ||
-        trimmed;
+      if (wsAudioSeenTurnRef.current === turn) return;
+      const line = wsAssistantTurnTextRef.current.trim() || wsPendingFallbackTextRef.current.trim();
       if (!line) return;
       wsPendingFallbackTextRef.current = "";
       void speakViaEzriTts(line);
@@ -2062,15 +2188,9 @@ export function ActiveSession() {
   };
 
   const appendAssistantFinal = (text: string) => {
-    if (!text.trim()) return;
-    const t = text.trim();
-    latestJordanTextRef.current = t;
-    wsLastFinalTextRef.current = t;
-    ezriPlaybackTextRef.current = t;
-    setTranscript((prev) => [
-      ...prev,
-      { role: "assistant", content: text, timestamp: Date.now() },
-    ]);
+    beginNewAssistantReplyIfNeeded();
+    const accumulated = accumulateAssistantSentence(text);
+    upsertAssistantTranscript(accumulated);
   };
 
   /**
@@ -2105,7 +2225,7 @@ export function ActiveSession() {
     if (!sessionBillingStartedRef.current) {
       sessionBillingStartedRef.current = true;
     }
-    resumeStt(150, { ignoreSpeakingGate: true });
+    resumeStt(0, { ignoreSpeakingGate: true });
   }, [serverPcmSttActive]);
 
   /** Tell the backend Ezri finished speaking so VAD/STT accepts user audio (is_bot_speaking lock). */
@@ -2117,7 +2237,7 @@ export function ActiveSession() {
       const ws = wsClientRef.current;
       if (!ws || ws.getStatus() !== "connected") return;
       const now = Date.now();
-      if (now - lastServerMicUnlockAttemptRef.current < 800) return;
+      if (now - lastServerMicUnlockAttemptRef.current < 250) return;
       lastServerMicUnlockAttemptRef.current = now;
       console.log(`[WS] Unlocking server mic (${reason})`);
       sendPlaybackDoneNow();
@@ -2132,17 +2252,11 @@ export function ActiveSession() {
     tryUnlockServerMicRef.current = tryUnlockServerMic;
   }, [sendPlaybackDoneNow, tryUnlockServerMic]);
 
-  /** After interrupt / stopPlayback — 1500ms echo cooldown (reference app.js). */
+  /** After interrupt / stopPlayback — echo cooldown before playback_done (reference app.js). */
   const sendPlaybackDoneAfterCooldown = (
-    cooldownMs = 1500,
+    cooldownMs = ECHO_COOLDOWN_MS,
     bypassDebounce = false,
   ) => {
-    const now = Date.now();
-    if (!bypassDebounce && now - lastPlaybackDoneAtRef.current < 2000) {
-      resumeStt(0, { ignoreSpeakingGate: true });
-      return;
-    }
-    lastPlaybackDoneAtRef.current = now;
     if (playbackDoneCooldownTimerRef.current !== null) {
       window.clearTimeout(playbackDoneCooldownTimerRef.current);
       playbackDoneCooldownTimerRef.current = null;
@@ -2153,17 +2267,12 @@ export function ActiveSession() {
         pendingPlaybackDoneRef.current = true;
         return;
       }
-      if (serverPcmSttActive) {
-        try {
-          wsClientRef.current?.sendPlaybackDone();
-        } catch {
-          /* ignore */
-        }
+      const now = Date.now();
+      if (!bypassDebounce && now - lastPlaybackDoneAtRef.current < 800) {
+        resumeStt(0, { ignoreSpeakingGate: true });
+        return;
       }
-      if (!sessionBillingStartedRef.current) {
-        sessionBillingStartedRef.current = true;
-      }
-      resumeStt(150, { ignoreSpeakingGate: true });
+      sendPlaybackDoneNowRef.current();
     }, cooldownMs);
   };
 
@@ -2241,6 +2350,7 @@ export function ActiveSession() {
     isEzriSpeakingRef.current = true;
     setIsEzriSpeaking(true);
     setLiveUserSpeech("");
+    wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
 
     const ctx = wsSchedulerRef.current?.getAudioContext();
     if (ctx) {
@@ -2268,8 +2378,13 @@ export function ActiveSession() {
     stopWsSchedulerMouthAnalyser();
     stopAudioAndSpeechDriver();
     maybeResumeMicAfterEzriPlayback(true);
-    wsTtsDoneReceivedRef.current = false;
-    sendPlaybackDoneAfterCooldown(1200);
+    const owedPlaybackDone = pendingPlaybackDoneRef.current;
+    pendingPlaybackDoneRef.current = false;
+    if (owedPlaybackDone) {
+      sendPlaybackDoneNowRef.current();
+      return;
+    }
+    sendPlaybackDoneAfterCooldown(ECHO_COOLDOWN_MS);
   };
 
   const wsSchedulerCallbacksRef = useRef({
@@ -2306,6 +2421,9 @@ export function ActiveSession() {
         console.error("[WS Audio] Chunk schedule failed:", meta.subtitle, error);
       },
     });
+    if (playbackAudioContextRef.current) {
+      wsSchedulerRef.current?.bindAudioContext(playbackAudioContextRef.current);
+    }
   }
 
   const scheduleWsChunk = (item: WsAudioQueueItem) => {
@@ -2320,9 +2438,18 @@ export function ActiveSession() {
     if (!wsSchedulerPipelineActive()) {
       jordanSpeechStartedAtMsRef.current = performance.now();
     }
-    wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
     wsIsPlaybackActiveRef.current = true;
     pauseStt();
+
+    const playbackCtx = playbackAudioContextRef.current;
+    if (playbackCtx && playbackCtx.state !== "closed") {
+      wsSchedulerRef.current?.bindAudioContext(playbackCtx);
+      if (playbackCtx.state === "suspended") {
+        void playbackCtx.resume().catch(() => {
+          /* non-fatal */
+        });
+      }
+    }
 
     const chunkId = `${performance.now()}_${Math.random().toString(36).slice(2, 9)}`;
     wsScheduledChunkMapRef.current.set(chunkId, item);
@@ -2358,7 +2485,9 @@ export function ActiveSession() {
 
     for (const line of prePermissionTranscriptRef.current) {
       if (line.role === "assistant") {
-        appendAssistantFinal(line.content);
+        assistantReplyStartedRef.current = false;
+        beginNewAssistantReplyIfNeeded();
+        upsertAssistantTranscript(line.content);
       } else if (line.content.trim()) {
         setTranscript((prev) => mergeUserTranscriptAppend(prev, line.content));
       }
@@ -2396,6 +2525,9 @@ export function ActiveSession() {
     wsAssistantBufferRef.current = "";
     wsLastFinalTextRef.current = "";
     wsPendingFallbackTextRef.current = "";
+    assistantReplyStartedRef.current = false;
+    resetAssistantTurnAccumulation();
+    resetWsAudioReorderBuffer();
 
     if (restAbortControllerRef.current) {
       restAbortControllerRef.current.abort();
@@ -2414,7 +2546,7 @@ export function ActiveSession() {
       dropOldResponsesRef.current += 1;
       stopPlaybackAndCooldown({
         sendPlaybackDone: wasPlaying,
-        cooldownMs: wasPlaying ? 1500 : 0,
+        cooldownMs: wasPlaying ? INTERRUPT_ECHO_COOLDOWN_MS : 0,
         bypassPlaybackDoneDebounce: true,
       });
       suppressSttRef.current = false;
@@ -2433,7 +2565,7 @@ export function ActiveSession() {
     }
     stopPlaybackAndCooldown({
       sendPlaybackDone: wasPlaying,
-      cooldownMs: wasPlaying ? 1500 : 0,
+      cooldownMs: wasPlaying ? INTERRUPT_ECHO_COOLDOWN_MS : 0,
       bypassPlaybackDoneDebounce: true,
     });
 
@@ -2723,8 +2855,9 @@ export function ActiveSession() {
         suppressIncomingAudioRef.current = false;
         wsActiveTurnRef.current += 1;
         wsAudioSeenTurnRef.current = 0;
+        assistantReplyStartedRef.current = false;
+        resetWsAudioReorderBuffer();
         wsAssistantBufferRef.current = "";
-        wsLastFinalTextRef.current = "";
         if (wsSpeakFallbackTimerRef.current) {
           window.clearTimeout(wsSpeakFallbackTimerRef.current);
           wsSpeakFallbackTimerRef.current = null;
@@ -3619,31 +3752,43 @@ export function ActiveSession() {
             return;
           }
 
+          // Ezri_Avatar v2: streaming sentences via transcription_chunk.
+          if (kind === "chunk") {
+            const sentence = text.trim();
+            if (!sentence || sentence === wsLastRawAssistantSentenceRef.current) return;
+            wsLastRawAssistantSentenceRef.current = sentence;
+            beginNewAssistantReplyIfNeeded();
+            const accumulated = accumulateAssistantSentence(sentence);
+            if (!permissionsGrantedRef.current) {
+              upsertPrePermissionAssistantTranscript(accumulated);
+            } else {
+              upsertAssistantTranscript(accumulated);
+            }
+            setIsEzriThinking(false);
+            isEzriThinkingRef.current = false;
+            pendingUserTextRef.current = "";
+            return;
+          }
+
           const full = (wsAssistantBufferRef.current + text).trim();
           wsAssistantBufferRef.current = "";
 
-          // Deduplicate: some backends emit both transcription.ai and assistant_final.
-          if (full && full === wsLastFinalTextRef.current) return;
-          wsLastFinalTextRef.current = full;
+          if (!full || full === wsLastRawAssistantSentenceRef.current) return;
+          wsLastRawAssistantSentenceRef.current = full;
 
           if (wsSpeakFallbackTimerRef.current) {
             window.clearTimeout(wsSpeakFallbackTimerRef.current);
             wsSpeakFallbackTimerRef.current = null;
           }
 
-          if (full) {
-            if (!permissionsGrantedRef.current) {
-              prePermissionTranscriptRef.current.push({
-                role: "assistant",
-                content: full,
-              });
-            } else {
-              appendAssistantFinal(full);
-            }
-            // Store for potential fallback ONLY if the server never sends audio.
-            wsPendingFallbackTextRef.current = full;
-            scheduleAssistantSpeakFallback(full);
+          beginNewAssistantReplyIfNeeded();
+          const accumulated = accumulateAssistantSentence(full);
+          if (!permissionsGrantedRef.current) {
+            upsertPrePermissionAssistantTranscript(accumulated);
+          } else {
+            upsertAssistantTranscript(accumulated);
           }
+          scheduleAssistantSpeakFallback(accumulated);
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
           pendingUserTextRef.current = "";
@@ -3672,12 +3817,14 @@ export function ActiveSession() {
         onTtsDone: () => {
           // Greeting may finish before mic permission â€” defer playback_done until audio plays.
           if (!permissionsGrantedRef.current) {
+            assistantReplyStartedRef.current = false;
             wsTtsDoneReceivedRef.current = true;
             wsTtsStreamingRef.current = false;
             return;
           }
           // tts_done from an interrupted turn â€” mark done so queue cannot stall (app.js parity).
           if (suppressIncomingAudioRef.current) {
+            assistantReplyStartedRef.current = false;
             wsTtsDoneReceivedRef.current = true;
             wsTtsStreamingRef.current = false;
             return;
@@ -3692,6 +3839,7 @@ export function ActiveSession() {
             wsIsPlaybackActiveRef.current = false;
             wsTtsDoneReceivedRef.current = false;
             wsTtsStreamingRef.current = false;
+            assistantReplyStartedRef.current = false;
             return;
           }
 
@@ -3708,11 +3856,14 @@ export function ActiveSession() {
           // Late binary chunks can arrive after tts_done — wait before REST speak fallback.
           wsTtsDoneGraceTimerRef.current = window.setTimeout(() => {
             wsTtsDoneGraceTimerRef.current = null;
+            assistantReplyStartedRef.current = false;
             if (suppressIncomingAudioRef.current) return;
             if (turnAtDone !== wsActiveTurnRef.current) return;
 
-            if (!heardAudioThisTurn && !ezriWsAudioPipelineActive()) {
-              const t = wsPendingFallbackTextRef.current.trim();
+            if (!heardAudioThisTurn) {
+              const t =
+                wsAssistantTurnTextRef.current.trim() ||
+                wsPendingFallbackTextRef.current.trim();
               if (t) {
                 wsPendingFallbackTextRef.current = "";
                 void speakViaEzriTts(t);
@@ -3722,12 +3873,22 @@ export function ActiveSession() {
             if (wsAudioQueueRef.current.length > 0) {
               flushWsAudioQueueRef.current();
             }
+
+            if (
+              pendingPlaybackDoneRef.current &&
+              !ezriWsAudioPipelineActive()
+            ) {
+              pendingPlaybackDoneRef.current = false;
+              sendPlaybackDoneAfterCooldown(ECHO_COOLDOWN_MS);
+            }
           }, TTS_DONE_GRACE_MS);
         },
         onAudioStart: (info) => {
+          resetWsAudioReorderBuffer();
           wsSchedulerRef.current?.setAudioFormat(info.format, info.sampleRate);
         },
         onSpeakingStart: () => {
+          resetWsAudioReorderBuffer();
           // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
           playbackDoneAckRef.current = false;
           pendingPlaybackDoneRef.current = false;
@@ -3738,10 +3899,14 @@ export function ActiveSession() {
           pauseStt();
           // While discarding a dead turn's audio, don't update thinking/buffer state from stray "speaking" steps.
           if (suppressIncomingAudioRef.current) return;
+          beginNewAssistantReplyIfNeeded();
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
         },
         onAvatarData: (data) => {
+          if (data.audio_b64) {
+            enqueueWsAvatarAudioChunk(data);
+          }
           // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
           const avatarDataReceived = performance.now();
           const queuedGreetingWithoutData =
@@ -3889,7 +4054,7 @@ export function ActiveSession() {
 
           stopPlaybackAndCooldown({
             sendPlaybackDone: true,
-            cooldownMs: 1500,
+            cooldownMs: INTERRUPT_ECHO_COOLDOWN_MS,
             bypassPlaybackDoneDebounce: true,
           });
           resumeStt(0, { ignoreSpeakingGate: true });
@@ -4064,7 +4229,7 @@ export function ActiveSession() {
             // User is clearly talking but server may still think Ezri is speaking (no playback_done).
             if (
               permissionsGrantedRef.current &&
-              rms >= 350 &&
+              rms >= 200 &&
               !playbackDoneAckRef.current
             ) {
               tryUnlockServerMicRef.current("user_voice_rms");
@@ -4259,7 +4424,7 @@ export function ActiveSession() {
       if (!playbackDoneAckRef.current) {
         tryUnlockServerMicRef.current("safety_timer");
       }
-    }, 6000);
+    }, 2000);
 
     return () => window.clearTimeout(t);
   }, [
