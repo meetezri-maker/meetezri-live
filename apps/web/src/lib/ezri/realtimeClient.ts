@@ -29,11 +29,13 @@ export type EzriAvatarData = {
   phonemes: string[] | EzriTimestampedPhoneme[];
   sentiment: unknown;
   chunk_index?: number;
+  /** Base64 WAV audio bundled with avatar_data (Ezri_Avatar v2 pipeline). */
+  audio_b64?: string;
 };
 
 export type EzriRealtimeClientHandlers = {
   onStatus?: (status: EzriWsStatus) => void;
-  onAssistantText?: (text: string, kind: "partial" | "final") => void;
+  onAssistantText?: (text: string, kind: "partial" | "final" | "chunk") => void;
   /** HF / reference backend: `{ type: "transcription", user, ai }` — user line for the UI. */
   onUserTranscript?: (text: string) => void;
   onAudio?: (audio: EzriAudioSource) => void;
@@ -66,15 +68,15 @@ function safeJsonParse(data: string): unknown {
   }
 }
 
-function extractText(msg: AnyObj): { text: string; kind: "partial" | "final" } | null {
+function extractText(msg: AnyObj): { text: string; kind: "partial" | "final" | "chunk" } | null {
   const type = typeof msg.type === "string" ? msg.type : "";
   // The reference backend emits lots of UI/progress messages. These are NOT assistant replies.
   // - step: {status, message}
   // - status: {text}
   // - debug/warning: telemetry
   if (type === "step" || type === "status" || type === "debug" || type === "warning") return null;
-  // `transcription` is handled in onmessage (user + ai); do not route through here.
-  if (type === "transcription") return null;
+  // Handled explicitly in onmessage.
+  if (type === "transcription" || type === "transcription_chunk") return null;
   const text =
     (typeof msg.text === "string" && msg.text) ||
     (typeof msg.message === "string" && msg.message) ||
@@ -275,14 +277,31 @@ export class EzriRealtimeClient {
         return;
       }
 
-      // avatar_data → per-sentence phonemes + sentiment for lip sync / expressions.
+      // avatar_data → per-sentence phonemes + sentiment (+ audio_b64 in v2 pipeline).
       if (errType === "avatar_data") {
+        const audioB64 =
+          (typeof msg.audio_b64 === "string" && msg.audio_b64) ||
+          (typeof msg.audioBase64 === "string" && msg.audioBase64) ||
+          "";
         this.handlers.onAvatarData?.({
           sentence: typeof msg.sentence === "string" ? msg.sentence : "",
           phonemes: msg.phonemes,
           sentiment: msg.sentiment,
           chunk_index: typeof msg.chunk_index === "number" ? msg.chunk_index : undefined,
+          audio_b64: audioB64 || undefined,
         });
+        return;
+      }
+
+      // Streaming sentence text (final `transcription.ai` is omitted in v2 pipeline).
+      if (errType === "transcription_chunk") {
+        const chunkText =
+          (typeof msg.text === "string" && msg.text) ||
+          (typeof msg.sentence === "string" && msg.sentence) ||
+          "";
+        if (chunkText.trim()) {
+          this.handlers.onAssistantText?.(chunkText, "chunk");
+        }
         return;
       }
 

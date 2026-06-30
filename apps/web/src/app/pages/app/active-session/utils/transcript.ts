@@ -123,3 +123,17 @@ export function mergeUserTranscriptAppend(
 
   return [...prev, { role: "user", content: t, timestamp: now }];
 }
+
+/** Stitch per-sentence `transcription_chunk` events into one assistant reply. */
+export function mergeAssistantSentenceIntoTurn(prev: string, next: string): string {
+  const p = prev.trim();
+  const n = next.trim();
+  if (!n) return p;
+  if (!p) return n;
+  if (p === n) return p;
+  if (n.startsWith(p) && n.length >= p.length) return n;
+  if (p.startsWith(n)) return p;
+  const glued = glueOverlappingFragments(p, n);
+  if (glued !== null) return glued;
+  return `${p} ${n}`.replace(/\s+/g, " ").trim();
+}

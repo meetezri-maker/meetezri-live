@@ -32,6 +32,7 @@ const PIPELINE_IDLE_DEBOUNCE_MS = 350;
  */
 export class EzriWsAudioScheduler {
   private ctx: AudioContext | null = null;
+  private boundContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
   private activeNodes: AudioBufferSourceNode[] = [];
@@ -53,6 +54,26 @@ export class EzriWsAudioScheduler {
 
   setHandlers(handlers: EzriWsAudioSchedulerHandlers) {
     this.handlers = handlers;
+  }
+
+  /** Use AudioContext unlocked during the mic-permission user gesture. */
+  bindAudioContext(ctx: AudioContext | null) {
+    if (!ctx || ctx.state === "closed") return;
+    if (this.activeNodes.length > 0 || this.pendingDecodes > 0) return;
+    this.boundContext = ctx;
+    this.ctx = ctx;
+    this.ensureOutputNodes(ctx);
+  }
+
+  private ensureOutputNodes(ctx: AudioContext) {
+    if (this.masterGain && this.analyser) return;
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.value = 1;
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.analyser.smoothingTimeConstant = 0.45;
+    this.masterGain.connect(this.analyser);
+    this.analyser.connect(ctx.destination);
   }
 
   getAudioContext(): AudioContext | null {
@@ -116,14 +137,19 @@ export class EzriWsAudioScheduler {
   }
 
   private async ensureContext(): Promise<AudioContext> {
+    if (this.boundContext && this.boundContext.state !== "closed") {
+      this.ctx = this.boundContext;
+      this.ensureOutputNodes(this.boundContext);
+      if (this.boundContext.state === "suspended") {
+        await this.boundContext.resume();
+      }
+      return this.boundContext;
+    }
     if (!this.ctx || this.ctx.state === "closed") {
       this.ctx = new AudioContext({ sampleRate: 24000 });
-      this.masterGain = this.ctx.createGain();
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 1024;
-      this.analyser.smoothingTimeConstant = 0.45;
-      this.masterGain.connect(this.analyser);
-      this.analyser.connect(this.ctx.destination);
+      this.masterGain = null;
+      this.analyser = null;
+      this.ensureOutputNodes(this.ctx);
     }
     if (this.ctx.state === "suspended") {
       await this.ctx.resume();
@@ -210,8 +236,12 @@ export class EzriWsAudioScheduler {
         this.nextStartTime = ctx.currentTime + 0.05;
       }
 
-      const crossfadeTime = chunkFormat === "pcm_s16le" ? 0 : 0.005;
-      const startTime = this.nextStartTime;
+      const crossfadeTime = 0;
+      let startTime = this.nextStartTime;
+      if (startTime < ctx.currentTime) {
+        startTime = ctx.currentTime + 0.02;
+        this.nextStartTime = startTime;
+      }
       const duration = audioBuffer.duration;
       const endTime = startTime + duration;
 
