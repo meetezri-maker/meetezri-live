@@ -729,7 +729,11 @@ export function ActiveSession() {
   const sessionBillingStartedRef = useRef(false);
 
   const TTS_SPEAK_FALLBACK_MS = 1000;
-  const TTS_DONE_GRACE_MS = 500;
+  const TTS_DONE_GRACE_MS = 200;
+  /** After last TTS sample — minimal echo guard; server VAD also filters speaker bleed. */
+  const ECHO_COOLDOWN_MS = 250;
+  /** Barge-in / interrupt — slightly longer than normal end-of-turn cooldown. */
+  const INTERRUPT_ECHO_COOLDOWN_MS = 500;
   const THINKING_STUCK_MS = 45_000;
 
   const clearSpeakFallbackTimer = () => {
@@ -995,7 +999,7 @@ export function ActiveSession() {
 
   /** Pass `delayMs: 0` after barge-in so the mic opens immediately â€” long delays clip the user's first words. */
   const resumeStt = (
-    delayMs = 150,
+    delayMs = 0,
     opts?: { ignoreSpeakingGate?: boolean },
   ) => {
     if (!browserSpeechRecognitionActive) return;
@@ -1077,7 +1081,7 @@ export function ActiveSession() {
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
     sendPlaybackDoneAfterCooldown(
-      opts?.cooldownMs ?? 1500,
+      opts?.cooldownMs ?? INTERRUPT_ECHO_COOLDOWN_MS,
       opts?.bypassPlaybackDoneDebounce ?? false,
     );
   };
@@ -2221,7 +2225,7 @@ export function ActiveSession() {
     if (!sessionBillingStartedRef.current) {
       sessionBillingStartedRef.current = true;
     }
-    resumeStt(150, { ignoreSpeakingGate: true });
+    resumeStt(0, { ignoreSpeakingGate: true });
   }, [serverPcmSttActive]);
 
   /** Tell the backend Ezri finished speaking so VAD/STT accepts user audio (is_bot_speaking lock). */
@@ -2233,7 +2237,7 @@ export function ActiveSession() {
       const ws = wsClientRef.current;
       if (!ws || ws.getStatus() !== "connected") return;
       const now = Date.now();
-      if (now - lastServerMicUnlockAttemptRef.current < 800) return;
+      if (now - lastServerMicUnlockAttemptRef.current < 250) return;
       lastServerMicUnlockAttemptRef.current = now;
       console.log(`[WS] Unlocking server mic (${reason})`);
       sendPlaybackDoneNow();
@@ -2248,17 +2252,11 @@ export function ActiveSession() {
     tryUnlockServerMicRef.current = tryUnlockServerMic;
   }, [sendPlaybackDoneNow, tryUnlockServerMic]);
 
-  /** After interrupt / stopPlayback — 1500ms echo cooldown (reference app.js). */
+  /** After interrupt / stopPlayback — echo cooldown before playback_done (reference app.js). */
   const sendPlaybackDoneAfterCooldown = (
-    cooldownMs = 1500,
+    cooldownMs = ECHO_COOLDOWN_MS,
     bypassDebounce = false,
   ) => {
-    const now = Date.now();
-    if (!bypassDebounce && now - lastPlaybackDoneAtRef.current < 2000) {
-      resumeStt(0, { ignoreSpeakingGate: true });
-      return;
-    }
-    lastPlaybackDoneAtRef.current = now;
     if (playbackDoneCooldownTimerRef.current !== null) {
       window.clearTimeout(playbackDoneCooldownTimerRef.current);
       playbackDoneCooldownTimerRef.current = null;
@@ -2269,17 +2267,12 @@ export function ActiveSession() {
         pendingPlaybackDoneRef.current = true;
         return;
       }
-      if (serverPcmSttActive) {
-        try {
-          wsClientRef.current?.sendPlaybackDone();
-        } catch {
-          /* ignore */
-        }
+      const now = Date.now();
+      if (!bypassDebounce && now - lastPlaybackDoneAtRef.current < 800) {
+        resumeStt(0, { ignoreSpeakingGate: true });
+        return;
       }
-      if (!sessionBillingStartedRef.current) {
-        sessionBillingStartedRef.current = true;
-      }
-      resumeStt(150, { ignoreSpeakingGate: true });
+      sendPlaybackDoneNowRef.current();
     }, cooldownMs);
   };
 
@@ -2385,8 +2378,13 @@ export function ActiveSession() {
     stopWsSchedulerMouthAnalyser();
     stopAudioAndSpeechDriver();
     maybeResumeMicAfterEzriPlayback(true);
-    wsTtsDoneReceivedRef.current = false;
-    sendPlaybackDoneAfterCooldown(1200);
+    const owedPlaybackDone = pendingPlaybackDoneRef.current;
+    pendingPlaybackDoneRef.current = false;
+    if (owedPlaybackDone) {
+      sendPlaybackDoneNowRef.current();
+      return;
+    }
+    sendPlaybackDoneAfterCooldown(ECHO_COOLDOWN_MS);
   };
 
   const wsSchedulerCallbacksRef = useRef({
@@ -2548,7 +2546,7 @@ export function ActiveSession() {
       dropOldResponsesRef.current += 1;
       stopPlaybackAndCooldown({
         sendPlaybackDone: wasPlaying,
-        cooldownMs: wasPlaying ? 1500 : 0,
+        cooldownMs: wasPlaying ? INTERRUPT_ECHO_COOLDOWN_MS : 0,
         bypassPlaybackDoneDebounce: true,
       });
       suppressSttRef.current = false;
@@ -2567,7 +2565,7 @@ export function ActiveSession() {
     }
     stopPlaybackAndCooldown({
       sendPlaybackDone: wasPlaying,
-      cooldownMs: wasPlaying ? 1500 : 0,
+      cooldownMs: wasPlaying ? INTERRUPT_ECHO_COOLDOWN_MS : 0,
       bypassPlaybackDoneDebounce: true,
     });
 
@@ -3817,15 +3815,16 @@ export function ActiveSession() {
           }
         },
         onTtsDone: () => {
-          assistantReplyStartedRef.current = false;
           // Greeting may finish before mic permission â€” defer playback_done until audio plays.
           if (!permissionsGrantedRef.current) {
+            assistantReplyStartedRef.current = false;
             wsTtsDoneReceivedRef.current = true;
             wsTtsStreamingRef.current = false;
             return;
           }
           // tts_done from an interrupted turn â€” mark done so queue cannot stall (app.js parity).
           if (suppressIncomingAudioRef.current) {
+            assistantReplyStartedRef.current = false;
             wsTtsDoneReceivedRef.current = true;
             wsTtsStreamingRef.current = false;
             return;
@@ -3840,6 +3839,7 @@ export function ActiveSession() {
             wsIsPlaybackActiveRef.current = false;
             wsTtsDoneReceivedRef.current = false;
             wsTtsStreamingRef.current = false;
+            assistantReplyStartedRef.current = false;
             return;
           }
 
@@ -3856,6 +3856,7 @@ export function ActiveSession() {
           // Late binary chunks can arrive after tts_done — wait before REST speak fallback.
           wsTtsDoneGraceTimerRef.current = window.setTimeout(() => {
             wsTtsDoneGraceTimerRef.current = null;
+            assistantReplyStartedRef.current = false;
             if (suppressIncomingAudioRef.current) return;
             if (turnAtDone !== wsActiveTurnRef.current) return;
 
@@ -3871,6 +3872,14 @@ export function ActiveSession() {
 
             if (wsAudioQueueRef.current.length > 0) {
               flushWsAudioQueueRef.current();
+            }
+
+            if (
+              pendingPlaybackDoneRef.current &&
+              !ezriWsAudioPipelineActive()
+            ) {
+              pendingPlaybackDoneRef.current = false;
+              sendPlaybackDoneAfterCooldown(ECHO_COOLDOWN_MS);
             }
           }, TTS_DONE_GRACE_MS);
         },
@@ -4045,7 +4054,7 @@ export function ActiveSession() {
 
           stopPlaybackAndCooldown({
             sendPlaybackDone: true,
-            cooldownMs: 1500,
+            cooldownMs: INTERRUPT_ECHO_COOLDOWN_MS,
             bypassPlaybackDoneDebounce: true,
           });
           resumeStt(0, { ignoreSpeakingGate: true });
@@ -4220,7 +4229,7 @@ export function ActiveSession() {
             // User is clearly talking but server may still think Ezri is speaking (no playback_done).
             if (
               permissionsGrantedRef.current &&
-              rms >= 350 &&
+              rms >= 200 &&
               !playbackDoneAckRef.current
             ) {
               tryUnlockServerMicRef.current("user_voice_rms");
@@ -4415,7 +4424,7 @@ export function ActiveSession() {
       if (!playbackDoneAckRef.current) {
         tryUnlockServerMicRef.current("safety_timer");
       }
-    }, 6000);
+    }, 2000);
 
     return () => window.clearTimeout(t);
   }, [

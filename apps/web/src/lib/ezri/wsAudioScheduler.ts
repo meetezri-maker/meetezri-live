@@ -23,7 +23,7 @@ export type EzriWsAudioSchedulerHandlers = {
   onScheduleError?: (error: unknown, meta: EzriWsSchedulerChunkMeta) => void;
 };
 
-const PIPELINE_IDLE_DEBOUNCE_MS = 350;
+const PIPELINE_IDLE_DEBOUNCE_MS = 50;
 
 /**
  * Gapless WebSocket TTS playback — ports `Ezri_Avatar/frontend/app.js` `playAudio` +
@@ -228,7 +228,7 @@ export class EzriWsAudioScheduler {
       // Jitter buffer — reference app.js
       if (!this.isPlaybackActive) {
         this.isPlaybackActive = true;
-        this.nextStartTime = ctx.currentTime + 0.25;
+        this.nextStartTime = ctx.currentTime + 0.12;
       } else if (this.nextStartTime < ctx.currentTime) {
         console.warn(
           "[WS Audio] Underrun detected — rescheduling with small buffer",
