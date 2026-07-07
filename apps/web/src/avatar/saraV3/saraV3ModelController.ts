@@ -2,9 +2,13 @@ import type { AvatarGltfTransformConfig } from "@/lib/avatar/avatarConfigTypes";
 import * as THREE from "three";
 import { SARA_V3_AVATAR_DEFINITION } from "./saraV3Config";
 import { writeSaraV3Diagnostics } from "./saraV3Diagnostics";
-import { bindSaraV3MorphTargets } from "./saraV3MorphBinding";
+import {
+  bindSaraV3MorphTargets,
+  findSaraV3MorphBindingsOnDeformingMeshes,
+} from "./saraV3MorphBinding";
 import { discoverSaraV3MorphTargets } from "./saraV3MorphDiscovery";
 import { applySaraV3MaterialFixes } from "./saraV3MaterialFixes";
+import { applySaraV3MaterialPass } from "./saraV3MaterialPass";
 import type { SaraV3ControllerState } from "./saraV3Types";
 
 function applyVector3Like(
@@ -45,7 +49,14 @@ export function createSaraV3ModelController(args: {
     child.visible = true;
     child.frustumCulled = false;
   });
-  applySaraV3MaterialFixes(args.root);
+  // A2: per-category material pass replaces the legacy global fixes. Rollback
+  // is a one-line config change (materialPassConfig.enabled: false), which
+  // restores the pre-existing applySaraV3MaterialFixes behavior unchanged.
+  if (SARA_V3_AVATAR_DEFINITION.saraV3.materialPassConfig.enabled) {
+    applySaraV3MaterialPass(args.root);
+  } else {
+    applySaraV3MaterialFixes(args.root);
+  }
   const discovery = discoverSaraV3MorphTargets(args.root);
   const groupedFaceMeshBindingActive = discovery.groupedFaceMeshes.length > 0;
   const boundFaceMeshes = groupedFaceMeshBindingActive
@@ -53,7 +64,27 @@ export function createSaraV3ModelController(args: {
     : discovery.selectedFaceMesh
       ? [discovery.selectedFaceMesh]
       : [];
-  const bindings = bindSaraV3MorphTargets(boundFaceMeshes);
+  const bindings = new Map(bindSaraV3MorphTargets(boundFaceMeshes));
+  // Additionally bind the eyeball-gaze morphs on whichever mesh actually
+  // deforms the eyeballs (a separate primitive from the bound face skin), so
+  // idle eyeball movement reaches the real eye geometry. Existing bindings for
+  // visemes/blink/expression are left untouched.
+  const eyeballMorphNames = [
+    SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.leftEyeball,
+    SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.rightEyeball,
+  ];
+  findSaraV3MorphBindingsOnDeformingMeshes(args.root, eyeballMorphNames).forEach(
+    (eyeballBindings, name) => {
+      const existing = bindings.get(name) ?? [];
+      const combined = existing.slice();
+      eyeballBindings.forEach((binding) => {
+        if (!combined.some((entry) => entry.mesh === binding.mesh && entry.index === binding.index)) {
+          combined.push(binding);
+        }
+      });
+      bindings.set(name, combined);
+    }
+  );
   console.log("[SaraV3 Discovery Result]", {
     faceMeshCandidates: discovery.faceMeshCandidates,
     selectedFaceMesh: discovery.selectedFaceMesh?.name ?? null,

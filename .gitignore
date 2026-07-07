@@ -12,6 +12,9 @@ node_modules/
 coverage/
 .nyc_output/
 
+# SaraV3 renderer before/after audit captures (local only)
+renderer-audit/
+
 # Production
 build/
 dist/

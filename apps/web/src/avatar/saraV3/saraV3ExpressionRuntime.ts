@@ -11,6 +11,8 @@ const EXPRESSION_MORPH_NAMES = [
   SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.frownRight,
   SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.cheekLeft,
   SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.cheekRight,
+  SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.eyeSquintLeft,
+  SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.eyeSquintRight,
   SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.eyebrows,
   SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.sad,
 ] as const;

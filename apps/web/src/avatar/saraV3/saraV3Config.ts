@@ -25,9 +25,9 @@ export const SARA_V3_AVATAR_DEFINITION = {
   },
   camera: {
     mode: "fixed",
-    fov: 12,
-    position: [0, 1.25, 3.0],
-    lookAt: [0, 1.25, 0],
+    fov: 8,
+    position: [0, 1.30, 3.0],
+    lookAt: [0, 1.30, 0],
     notes: "Sara head framing with Jordan session-room camera distance (z=3.0).",
   },
   gltfTransform: {
@@ -118,11 +118,55 @@ export const SARA_V3_AVATAR_DEFINITION = {
     modelUrl: SARA_V3_MODEL_URL,
     rawRenderAuditMode: false,
     environmentConfig: {
-      enabled: false,
-      source: "roomEnvironmentPmrem",
-      intensity: 0.35,
+      // A1: image-based lighting on, lit by a portrait studio HDRI.
+      enabled: true,
+      // "hdri" | "roomEnvironmentPmrem" (fallback + rollback).
+      source: "hdri",
+      // Portrait/studio HDRI (CC0, Poly Haven "brown_photostudio_02", 1k).
+      url: "/avatars/hdri/brown_photostudio_02_1k.hdr",
+      // HDRI environment intensity (tunable). Base skin illumination.
+      intensity: 1.0,
+      // Intensity used when the RoomEnvironment PMREM fallback/rollback is active.
+      roomEnvironmentIntensity: 0.35,
+      // Renderer tone mapping: "ACESFilmic" (default) | "AgX".
+      toneMapping: "ACESFilmic",
       backgroundMode: "unchanged",
-      captureComparisonDiagnostics: false,
+      // A3: enabled so the before/after comparison + per-category luma metrics
+      // populate window.saraV3EnvironmentDiagnostics. Inert unless
+      // rawRenderAuditMode is also on, so it is safe to leave true in the live app.
+      captureComparisonDiagnostics: true,
+      // Applied only while IBL is active; HDRI carries base light, one rim
+      // light separates hair/jawline from the background. Disabling the
+      // environment reverts to the shared legacy light values.
+      analyticLightRig: {
+        ambientIntensity: 0.35,
+        hemisphereIntensity: 0.12,
+        keyIntensity: 0.55,
+        fillIntensity: 0.18,
+        rimIntensity: 0.95,
+        rimColor: 0xbcd2ff,
+        rimPosition: [-2.4, 4.2, -4.5],
+        roomWarmthIntensity: 0.12,
+      },
+    },
+    materialPassConfig: {
+      // A2: per-category material pass. false → legacy applySaraV3MaterialFixes. shaz
+      enabled: true,
+      eyes: {
+        // Low cornea roughness + envMap boost so the HDRI yields a catchlight.
+        roughness: 0.1,
+        envMapIntensity: 2.0,
+      },
+      hair: {
+        blendRenderOrder: 22,
+        innerRenderOrder: 20,
+        // Neutralize the wrong baked hair metalness (0.545) — hair is dielectric.
+        metalness: 0.0,
+        // Floor, not override: kills the white/gray specular sheen on the
+        // bangs from the July 2026 re-export (verified live in console).
+        minRoughness: 0.85,
+        hardEdgeAlphaTest: 0.4,
+      },
     },
     scale: [1, 1, 1],
     position: [0, 0, 0],
@@ -150,6 +194,20 @@ export const SARA_V3_AVATAR_DEFINITION = {
       cheekRight: "cheekSquintRight",
       eyebrows: "eyebrows",
       sad: "sad",
+      // New SaraV3 GLB morphs (previously unused). The global "smile" morph is
+      // intentionally NOT mapped to avoid double-driving the smile alongside
+      // mouthSmileLeft/mouthSmileRight.
+      eyeSquintLeft: "eyeSquintLeft",
+      eyeSquintRight: "eyeSquintRight",
+      eyeLookUpLeft: "eyeLookUpLeft",
+      eyeLookUpRight: "eyeLookUpRight",
+      eyeLookDownLeft: "eyeLookDownLeft",
+      eyeLookDownRight: "eyeLookDownRight",
+      // Actual eyeball-gaze morph targets. These live on the separate eye mesh
+      // (Face002_2) and are what visibly rotate the eyeballs (the eyeLook*
+      // morphs above only deform the eyelid/socket skin on the face mesh).
+      leftEyeball: "LeftEyeball",
+      rightEyeball: "RightEyeball",
     },
     visemeMap: PHONEME_TO_JORDAN_VISEME,
     blinkConfig: {
@@ -164,35 +222,112 @@ export const SARA_V3_AVATAR_DEFINITION = {
     presenceConfig: {
       defaultMode: "idle",
     },
+    // Extremely lightweight idle eye "aliveness": a very subtle, slow vertical
+    // drift driven purely by time. NOT a gaze system and no head movement.
+    idleEyeConfig: {
+      enabled: true,
+      verticalAmplitude: 0.05,
+      primarySpeed: 0.35,
+      secondarySpeed: 0.13,
+      modeScale: {
+        idle: 1,
+        listening: 0.7,
+        thinking: 0.4,
+        speaking: 0.4,
+      },
+    },
+    // Idle-only eyeball gaze, driven via the LeftEyeball/RightEyeball morphs
+    // (NOT mesh rotation, NOT the eyeLook* morphs). Event-based glances with a
+    // slow damp; both eyes share the same target so the gaze stays coordinated.
+    // Influence stays tiny because the underlying morph delta is large (~0.42).
+    idleEyeballConfig: {
+      enabled: true,
+      minIntervalMs: 3000,
+      maxIntervalMs: 6000,
+      moveMs: [800, 1500],
+      holdMs: [400, 1200],
+      returnMs: [800, 1400],
+      minInfluence: 0.02,
+      maxInfluence: 0.035,
+      dampLambda: 12,
+      blinkReductionFactor: 0.6,
+    },
+    // Coordinated idle-only micro-movement. All values are tiny additive
+    // offsets layered on top of the idle expression base; they apply ONLY in
+    // idle and smoothly decay to zero (via the expression runtime damping)
+    // when leaving idle. Does not touch jawOpen or viseme_* / lip-sync.
+    idleMicroMovementConfig: {
+      // Continuous, very slow, very small "breathing" swell across the face.
+      breathing: {
+        speed: 0.8,
+        smileAmplitude: 0.012,
+        cheekAmplitude: 0.006,
+        eyeSquintAmplitude: 0.005,
+        eyebrowAmplitude: 0.008,
+      },
+      // Scheduled gentle, asymmetric micro-smiles (not constant).
+      smileEvent: {
+        minIntervalMs: 8000,
+        maxIntervalMs: 15000,
+        smileLeftMax: 0.05,
+        smileRightMax: 0.06,
+        cheekMax: 0.02,
+      },
+      // Scheduled subtle brow relaxation/lift (never "surprised").
+      browEvent: {
+        minIntervalMs: 10000,
+        maxIntervalMs: 20000,
+        fadeInMs: [500, 900],
+        holdMs: [400, 900],
+        fadeOutMs: [900, 1500],
+        eyebrowMax: 0.05,
+      },
+    },
     expressionConfig: {
+      // Soft, neutral resting face. A gentle closed-mouth pleasantness with a
+      // trace of eye warmth — deliberately low so it never reads as a grin.
       idle: {
-        mouthSmileLeft: 0.515,
-        mouthSmileRight: 0.515,
-        cheekSquintLeft: 0.005,
-        cheekSquintRight: 0.005,
-        eyebrows: 0.01,
+        mouthSmileLeft: 0.08,
+        mouthSmileRight: 0.085,
+        cheekSquintLeft: 0.01,
+        cheekSquintRight: 0.01,
+        eyeSquintLeft: 0.03,
+        eyeSquintRight: 0.03,
+        eyebrows: 0.03,
       },
+      // Attentive and warm, but still clearly not a full grin. Slight brow
+      // raise + genuine (Duchenne) eye/cheek engagement to read as "listening".
       listening: {
-        mouthSmileLeft: 0.64,
-        mouthSmileRight: 0.645,
-        cheekSquintLeft: 0.52,
-        cheekSquintRight: 0.522,
-        eyebrows: 0.25,
+        mouthSmileLeft: 0.24,
+        mouthSmileRight: 0.25,
+        cheekSquintLeft: 0.14,
+        cheekSquintRight: 0.142,
+        eyeSquintLeft: 0.1,
+        eyeSquintRight: 0.1,
+        eyebrows: 0.14,
       },
+      // Natural, contemplative. A whisper of smile keeps it from reading
+      // grumpy; a faint brow/frown/sad gives a thoughtful cast.
       thinking: {
-        mouthFrownLeft: 0.015,
-        mouthFrownRight: 0.015,
-        eyebrows: 0.025,
+        mouthSmileLeft: 0.05,
+        mouthSmileRight: 0.05,
+        mouthFrownLeft: 0.02,
+        mouthFrownRight: 0.02,
+        eyebrows: 0.05,
         sad: 0.01,
       },
+      // Near-neutral base — lip-sync owns the mouth. Just a gentle pleasant
+      // undertone so the face stays alive between words.
       speaking: {
-        mouthSmileLeft: 0.02,
-        mouthSmileRight: 0.02,
-        cheekSquintLeft: 0.015,
-        cheekSquintRight: 0.015,
-        eyebrows: 0.02,
+        mouthSmileLeft: 0.06,
+        mouthSmileRight: 0.06,
+        cheekSquintLeft: 0.02,
+        cheekSquintRight: 0.02,
+        eyeSquintLeft: 0.02,
+        eyeSquintRight: 0.02,
+        eyebrows: 0.03,
       },
-      blendSpeed: 4,
+      blendSpeed: 3.5,
     },
     lipSyncConfig: {
       lookAheadSeconds: JORDAN_RFV2_FACE_TUNING.lookAheadSeconds,

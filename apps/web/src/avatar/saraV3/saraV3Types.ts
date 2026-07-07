@@ -8,10 +8,82 @@ export type SaraV3AvatarDefinition = AvatarDefinition & {
     readonly rawRenderAuditMode: boolean;
     readonly environmentConfig: {
       readonly enabled: boolean;
+      /**
+       * "hdri" loads the portrait HDRI at `url` via RGBELoader + PMREM.
+       * "roomEnvironmentPmrem" is the original neutral RoomEnvironment path and
+       * remains the fallback (on HDRI load failure) and the one-line rollback.
+       */
       readonly source: string;
+      /** Environment intensity applied when the HDRI path is active. */
       readonly intensity: number;
+      /**
+       * Environment intensity applied when the RoomEnvironment PMREM path is
+       * active (explicit `source: "roomEnvironmentPmrem"` or HDRI-load fallback).
+       * Preserves the original 0.35 look independent of the HDRI `intensity`.
+       */
+      readonly roomEnvironmentIntensity?: number;
+      /** Portrait HDRI URL (served from public/). Used when source === "hdri". */
+      readonly url?: string;
+      /**
+       * Renderer tone-mapping toggle used when this avatar owns the renderer.
+       * Default "ACESFilmic"; "AgX" is provided to A/B against the Blender viewport.
+       */
+      readonly toneMapping?: "ACESFilmic" | "AgX";
       readonly backgroundMode: "unchanged";
       readonly captureComparisonDiagnostics: boolean;
+      /**
+       * Analytic light-rig intensities applied ONLY when SaraV3 IBL is active
+       * (env enabled). Lets the HDRI provide base illumination while a single
+       * rim light separates hair/jawline from the background. When env is
+       * disabled these overrides are not applied and the legacy shared light
+       * values remain — that is the rollback path.
+       */
+      readonly analyticLightRig?: {
+        readonly ambientIntensity: number;
+        readonly hemisphereIntensity: number;
+        readonly keyIntensity: number;
+        readonly fillIntensity: number;
+        readonly rimIntensity: number;
+        readonly rimColor: number;
+        readonly rimPosition: readonly [number, number, number];
+        readonly roomWarmthIntensity: number;
+      };
+    };
+    readonly materialPassConfig: {
+      /**
+       * Master flag. true → per-category `applySaraV3MaterialPass` runs.
+       * false → legacy `applySaraV3MaterialFixes` (the pre-existing behavior,
+       * kept intact) runs instead. Rollback is this one line.
+       */
+      readonly enabled: boolean;
+      readonly eyes: {
+        readonly roughness: number;
+        readonly envMapIntensity: number;
+      };
+      readonly hair: {
+        /** renderOrder for outer alpha-carded strands (Material.002). */
+        readonly blendRenderOrder: number;
+        /** renderOrder for inner/scalp/brow-lash geometry (Material.001). */
+        readonly innerRenderOrder: number;
+        /**
+         * Hair metalness override. The GLB bakes strand metalness at
+         * ~0.545 which reads as wet plastic under IBL; hair is dielectric.
+         */
+        readonly metalness: number;
+        /**
+         * Roughness floor (`roughness = max(authored, minRoughness)`). The
+         * July 2026 eyelash re-export shipped the hair with low roughness,
+         * so direct lights bounced off the bang cards as a broad white/gray
+         * sheen. 0.85 removes it while keeping a hint of specular life.
+         */
+        readonly minRoughness: number;
+        /**
+         * alphaTest fallback for any hair material whose cards are hard-edged
+         * (kept for tuning; the shipped choice is documented per material in
+         * saraV3MaterialPass.ts).
+         */
+        readonly hardEdgeAlphaTest: number;
+      };
     };
     readonly scale: number | Vector3Config;
     readonly position: Vector3Config;
@@ -32,6 +104,49 @@ export type SaraV3AvatarDefinition = AvatarDefinition & {
     };
     readonly presenceConfig: {
       readonly defaultMode: SaraV3RuntimeMode;
+    };
+    readonly idleEyeConfig: {
+      readonly enabled: boolean;
+      readonly verticalAmplitude: number;
+      readonly primarySpeed: number;
+      readonly secondarySpeed: number;
+      readonly modeScale: Readonly<Record<SaraV3RuntimeMode, number>>;
+    };
+    readonly idleEyeballConfig: {
+      readonly enabled: boolean;
+      readonly minIntervalMs: number;
+      readonly maxIntervalMs: number;
+      readonly moveMs: readonly [number, number];
+      readonly holdMs: readonly [number, number];
+      readonly returnMs: readonly [number, number];
+      readonly minInfluence: number;
+      readonly maxInfluence: number;
+      readonly dampLambda: number;
+      readonly blinkReductionFactor: number;
+    };
+    readonly idleMicroMovementConfig: {
+      readonly breathing: {
+        readonly speed: number;
+        readonly smileAmplitude: number;
+        readonly cheekAmplitude: number;
+        readonly eyeSquintAmplitude: number;
+        readonly eyebrowAmplitude: number;
+      };
+      readonly smileEvent: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly smileLeftMax: number;
+        readonly smileRightMax: number;
+        readonly cheekMax: number;
+      };
+      readonly browEvent: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly fadeInMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly fadeOutMs: readonly [number, number];
+        readonly eyebrowMax: number;
+      };
     };
     readonly expressionConfig: {
       readonly idle: Readonly<Record<string, number>>;
@@ -427,6 +542,14 @@ export type SaraV3EyeRuntimeState = {
   nextBlinkDelayMs: number;
   appliedEyeMorphs: Record<string, number>;
   coordinatedMorphs: Record<string, number>;
+  nextEyeballAtMs: number;
+  eyeballStartedAtMs: number | null;
+  eyeballMoveMs: number;
+  eyeballHoldMs: number;
+  eyeballReturnMs: number;
+  eyeballTarget: number;
+  eyeballValue: number;
+  lastNowMs: number;
 };
 
 export type SaraV3SmileRuntimeState = {
@@ -442,6 +565,12 @@ export type SaraV3SmileRuntimeState = {
   smileAdditiveTargets: Record<string, number>;
   blockedByBlink: boolean;
   lastCollisionAvoidedAtMs: number | null;
+  nextBrowAtMs: number;
+  browStartedAtMs: number | null;
+  browFadeInMs: number;
+  browHoldMs: number;
+  browFadeOutMs: number;
+  browTarget: number;
 };
 
 export type UpdateSaraV3VisemeArgs = {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { SARA_V3_AVATAR_DEFINITION } from "./saraV3Config";
 
 type SaraV3EnvironmentHandle = {
@@ -35,18 +36,45 @@ function captureCanvasDataUrl(renderer: THREE.WebGLRenderer): string | null {
   }
 }
 
-function materialCategoryMatches(materialName: string, category: "face" | "eyes" | "hair" | "clothing") {
-  const name = materialName.toLowerCase();
+export type SaraV3MaterialCategory = "face" | "eyes" | "hair" | "clothing";
+
+/**
+ * Single source of truth for SaraV3 material→category matching. Matched against
+ * the material's exact (lowercased) name from the current sara-v3.glb.
+ *
+ * Anchored (`^...$`) so "material.002" (hair) does NOT collide with the
+ * substring inside "unrealmaterial.002" (teeth).
+ *
+ *   face  : UnrealMaterial.001 (face skin), UnrealMaterial.002 (teeth),
+ *           UnrealMaterial.006 (eye occlusion/moisture shell)
+ *   eyes  : UnrealMaterial.004
+ *   hair  : Material.002 (alpha-carded strands, BLEND),
+ *           Material.001 (brow/lash geometry, incl. the standalone eyelash
+ *           meshes Object_0 / Object_0.001 added in the July 2026 re-export)
+ *   cloth : Wolf3D_Outfit_Bottom, Wolf3D_Outfit_Top, Wolf3D_Outfit_Footwear,
+ *           Wolf3D_Body
+ *
+ * NOTE (July 2026): the designer's eyelash re-export renamed EVERY material
+ * (old: UnrealMaterial.003/005/007/008, Material.005/006, Bottom/Body/
+ * Footwear/Top.002). Role mapping was verified by primitive order + authored
+ * alphaMode/extensions in the GLB audit. Update here if the GLB is re-exported
+ * again — still the single shared matcher, no parallel system.
+ */
+export function materialCategoryMatches(
+  materialName: string,
+  category: SaraV3MaterialCategory
+) {
+  const name = (materialName || "").toLowerCase();
   if (category === "face") {
-    return /body\.001|unrealmaterial\.001|unrealmaterial\.002/.test(name);
+    return /^unrealmaterial\.(001|002|006)$/.test(name);
   }
   if (category === "eyes") {
-    return /unrealmaterial\.004/.test(name);
+    return /^unrealmaterial\.004$/.test(name);
   }
   if (category === "hair") {
-    return /material\.005|unrealmaterial\.006/.test(name);
+    return /^material\.(001|002)$/.test(name);
   }
-  return /top\.001|bottom\.001|footwear\.001/.test(name);
+  return /^(wolf3d_outfit_(bottom|top|footwear)|wolf3d_body)$/.test(name);
 }
 
 function computeCategoryMask(args: {
@@ -157,40 +185,105 @@ export function applySaraV3Environment(args: {
   const config = SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig;
   if (!config.enabled) return null;
 
+  const scene = args.scene;
   const pmremGenerator = new THREE.PMREMGenerator(args.renderer);
   pmremGenerator.compileEquirectangularShader();
 
-  const roomEnvironment = new RoomEnvironment();
-  const target = pmremGenerator.fromScene(roomEnvironment, 0.04);
-  args.scene.environment = target.texture;
-  args.scene.userData.saraV3EnvironmentSource = config.source;
-  args.scene.userData.saraV3PmremGeneratorUsed = true;
-  args.scene.userData.saraV3HdrEnvironmentUsed = true;
+  let disposed = false;
+  let roomDisposed = false;
+  let hdrTarget: THREE.WebGLRenderTarget | null = null;
 
-  if ("environmentIntensity" in args.scene) {
-    (args.scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity =
-      config.intensity;
+  const setEnvironmentIntensity = (value: number) => {
+    if ("environmentIntensity" in scene) {
+      (scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = value;
+    }
+  };
+
+  // Build the RoomEnvironment PMREM first. It is always the initial environment
+  // (so the model is never unlit) and remains the fallback if the HDRI fails.
+  const roomEnvironment = new RoomEnvironment();
+  const roomTarget = pmremGenerator.fromScene(roomEnvironment, 0.04);
+  const roomIntensity = config.roomEnvironmentIntensity ?? config.intensity;
+
+  const disposeRoom = () => {
+    if (roomDisposed) return;
+    roomDisposed = true;
+    roomTarget.texture.dispose();
+    roomTarget.dispose();
+    roomEnvironment.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.geometry?.dispose();
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => material?.dispose());
+      }
+    });
+  };
+
+  scene.environment = roomTarget.texture;
+  scene.userData.saraV3PmremGeneratorUsed = true;
+  scene.userData.saraV3HdrEnvironmentUsed = false;
+  scene.userData.saraV3EnvironmentSource = "roomEnvironmentPmrem";
+  setEnvironmentIntensity(roomIntensity);
+
+  const useHdri =
+    config.source === "hdri" && typeof config.url === "string" && config.url.length > 0;
+
+  if (useHdri) {
+    new RGBELoader().load(
+      config.url as string,
+      (texture) => {
+        if (disposed) {
+          texture.dispose();
+          return;
+        }
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        const target = pmremGenerator.fromEquirectangular(texture);
+        texture.dispose();
+        hdrTarget = target;
+        // Swap to the HDRI and retire the RoomEnvironment fallback.
+        scene.environment = target.texture;
+        scene.userData.saraV3HdrEnvironmentUsed = true;
+        scene.userData.saraV3EnvironmentSource = "hdri";
+        setEnvironmentIntensity(config.intensity);
+        disposeRoom();
+      },
+      undefined,
+      (error) => {
+        // HDRI failed — keep the RoomEnvironment fallback already in place.
+        console.warn(
+          "[SaraV3 environment] HDRI load failed; using RoomEnvironment fallback",
+          { url: config.url, error }
+        );
+        if (!disposed) {
+          scene.userData.saraV3EnvironmentSource = "roomEnvironmentPmrem-fallback";
+        }
+      }
+    );
   }
 
   return {
+    // Reflects the configured source; the resolved runtime source is mirrored
+    // on scene.userData.saraV3EnvironmentSource ("hdri" once loaded, or
+    // "roomEnvironmentPmrem" / "roomEnvironmentPmrem-fallback").
     source: config.source,
     dispose: () => {
-      if (args.scene.environment === target.texture) {
-        args.scene.environment = null;
+      disposed = true;
+      if (
+        scene.environment === roomTarget.texture ||
+        (hdrTarget && scene.environment === hdrTarget.texture)
+      ) {
+        scene.environment = null;
       }
-      delete args.scene.userData.saraV3EnvironmentSource;
-      delete args.scene.userData.saraV3PmremGeneratorUsed;
-      delete args.scene.userData.saraV3HdrEnvironmentUsed;
-      target.texture.dispose();
-      target.dispose();
-      roomEnvironment.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (mesh.isMesh) {
-          mesh.geometry?.dispose();
-          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          materials.forEach((material) => material.dispose());
-        }
-      });
+      delete scene.userData.saraV3EnvironmentSource;
+      delete scene.userData.saraV3PmremGeneratorUsed;
+      delete scene.userData.saraV3HdrEnvironmentUsed;
+      if (hdrTarget) {
+        hdrTarget.texture.dispose();
+        hdrTarget.dispose();
+        hdrTarget = null;
+      }
+      disposeRoom();
       pmremGenerator.dispose();
     },
   };

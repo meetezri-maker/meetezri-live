@@ -29,6 +29,55 @@ export function bindSaraV3MorphTargets(
   return bindings;
 }
 
+// The eyeball geometry lives in a separate primitive/mesh from the face skin
+// that the main discovery binds. This finds the mesh(es) whose given morphs
+// actually deform geometry (large position deltas), so eyeball-gaze morphs are
+// bound to the eye mesh rather than silently written to the skin mesh where
+// their deltas are ~0. Meshes without real deltas are skipped.
+export function findSaraV3MorphBindingsOnDeformingMeshes(
+  root: THREE.Group,
+  morphNames: readonly string[],
+  minDelta = 0.05
+): Map<string, MorphBinding[]> {
+  const result = new Map<string, MorphBinding[]>();
+
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
+      return;
+    }
+
+    morphNames.forEach((name) => {
+      const index = mesh.morphTargetDictionary?.[name];
+      if (index == null) return;
+
+      const attribute = (mesh.geometry as THREE.BufferGeometry | undefined)?.morphAttributes
+        ?.position?.[index];
+      if (!attribute) return;
+
+      const array = attribute.array as ArrayLike<number>;
+      let maxAbs = 0;
+      for (let i = 0; i < array.length; i += 1) {
+        const value = Math.abs(array[i]);
+        if (value > maxAbs) maxAbs = value;
+        if (maxAbs > minDelta) break;
+      }
+      if (maxAbs <= minDelta) return;
+
+      const list = result.get(name) ?? [];
+      list.push({
+        mesh,
+        index,
+        name,
+        initialInfluence: mesh.morphTargetInfluences?.[index] ?? 0,
+      });
+      result.set(name, list);
+    });
+  });
+
+  return result;
+}
+
 export function applySaraV3MorphValues(
   bindings: SaraV3BindingSet,
   values: Readonly<Record<string, number>>

@@ -31,6 +31,12 @@ function getSmileIntervalRange(activePresenceState: SaraV3RuntimeMode) {
     case "speaking":
       return { minIntervalMs: 8000, maxIntervalMs: 12000 };
     case "idle":
+      return {
+        minIntervalMs:
+          SARA_V3_AVATAR_DEFINITION.saraV3.idleMicroMovementConfig.smileEvent.minIntervalMs,
+        maxIntervalMs:
+          SARA_V3_AVATAR_DEFINITION.saraV3.idleMicroMovementConfig.smileEvent.maxIntervalMs,
+      };
     default:
       return { minIntervalMs: 5000, maxIntervalMs: 9000 };
   }
@@ -54,6 +60,21 @@ function createSmileEventTargets(activePresenceState: SaraV3RuntimeMode) {
   const thinkingScale = activePresenceState === "thinking" ? 0.55 : 1;
   const scale = speakingScale * thinkingScale;
 
+  if (activePresenceState === "idle") {
+    // Idle gets a slightly more noticeable — but still gentle and asymmetric —
+    // micro-smile so the resting face reads as alive rather than frozen.
+    const smileEvent = SARA_V3_AVATAR_DEFINITION.saraV3.idleMicroMovementConfig.smileEvent;
+    return {
+      smileFadeInMs: randomBetween(450, 700),
+      smileHoldMs: randomBetween(500, 1200),
+      smileFadeOutMs: randomBetween(700, 1200),
+      smileLeftTarget: randomBetween(smileEvent.smileLeftMax * 0.6, smileEvent.smileLeftMax),
+      smileRightTarget: randomBetween(smileEvent.smileRightMax * 0.6, smileEvent.smileRightMax),
+      cheekLeftTarget: randomBetween(smileEvent.cheekMax * 0.5, smileEvent.cheekMax),
+      cheekRightTarget: randomBetween(smileEvent.cheekMax * 0.5, smileEvent.cheekMax),
+    };
+  }
+
   return {
     smileFadeInMs: randomBetween(450, 700),
     smileHoldMs: randomBetween(500, 1200),
@@ -62,6 +83,27 @@ function createSmileEventTargets(activePresenceState: SaraV3RuntimeMode) {
     smileRightTarget: randomBetween(0.012, 0.028) * scale,
     cheekLeftTarget: randomBetween(0.004, 0.01) * scale,
     cheekRightTarget: randomBetween(0.004, 0.01) * scale,
+  };
+}
+
+function nextBrowDelayMs(browConfig: { minIntervalMs: number; maxIntervalMs: number }) {
+  return (
+    browConfig.minIntervalMs +
+    Math.random() * (browConfig.maxIntervalMs - browConfig.minIntervalMs)
+  );
+}
+
+function createBrowEventTargets(browConfig: {
+  fadeInMs: readonly [number, number];
+  holdMs: readonly [number, number];
+  fadeOutMs: readonly [number, number];
+  eyebrowMax: number;
+}) {
+  return {
+    browFadeInMs: randomBetween(browConfig.fadeInMs[0], browConfig.fadeInMs[1]),
+    browHoldMs: randomBetween(browConfig.holdMs[0], browConfig.holdMs[1]),
+    browFadeOutMs: randomBetween(browConfig.fadeOutMs[0], browConfig.fadeOutMs[1]),
+    browTarget: randomBetween(browConfig.eyebrowMax * 0.6, browConfig.eyebrowMax),
   };
 }
 
@@ -91,6 +133,12 @@ export function createSaraV3SmileRuntimeState(): SaraV3SmileRuntimeState {
     smileAdditiveTargets: {},
     blockedByBlink: false,
     lastCollisionAvoidedAtMs: null,
+    nextBrowAtMs: 0,
+    browStartedAtMs: null,
+    browFadeInMs: 0,
+    browHoldMs: 0,
+    browFadeOutMs: 0,
+    browTarget: 0,
   };
 }
 
@@ -166,17 +214,88 @@ export function updateSaraV3SmileRuntime(args: {
     }
   }
 
+  const idle = args.activePresenceState === "idle";
+  const micro = SARA_V3_AVATAR_DEFINITION.saraV3.idleMicroMovementConfig;
+
+  // Idle-only brow relaxation/lift events — subtle, scheduled, never surprised.
+  let browEventStrength = 0;
+  if (idle) {
+    if (args.state.nextBrowAtMs === 0) {
+      args.state.nextBrowAtMs = args.nowMs + nextBrowDelayMs(micro.browEvent);
+    }
+    if (args.state.browStartedAtMs == null && args.nowMs >= args.state.nextBrowAtMs) {
+      const browEvent = createBrowEventTargets(micro.browEvent);
+      args.state.browStartedAtMs = args.nowMs;
+      args.state.browFadeInMs = browEvent.browFadeInMs;
+      args.state.browHoldMs = browEvent.browHoldMs;
+      args.state.browFadeOutMs = browEvent.browFadeOutMs;
+      args.state.browTarget = browEvent.browTarget;
+    }
+    if (args.state.browStartedAtMs != null) {
+      const elapsed = args.nowMs - args.state.browStartedAtMs;
+      if (elapsed <= args.state.browFadeInMs) {
+        browEventStrength = smoothstep(elapsed / Math.max(1, args.state.browFadeInMs));
+      } else if (elapsed <= args.state.browFadeInMs + args.state.browHoldMs) {
+        browEventStrength = 1;
+      } else if (
+        elapsed <=
+        args.state.browFadeInMs + args.state.browHoldMs + args.state.browFadeOutMs
+      ) {
+        browEventStrength =
+          1 -
+          smoothstep(
+            (elapsed - args.state.browFadeInMs - args.state.browHoldMs) /
+              Math.max(1, args.state.browFadeOutMs)
+          );
+      } else {
+        args.state.browStartedAtMs = null;
+        args.state.browTarget = 0;
+        args.state.nextBrowAtMs = args.nowMs + nextBrowDelayMs(micro.browEvent);
+        browEventStrength = 0;
+      }
+    }
+  } else {
+    // Leaving idle: stop scheduling. Any in-flight additive smoothly damps to
+    // zero in the expression runtime; reschedule fresh next time idle resumes.
+    args.state.browStartedAtMs = null;
+    args.state.nextBrowAtMs = 0;
+  }
+  const browEventValue = args.state.browTarget * browEventStrength;
+
+  // Idle-only breathing rhythm: very slow, very small swell across the face.
+  // Phase-offset per morph so it never reads as a single synchronized pulse.
+  let breathSmileLeft = 0;
+  let breathSmileRight = 0;
+  let breathCheek = 0;
+  let breathEyeSquint = 0;
+  let breathBrow = 0;
+  if (idle) {
+    const breathT = args.nowMs / 1000;
+    const breathing = micro.breathing;
+    const swell = (Math.sin(breathT * breathing.speed) + 1) / 2;
+    const swellOffset = (Math.sin(breathT * breathing.speed * 0.53 + 0.8) + 1) / 2;
+    breathSmileLeft = breathing.smileAmplitude * swell;
+    breathSmileRight = breathing.smileAmplitude * swellOffset;
+    breathCheek = breathing.cheekAmplitude * swell;
+    breathEyeSquint = breathing.eyeSquintAmplitude * swellOffset;
+    breathBrow = breathing.eyebrowAmplitude * Math.sin(breathT * breathing.speed * 0.5 + 1.7);
+  }
+
   const blinkCheekReduction = args.eyeState.blinkStartedAtMs != null ? 0.7 : 1;
-  const smileAdditiveTargets = {
-    [SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.smileLeft]:
-      args.state.smileLeftTarget * smileStrength,
-    [SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.smileRight]:
-      args.state.smileRightTarget * smileStrength,
-    [SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.cheekLeft]:
-      args.state.cheekLeftTarget * smileStrength * blinkCheekReduction,
-    [SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.cheekRight]:
-      args.state.cheekRightTarget * smileStrength * blinkCheekReduction,
+  const map = SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap;
+  const smileAdditiveTargets: Record<string, number> = {
+    [map.smileLeft]: args.state.smileLeftTarget * smileStrength + breathSmileLeft,
+    [map.smileRight]: args.state.smileRightTarget * smileStrength + breathSmileRight,
+    [map.cheekLeft]:
+      args.state.cheekLeftTarget * smileStrength * blinkCheekReduction + breathCheek,
+    [map.cheekRight]:
+      args.state.cheekRightTarget * smileStrength * blinkCheekReduction + breathCheek,
   };
+  if (idle) {
+    smileAdditiveTargets[map.eyeSquintLeft] = breathEyeSquint;
+    smileAdditiveTargets[map.eyeSquintRight] = breathEyeSquint;
+    smileAdditiveTargets[map.eyebrows] = breathBrow + browEventValue;
+  }
 
   args.state.smileAdditiveTargets = smileAdditiveTargets;
 

@@ -3142,7 +3142,14 @@ function ThreeAvatarComponent({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     /** Softer rolloff in dark tones — reduces stepped “rings” on large curved surfaces. */
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // SaraV3 owns a tone-mapping toggle (A/B vs the Blender viewport). Default
+    // ACESFilmic; "AgX" is opt-in via environmentConfig.toneMapping. Other
+    // avatars are unaffected. Rollback = set toneMapping back to "ACESFilmic".
+    renderer.toneMapping =
+      isSaraV3Avatar &&
+      (SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.toneMapping as string) === "AgX"
+        ? THREE.AgXToneMapping
+        : THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1;
     rendererRef.current = renderer;
 
@@ -3216,8 +3223,10 @@ function ThreeAvatarComponent({
 
     if (SHOW_ROOM) scene.add(roomGroup);
     // Lights
-    scene.add(new THREE.AmbientLight(0xfff8ef, 1.1));
-    scene.add(new THREE.HemisphereLight(0x9eb6d4, 0x1e2838, 0.38));
+    const ambientLight = new THREE.AmbientLight(0xfff8ef, 1.1);
+    scene.add(ambientLight);
+    const hemisphereLight = new THREE.HemisphereLight(0x9eb6d4, 0x1e2838, 0.38);
+    scene.add(hemisphereLight);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
     keyLight.position.set(3, 5, 4);
@@ -3244,6 +3253,26 @@ function ThreeAvatarComponent({
     const roomWarmth = new THREE.PointLight(0xffc9a8, 0.45, 28);
     roomWarmth.position.set(1.5, 3.5, 2);
     scene.add(roomWarmth);
+
+    // SaraV3 IBL rebalance (A1): when the HDRI environment is active, drop the
+    // analytic ambient/fill so the HDRI carries base illumination, and
+    // repurpose the single rim light to separate hair/jawline from the
+    // background. Gated on isSaraV3Avatar so Jordan / SaraV2 are untouched.
+    // Reversible: environmentConfig.enabled:false skips this and the legacy
+    // shared light values remain in effect.
+    if (isSaraV3Avatar && SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.enabled) {
+      const rig = SARA_V3_AVATAR_DEFINITION.saraV3.environmentConfig.analyticLightRig;
+      if (rig) {
+        ambientLight.intensity = rig.ambientIntensity;
+        hemisphereLight.intensity = rig.hemisphereIntensity;
+        keyLight.intensity = rig.keyIntensity;
+        fillLight.intensity = rig.fillIntensity;
+        rimLight.color.setHex(rig.rimColor);
+        rimLight.intensity = rig.rimIntensity;
+        rimLight.position.set(rig.rimPosition[0], rig.rimPosition[1], rig.rimPosition[2]);
+        roomWarmth.intensity = rig.roomWarmthIntensity;
+      }
+    }
 
     /** Cyclorama-style room: curved backdrop (center recesses) + sides nearer the figure. */
     let sessionRoomGroup: THREE.Group | null = null;
