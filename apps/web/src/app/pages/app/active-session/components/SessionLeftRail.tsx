@@ -54,7 +54,7 @@ function SessionLeftRailComponent({
     >
       <div
         ref={leftSessionChromeRef}
-        className={`pointer-events-auto ${glassPanel} flex min-h-0 max-h-[min(100dvh-8rem,42rem)] shrink-0 flex-col space-y-3 overflow-hidden p-4 sm:p-5`}
+        className={`pointer-events-auto ${glassPanel} hidden md:block flex min-h-0 max-h-[min(100dvh-8rem,42rem)] shrink-0 flex-col space-y-3 overflow-hidden p-4 sm:p-5`}
       >
         <div className="shrink-0">
           <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
