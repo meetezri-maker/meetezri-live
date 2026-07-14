@@ -13,6 +13,27 @@ export type EzriWsSchedulerChunkMeta = {
 };
 
 export type EzriWsAudioSchedulerHandlers = {
+  /**
+   * Fired SYNCHRONOUSLY at schedule time, right after `source.start(startTime)`,
+   * with the FINAL startTime (post underrun-bump) and decoded duration. Use this
+   * for sample-accurate, audio-clock-keyed timeline selection — unlike
+   * `onChunkStart`, it is not deferred through `setTimeout` and does not lag the
+   * audio under main-thread jank.
+   */
+  onChunkScheduled?: (
+    meta: EzriWsSchedulerChunkMeta,
+    timing: {
+      audioContextStartTime: number;
+      durationMs: number;
+      /**
+       * Leading digital-silence trimmed off the head of the decoded buffer
+       * before playback (seconds). Kept on the scheduled chunk metadata for
+       * diagnostics; the timeline anchors on the audible voice start, not the
+       * buffer start.
+       */
+      leadInSec: number;
+    },
+  ) => void;
   /** Fired when a chunk physically starts playing (after jitter buffer delay). */
   onChunkStart?: (
     meta: EzriWsSchedulerChunkMeta,
@@ -171,6 +192,70 @@ export class EzriWsAudioScheduler {
     return audioBuffer;
   }
 
+  /**
+   * Leading-silence trim. Decoded TTS chunks carry 0.4–1.1s of digital silence
+   * at the head, but backend phoneme timestamps are speech-relative (t=0 is the
+   * voice onset, not the buffer start). Detect the voice onset and return the
+   * seconds to skip so the audible voice aligns with the phoneme timeline.
+   *
+   * Onset detection uses a windowed-RMS gate rather than a single-sample
+   * threshold: isolated clicks/dither near t=0 can cross a per-sample threshold
+   * while the actual speech is still 0.5–0.86s away, causing those chunks to
+   * incorrectly report leadIn = 0. Requiring a run of consecutive 10ms windows
+   * above an RMS floor ignores those transient spikes. Only the first ~2s of
+   * channel 0 is scanned (silence is always at the head). Returns 0 if no onset
+   * is found or the computed lead-in would consume the whole buffer.
+   */
+  private computeLeadInSec(audioBuffer: AudioBuffer): number {
+    const WINDOW_MS = 10;
+    const RMS_THRESHOLD = 0.01;
+    const REQUIRED_CONSECUTIVE_WINDOWS = 3;
+    const SAFETY_PAD_SEC = 0.05;
+
+    const sampleRate = audioBuffer.sampleRate || this.sampleRate;
+    const channel = audioBuffer.getChannelData(0);
+    const scanLimit = Math.min(channel.length, Math.ceil(sampleRate * 2));
+    const windowSize = Math.max(
+      1,
+      Math.round((sampleRate * WINDOW_MS) / 1000),
+    );
+
+    let consecutive = 0;
+    let onsetWindowStart = -1;
+    for (let start = 0; start + windowSize <= scanLimit; start += windowSize) {
+      let sumSq = 0;
+      for (let i = start; i < start + windowSize; i++) {
+        const sample = channel[i];
+        sumSq += sample * sample;
+      }
+      const rms = Math.sqrt(sumSq / windowSize);
+      if (rms >= RMS_THRESHOLD) {
+        if (consecutive === 0) {
+          onsetWindowStart = start;
+        }
+        consecutive += 1;
+        if (consecutive >= REQUIRED_CONSECUTIVE_WINDOWS) {
+          break;
+        }
+      } else {
+        consecutive = 0;
+        onsetWindowStart = -1;
+      }
+    }
+
+    if (onsetWindowStart < 0 || consecutive < REQUIRED_CONSECUTIVE_WINDOWS) {
+      // No sustained speech onset in the scanned head — treat as no trim.
+      return 0;
+    }
+
+    const onsetSec = onsetWindowStart / sampleRate;
+    const leadInSec = Math.max(0, onsetSec - SAFETY_PAD_SEC);
+    if (leadInSec >= audioBuffer.duration) {
+      return 0;
+    }
+    return leadInSec;
+  }
+
   private sniffFormatFromBuffer(arrayBuffer: ArrayBuffer): EzriWsAudioFormat {
     const bytes = new Uint8Array(arrayBuffer.slice(0, 16));
     if (
@@ -236,14 +321,21 @@ export class EzriWsAudioScheduler {
         this.nextStartTime = ctx.currentTime + 0.05;
       }
 
+      // Trim leading digital silence so the audible voice onset aligns with the
+      // speech-relative phoneme timeline (see computeLeadInSec). Everything the
+      // scheduler models about the played audio uses `audibleDuration` — the
+      // buffer length minus the skipped head — while `source.start` skips the
+      // silence via the offset argument.
+      const leadInSec = this.computeLeadInSec(audioBuffer);
+      const audibleDuration = audioBuffer.duration - leadInSec;
+
       const crossfadeTime = 0;
       let startTime = this.nextStartTime;
       if (startTime < ctx.currentTime) {
         startTime = ctx.currentTime + 0.02;
         this.nextStartTime = startTime;
       }
-      const duration = audioBuffer.duration;
-      const endTime = startTime + duration;
+      const endTime = startTime + audibleDuration;
 
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
@@ -261,11 +353,22 @@ export class EzriWsAudioScheduler {
         gainNode.gain.value = 1;
       }
 
-      source.start(startTime);
-      this.nextStartTime += duration - crossfadeTime;
+      // Skip the leading silence: play from `leadInSec` into the buffer.
+      source.start(startTime, leadInSec);
+      this.nextStartTime += audibleDuration - crossfadeTime;
       this.activeNodes.push(source);
 
-      const durationMs = duration * 1000;
+      const durationMs = audibleDuration * 1000;
+
+      // Synchronous, audio-clock-keyed handoff — fires with the FINAL startTime
+      // so the consumer can select the timeline against `ctx.currentTime` in its
+      // RAF tick instead of waiting on the (laggy) `setTimeout` below.
+      this.handlers.onChunkScheduled?.(meta, {
+        audioContextStartTime: startTime,
+        durationMs,
+        leadInSec,
+      });
+
       const timeUntilPlay = Math.max(0, startTime - ctx.currentTime);
       window.setTimeout(() => {
         if (session !== this.sessionId) return;

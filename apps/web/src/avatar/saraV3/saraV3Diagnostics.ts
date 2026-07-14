@@ -1,3 +1,9 @@
+import type { SaraV3BehaviorDiagnostics } from "./saraV3BehaviorTypes";
+import type {
+  SaraV3IdleBehaviorDiagnostics,
+  SaraV3ListeningBehaviorDiagnostics,
+  SaraV3SentimentDiagnostics,
+} from "./saraV3Types";
 import type {
   SaraV3Diagnostics,
   SaraV3HairDiagnostics,
@@ -25,6 +31,10 @@ declare global {
     saraV3EyeDiagnostics?: SaraV3EyeDiagnostics;
     saraV3ExpressionDiagnostics?: SaraV3ExpressionDiagnostics;
     saraV3SmileDiagnostics?: SaraV3SmileDiagnostics;
+    saraV3BehaviorDiagnostics?: SaraV3BehaviorDiagnostics;
+    saraV3IdleBehaviorDiagnostics?: SaraV3IdleBehaviorDiagnostics;
+    saraV3ListeningBehaviorDiagnostics?: SaraV3ListeningBehaviorDiagnostics;
+    saraV3SentimentDiagnostics?: SaraV3SentimentDiagnostics;
     saraV3RawAudit?: SaraV3RawAudit;
     saraV3RenderAudit?: SaraV3RenderAudit;
     saraV3EnvironmentDiagnostics?: Record<string, unknown>;
@@ -234,6 +244,110 @@ export function writeSaraV3SmileDiagnostics(update: Partial<SaraV3SmileDiagnosti
     blockedByBlink: false,
     lastCollisionAvoidedAtMs: null,
     ...(window.saraV3SmileDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C1: development-only behavior-engine diagnostics. Gated on `import.meta.env.DEV`
+ * so production builds neither run nor ship this write — keeping the rollback
+ * (engine-disabled) path byte-for-byte equivalent to today in production.
+ */
+export function writeSaraV3BehaviorDiagnostics(update: Partial<SaraV3BehaviorDiagnostics>) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3BehaviorDiagnostics = {
+    activePath: "legacyPresence",
+    currentState: "idle",
+    previousState: null,
+    enteredAt: 0,
+    stateElapsed: 0,
+    transitionReason: null,
+    interrupted: false,
+    effectiveMode: "idle",
+    ...(window.saraV3BehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C4: development-only idle-behavior diagnostics. Gated on `import.meta.env.DEV`
+ * so production neither runs nor ships this write — the idle personality layer
+ * emits no production logs.
+ */
+export function writeSaraV3IdleBehaviorDiagnostics(
+  update: Partial<SaraV3IdleBehaviorDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3IdleBehaviorDiagnostics = {
+    enabled: false,
+    idleActive: false,
+    timeInIdleMs: 0,
+    breathingPhase: 0,
+    breathingValue: 0,
+    currentEventType: "none",
+    eventPhase: "inactive",
+    eventMagnitude: 0,
+    nextSmileAtMs: 0,
+    nextBrowAtMs: 0,
+    gazeActive: false,
+    gazeValue: 0,
+    idleBaselineTargets: {},
+    scheduledMicroTargets: {},
+    ...(window.saraV3IdleBehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C5: development-only listening-behavior diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * listening personality layer emits no production logs.
+ */
+export function writeSaraV3ListeningBehaviorDiagnostics(
+  update: Partial<SaraV3ListeningBehaviorDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3ListeningBehaviorDiagnostics = {
+    enabled: false,
+    listeningActive: false,
+    timeInListeningMs: 0,
+    baselineTargets: {},
+    currentEventType: "none",
+    eventPhase: "inactive",
+    eventMagnitude: 0,
+    nextEventAtMs: 0,
+    stateExpressionTargets: {},
+    scheduledMicroTargets: {},
+    tempAssetCompensation: false,
+    ...(window.saraV3ListeningBehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C3: development-only sentiment-gate diagnostics. Gated on `import.meta.env.DEV`
+ * so production neither runs nor ships this write.
+ */
+export function writeSaraV3SentimentDiagnostics(update: Partial<SaraV3SentimentDiagnostics>) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3SentimentDiagnostics = {
+    enabled: false,
+    isSpeaking: false,
+    rawCompound: null,
+    clampedCompound: null,
+    label: "",
+    direction: "neutral",
+    normalizedMagnitude: 0,
+    labelNudge: 0,
+    finalMagnitude: 0,
+    sentenceIdentity: null,
+    emotionOverlayTargets: {},
+    neutralReason: null,
+    ...(window.saraV3SentimentDiagnostics ?? {}),
     ...update,
   };
 }

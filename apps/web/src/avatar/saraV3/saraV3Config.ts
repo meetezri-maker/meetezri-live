@@ -1,12 +1,42 @@
+import { JORDAN_RFV2_BLINK_TUNING } from "@/lib/avatar/jordanRfv2Config";
 import {
-  JORDAN_RFV2_BLINK_TUNING,
-  JORDAN_RFV2_FACE_TUNING,
-  PHONEME_TO_JORDAN_VISEME,
-} from "@/lib/avatar/jordanRfv2Config";
-import type { SaraV3AvatarDefinition } from "./saraV3Types";
+  PHONEME_TO_SARA_V3_VISEME,
+  SARA_V3_PHONEME_TO_VISEME_NAME,
+} from "./saraV3VisemeMap";
+import type { SaraV3AvatarDefinition, SaraV3VisemeTable } from "./saraV3Types";
 
 export const SARA_V3_MODEL_URL = "/avatars/sara-v3.glb";
 export const useSaraV3ForSara = true;
+
+// B2.1: SaraV3 lip-sync tuning is now its own, no longer read from
+// JORDAN_RFV2_FACE_TUNING. Values are unchanged from Jordan's at the time of
+// the split, so this decoupling is behavior-neutral.
+export const SARA_V3_LOOK_AHEAD_SECONDS = 0.04;
+// B2.2: no longer the strength every viseme fires at — now a global ceiling
+// applied after `profile.strength * phonemeWeight`. Keep it as a safety clamp.
+export const SARA_V3_VISEME_MAX_STRENGTH = 0.86;
+
+/**
+ * B2.2 per-viseme intensity + jaw table. Replaces the two uniform scalars
+ * (visemeMaxStrength / jawOpenMax) that made every phoneme render as one
+ * generic shape with the same 0.22 jaw drop — bilabials included.
+ *
+ * jawOpen is authored per shape: PP is a lip closure (jaw shut), sibilants
+ * keep the teeth near-together, open vowels drive the jaw hardest.
+ *
+ * The `viseme_rest` row exists for completeness. Rest strength at runtime
+ * still comes from `lipSyncConfig.restStrength`.
+ */
+export const SARA_V3_VISEME_TABLE = {
+  viseme_AA: { strength: 0.86, jawOpen: 0.3 },
+  viseme_O: { strength: 0.82, jawOpen: 0.2 },
+  viseme_E: { strength: 0.72, jawOpen: 0.14 },
+  viseme_IH: { strength: 0.66, jawOpen: 0.12 },
+  viseme_CH: { strength: 0.72, jawOpen: 0.06 },
+  viseme_PP: { strength: 0.86, jawOpen: 0.02 },
+  mouthRollLower: { strength: 0.45, jawOpen: 0.05 },
+  viseme_rest: { strength: 0.18, jawOpen: 0 },
+} as const satisfies SaraV3VisemeTable;
 
 export const saraV3CameraConfig = {
   fov: 12,
@@ -42,10 +72,10 @@ export const SARA_V3_AVATAR_DEFINITION = {
       "viseme_AA",
       "viseme_IH",
       "viseme_O",
-      "viseme_S",
       "viseme_PP",
       "viseme_CH",
       "viseme_E",
+      "mouthRollLower",
       "jawOpen",
       "eyeBlinkLeft",
       "eyeBlinkRight",
@@ -63,10 +93,10 @@ export const SARA_V3_AVATAR_DEFINITION = {
       "viseme_AA",
       "viseme_IH",
       "viseme_O",
-      "viseme_S",
       "viseme_PP",
       "viseme_CH",
       "viseme_E",
+      "mouthRollLower",
     ],
     blinkMorphNames: ["eyeBlinkLeft", "eyeBlinkRight"],
     requiredDriverMorphs: ["viseme_AA", "jawOpen", "eyeBlinkLeft", "eyeBlinkRight"],
@@ -84,15 +114,18 @@ export const SARA_V3_AVATAR_DEFINITION = {
       "viseme_AA",
       "viseme_IH",
       "viseme_O",
-      "viseme_S",
       "viseme_PP",
       "viseme_CH",
       "viseme_E",
+      "mouthRollLower",
     ],
-    phonemeToViseme: PHONEME_TO_JORDAN_VISEME,
+    // Weight-less projection: the shared AvatarVisemeConfig contract types this
+    // as Record<string, string>. The driver reads the weighted map from
+    // `saraV3.visemeMap` instead.
+    phonemeToViseme: SARA_V3_PHONEME_TO_VISEME_NAME,
     caps: {
-      lookAheadSeconds: JORDAN_RFV2_FACE_TUNING.lookAheadSeconds,
-      visemeMaxStrength: JORDAN_RFV2_FACE_TUNING.visemeMaxStrength,
+      lookAheadSeconds: SARA_V3_LOOK_AHEAD_SECONDS,
+      visemeMaxStrength: SARA_V3_VISEME_MAX_STRENGTH,
       jawOpenMax: 0.22,
       restStrength: 0.18,
     },
@@ -179,7 +212,6 @@ export const SARA_V3_AVATAR_DEFINITION = {
       visemeAA: "viseme_AA",
       visemeIH: "viseme_IH",
       visemeO: "viseme_O",
-      visemeS: "viseme_S",
       visemePP: "viseme_PP",
       visemeCH: "viseme_CH",
       visemeE: "viseme_E",
@@ -209,7 +241,8 @@ export const SARA_V3_AVATAR_DEFINITION = {
       leftEyeball: "LeftEyeball",
       rightEyeball: "RightEyeball",
     },
-    visemeMap: PHONEME_TO_JORDAN_VISEME,
+    visemeMap: PHONEME_TO_SARA_V3_VISEME,
+    visemeTable: SARA_V3_VISEME_TABLE,
     blinkConfig: {
       closeMs: 75,
       holdMs: 35,
@@ -247,8 +280,10 @@ export const SARA_V3_AVATAR_DEFINITION = {
       moveMs: [800, 1500],
       holdMs: [400, 1200],
       returnMs: [800, 1400],
-      minInfluence: 0.02,
-      maxInfluence: 0.035,
+      // C4 TEMP VALIDATION: influence ×1.5 for a clearer glance (range/logic and
+      // blink timing unchanged). (Original: minInfluence 0.02, maxInfluence 0.035.)
+      minInfluence: 0.03,
+      maxInfluence: 0.0525,
       dampLambda: 12,
       blinkReductionFactor: 0.6,
     },
@@ -258,42 +293,106 @@ export const SARA_V3_AVATAR_DEFINITION = {
     // when leaving idle. Does not touch jawOpen or viseme_* / lip-sync.
     idleMicroMovementConfig: {
       // Continuous, very slow, very small "breathing" swell across the face.
+      // C4 TEMP VALIDATION: amplitudes ×2.5, each capped at 0.03 so the idle
+      // face is clearly readable while confirming the events reach the morphs.
+      // (Original: smile 0.012, cheek 0.006, eyeSquint 0.005, eyebrow 0.008.)
       breathing: {
         speed: 0.8,
-        smileAmplitude: 0.012,
-        cheekAmplitude: 0.006,
-        eyeSquintAmplitude: 0.005,
-        eyebrowAmplitude: 0.008,
+        smileAmplitude: 0.3, // was 0.012 (0.012*2.5=0.03, at cap)
+        cheekAmplitude: 0.5, // was 0.006
+        eyeSquintAmplitude: 0.25, // was 0.005
+        eyebrowAmplitude: 0.5, // was 0.008
       },
       // Scheduled gentle, asymmetric micro-smiles (not constant).
+      // C4 TEMP VALIDATION: faster + stronger for visual confirmation.
+      // (Original: interval 8000–15000, smileLeft 0.05, smileRight 0.06, cheek 0.02.)
       smileEvent: {
-        minIntervalMs: 8000,
-        maxIntervalMs: 15000,
-        smileLeftMax: 0.05,
-        smileRightMax: 0.06,
-        cheekMax: 0.02,
+        minIntervalMs: 3000,
+        maxIntervalMs: 5000,
+        smileLeftMax: 0.12,
+        smileRightMax: 0.12,
+        cheekMax: 0.06,
       },
       // Scheduled subtle brow relaxation/lift (never "surprised").
+      // C4 TEMP VALIDATION: faster + stronger; fadeOut clamped to <=1s/phase.
+      // (Original: interval 10000–20000, fadeOut [900,1500], eyebrowMax 0.05.)
       browEvent: {
-        minIntervalMs: 10000,
-        maxIntervalMs: 20000,
+        minIntervalMs: 4000,
+        maxIntervalMs: 7000,
         fadeInMs: [500, 900],
         holdMs: [400, 900],
-        fadeOutMs: [900, 1500],
-        eyebrowMax: 0.05,
+        fadeOutMs: [900, 1000],
+        eyebrowMax: 0.1,
+      },
+    },
+    // C4: idle-personality coordinator policy. The per-morph idle tuning already
+    // lives in `idleMicroMovementConfig` (breathing / micro-smile / brow) and
+    // `idleEyeballConfig` (gaze glances); this block holds only the C4
+    // coordination values so nothing is hard-coded in the runtime.
+    idleBehaviorConfig: {
+      // On every (re)entry into idle, the micro-smile timer is rescheduled to a
+      // fresh random time within this window. Keeps a smile from firing the
+      // instant idle resumes and prevents the loop from lining up run to run.
+      // Mirrors `idleMicroMovementConfig.smileEvent` interval on purpose.
+      reentrySmileDelayMs: [8000, 15000],
+      // Route the continuous breathing swell into C2's `idleBaseline` layer and
+      // the discrete smile/brow events into the `scheduledMicro` layer. When
+      // false, everything stays in `scheduledMicro` (pre-C4 grouping).
+      routeBreathingToIdleBaseline: true,
+    },
+    // C5: listening-personality behavior. All values TEMP CURRENT-ASSET
+    // COMPENSATION — the current SaraV3 GLB deforms weakly, so these run higher
+    // than a final rig would need for the behavior to read on a client demo.
+    // Re-tune (lower) after the updated GLB arrives. Nothing here is hard-coded
+    // in the runtime; the coordinator reads every value from this block.
+    listeningBehaviorConfig: {
+      // Stable attentive baseline held for the whole listening state. Replaces
+      // the static expressionConfig.listening base while C5 is enabled.
+      // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      base: {
+        mouthSmileLeft: 0.26,
+        mouthSmileRight: 0.27,
+        cheekSquintLeft: 0.28,
+        cheekSquintRight: 0.285,
+        eyebrows: 0.4,
+        eyeSquintLeft: 0.05,
+        eyeSquintRight: 0.05,
+      },
+      // Rare acknowledgement pulses (a soft smile beat or a brow lift) layered on
+      // top of the baseline via C2's scheduledMicro slot. Randomized interval,
+      // short fade-in / hold / fade-out. Peaks are TEMP high for weak-morph
+      // visibility. TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      acknowledgement: {
+        minIntervalMs: 6000,
+        maxIntervalMs: 11000,
+        fadeInMs: [250, 400],
+        holdMs: [300, 600],
+        fadeOutMs: [500, 800],
+        smilePeak: 0.45,
+        cheekPeak: 0.4,
+        eyebrowPeak: 0.55,
+        // Probability an acknowledgement is a smile beat (else a brow lift).
+        smilePulseChance: 0.5,
+      },
+      // Eye attention (comfortable eye contact + tiny refocus) is provided by the
+      // existing shared eyeLook drift (idleEyeConfig.modeScale.listening = 0.7):
+      // no side glances, no scanning. A dedicated listening gaze is deferred to
+      // C8, so C5 adds no new eye values and does not touch the eye runtime.
+      eyeAttention: {
+        reuseIdleEyeDrift: true,
       },
     },
     expressionConfig: {
       // Soft, neutral resting face. A gentle closed-mouth pleasantness with a
       // trace of eye warmth — deliberately low so it never reads as a grin.
       idle: {
-        mouthSmileLeft: 0.08,
-        mouthSmileRight: 0.085,
-        cheekSquintLeft: 0.01,
-        cheekSquintRight: 0.01,
+        mouthSmileLeft: 0.5,
+        mouthSmileRight: 0.8,
+        cheekSquintLeft: 0.4,
+        cheekSquintRight: 0.4,
         eyeSquintLeft: 0.03,
         eyeSquintRight: 0.03,
-        eyebrows: 0.03,
+        eyebrows: 0.5,
       },
       // Attentive and warm, but still clearly not a full grin. Slight brow
       // raise + genuine (Duchenne) eye/cheek engagement to read as "listening".
@@ -329,10 +428,39 @@ export const SARA_V3_AVATAR_DEFINITION = {
       },
       blendSpeed: 3.5,
     },
+    // C3: sentence-level speaking-sentiment gate. Conservative, symmetric,
+    // bounded. Direction comes only from the compound's sign; a matching label
+    // may add a small same-direction nudge but can never flip or rescue.
+    sentimentGateConfig: {
+      neutralThreshold: 0.4,
+      maxPositiveDelta: 0.18,
+      maxConcernDelta: 0.14,
+      labelNudgeCap: 0.03,
+      // Primary morph = mouthSmile (ratio 1). Cheek is a gentle Duchenne
+      // support. A small brow raise is direction-safe for positive (matches the
+      // attentive listening base, eyebrows: 0.14 > 0).
+      positiveMorphRatios: {
+        mouthSmile: 1,
+        cheekSquint: 0.4,
+        eyebrows: 0.2,
+      },
+      // Primary morph = mouthFrown (ratio 1) + a soft `sad`. Eyebrow direction
+      // for concern is NOT verified on this GLB, so it is deliberately 0 (see
+      // C3 notes) rather than guessed.
+      concernMorphRatios: {
+        mouthFrown: 1,
+        sad: 0.7,
+        eyebrows: 0,
+      },
+    },
     lipSyncConfig: {
-      lookAheadSeconds: JORDAN_RFV2_FACE_TUNING.lookAheadSeconds,
+      lookAheadSeconds: SARA_V3_LOOK_AHEAD_SECONDS,
       timingOffsetSeconds: 0,
-      visemeMaxStrength: JORDAN_RFV2_FACE_TUNING.visemeMaxStrength,
+      // B2.2: global ceiling on `profile.strength * phonemeWeight`.
+      visemeMaxStrength: SARA_V3_VISEME_MAX_STRENGTH,
+      // B2.2: superseded by SARA_V3_VISEME_TABLE[viseme].jawOpen for the
+      // phoneme-driven path. Retained as the rollback value; the audio-driven
+      // mouth fallback keeps its own separate jawOpenMax below.
       jawOpenMax: 0.22,
       restStrength: 0.18,
       attackSpeed: 18,

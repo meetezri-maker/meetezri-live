@@ -110,23 +110,39 @@ import {
 } from "@/lib/avatar/saraRfv2SmoothingLayer";
 import {
   SARA_V3_AVATAR_DEFINITION,
+  SARA_V3_BEHAVIOR_ENGINE_CONFIG,
+  SARA_V3_IDLE_BEHAVIOR_CONFIG,
+  SARA_V3_LISTENING_BEHAVIOR_CONFIG,
+  SARA_V3_SENTIMENT_GATE_CONFIG,
   applySaraV3Environment,
   captureSaraV3EnvironmentComparison,
+  createSaraV3BehaviorEngineState,
+  createSaraV3EmotionOverlayState,
   createSaraV3EyeRuntimeState,
   createSaraV3ExpressionState,
+  createSaraV3IdleBehaviorState,
+  createSaraV3ListeningBehaviorState,
   createSaraV3ModelController,
   createSaraV3PresenceState,
   createSaraV3SmileRuntimeState,
   createSaraV3VisemeDriverState,
   runSaraV3RawRenderAudit,
+  updateSaraV3BehaviorStateMachine,
   updateSaraV3EyeRuntime,
   updateSaraV3ExpressionRuntime,
+  updateSaraV3IdleBehavior,
+  updateSaraV3ListeningBehavior,
   updateSaraV3PresenceRuntime,
   updateSaraV3SmileRuntime,
+  updateSaraV3SpeakingEmotionOverlay,
   updateSaraV3VisemeDriver,
+  type SaraV3BehaviorEngineState,
   type SaraV3ControllerState,
+  type SaraV3EmotionOverlayState,
   type SaraV3EyeRuntimeState,
   type SaraV3ExpressionState,
+  type SaraV3IdleBehaviorState,
+  type SaraV3ListeningBehaviorState,
   type SaraV3PresenceState,
   type SaraV3SmileRuntimeState,
   type SaraV3VisemeDriverState,
@@ -2940,6 +2956,22 @@ function ThreeAvatarComponent({
   const saraV3PresenceStateRef = useRef<SaraV3PresenceState>(
     createSaraV3PresenceState()
   );
+  // C1: authoritative behavior-state metadata wrapping the presence resolver.
+  const saraV3BehaviorStateRef = useRef<SaraV3BehaviorEngineState>(
+    createSaraV3BehaviorEngineState()
+  );
+  // C3: SaraV3-owned per-sentence speaking-emotion overlay (feeds C2's slot).
+  const saraV3EmotionOverlayStateRef = useRef<SaraV3EmotionOverlayState>(
+    createSaraV3EmotionOverlayState()
+  );
+  // C4: idle-personality coordinator state (routes idle output into C2 slots).
+  const saraV3IdleStateRef = useRef<SaraV3IdleBehaviorState>(
+    createSaraV3IdleBehaviorState()
+  );
+  // C5: listening-personality coordinator state (attentive baseline + acks).
+  const saraV3ListeningStateRef = useRef<SaraV3ListeningBehaviorState>(
+    createSaraV3ListeningBehaviorState()
+  );
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
   const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
@@ -3561,6 +3593,10 @@ function ThreeAvatarComponent({
     saraV3ExpressionStateRef.current = createSaraV3ExpressionState();
     saraV3SmileStateRef.current = createSaraV3SmileRuntimeState();
     saraV3PresenceStateRef.current = createSaraV3PresenceState();
+    saraV3BehaviorStateRef.current = createSaraV3BehaviorEngineState();
+    saraV3EmotionOverlayStateRef.current = createSaraV3EmotionOverlayState();
+    saraV3IdleStateRef.current = createSaraV3IdleBehaviorState();
+    saraV3ListeningStateRef.current = createSaraV3ListeningBehaviorState();
     faceBoneDefaultsRef.current = new Map();
     jordanIdlePresenceBonesRef.current = [];
     avatarRootRef.current = null;
@@ -7295,12 +7331,28 @@ function ThreeAvatarComponent({
 	              isSpeaking: speaking,
 	              dt,
 	            });
-	            updateSaraV3PresenceRuntime({
-	              state: saraV3PresenceStateRef.current,
-	              isSpeaking: speaking,
-	              isListening: isListeningRef.current,
-	              isThinking: isThinkingRef.current,
-	            });
+	            // C1: behavior engine wraps the presence resolver. When enabled it
+	            // writes the same effective mode into saraV3PresenceStateRef (which
+	            // every downstream subsystem reads) plus authoritative state
+	            // metadata. When disabled, the legacy PresenceRuntime path runs
+	            // exactly as before — the one-line rollback.
+	            if (SARA_V3_BEHAVIOR_ENGINE_CONFIG.enabled) {
+	              updateSaraV3BehaviorStateMachine({
+	                behavior: saraV3BehaviorStateRef.current,
+	                presence: saraV3PresenceStateRef.current,
+	                isSpeaking: speaking,
+	                isListening: isListeningRef.current,
+	                isThinking: isThinkingRef.current,
+	                nowMs: now,
+	              });
+	            } else {
+	              updateSaraV3PresenceRuntime({
+	                state: saraV3PresenceStateRef.current,
+	                isSpeaking: speaking,
+	                isListening: isListeningRef.current,
+	                isThinking: isThinkingRef.current,
+	              });
+	            }
 	            updateSaraV3EyeRuntime({
 	              state: saraV3EyeStateRef.current,
 	              bindings: saraV3ControllerRef.current.bindings,
@@ -7313,12 +7365,56 @@ function ThreeAvatarComponent({
 	              eyeState: saraV3EyeStateRef.current,
 	              nowMs: now,
 	            });
+	            // C3: evaluate sentence-level speaking sentiment once per new chunk
+	            // and hold it through the sentence. Feeds C2's emotionOverlayTargets.
+	            // Does not touch lip-sync, viseme, jaw, blink, smile, gaze, or head.
+	            updateSaraV3SpeakingEmotionOverlay({
+	              state: saraV3EmotionOverlayStateRef.current,
+	              enabled: SARA_V3_SENTIMENT_GATE_CONFIG.enabled,
+	              isSpeaking: speaking,
+	              timeline: avatarPhonemeTimelineRef.current,
+	            });
+	            // C4: idle personality coordinator. Runs after the smile runtime
+	            // so it can route the already-computed breathing/event split into
+	            // C2's idleBaseline + scheduledMicro slots. Idle-only; writes no
+	            // morphs. When SARA_V3_IDLE_BEHAVIOR_CONFIG.enabled is false it
+	            // returns the pre-C4 grouping (all in scheduledMicro, none in
+	            // idleBaseline), so the expression sum is byte-identical to pre-C4.
+	            const saraV3IdleTargets = updateSaraV3IdleBehavior({
+	              state: saraV3IdleStateRef.current,
+	              activeMode: saraV3PresenceStateRef.current.currentMode,
+	              smileState: saraV3SmileStateRef.current,
+	              eyeState: saraV3EyeStateRef.current,
+	              nowMs: now,
+	            });
+	            // C5: listening personality coordinator. Runs before the
+	            // expression runtime. While C1 state is `listening` (and enabled)
+	            // it owns the attentive baseline (stateExpression override) plus
+	            // rare acknowledgement pulses (scheduledMicro), and is the sole
+	            // listening micro-event source. When not active it returns empty
+	            // maps and we fall back to the pre-C5 sources below.
+	            const saraV3ListeningTargets = updateSaraV3ListeningBehavior({
+	              state: saraV3ListeningStateRef.current,
+	              activeMode: saraV3PresenceStateRef.current.currentMode,
+	              nowMs: now,
+	            });
+	            const saraV3ListeningActive =
+	              SARA_V3_LISTENING_BEHAVIOR_CONFIG.enabled && saraV3ListeningTargets.active;
 	            updateSaraV3ExpressionRuntime({
 	              state: saraV3ExpressionStateRef.current,
 	              bindings: saraV3ControllerRef.current.bindings,
 	              activePresenceState: saraV3PresenceStateRef.current.currentMode,
-	              scheduledSmileTargets: saraV3SmileStateRef.current.smileAdditiveTargets,
+	              // C5: attentive baseline replaces the static listening base when active.
+	              stateExpressionTargets: saraV3ListeningActive
+	                ? saraV3ListeningTargets.stateExpressionTargets
+	                : undefined,
+	              // C5 owns listening micro-events; otherwise use the C4 coordinator's.
+	              scheduledSmileTargets: saraV3ListeningActive
+	                ? saraV3ListeningTargets.scheduledMicroTargets
+	                : saraV3IdleTargets.scheduledMicroTargets,
+	              idleBaselineTargets: saraV3IdleTargets.idleBaselineTargets,
 	              coordinatedBlinkSupport: saraV3EyeStateRef.current.coordinatedMorphs,
+	              emotionOverlayTargets: saraV3EmotionOverlayStateRef.current.targets,
 	              dt,
 	            });
 	          }

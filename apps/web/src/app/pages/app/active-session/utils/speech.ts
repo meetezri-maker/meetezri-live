@@ -1,3 +1,5 @@
+import { readSentimentCompoundRaw } from "@/lib/avatar/avatarExpressionUtils";
+
 /** Lip-sync openness from transcript position (no Three.js — safe for orchestrator bundle). */
 export function getSpeechOpennessAt(text: string, idx: number): number {
   if (!text || idx < 0 || idx >= text.length) return 0.1;
@@ -20,16 +22,17 @@ export function getSpeechOpennessAt(text: string, idx: number): number {
   return Math.min(0.92, Math.max(0.02, normalized));
 }
 
+/**
+ * Legacy Jordan sentiment compound. The generic numeric extraction now lives in
+ * `avatarExpressionUtils.readSentimentCompoundRaw`; this is a thin shim that
+ * preserves the exact historical contract (`number | undefined`, unclamped, NaN
+ * passthrough) for the Jordan behavior scheduler. Do not add clamping/null here
+ * — that would change Jordan's visible behavior. (avatarExpressionUtils only
+ * imports `three` as a type, so this keeps speech.ts free of a runtime Three
+ * dependency.)
+ */
 export function extractJordanSentimentCompound(
   sentiment: unknown,
 ): number | undefined {
-  if (!sentiment || typeof sentiment !== "object") {
-    return undefined;
-  }
-
-  const record = sentiment as Record<string, unknown>;
-  const candidates = [record.compound, record.score, record.polarity, record.value];
-  const numeric = candidates.find((value) => typeof value === "number");
-
-  return typeof numeric === "number" ? numeric : undefined;
+  return readSentimentCompoundRaw(sentiment);
 }

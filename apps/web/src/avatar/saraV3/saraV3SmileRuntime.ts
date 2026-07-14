@@ -1,4 +1,5 @@
 import { SARA_V3_AVATAR_DEFINITION } from "./saraV3Config";
+import { SARA_V3_IDLE_BEHAVIOR_CONFIG } from "./saraV3BehaviorConfig";
 import { writeSaraV3SmileDiagnostics } from "./saraV3Diagnostics";
 import type {
   SaraV3EyeRuntimeState,
@@ -139,7 +140,23 @@ export function createSaraV3SmileRuntimeState(): SaraV3SmileRuntimeState {
     browHoldMs: 0,
     browFadeOutMs: 0,
     browTarget: 0,
+    // C4
+    lastActivePresenceState: null,
+    smilePhase: "idle",
+    smileStrength: 0,
+    browEventStrength: 0,
+    breathingTargets: {},
+    eventTargets: {},
   };
+}
+
+/**
+ * C4: fresh idle micro-smile delay used on idle (re)entry, drawn from the
+ * SaraV3-owned `idleBehaviorConfig.reentrySmileDelayMs` window.
+ */
+function nextIdleReentrySmileDelayMs() {
+  const [min, max] = SARA_V3_AVATAR_DEFINITION.saraV3.idleBehaviorConfig.reentrySmileDelayMs;
+  return randomBetween(min, max);
 }
 
 export function updateSaraV3SmileRuntime(args: {
@@ -148,6 +165,20 @@ export function updateSaraV3SmileRuntime(args: {
   eyeState: SaraV3EyeRuntimeState;
   nowMs: number;
 }) {
+  // C4: on entering idle from another mode, restart the micro-smile timer with
+  // fresh randomized timing so a smile never fires the instant idle resumes and
+  // the cadence never lines up run-to-run. Gated by the C4 flag; when disabled
+  // the timer spans modes exactly as it did pre-C4. Idle-only — non-idle smile
+  // scheduling is untouched. (Brow + eyeball glances already self-reset on exit.)
+  const enteringIdle =
+    SARA_V3_IDLE_BEHAVIOR_CONFIG.enabled &&
+    args.activePresenceState === "idle" &&
+    args.state.lastActivePresenceState !== "idle" &&
+    args.state.lastActivePresenceState !== null;
+  if (enteringIdle) {
+    args.state.nextSmileAtMs = args.nowMs + nextIdleReentrySmileDelayMs();
+  }
+
   if (args.state.nextSmileAtMs === 0) {
     args.state.nextSmileAtMs = scheduleNextSmile(args.nowMs, args.activePresenceState);
   }
@@ -283,21 +314,46 @@ export function updateSaraV3SmileRuntime(args: {
 
   const blinkCheekReduction = args.eyeState.blinkStartedAtMs != null ? 0.7 : 1;
   const map = SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap;
-  const smileAdditiveTargets: Record<string, number> = {
-    [map.smileLeft]: args.state.smileLeftTarget * smileStrength + breathSmileLeft,
-    [map.smileRight]: args.state.smileRightTarget * smileStrength + breathSmileRight,
-    [map.cheekLeft]:
-      args.state.cheekLeftTarget * smileStrength * blinkCheekReduction + breathCheek,
-    [map.cheekRight]:
-      args.state.cheekRightTarget * smileStrength * blinkCheekReduction + breathCheek,
+
+  // C4: split the additive output into its continuous "breathing" baseline and
+  // its discrete smile/brow event portion. The two maps always sum to the exact
+  // same `smileAdditiveTargets` produced pre-C4 — the idle coordinator routes
+  // breathing → C2 idleBaseline and events → C2 scheduledMicro without changing
+  // the summed result. Non-idle: breathing terms are all zero.
+  const eventTargets: Record<string, number> = {
+    [map.smileLeft]: args.state.smileLeftTarget * smileStrength,
+    [map.smileRight]: args.state.smileRightTarget * smileStrength,
+    [map.cheekLeft]: args.state.cheekLeftTarget * smileStrength * blinkCheekReduction,
+    [map.cheekRight]: args.state.cheekRightTarget * smileStrength * blinkCheekReduction,
+  };
+  const breathingTargets: Record<string, number> = {
+    [map.smileLeft]: breathSmileLeft,
+    [map.smileRight]: breathSmileRight,
+    [map.cheekLeft]: breathCheek,
+    [map.cheekRight]: breathCheek,
   };
   if (idle) {
-    smileAdditiveTargets[map.eyeSquintLeft] = breathEyeSquint;
-    smileAdditiveTargets[map.eyeSquintRight] = breathEyeSquint;
-    smileAdditiveTargets[map.eyebrows] = breathBrow + browEventValue;
+    breathingTargets[map.eyeSquintLeft] = breathEyeSquint;
+    breathingTargets[map.eyeSquintRight] = breathEyeSquint;
+    breathingTargets[map.eyebrows] = breathBrow;
+    eventTargets[map.eyebrows] = browEventValue;
+  }
+
+  const smileAdditiveTargets: Record<string, number> = {};
+  for (const key of new Set([
+    ...Object.keys(breathingTargets),
+    ...Object.keys(eventTargets),
+  ])) {
+    smileAdditiveTargets[key] = (breathingTargets[key] ?? 0) + (eventTargets[key] ?? 0);
   }
 
   args.state.smileAdditiveTargets = smileAdditiveTargets;
+  args.state.breathingTargets = breathingTargets;
+  args.state.eventTargets = eventTargets;
+  args.state.smilePhase = smilePhase;
+  args.state.smileStrength = smileStrength;
+  args.state.browEventStrength = browEventStrength;
+  args.state.lastActivePresenceState = args.activePresenceState;
 
   writeSaraV3SmileDiagnostics({
     nextSmileAtMs: args.state.nextSmileAtMs,

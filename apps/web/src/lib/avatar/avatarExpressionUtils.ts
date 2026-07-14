@@ -7,6 +7,43 @@ import {
   type JordanMorphName,
 } from "./jordanRfv2Config";
 
+/**
+ * Reads the raw numeric sentiment "compound" from a sentiment payload, scanning
+ * `compound → score → polarity → value` for the first numeric field. Returns
+ * `undefined` when the payload is not an object or has no numeric field.
+ *
+ * This is the generic parse relocated out of `extractJordanSentimentCompound`
+ * (active-session/utils/speech.ts). It intentionally does NOT clamp or
+ * finite-check, so the legacy Jordan contract (`number | undefined`, unclamped,
+ * NaN passthrough) is preserved byte-for-byte when that helper delegates here.
+ */
+export function readSentimentCompoundRaw(sentiment: unknown): number | undefined {
+  if (!sentiment || typeof sentiment !== "object") {
+    return undefined;
+  }
+  const record = sentiment as Record<string, unknown>;
+  const candidates = [record.compound, record.score, record.polarity, record.value];
+  const numeric = candidates.find((value) => typeof value === "number");
+  return typeof numeric === "number" ? numeric : undefined;
+}
+
+/**
+ * C3 shared sentiment extraction. Parses the raw compound (see
+ * {@link readSentimentCompoundRaw}) and returns a reliable value clamped to
+ * [-1, 1], or `null` when no finite numeric compound is available.
+ *
+ * Distinct from the legacy Jordan helper on purpose: this one clamps and uses
+ * `null` (not `undefined`) so SaraV3's sentiment gate has a single, well-bounded
+ * numeric contract to reason about.
+ */
+export function extractSentimentCompound(sentiment: unknown): number | null {
+  const raw = readSentimentCompoundRaw(sentiment);
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return null;
+  }
+  return Math.min(1, Math.max(-1, raw));
+}
+
 export function getSentimentLabel(sentiment: unknown): string {
   if (!sentiment) return "";
   if (typeof sentiment === "string") return sentiment.toLowerCase();

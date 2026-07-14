@@ -105,6 +105,21 @@ type WsAudioQueueItem = {
   saraGreetingSync?: SaraGreetingSyncState;
 };
 
+/** B1.1b: one scheduled chunk, keyed by AudioContext start/end for clock-driven selection. */
+type WsTimelineScheduleEntry = {
+  /** AudioContext seconds — the FINAL `source.start()` time (post underrun-bump). */
+  startTime: number;
+  /** startTime + decoded duration. */
+  endTime: number;
+  /** Item ref — `avatarData` may attach late via the repair chain after scheduling. */
+  item: WsAudioQueueItem;
+  /** Lazily normalized at first active frame, cached; re-normalized if avatarData changes. */
+  timeline: AvatarPhonemeTimeline | null;
+  normalized: boolean;
+  /** The `avatarData` ref the cached timeline was built from (detects null→non-null repair). */
+  normalizedAvatarData: EzriAvatarData | null;
+};
+
 type SaraGreetingDiagnostics = {
   greetingSentence: string;
   audioReceived: number | null;
@@ -692,9 +707,24 @@ export function ActiveSession() {
   const wsAudioQueueRef = useRef<WsAudioQueueItem[]>([]);
   const wsScheduledChunkMapRef = useRef(new Map<string, WsAudioQueueItem>());
   const wsSchedulerRef = useRef<EzriWsAudioScheduler | null>(null);
-  const wsChunkClockRef = useRef<{ ctx: AudioContext; startTime: number } | null>(
-    null,
-  );
+  /**
+   * B1.1b: per-turn schedule of played chunks, keyed by the sample-accurate
+   * AudioContext start/end times captured synchronously at `source.start()`
+   * (see `onChunkScheduled`). The analyser RAF selects the active entry each
+   * frame by `ctx.currentTime`, replacing the laggy `setTimeout`-driven swap.
+   */
+  const wsTimelineScheduleRef = useRef<WsTimelineScheduleEntry[]>([]);
+  /** The AudioContext the current schedule entries were captured against (§4d). */
+  const wsTimelineScheduleCtxRef = useRef<AudioContext | null>(null);
+  /**
+   * B1.1b swap-lag audit (diagnostic-only). Kept in refs, not tickClock locals,
+   * because startWsSchedulerMouthAnalyser re-creates tickClock on every
+   * onChunkScheduled — closure locals would reset at every boundary (exactly
+   * where we measure) and record spurious transitions. Persisting across RAF
+   * restarts makes the recorded transitions reflect true audio boundaries.
+   */
+  const wsSwapAuditPrevActiveRef = useRef<WsTimelineScheduleEntry | null>(null);
+  const wsSwapAuditLastTickRef = useRef(0);
   const wsIsPlaybackActiveRef = useRef(false);
   /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
   const wsTtsStreamingRef = useRef(false);
@@ -924,8 +954,60 @@ export function ActiveSession() {
   const playbackDoneCooldownTimerRef = useRef<number | null>(null);
   /** Bumped on interrupt/pause â€” invalidates awaited work inside `playEzriAudio`. */
   const audioPlaySeqRef = useRef<number>(0);
-  const avatarPendingDataRef = useRef<EzriAvatarData | null>(null);
-  const avatarPendingDataReceivedAtRef = useRef<number | null>(null);
+  // Pending split-shape avatar_data (phonemes) awaiting pairing with a raw binary
+  // audio frame. Bounded FIFO keyed by chunk_index (B1.1c) — replaces the old
+  // single `avatarPendingDataRef` slot, which dropped phonemes whenever a normal
+  // multi-sentence reply deviated from strict avatar_data→audio alternation.
+  const avatarPendingQueueRef = useRef<
+    Array<{ data: EzriAvatarData; receivedAt: number; chunkIndex: number | null }>
+  >([]);
+  // Ordinal of the next raw binary audio frame in this turn (binary frames carry
+  // no index, so the audio side counts; avatar_data carries chunk_index).
+  const wsBinaryAudioSeqRef = useRef(0);
+  const pushPendingAvatarData = (data: EzriAvatarData, receivedAt: number) => {
+    const queue = avatarPendingQueueRef.current;
+    queue.push({
+      data,
+      receivedAt,
+      chunkIndex: typeof data.chunk_index === "number" ? data.chunk_index : null,
+    });
+    while (queue.length > 16) {
+      queue.shift();
+      console.warn(
+        "[Ezri] pending avatar_data queue overflow — dropping oldest phonemes",
+      );
+    }
+  };
+  // Pair a binary audio frame with its phonemes: exact chunk_index match on the
+  // per-turn ordinal, else FIFO (preserves prior behavior when the backend omits
+  // chunk_index), else null (the existing late-repair chain stays the fallback).
+  const takePendingAvatarDataForSeq = (
+    seq: number,
+  ): { data: EzriAvatarData; receivedAt: number } | null => {
+    const queue = avatarPendingQueueRef.current;
+    const exactIdx = queue.findIndex((entry) => entry.chunkIndex === seq);
+    const idx = exactIdx >= 0 ? exactIdx : queue.length > 0 ? 0 : -1;
+    if (idx < 0) return null;
+    const [entry] = queue.splice(idx, 1);
+    return { data: entry.data, receivedAt: entry.receivedAt };
+  };
+  // Non-consuming head peek — for the legacy REST-fallback diagnostics that only
+  // ask "is there pending avatar_data / what is it" (1-deep behavior preserved).
+  const peekPendingAvatarData = ():
+    | { data: EzriAvatarData; receivedAt: number }
+    | null => {
+    const head = avatarPendingQueueRef.current[0];
+    return head ? { data: head.data, receivedAt: head.receivedAt } : null;
+  };
+  const removePendingAvatarData = (data: EzriAvatarData) => {
+    avatarPendingQueueRef.current = avatarPendingQueueRef.current.filter(
+      (entry) => entry.data !== data,
+    );
+  };
+  const clearPendingAvatarData = () => {
+    avatarPendingQueueRef.current = [];
+    wsBinaryAudioSeqRef.current = 0;
+  };
   const avatarPhonemeTimelineRef = useRef<AvatarPhonemeTimeline | null>(null);
   const avatarAudioCurrentTimeRef = useRef(0);
   const saraGreetingSyncSeqRef = useRef(0);
@@ -1068,7 +1150,7 @@ export function ActiveSession() {
     // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
     wsSchedulerRef.current?.stop();
     wsScheduledChunkMapRef.current.clear();
-    wsChunkClockRef.current = null;
+    wsTimelineScheduleRef.current = []; // B1.1b: barge-in invalidates scheduled timelines
     wsAudioQueueRef.current = [];
     wsAudioReorderBufferRef.current = {};
     wsNextExpectedChunkIndexRef.current = 0;
@@ -1105,8 +1187,7 @@ export function ActiveSession() {
     mouthAudioLevelRef.current = 0;
     avatarAudioCurrentTimeRef.current = 0;
     avatarPhonemeTimelineRef.current = null;
-    avatarPendingDataRef.current = null;
-    avatarPendingDataReceivedAtRef.current = null;
+    clearPendingAvatarData();
     updateSaraV3AudioDiagnostics({
       isSpeaking: false,
       audioCurrentTime: 0,
@@ -1300,6 +1381,13 @@ export function ActiveSession() {
     resumeStt();
   };
 
+  // REST TTS fallback path only (see speakRest callers). This is NOT the
+  // streaming/greeting path — that runs through the WS audio scheduler
+  // (wsAudioScheduler.ts). Its lip-sync clock is HTMLMediaElement.currentTime,
+  // which is coarse relative to the scheduler's AudioContext clock; that is
+  // acceptable here because this path is a degraded fallback only. Do not extend
+  // it — new audio features must go through the scheduler.
+  // See docs/lipsync-clock-audit.md (addendum).
   const playEzriAudio = async (
     text: string,
     audioSource: any,
@@ -1442,7 +1530,7 @@ export function ActiveSession() {
         welcomeHasAvatarData: Boolean(
           timeline?.phonemes.length ||
             opts?.avatarData ||
-            avatarPendingDataRef.current ||
+            peekPendingAvatarData() ||
             currentAvatarDataReceivedAt !== null
         ),
         welcomeTimelineLength: timeline?.phonemes.length ?? 0,
@@ -1482,17 +1570,17 @@ export function ActiveSession() {
         !avatarPhonemeTimelineRef.current?.phonemes?.length
       ) {
         waitedForPhonemesBeforePlayback = true;
-        if (avatarPendingDataRef.current) {
+        const pendingHead = peekPendingAvatarData();
+        if (pendingHead) {
           const lateTimeline = normalizeAvatarPhonemeTimeline(
-            avatarPendingDataRef.current,
+            pendingHead.data,
             Number.isFinite(audio.duration) ? audio.duration : undefined
           );
           if (lateTimeline?.phonemes.length) {
             avatarPhonemeTimelineRef.current = lateTimeline;
             currentAvatarDataReceivedAt =
-              avatarPendingDataReceivedAtRef.current ?? performance.now();
-            avatarPendingDataRef.current = null;
-            avatarPendingDataReceivedAtRef.current = null;
+              pendingHead.receivedAt ?? performance.now();
+            removePendingAvatarData(pendingHead.data);
             updateSaraV3WelcomeTimelineDiagnostics(lateTimeline);
             break;
           }
@@ -1674,7 +1762,7 @@ export function ActiveSession() {
           welcomeHasAvatarData: Boolean(
             activeWelcomeTimeline?.phonemes.length ||
               opts?.avatarData ||
-              avatarPendingDataRef.current ||
+              peekPendingAvatarData() ||
               currentAvatarDataReceivedAt !== null
           ),
           welcomeTimelineLength: activeWelcomeTimeline?.phonemes.length ?? 0,
@@ -1840,7 +1928,7 @@ export function ActiveSession() {
           opts?.partOfWsStreamingTurn ||
             opts?.saraGreetingSync ||
             opts?.avatarData ||
-            avatarPendingDataRef.current
+            peekPendingAvatarData()
         );
       const waitDiagnostics = shouldWaitForSaraPhonemes
         ? await waitForSaraPhonemesBeforePlayback()
@@ -1859,7 +1947,7 @@ export function ActiveSession() {
           welcomeAudioPlaying: true,
           welcomeAudioCurrentTime: 0,
           welcomeAudioDuration: Number.isFinite(audio.duration) ? audio.duration : null,
-          welcomeHasAvatarData: Boolean(opts?.avatarData ?? avatarPendingDataRef.current),
+          welcomeHasAvatarData: Boolean(opts?.avatarData ?? peekPendingAvatarData()),
           welcomeTimelineLength: avatarPhonemeTimelineRef.current?.phonemes.length ?? 0,
           welcomeTimelineFirstItem: avatarPhonemeTimelineRef.current?.phonemes[0]
             ? {
@@ -1887,7 +1975,7 @@ export function ActiveSession() {
               : null,
 	          reasonLipsNotMoving: avatarPhonemeTimelineRef.current?.phonemes.length
 	            ? null
-	            : Boolean(opts?.avatarData ?? avatarPendingDataRef.current)
+	            : Boolean(opts?.avatarData ?? peekPendingAvatarData())
 	              ? "Welcome phoneme timeline is missing; SaraV3 will stay on viseme_rest and use subtle jaw fallback."
 	              : "Welcome avatar_data is still missing at playback start; SaraV3 will stay on viseme_rest and use subtle jaw fallback.",
 	        });
@@ -2100,6 +2188,10 @@ export function ActiveSession() {
   const resetWsAudioReorderBuffer = () => {
     wsAudioReorderBufferRef.current = {};
     wsNextExpectedChunkIndexRef.current = 0;
+    clearPendingAvatarData();
+    // B1.1b: new turn = new context-timeline domain (nextStartTime resets), so
+    // the previous turn's scheduled entries are invalid.
+    wsTimelineScheduleRef.current = [];
   };
 
   const processWsAudioReorderBuffer = () => {
@@ -2288,7 +2380,6 @@ export function ActiveSession() {
     ezriPlaybackSmoothRef.current = 0;
     ttsMouthTapOkRef.current = false;
     mouthAudioLevelRef.current = 0;
-    wsChunkClockRef.current = null;
   };
 
   const startWsSchedulerMouthAnalyser = () => {
@@ -2324,13 +2415,77 @@ export function ActiveSession() {
       cancelAnimationFrame(ttsAudioClockRafRef.current);
     }
     const tickClock = () => {
-      const clock = wsChunkClockRef.current;
-      if (clock) {
+      // B1.1b: sample-accurate, audio-clock-keyed timeline selection. Each frame,
+      // pick the LAST scheduled entry whose [startTime, endTime) contains the
+      // current AudioContext time ("last" resolves any crossfade overlap in favor
+      // of the later chunk). This replaces the setTimeout-driven ref swap.
+      const nowWall =
+        typeof window !== "undefined" ? performance.now() : 0;
+      const msSinceLastTick = wsSwapAuditLastTickRef.current
+        ? nowWall - wsSwapAuditLastTickRef.current
+        : 0;
+      wsSwapAuditLastTickRef.current = nowWall;
+      const nowCtx = ctx.currentTime;
+      const schedule = wsTimelineScheduleRef.current;
+      let active: WsTimelineScheduleEntry | null = null;
+      for (let i = schedule.length - 1; i >= 0; i--) {
+        const entry = schedule[i];
+        if (entry.startTime <= nowCtx && nowCtx < entry.endTime) {
+          active = entry;
+          break;
+        }
+      }
+      // Diagnostic-only (no behavior change): on every active-entry transition
+      // record the frame-quantized selection lag AT the write site. selectLagMs
+      // is the gap between the chunk's audio start and the first frame the
+      // selection activates it — the true B1.1b metric. msSinceLastTick exposes
+      // RAF throttling/death across the boundary.
+      if (
+        process.env.NODE_ENV === "development" &&
+        typeof window !== "undefined" &&
+        active !== wsSwapAuditPrevActiveRef.current
+      ) {
+        if (active) {
+          const w = window as unknown as { __saraV3SwapAudit?: unknown[] };
+          const audit = (w.__saraV3SwapAudit = w.__saraV3SwapAudit ?? []);
+          audit.push({
+            tWall: Math.round(nowWall),
+            selectLagMs: Math.round((nowCtx - active.startTime) * 1000),
+            chunkStart: +active.startTime.toFixed(4),
+            entries: schedule.length,
+            hadTimeline: !!active.item.avatarData,
+            msSinceLastTick: Math.round(msSinceLastTick),
+          });
+          if (audit.length > 200) audit.shift();
+        }
+        wsSwapAuditPrevActiveRef.current = active;
+      }
+      if (active) {
         avatarAudioCurrentTimeRef.current = Math.max(
           0,
-          clock.ctx.currentTime - clock.startTime,
+          nowCtx - active.startTime,
         );
+        // Normalize lazily on first use; re-normalize only when avatarData's
+        // reference changes (the late-repair chain attaches it null→non-null
+        // after scheduling), so genuinely empty chunks don't churn every frame.
+        if (!active.normalized || active.normalizedAvatarData !== active.item.avatarData) {
+          active.timeline = normalizeAvatarPhonemeTimeline(
+            active.item.avatarData ?? null,
+            active.endTime - active.startTime,
+          );
+          active.normalized = true;
+          active.normalizedAvatarData = active.item.avatarData;
+        }
+        if (active.timeline?.phonemes.length || active.item.avatarData) {
+          avatarPhonemeTimelineRef.current = active.timeline;
+        }
       }
+      // No active entry (pre-roll before chunk 0, or the tail/idle gap after the
+      // last chunk): leave clock + timeline as-is. The clock naturally freezes
+      // past the last phoneme end → driver relaxes the mouth. Cross-turn staleness
+      // is prevented by clearing wsTimelineScheduleRef at turn start and by the
+      // pipeline-idle teardown (stopAudioAndSpeechDriver) which nulls the timeline
+      // and cancels this RAF between turns.
       ttsAudioClockRafRef.current = requestAnimationFrame(tickClock);
     };
     ttsAudioClockRafRef.current = requestAnimationFrame(tickClock);
@@ -2342,34 +2497,91 @@ export function ActiveSession() {
     timing: { durationMs: number; audioContextStartTime: number },
   ) => {
     const text = item?.subtitle?.trim() || subtitle.trim();
+
+    // "Audio is playing" state — reflects that a chunk is now audible, not that
+    // it carries subtitle text. Must run for every chunk (incl. empty-subtitle
+    // ones) so speaking state / mic gating stay correct through the whole reply.
+    isEzriSpeakingRef.current = true;
+    setIsEzriSpeaking(true);
+    wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
+
+    // B1.1b: the clock rebase and timeline attach that used to live here have
+    // moved to the audio-clock-keyed queue (`onChunkScheduled` + `tickClock`).
+    // Keeping them here would make two writers race the same refs. This handler
+    // (delivered by the laggy `setTimeout`) now only owns non-timing-critical
+    // work: speaking state, the analyser, and the text-gated caption/animation.
+    startWsSchedulerMouthAnalyser();
+
+    // Text-dependent work — subtitle-driven caption/animation, only meaningful
+    // when the chunk actually carries text.
     if (!text) return;
 
     ezriPlaybackTextRef.current = text;
     speechTextRef.current = text;
     speechCharIndexRef.current = 0;
-    isEzriSpeakingRef.current = true;
-    setIsEzriSpeaking(true);
     setLiveUserSpeech("");
-    wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
+    driveSpeechAnimationForText(text, timing.durationMs);
+  };
 
-    const ctx = wsSchedulerRef.current?.getAudioContext();
-    if (ctx) {
-      wsChunkClockRef.current = {
-        ctx,
-        startTime: timing.audioContextStartTime,
-      };
+  /**
+   * B1.1b: fired SYNCHRONOUSLY at schedule time with the FINAL AudioContext
+   * start time. Records the chunk in the per-turn schedule so `tickClock` can
+   * select the active timeline sample-accurately, and starts the analyser RAF
+   * from first schedule (not first chunk start) so pre-roll frames select
+   * correctly. Does NOT delete the chunk-map entry — that stays in onChunkStart.
+   */
+  const handleWsSchedulerChunkScheduled = (
+    item: WsAudioQueueItem | undefined,
+    timing: { audioContextStartTime: number; durationMs: number },
+  ) => {
+    if (!item) return;
+
+    const ctx = wsSchedulerRef.current?.getAudioContext() ?? null;
+    // §4d — entries are keyed to one AudioContext's timeline; drop the old
+    // turn's entries if playback rebound to a different context.
+    if (ctx !== wsTimelineScheduleCtxRef.current) {
+      wsTimelineScheduleRef.current = [];
+      wsTimelineScheduleCtxRef.current = ctx;
     }
 
-    const timeline = normalizeAvatarPhonemeTimeline(
-      item?.avatarData ?? null,
-      timing.durationMs / 1000,
-    );
-    if (timeline?.phonemes.length || item?.avatarData) {
-      avatarPhonemeTimelineRef.current = timeline;
+    const schedule = wsTimelineScheduleRef.current;
+    // Bound memory: drop entries that ended > 30s ago (kept in schedule order).
+    if (ctx) {
+      const cutoff = ctx.currentTime - 30;
+      let firstKeep = 0;
+      while (firstKeep < schedule.length && schedule[firstKeep].endTime < cutoff) {
+        firstKeep += 1;
+      }
+      if (firstKeep > 0) schedule.splice(0, firstKeep);
+    }
+
+    const startTime = timing.audioContextStartTime;
+    schedule.push({
+      startTime,
+      endTime: startTime + timing.durationMs / 1000,
+      item,
+      timeline: null,
+      normalized: false,
+      normalizedAvatarData: null,
+    });
+
+    // Diagnostic-only (no behavior change): confirm entries exist BEFORE their
+    // audio starts. aheadMs > 0 means the entry was scheduled ahead of the
+    // audible boundary (expected); aheadMs < 0 means we scheduled after audio
+    // already started, which would explain a late first selection.
+    if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+      const w = window as unknown as { __saraV3SwapAudit?: unknown[] };
+      const audit = (w.__saraV3SwapAudit = w.__saraV3SwapAudit ?? []);
+      audit.push({
+        tWall: Math.round(performance.now()),
+        scheduled: true,
+        chunkStart: +startTime.toFixed(4),
+        aheadMs: Math.round((startTime - (ctx?.currentTime ?? 0)) * 1000),
+      });
+      if (audit.length > 200) audit.shift();
     }
 
     startWsSchedulerMouthAnalyser();
-    driveSpeechAnimationForText(text, timing.durationMs);
   };
 
   const handleWsSchedulerPipelineIdle = () => {
@@ -2388,6 +2600,10 @@ export function ActiveSession() {
   };
 
   const wsSchedulerCallbacksRef = useRef({
+    onChunkScheduled: (
+      _meta: { subtitle: string; chunkId?: string },
+      _timing: { audioContextStartTime: number; durationMs: number },
+    ) => {},
     onChunkStart: (
       _meta: { subtitle: string; chunkId?: string },
       _timing: { durationMs: number; audioContextStartTime: number },
@@ -2395,6 +2611,13 @@ export function ActiveSession() {
     onPipelineIdle: () => {},
   });
   wsSchedulerCallbacksRef.current = {
+    onChunkScheduled: (meta, timing) => {
+      // Look up (but do NOT delete) the item — deletion stays in onChunkStart.
+      const item = meta.chunkId
+        ? wsScheduledChunkMapRef.current.get(meta.chunkId)
+        : undefined;
+      handleWsSchedulerChunkScheduled(item, timing);
+    },
     onChunkStart: (meta, timing) => {
       const item = meta.chunkId
         ? wsScheduledChunkMapRef.current.get(meta.chunkId)
@@ -2411,6 +2634,9 @@ export function ActiveSession() {
 
   if (!wsSchedulerRef.current) {
     wsSchedulerRef.current = new EzriWsAudioScheduler({
+      onChunkScheduled: (meta, timing) => {
+        wsSchedulerCallbacksRef.current.onChunkScheduled(meta, timing);
+      },
       onChunkStart: (meta, timing) => {
         wsSchedulerCallbacksRef.current.onChunkStart(meta, timing);
       },
@@ -3980,8 +4206,7 @@ export function ActiveSession() {
                   : "Welcome avatar_data arrived, but no phoneme timeline was attached.",
               });
             }
-            avatarPendingDataRef.current = null;
-            avatarPendingDataReceivedAtRef.current = null;
+            removePendingAvatarData(data);
           } else {
             const sentence = data.sentence?.trim() ?? "";
             const chunkIndex =
@@ -4004,26 +4229,19 @@ export function ActiveSession() {
               queuedWithoutData.avatarData = data;
               queuedWithoutData.avatarDataReceived = avatarDataReceived;
               queuedWithoutData.subtitle = sentence;
-              avatarPendingDataRef.current = null;
-              avatarPendingDataReceivedAtRef.current = null;
+              removePendingAvatarData(data);
             } else if (
               wsIsPlaybackActiveRef.current &&
               sentence.length > 0 &&
               ezriPlaybackTextRef.current.trim() === sentence
             ) {
-              const playingDuration = audioRef.current?.duration;
-              const lateTimeline = normalizeAvatarPhonemeTimeline(
-                data,
-                Number.isFinite(playingDuration) ? playingDuration : undefined
-              );
+              const lateTimeline = normalizeAvatarPhonemeTimeline(data);
               if (lateTimeline?.phonemes.length) {
                 avatarPhonemeTimelineRef.current = lateTimeline;
               }
-              avatarPendingDataRef.current = null;
-              avatarPendingDataReceivedAtRef.current = null;
+              removePendingAvatarData(data);
             } else {
-              avatarPendingDataRef.current = data;
-              avatarPendingDataReceivedAtRef.current = avatarDataReceived;
+              pushPendingAvatarData(data, avatarDataReceived);
             }
           }
           latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
@@ -4089,9 +4307,13 @@ export function ActiveSession() {
             if (suppressIncomingAudioRef.current) return;
             if (dropOldResponsesRef.current > 0) return;
 
+            // B1.1c: pair this raw binary audio frame with its phonemes by per-turn
+            // ordinal (exact chunk_index → FIFO → null; late-repair chain covers null).
+            const seq = wsBinaryAudioSeqRef.current++;
+            const paired = takePendingAvatarDataForSeq(seq);
+
             const buffered = wsAssistantBufferRef.current.trim();
-            const sentence =
-              avatarPendingDataRef.current?.sentence?.trim() ?? "";
+            const sentence = paired?.data.sentence?.trim() ?? "";
             const subtitle =
               sentence ||
               buffered ||
@@ -4106,7 +4328,7 @@ export function ActiveSession() {
                   id: ++saraGreetingSyncSeqRef.current,
                   sentence: sentence || subtitle,
                   audioReceived,
-                  avatarDataReceived: avatarPendingDataReceivedAtRef.current,
+                  avatarDataReceived: paired?.receivedAt ?? null,
                 }
               : undefined;
             if (saraGreetingSync && companionCanonicalId === "sarah" && useSaraV3ForSara) {
@@ -4133,13 +4355,11 @@ export function ActiveSession() {
             const chunk: WsAudioQueueItem = {
               subtitle,
               audio,
-              avatarData: avatarPendingDataRef.current,
+              avatarData: paired?.data ?? null,
               audioReceived,
-              avatarDataReceived: avatarPendingDataReceivedAtRef.current,
+              avatarDataReceived: paired?.receivedAt ?? null,
               saraGreetingSync,
             };
-            avatarPendingDataRef.current = null;
-            avatarPendingDataReceivedAtRef.current = null;
 
             if (saraGreetingSync) {
               const timeline = normalizeAvatarPhonemeTimeline(chunk.avatarData);
@@ -4192,7 +4412,10 @@ export function ActiveSession() {
             pendingUserTextRef.current = "";
           };
 
-          if (!permissionsGrantedRef.current && !avatarPendingDataRef.current) {
+          if (
+            !permissionsGrantedRef.current &&
+            avatarPendingQueueRef.current.length === 0
+          ) {
             window.setTimeout(enqueueAudioWithPendingAvatarData, 300);
             return;
           }
@@ -4599,6 +4822,7 @@ export function ActiveSession() {
     }
 
     stopAudioAndSpeechDriver();
+    wsTimelineScheduleRef.current = []; // B1.1b: session reset/unmount
 
     try {
       wsClientRef.current?.disconnect();

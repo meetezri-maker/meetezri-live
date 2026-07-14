@@ -1,0 +1,201 @@
+{
+  "file": "apps/web/public/avatars/sara-v3.glb",
+  "sizeMB": 62.54,
+  "generatedAt": "2026-07-09T23:36:01.720Z",
+  "meshCount": 3,
+  "meshes": [
+    {
+      "index": 0,
+      "name": "Object_0",
+      "primitives": [
+        {
+          "prim": 0,
+          "material": "Material.001",
+          "morphTargetCount": 0
+        }
+      ],
+      "targetNames": null,
+      "weights": 0
+    },
+    {
+      "index": 1,
+      "name": "Face.002",
+      "primitives": [
+        {
+          "prim": 0,
+          "material": "UnrealMaterial.001",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 1,
+          "material": "UnrealMaterial.002",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 2,
+          "material": "UnrealMaterial.004",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 3,
+          "material": "UnrealMaterial.006",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 4,
+          "material": "Material.001",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 5,
+          "material": "Material.002",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 6,
+          "material": "Wolf3D_Outfit_Bottom",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 7,
+          "material": "Wolf3D_Outfit_Top",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 8,
+          "material": "Wolf3D_Outfit_Footwear",
+          "morphTargetCount": 46
+        },
+        {
+          "prim": 9,
+          "material": "Wolf3D_Body",
+          "morphTargetCount": 46
+        }
+      ],
+      "targetNames": [
+        "eye_close",
+        "eyeBlinkLeft",
+        "eyeBlinkRight",
+        "viseme_rest",
+        "mouthSmileLeft",
+        "mouthSmileRight",
+        "smile",
+        "mouthFrownLeft",
+        "mouthFrownRight",
+        "sad",
+        "eyeLookUpLeft",
+        "eyeLookUpRight",
+        "cheekSquintLeft",
+        "cheekSquintRight",
+        "eyeLookDownLeft",
+        "eyeLookDownRight",
+        "viseme_AA",
+        "viseme_PP",
+        "viseme_O",
+        "viseme_IH",
+        "viseme_E",
+        "viseme_CH",
+        "eyebrows",
+        "jawOpen",
+        "noseSneerLeft",
+        "noseSneerRight",
+        "mouthUpperUpLeft",
+        "mouthUpperUpRight",
+        "mouthLowerDownLeft",
+        "mouthLowerDownRight",
+        "mouthPressLeft",
+        "mouthPressRight",
+        "mouthShrugLower",
+        "mouthShrugUpper",
+        "mouthRollLower",
+        "jawLeft",
+        "jawRight",
+        "jawForward",
+        "eyeSquintRight",
+        "eyeSquintLeft",
+        "browInnerUpLeft",
+        "browInnerUpRight",
+        "browOuterUpLeft",
+        "browOuterUpRight",
+        "LeftEyeball",
+        "RightEyeball"
+      ],
+      "weights": 46
+    },
+    {
+      "index": 2,
+      "name": "Object_0.001",
+      "primitives": [
+        {
+          "prim": 0,
+          "material": "Material.001",
+          "morphTargetCount": 0
+        }
+      ],
+      "targetNames": null,
+      "weights": 0
+    }
+  ],
+  "uniqueMorphNames": [
+    "LeftEyeball",
+    "RightEyeball",
+    "browInnerUpLeft",
+    "browInnerUpRight",
+    "browOuterUpLeft",
+    "browOuterUpRight",
+    "cheekSquintLeft",
+    "cheekSquintRight",
+    "eyeBlinkLeft",
+    "eyeBlinkRight",
+    "eyeLookDownLeft",
+    "eyeLookDownRight",
+    "eyeLookUpLeft",
+    "eyeLookUpRight",
+    "eyeSquintLeft",
+    "eyeSquintRight",
+    "eye_close",
+    "eyebrows",
+    "jawForward",
+    "jawLeft",
+    "jawOpen",
+    "jawRight",
+    "mouthFrownLeft",
+    "mouthFrownRight",
+    "mouthLowerDownLeft",
+    "mouthLowerDownRight",
+    "mouthPressLeft",
+    "mouthPressRight",
+    "mouthRollLower",
+    "mouthShrugLower",
+    "mouthShrugUpper",
+    "mouthSmileLeft",
+    "mouthSmileRight",
+    "mouthUpperUpLeft",
+    "mouthUpperUpRight",
+    "noseSneerLeft",
+    "noseSneerRight",
+    "sad",
+    "smile",
+    "viseme_AA",
+    "viseme_CH",
+    "viseme_E",
+    "viseme_IH",
+    "viseme_O",
+    "viseme_PP",
+    "viseme_rest"
+  ],
+  "uniqueMorphCount": 46,
+  "wiredCheck": {
+    "viseme_rest": true,
+    "viseme_AA": true,
+    "viseme_IH": true,
+    "viseme_O": true,
+    "viseme_S": false,
+    "viseme_PP": true,
+    "viseme_CH": true,
+    "viseme_E": true,
+    "jawOpen": true,
+    "eyeBlinkLeft": true,
+    "eyeBlinkRight": true
+  }
+}

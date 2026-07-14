@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { normalizePhonemeLabel } from "@/lib/avatar/phonemeToViseme";
 import { SARA_V3_AVATAR_DEFINITION } from "./saraV3Config";
+import { SARA_V3_REST_VISEME_ENTRY } from "./saraV3VisemeMap";
 import { applySaraV3MorphValues } from "./saraV3MorphBinding";
 import {
   writeSaraV3Diagnostics,
@@ -8,8 +9,6 @@ import {
   writeSaraV3WelcomeLipSyncDiagnostics,
 } from "./saraV3Diagnostics";
 import type { SaraV3VisemeDriverState, UpdateSaraV3VisemeArgs } from "./saraV3Types";
-
-type TimelinePhoneme = NonNullable<UpdateSaraV3VisemeArgs["timeline"]>["phonemes"][number];
 
 function asTimelineItem(
   phoneme:
@@ -28,71 +27,25 @@ function asTimelineItem(
   };
 }
 
-function normalizeSaraV3TimelineCopy(timelineItems: readonly TimelinePhoneme[]) {
-  const originalFirstTimelineStart = timelineItems[0]?.start ?? null;
-  const lastTimelineItem = timelineItems[timelineItems.length - 1] ?? null;
-  const rawLastTimelineEnd =
-    lastTimelineItem == null
-      ? 0
-      : lastTimelineItem.end ?? lastTimelineItem.start;
-  const timelineUnitConverted =
-    timelineItems.length > 0 &&
-    (
-      (originalFirstTimelineStart ?? 0) > 30 ||
-      rawLastTimelineEnd > 30
-    );
-  const secondScaledItems = timelineItems.map((item) => ({
-    ...item,
-    start: Math.max(0, timelineUnitConverted ? item.start / 1000 : item.start),
-    end:
-      item.end == null
-        ? item.end
-        : Math.max(0, timelineUnitConverted ? item.end / 1000 : item.end),
-  }));
-  const normalizedFirstTimelineStart = secondScaledItems[0]?.start ?? 0;
-  const timelineRebasedToZero = normalizedFirstTimelineStart > 0;
-  const rebasedItems = secondScaledItems.map((item) => ({
-    ...item,
-    start: Math.max(0, item.start - normalizedFirstTimelineStart),
-    end:
-      item.end == null
-        ? item.end
-        : Math.max(0, item.end - normalizedFirstTimelineStart),
-  }));
-
-  return {
-    timelineItems: rebasedItems,
-    originalFirstTimelineStart,
-    rebasedFirstTimelineStart: rebasedItems[0]?.start ?? null,
-    timelineRebasedToZero,
-    timelineUnitConverted,
-  };
-}
-
 function resolvePossibleTimingIssue(args: {
   isSpeaking: boolean;
-  audioCurrentTime: number;
   timelineLength: number;
-  timelineStartsAtZero: boolean;
-  timelineUnitConverted: boolean;
-  timelineRebasedToZero: boolean;
-  activePhoneme: string | null;
+  effectiveLookupTime: number;
+  lastTimelineEnd: number;
 }) {
   if (args.timelineLength === 0) {
     return "No phoneme timeline is attached to SaraV3.";
   }
-  if (!args.timelineStartsAtZero) {
-    return "Timeline does not start at zero, so clip-relative audio.currentTime is being compared against an offset phoneme timeline.";
-  }
+  // Only a genuine overrun is an issue: the clock has advanced past the end of
+  // the entire timeline (with a 0.15 s tolerance). A lookup that merely falls in
+  // an inter-word gap between phonemes is normal rest behavior, not a defect, so
+  // it is not reported. (B1.3b — de-noise: this fired dozens of times per reply
+  // on ordinary 30-90 ms dwell gaps.)
   if (
     args.isSpeaking &&
-    args.audioCurrentTime > 0.12 &&
-    !args.activePhoneme
+    args.effectiveLookupTime > args.lastTimelineEnd + 0.15
   ) {
     return "Audio is already advancing but no active phoneme was found at the current lookup time.";
-  }
-  if (args.timelineUnitConverted || args.timelineRebasedToZero) {
-    return null;
   }
   return null;
 }
@@ -102,6 +55,7 @@ export function createSaraV3VisemeDriverState(): SaraV3VisemeDriverState {
     morphValues: new Map(),
     activePhoneme: null,
     activeViseme: null,
+    activePhonemeWeight: 1,
     appliedMorphs: {},
     previousLookupTime: null,
   };
@@ -111,8 +65,10 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
   const { state } = args;
   const config = SARA_V3_AVATAR_DEFINITION.saraV3.lipSyncConfig;
   const fallbackConfig = config.audioDrivenMouthFallback;
-  const normalizedTimeline = normalizeSaraV3TimelineCopy(args.timeline?.phonemes ?? []);
-  const timelineItems = normalizedTimeline.timelineItems;
+  // Use the incoming timeline items directly (B1.3b): the defensive per-frame
+  // unit-conversion / rebase-to-zero copy was removed after live captures proved
+  // backend phoneme timestamps are always 0-based seconds.
+  const timelineItems = args.timeline?.phonemes ?? [];
   const firstTimelineItem = timelineItems[0] ?? null;
   const lastTimelineItem = timelineItems[timelineItems.length - 1] ?? null;
   const values: Record<string, number> = {};
@@ -137,11 +93,22 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
   const fallbackEnvelope = audioFallbackEnabled
     ? THREE.MathUtils.clamp(((args.audioLevel ?? 0) - 18) / 120, 0, 1)
     : 0;
-  const activeViseme =
-    activePhonemeLabel
-      ? SARA_V3_AVATAR_DEFINITION.saraV3.visemeMap[activePhonemeLabel] ??
-        SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.visemeRest
-      : SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.visemeRest;
+  // B2.2: the map now yields { viseme, weight }. An unmapped label falls back
+  // to rest at weight 1, exactly as the old `?? visemeRest` did.
+  const activeEntry =
+    (activePhonemeLabel
+      ? SARA_V3_AVATAR_DEFINITION.saraV3.visemeMap[activePhonemeLabel]
+      : undefined) ?? SARA_V3_REST_VISEME_ENTRY;
+  const activeViseme = activeEntry.viseme;
+  const activePhonemeWeight = activeEntry.weight;
+  const visemeTable = SARA_V3_AVATAR_DEFINITION.saraV3.visemeTable;
+  const activeProfile = visemeTable[activeViseme] ?? visemeTable.viseme_rest;
+  // Per-viseme strength scaled by the phoneme weight, still clamped by the
+  // global ceiling so no shape can exceed the pre-B2.2 maximum.
+  const effectiveStrength = Math.min(
+    activeProfile.strength * activePhonemeWeight,
+    config.visemeMaxStrength
+  );
   const visemeNames = SARA_V3_AVATAR_DEFINITION.visemes.names ?? [];
   visemeNames.forEach((name) => {
     const previous = state.morphValues.get(name) ?? 0;
@@ -154,7 +121,7 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
     } else {
       target =
         args.isSpeaking && name === activeViseme
-          ? config.visemeMaxStrength
+          ? effectiveStrength
           : name === SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.visemeRest
             ? config.restStrength
             : 0;
@@ -175,7 +142,7 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
       ? fallbackEnvelope * fallbackConfig.jawOpenMax
       : args.isSpeaking &&
           activeViseme !== SARA_V3_AVATAR_DEFINITION.saraV3.morphNameMap.visemeRest
-        ? config.jawOpenMax
+        ? activeProfile.jawOpen * activePhonemeWeight
         : 0;
   const nextJaw = THREE.MathUtils.damp(
     previousJaw,
@@ -188,6 +155,7 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
   applySaraV3MorphValues(args.bindings, values);
   state.activePhoneme = activePhoneme?.phoneme ?? null;
   state.activeViseme = activeViseme;
+  state.activePhonemeWeight = activePhonemeWeight;
   state.appliedMorphs = values;
   state.previousLookupTime = effectiveLookupTime;
   const lastTimelineEnd =
@@ -206,15 +174,22 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
   writeSaraV3LipSyncDiagnostics({
     isSpeaking: args.isSpeaking,
     audioCurrentTime: args.audioCurrentTime,
-    originalFirstTimelineStart: normalizedTimeline.originalFirstTimelineStart,
-    rebasedFirstTimelineStart: normalizedTimeline.rebasedFirstTimelineStart,
-    timelineRebasedToZero: normalizedTimeline.timelineRebasedToZero,
-    timelineUnitConverted: normalizedTimeline.timelineUnitConverted,
+    // Vestigial (B1.3b): the unit-conversion / rebase-to-zero normalizer was
+    // removed after live captures proved backend timestamps are always 0-based
+    // seconds. These fields are kept so window.saraV3LipSyncDiagnostics consumers
+    // and the capture snippets don't break; they are now effectively constant
+    // (raw first start; never converted; never rebased).
+    originalFirstTimelineStart: firstTimelineItem?.start ?? null,
+    rebasedFirstTimelineStart: firstTimelineItem?.start ?? null,
+    timelineRebasedToZero: false,
+    timelineUnitConverted: false,
     timelineLength: timelineItems.length,
     firstTimelineItem: asTimelineItem(firstTimelineItem),
     lastTimelineItem: asTimelineItem(lastTimelineItem),
     activePhoneme: state.activePhoneme,
     activeViseme: state.activeViseme,
+    activePhonemeWeight,
+    activeVisemeStrength: effectiveStrength,
     activePhonemeStart: activePhoneme?.start ?? null,
     activePhonemeEnd:
       activePhoneme?.end ??
@@ -234,12 +209,9 @@ export function updateSaraV3VisemeDriver(args: UpdateSaraV3VisemeArgs) {
     jawOpenValue: values[jawName] ?? 0,
     possibleTimingIssue: resolvePossibleTimingIssue({
       isSpeaking: args.isSpeaking,
-      audioCurrentTime: args.audioCurrentTime,
       timelineLength: timelineItems.length,
-      timelineStartsAtZero,
-      timelineUnitConverted: normalizedTimeline.timelineUnitConverted,
-      timelineRebasedToZero: normalizedTimeline.timelineRebasedToZero,
-      activePhoneme: state.activePhoneme,
+      effectiveLookupTime,
+      lastTimelineEnd,
     }),
   });
   if (typeof window !== "undefined" && window.saraV3WelcomeLipSyncDiagnostics) {

@@ -197,12 +197,6 @@ export function normalizeAvatarPhonemeTimeline(
       phoneme.end = next.start;
     }
   });
-  if (durationSeconds && phonemes.some((p) => p.start > durationSeconds * 2)) {
-    phonemes.forEach((p) => {
-      p.start /= 1000;
-      if (p.end != null) p.end /= 1000;
-    });
-  }
   return {
     sentence: data.sentence || "",
     sentiment: data.sentiment,
