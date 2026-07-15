@@ -15,16 +15,46 @@ export {
   SARA_V3_EXPRESSION_LAYER_CONFIG,
   SARA_V3_SENTIMENT_GATE_CONFIG,
   SARA_V3_IDLE_BEHAVIOR_CONFIG,
+  SARA_V3_ATTENTION_REFRESH_CONFIG,
   SARA_V3_LISTENING_BEHAVIOR_CONFIG,
+  SARA_V3_THINKING_BEHAVIOR_CONFIG,
+  SARA_V3_SPEAKING_BEHAVIOR_CONFIG,
+  SARA_V3_GAZE_CONTROLLER_CONFIG,
+  SARA_V3_EMOTION_COORDINATOR_CONFIG,
+  SARA_V3_TRANSITION_ENGINE_CONFIG,
 } from "./saraV3BehaviorConfig";
+export {
+  createSaraV3GazeControllerState,
+  updateSaraV3GazeController,
+} from "./saraV3GazeController";
+export {
+  updateSaraV3EmotionCoordinator,
+  scaleSaraV3EmotionTargets,
+} from "./saraV3EmotionCoordinator";
+export {
+  createSaraV3TransitionState,
+  updateSaraV3StateTransition,
+} from "./saraV3StateTransitionController";
 export {
   createSaraV3IdleBehaviorState,
   updateSaraV3IdleBehavior,
 } from "./saraV3IdleBehavior";
 export {
+  createSaraV3AttentionRefreshState,
+  updateSaraV3AttentionRefresh,
+} from "./saraV3AttentionRefresh";
+export {
   createSaraV3ListeningBehaviorState,
   updateSaraV3ListeningBehavior,
 } from "./saraV3ListeningBehavior";
+export {
+  createSaraV3ThinkingBehaviorState,
+  updateSaraV3ThinkingBehavior,
+} from "./saraV3ThinkingBehavior";
+export {
+  createSaraV3SpeakingBehaviorState,
+  updateSaraV3SpeakingBehavior,
+} from "./saraV3SpeakingBehavior";
 export {
   createSaraV3EmotionOverlayState,
   evaluateSaraV3SentimentGate,
@@ -49,8 +79,27 @@ export type {
   SaraV3ExpressionLayerId,
   SaraV3IdleBehaviorState,
   SaraV3IdleBehaviorDiagnostics,
+  SaraV3AttentionRefreshState,
+  SaraV3AttentionRefreshCombination,
+  SaraV3AttentionRefreshDiagnostics,
   SaraV3ListeningBehaviorState,
   SaraV3ListeningBehaviorDiagnostics,
+  SaraV3ThinkingBehaviorState,
+  SaraV3ThinkingBehaviorDiagnostics,
+  SaraV3SpeakingBehaviorState,
+  SaraV3SpeakingBehaviorDiagnostics,
+  SaraV3GazeIntent,
+  SaraV3GazeControllerState,
+  SaraV3GazeMode,
+  SaraV3GazeEventPhase,
+  SaraV3GazeDiagnostics,
+  SaraV3EmotionCoordinatorDecision,
+  SaraV3EmotionCoordinatorDiagnostics,
+  SaraV3EmotionPersonality,
+  SaraV3EmotionDirection,
+  SaraV3TransitionState,
+  SaraV3TransitionDiagnostics,
+  SaraV3TransitionEasing,
   SaraV3SentimentGateResult,
 } from "./saraV3Types";
 export type {

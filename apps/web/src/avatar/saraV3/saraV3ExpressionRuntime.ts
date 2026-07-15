@@ -28,6 +28,13 @@ const EXPRESSION_MORPH_NAMES = [
   map.eyeSquintRight,
   map.eyebrows,
   map.sad,
+  // C6: lip compression (concentration cue). Not lip-sync-owned — lip-sync owns
+  // jawOpen + the visemes (incl. mouthRollLower), so this passes the ownership
+  // guard cleanly. Only the thinking layer ever sets it; every other state
+  // contributes 0, which damps to 0 and writes 0 — identical to today's rest
+  // pose (its GLB rest weight is 0), exactly as `sad`/`mouthFrown` already behave.
+  map.mouthPressLeft,
+  map.mouthPressRight,
 ] as const;
 
 // ── Morph ownership (C2) ────────────────────────────────────────────────────

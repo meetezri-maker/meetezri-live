@@ -231,6 +231,13 @@ export const SARA_V3_AVATAR_DEFINITION = {
       // mouthSmileLeft/mouthSmileRight.
       eyeSquintLeft: "eyeSquintLeft",
       eyeSquintRight: "eyeSquintRight",
+      // C6: lip compression — a concentration ("processing") cue, not a smile
+      // and not a frown. Verified present on the Face.002 face mesh with a rest
+      // weight of 0, and already bound (bindSaraV3MorphTargets binds the whole
+      // morph dictionary). NOT owned by lip-sync (that owns jawOpen + visemes +
+      // mouthRollLower), and thinking never overlaps speaking.
+      mouthPressLeft: "mouthPressLeft",
+      mouthPressRight: "mouthPressRight",
       eyeLookUpLeft: "eyeLookUpLeft",
       eyeLookUpRight: "eyeLookUpRight",
       eyeLookDownLeft: "eyeLookDownLeft",
@@ -340,6 +347,48 @@ export const SARA_V3_AVATAR_DEFINITION = {
       // false, everything stays in `scheduledMicro` (pre-C4 grouping).
       routeBreathingToIdleBaseline: true,
     },
+    // EXPERIMENT (idle-only): "Attention Refresh". A coordinated idle micro-event
+    // on its OWN 5–10s schedule, separate from the existing micro-smile/brow
+    // events (those stay exactly as they are). When it fires it randomly picks one
+    // of four natural combinations, so it never runs the same sequence twice:
+    //   A ~40% blink only
+    //   B ~30% blink + tiny brow + tiny cheek
+    //   C ~20% blink + tiny brow + tiny cheek + tiny eyeball refocus
+    //   D ~10% tiny eyeball refocus only
+    // Onsets are staged (brows follow the blink, cheeks follow the brows, the
+    // eyeball refocus follows last) and the whole event lasts ~600–700 ms. The
+    // blink is delegated to the existing blink runtime (so it keeps its natural
+    // per-blink variety); brow/cheek are additive into C2's scheduledMicro slot;
+    // the eyeball refocus is layered on top of the C8 gaze value and clamped to
+    // the shared gaze safety bound (`gazeConfig.safety.maxEyeballInfluence`).
+    // Peaks are TEMP CURRENT-ASSET COMPENSATION — the current GLB deforms weakly,
+    // so they run intentionally visible for this experiment only. Re-tune after
+    // the updated GLB. Nothing here is hard-coded in the runtime.
+    attentionRefreshConfig: {
+      intervalMinMs: 5000,
+      intervalMaxMs: 10000,
+      combinationWeights: { a: 0.4, b: 0.3, c: 0.2, d: 0.1 },
+      // Staged onsets (ms): blink at 0, brows at 40, cheeks at 80, eyeball at 120.
+      browDelayMs: 40,
+      cheekDelayMs: 80,
+      eyeDelayMs: 120,
+      // Shared brow/cheek envelope. brow (delay 40) peaks at 180 ms, cheek
+      // (delay 80) at 220 ms → brows peak before cheeks. Cheek fully relaxes at
+      // 80+140+200+220 = 640 ms → the whole event is ~640 ms (within 600–700).
+      fadeInMs: 140,
+      holdMs: 200,
+      fadeOutMs: 220,
+      // TEMP CURRENT-ASSET COMPENSATION peaks (weak GLB). eyebrow within 0.04–0.08,
+      // cheek within 0.02–0.05.
+      eyebrowPeak: 0.6,
+      cheekPeak: 0.5,
+      // Tiny eyeball refocus: slightly above the current idle refocus strength for
+      // this experiment (C8 idle vertical 0.03 / horizontal ≤ 0.0525), still under
+      // the shared safety cap (0.06). Out-and-back over ~275 ms (within 200–350),
+      // returns smoothly to center and is never held away.
+      eyeRefocusStrength: 0.4,
+      eyeRefocusDurationMs: 275,
+    },
     // C5: listening-personality behavior. All values TEMP CURRENT-ASSET
     // COMPENSATION — the current SaraV3 GLB deforms weakly, so these run higher
     // than a final rig would need for the behavior to read on a client demo.
@@ -354,9 +403,9 @@ export const SARA_V3_AVATAR_DEFINITION = {
         mouthSmileRight: 0.27,
         cheekSquintLeft: 0.28,
         cheekSquintRight: 0.285,
-        eyebrows: 0.4,
-        eyeSquintLeft: 0.05,
-        eyeSquintRight: 0.05,
+        eyebrows: 0.6,
+        eyeSquintLeft: 0.5,
+        eyeSquintRight: 0.5,
       },
       // Rare acknowledgement pulses (a soft smile beat or a brow lift) layered on
       // top of the baseline via C2's scheduledMicro slot. Randomized interval,
@@ -381,6 +430,298 @@ export const SARA_V3_AVATAR_DEFINITION = {
       eyeAttention: {
         reuseIdleEyeDrift: true,
       },
+    },
+    // C6: thinking-personality behavior. All values TEMP CURRENT-ASSET
+    // COMPENSATION — the current SaraV3 GLB deforms weakly, so these run higher
+    // than a final rig would need in order to read on a client demo. Re-tune
+    // (lower) after the updated GLB arrives. Nothing is hard-coded in the
+    // runtime; the coordinator reads every value from this block.
+    //
+    // Emotional read is deliberately "processing", not "upset": smile is near
+    // zero, frown/sad are present only at trace levels for a thoughtful cast,
+    // and the load-bearing cues are brow engagement + lip compression.
+    // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+    thinkingBehaviorConfig: {
+      base: {
+        // Near-zero: thinking is not a smile, but a hard 0 reads grumpy.
+        mouthSmileLeft: 0.02,
+        mouthSmileRight: 0.02,
+        // Controlled brow concentration. Kept under the micro-event peak so the
+        // two never sum past 1.0 (0.42 + 0.52 = 0.94).
+        eyebrows: 0.42,
+        cheekSquintLeft: 0.16,
+        cheekSquintRight: 0.165,
+        eyeSquintLeft: 0.08,
+        eyeSquintRight: 0.08,
+        // Trace only — enough for a thoughtful cast, far below a sad read.
+        mouthFrownLeft: 0.07,
+        mouthFrownRight: 0.07,
+        sad: 0.04,
+        // Lip compression = the clearest non-sad "concentrating" cue we have.
+        mouthPressLeft: 0.1,
+        mouthPressRight: 0.1,
+      },
+      // Rare thinking micro-events. Deliberately NO smile event and NO repeated
+      // concern pulse — only a brow shift (with a touch of cheek emphasis) or a
+      // lip-press beat.
+      microEvent: {
+        minIntervalMs: 5000,
+        maxIntervalMs: 10000,
+        fadeInMs: [250, 500],
+        holdMs: [300, 700],
+        fadeOutMs: [500, 900],
+        eyebrowPeak: 0.52,
+        cheekPeak: 0.28,
+        lipPressPeak: 0.22,
+        // Probability a micro-event is a brow shift (else a lip press).
+        browShiftChance: 0.5,
+      },
+      // C8 hand-off: while thinking, gaze should briefly disengage. C6 does NOT
+      // write any gaze morph (that would create a second gaze writer alongside
+      // the eye runtime) — it only publishes this intent as metadata for the
+      // future gaze controller to consume. Purely declarative today.
+      gazeIntent: {
+        emitIntent: true,
+        direction: "away",
+        // Suggested strength for C8; unused until the gaze controller lands.
+        strength: 0.35,
+      },
+    },
+    // C7: speaking body-language behavior. All values TEMP CURRENT-ASSET
+    // COMPENSATION — the current SaraV3 GLB deforms weakly, so these run higher
+    // than a final rig would need in order to read on a client demo. Re-tune
+    // (lower) after the updated GLB arrives. Nothing is hard-coded in the
+    // runtime; the coordinator reads every value from this block.
+    //
+    // The read is "naturally engaged while speaking", beyond lip-sync: a mild
+    // held baseline plus occasional phrase/sentence-level emphasis. It must never
+    // animate per phoneme, never read as a constant smile, and never flip or
+    // exaggerate C3 sentiment (concern suppresses the smile support entirely).
+    // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+    speakingBehaviorConfig: {
+      base: {
+        // Very low smile support — lip-sync owns the mouth; this only keeps the
+        // face warm between words. Suppressed further under C3 concern.
+        mouthSmileLeft: 0.1,
+        mouthSmileRight: 0.105,
+        // Controlled cheek support — the main "engaged" cue that survives weak
+        // deformation without reading as a grin.
+        cheekSquintLeft: 0.22,
+        cheekSquintRight: 0.225,
+        // Small, steady brow activity (kept under the emphasis peak so the two
+        // never sum past ~0.8 at a hold: 0.30 + 0.50 = 0.80).
+        eyebrows: 0.3,
+        // Slight eye engagement.
+        eyeSquintLeft: 0.05,
+        eyeSquintRight: 0.05,
+        // No frown / sad by default — speaking is neutral-engaged, not upset.
+      },
+      // When C3 direction is `concern`, scale the baseline smile support down so
+      // concern speech stays empathetic (cheek/brow engagement remain).
+      concernBaseSmileScale: 0.35,
+      // Occasional phrase/sentence emphasis pulse. Triggered only at sentence /
+      // chunk boundaries (a new phoneme-timeline object reference), never per
+      // phoneme, and only ~1 in 3 boundaries. Randomized envelope + magnitude.
+      emphasis: {
+        chancePerChunk: 0.35,
+        fadeInMs: [200, 400],
+        holdMs: [200, 500],
+        fadeOutMs: [400, 800],
+        eyebrowPeak: 0.5,
+        cheekPeak: 0.35,
+        eyeSquintPeak: 0.1,
+        // Very low, and only applied when C3 direction is not `concern`.
+        smileSupportPeak: 0.12,
+        // Extra scale on the emphasis smile support under C3 `positive`, so C7
+        // never stacks onto C3's positive smile into a grin.
+        positiveSmileScale: 0.5,
+      },
+      // C7 keeps a forward, engaged read and writes NO gaze morph (that would be
+      // a second gaze writer alongside the eye runtime). It emits no intent by
+      // default — a dedicated speaking gaze is deferred to C8; head motion to C9.
+      gazeIntent: {
+        emitIntent: false,
+        direction: "forward",
+        strength: 0,
+      },
+    },
+    // C8: unified gaze controller. One authoritative owner for all gaze morphs
+    // across idle / listening / thinking / speaking. Blink stays owned by the
+    // eye runtime. Horizontal gaze is one signed scalar written identically to
+    // LeftEyeball/RightEyeball (coordinated, never crossed); vertical is one
+    // signed scalar split into the non-negative eyeLookUp*/eyeLookDown* pair,
+    // mirrored L/R. `safety` is the single clamp/damp contract shared by every
+    // state. Influence magnitudes are intentionally high for the weak-deforming
+    // current GLB. TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+    gazeConfig: {
+      safety: {
+        // Underlying LeftEyeball/RightEyeball delta is large (~0.42), so a small
+        // influence already reads as a clear glance. Hard cap for every state.
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        maxEyeballInfluence: 0.06,
+        // Vertical (eyeLook*) cap. TEMP CURRENT-ASSET COMPENSATION — re-tune
+        // after updated GLB.
+        maxVerticalInfluence: 0.06,
+        // Damped, never snapped. Higher = quicker settle.
+        dampLambda: 10,
+        // Reduce eyeball movement during a blink (matches pre-C8 idle feel).
+        blinkReductionFactor: 0.6,
+      },
+      // Idle: occasional subtle side glance + tiny vertical refocus, randomized
+      // timing, smooth return to center. Mirrors the pre-C8 idleEyeballConfig.
+      idle: {
+        minIntervalMs: 3000,
+        maxIntervalMs: 6000,
+        moveMs: [800, 1500],
+        holdMs: [400, 1200],
+        returnMs: [800, 1400],
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        minInfluence: 0.03,
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        maxInfluence: 0.0525,
+        verticalChance: 0.4,
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        verticalInfluence: 0.03,
+      },
+      // Listening: mostly direct eye contact with tiny refocus shifts; a very
+      // rare brief gaze-away. No idle-style side scanning.
+      listening: {
+        minIntervalMs: 2500,
+        maxIntervalMs: 5000,
+        moveMs: [400, 800],
+        holdMs: [300, 700],
+        returnMs: [400, 800],
+        // Tiny — reads as attentive micro-adjustment, not a glance.
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        horizontalInfluence: 0.018,
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        verticalInfluence: 0.022,
+        // Very rare — most refocuses stay centered.
+        gazeAwayChance: 0.12,
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        gazeAwayInfluence: 0.04,
+      },
+      // Thinking: a controlled gaze-away with a configurable direction, held
+      // longer than idle, returning smoothly. Consumes C6 gazeIntent
+      // (direction "away", strength). Falls back to a subtle drift when the
+      // intent is inactive.
+      thinking: {
+        // Never zero — a beat of eye contact before disengaging on entry.
+        entryDelayMs: [350, 900],
+        minIntervalMs: 2600,
+        maxIntervalMs: 5200,
+        moveMs: [500, 900],
+        holdMs: [1200, 2600],
+        returnMs: [600, 1100],
+        // Applied horizontal = intentStrength * strengthScale (then clamped).
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        strengthScale: 0.16,
+        // Fixed look-aside side; 0 would randomize L/R each away event.
+        horizontalBias: -1,
+        // Slight downward cast reads as "processing".
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        verticalInfluence: -0.03,
+        fallback: {
+          minIntervalMs: 2500,
+          maxIntervalMs: 4500,
+          moveMs: [500, 900],
+          holdMs: [500, 1000],
+          returnMs: [500, 900],
+          // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+          horizontalInfluence: 0.025,
+          // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+          verticalInfluence: -0.02,
+        },
+      },
+      // Speaking: mostly re-engaged eye contact with small natural refocus, and
+      // an optional brief emphasis glance when C7 gazeIntent is active. C7 emits
+      // an inactive intent by default → resolves to neutral/direct gaze.
+      speaking: {
+        minIntervalMs: 1800,
+        maxIntervalMs: 3600,
+        moveMs: [300, 600],
+        holdMs: [200, 500],
+        returnMs: [400, 700],
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        horizontalInfluence: 0.02,
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        verticalInfluence: 0.015,
+        // Applied emphasis horizontal = intentStrength * emphasisStrengthScale.
+        // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+        emphasisStrengthScale: 0.12,
+      },
+    },
+    // C10: unified emotion coordinator. NOT another emotion generator and NOT a
+    // morph writer — it is the "conductor" that scales the already-produced
+    // additive layers (C3 sentiment, C4/C5/C6/C7 state personalities) so
+    // contradictory facial signals (smile-while-concerned, sad+smile,
+    // brow+concern, etc.) cannot co-exist. Every value below is a scalar knob;
+    // at neutral all channel scales resolve to 1 → output identical to C3–C8.
+    // Boosts are intentionally high for the weak-deforming current GLB.
+    // TEMP CURRENT-ASSET COMPENSATION — re-tune (toward ~1.2 / smaller) after GLB.
+    emotionCoordinatorConfig: {
+      // Ceiling on any single channel scale AND on overall expressiveness.
+      // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      maxExpressiveness: 1.8,
+      // Positive: amplify the warm channels (boost per unit of sentiment weight).
+      // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      positiveSmileBoost: 0.6,
+      positiveCheekBoost: 0.5,
+      positiveEyeBoost: 0.3,
+      // Positive: fully retire the opposing channels (scale → 0 at full weight).
+      positiveFrownSuppression: 1.0,
+      positiveSadSuppression: 1.0,
+      positiveMouthPressSuppression: 1.0,
+      // Concern: fully suppress the smile; reduce (not kill) the engaged cues.
+      concernSmileSuppression: 1.0,
+      // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      concernCheekReduction: 0.6,
+      concernEyeReduction: 0.5,
+      concernBrowReduction: 0.4,
+      // Concern: keep/boost the empathetic channels C3 already supplies.
+      // TEMP CURRENT-ASSET COMPENSATION — re-tune after updated GLB.
+      concernFrownBoost: 0.4,
+      concernSadBoost: 0.3,
+      // Reserved: extra lip-press under concern tension. Inert today (mouthPress
+      // is thinking-only, always neutral sentiment); 0 preserves neutral-identity.
+      mouthPressBoost: 0.0,
+    },
+    // C11: cross-state transition engine. Durations only — C11 introduces no new
+    // expression or behavior event; it crossfades the EXISTING state baselines
+    // between the outgoing and incoming state over these windows so handoffs feel
+    // intentional instead of relying on the fixed expression damp alone. Every
+    // timing lives here; the runtime hard-codes none. Ranges are conservative for
+    // the current asset — safe to widen slightly after the updated GLB.
+    transitionConfig: {
+      // "easeInOutSine" or "smoothstep" — both are gentle S-curves.
+      easing: "easeInOutSine",
+      // Fallback for any edge not explicitly listed below.
+      defaultMs: 350,
+      edges: {
+        // Normal state transitions (250–500 ms).
+        idleToListening: 350,
+        listeningToIdle: 350,
+        listeningToThinking: 350,
+        thinkingToListening: 350,
+        thinkingToIdle: 350,
+        // Speaking entry — snappy so speech reads immediately (150–300 ms).
+        // (Lip-sync/audio is unaffected; this only crossfades the non-mouth
+        // expression baseline.)
+        idleToSpeaking: 220,
+        listeningToSpeaking: 220,
+        thinkingToSpeaking: 220,
+        // Speaking exit — a touch longer to settle back (250–450 ms).
+        speakingToListening: 340,
+        speakingToIdle: 340,
+        speakingToThinking: 340,
+      },
+      // Config/type-ready but INACTIVE: no explicit session-layer barge-in signal
+      // exists that can be consumed without coupling to Workstream B timing, so
+      // C11 never triggers an interruption transition (see controller docs).
+      interruptionMs: 150,
+      // Config/type-ready but not actively triggered (no session lifecycle hook).
+      sessionStartMs: 550,
+      sessionEndMs: 450,
     },
     expressionConfig: {
       // Soft, neutral resting face. A gentle closed-mouth pleasantness with a

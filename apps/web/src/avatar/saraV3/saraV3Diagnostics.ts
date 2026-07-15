@@ -1,8 +1,14 @@
 import type { SaraV3BehaviorDiagnostics } from "./saraV3BehaviorTypes";
 import type {
+  SaraV3AttentionRefreshDiagnostics,
+  SaraV3EmotionCoordinatorDiagnostics,
+  SaraV3GazeDiagnostics,
   SaraV3IdleBehaviorDiagnostics,
   SaraV3ListeningBehaviorDiagnostics,
   SaraV3SentimentDiagnostics,
+  SaraV3SpeakingBehaviorDiagnostics,
+  SaraV3ThinkingBehaviorDiagnostics,
+  SaraV3TransitionDiagnostics,
 } from "./saraV3Types";
 import type {
   SaraV3Diagnostics,
@@ -33,7 +39,13 @@ declare global {
     saraV3SmileDiagnostics?: SaraV3SmileDiagnostics;
     saraV3BehaviorDiagnostics?: SaraV3BehaviorDiagnostics;
     saraV3IdleBehaviorDiagnostics?: SaraV3IdleBehaviorDiagnostics;
+    saraV3AttentionRefreshDiagnostics?: SaraV3AttentionRefreshDiagnostics;
     saraV3ListeningBehaviorDiagnostics?: SaraV3ListeningBehaviorDiagnostics;
+    saraV3ThinkingBehaviorDiagnostics?: SaraV3ThinkingBehaviorDiagnostics;
+    saraV3SpeakingBehaviorDiagnostics?: SaraV3SpeakingBehaviorDiagnostics;
+    saraV3GazeDiagnostics?: SaraV3GazeDiagnostics;
+    saraV3EmotionCoordinatorDiagnostics?: SaraV3EmotionCoordinatorDiagnostics;
+    saraV3TransitionDiagnostics?: SaraV3TransitionDiagnostics;
     saraV3SentimentDiagnostics?: SaraV3SentimentDiagnostics;
     saraV3RawAudit?: SaraV3RawAudit;
     saraV3RenderAudit?: SaraV3RenderAudit;
@@ -301,6 +313,34 @@ export function writeSaraV3IdleBehaviorDiagnostics(
 }
 
 /**
+ * EXPERIMENT: development-only Attention Refresh diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write.
+ */
+export function writeSaraV3AttentionRefreshDiagnostics(
+  update: Partial<SaraV3AttentionRefreshDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3AttentionRefreshDiagnostics = {
+    enabled: false,
+    idleActive: false,
+    eventActive: false,
+    combination: "none",
+    elapsedMs: 0,
+    eventDurationMs: 0,
+    nextEventAtMs: 0,
+    blinkTriggered: false,
+    browValue: 0,
+    cheekValue: 0,
+    eyeRefocusOffset: 0,
+    scheduledMicroTargets: {},
+    tempAssetCompensation: false,
+    ...(window.saraV3AttentionRefreshDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
  * C5: development-only listening-behavior diagnostics. Gated on
  * `import.meta.env.DEV` so production neither runs nor ships this write — the
  * listening personality layer emits no production logs.
@@ -323,6 +363,150 @@ export function writeSaraV3ListeningBehaviorDiagnostics(
     scheduledMicroTargets: {},
     tempAssetCompensation: false,
     ...(window.saraV3ListeningBehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C6: development-only thinking-behavior diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * thinking personality layer emits no production logs.
+ */
+export function writeSaraV3ThinkingBehaviorDiagnostics(
+  update: Partial<SaraV3ThinkingBehaviorDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3ThinkingBehaviorDiagnostics = {
+    enabled: false,
+    thinkingActive: false,
+    timeInThinkingMs: 0,
+    baselineTargets: {},
+    currentEventType: "none",
+    eventPhase: "inactive",
+    eventMagnitude: 0,
+    nextEventAtMs: 0,
+    stateExpressionTargets: {},
+    scheduledMicroTargets: {},
+    gazeIntent: { active: false, direction: "none", strength: 0 },
+    tempAssetCompensation: false,
+    ...(window.saraV3ThinkingBehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C7: development-only speaking-behavior diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * speaking body-language layer emits no production logs.
+ */
+export function writeSaraV3SpeakingBehaviorDiagnostics(
+  update: Partial<SaraV3SpeakingBehaviorDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3SpeakingBehaviorDiagnostics = {
+    enabled: false,
+    speakingActive: false,
+    timeInSpeakingMs: 0,
+    chunkIdentity: null,
+    baselineTargets: {},
+    currentEventType: "none",
+    eventPhase: "inactive",
+    eventMagnitude: 0,
+    lastChanceRoll: 0,
+    lastChanceTriggered: false,
+    sentimentDirection: "neutral",
+    stateExpressionTargets: {},
+    scheduledMicroTargets: {},
+    gazeIntent: { active: false, direction: "none", strength: 0 },
+    tempAssetCompensation: false,
+    ...(window.saraV3SpeakingBehaviorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C8: development-only gaze-controller diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * gaze controller emits no production logs.
+ */
+export function writeSaraV3GazeDiagnostics(update: Partial<SaraV3GazeDiagnostics>) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3GazeDiagnostics = {
+    enabled: false,
+    gazeActive: false,
+    behaviorState: "idle",
+    gazeMode: "idle",
+    sourceIntent: "none",
+    targetDirection: { horizontal: 0, vertical: 0 },
+    eyeLookValues: {},
+    eyeballValues: {},
+    eventPhase: "inactive",
+    eventStartedAtMs: null,
+    eventEndsAtMs: null,
+    nextEventAtMs: 0,
+    clampApplied: false,
+    tempAssetCompensation: false,
+    ...(window.saraV3GazeDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C10: development-only emotion-coordinator diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * coordinator emits no production logs.
+ */
+export function writeSaraV3EmotionCoordinatorDiagnostics(
+  update: Partial<SaraV3EmotionCoordinatorDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3EmotionCoordinatorDiagnostics = {
+    enabled: false,
+    currentState: "idle",
+    activePersonality: "idle",
+    emotionDirection: "neutral",
+    emotionIntensity: 0,
+    positiveWeight: 0,
+    concernWeight: 0,
+    scales: {},
+    suppressedChannels: [],
+    attenuatedChannels: [],
+    boostedChannels: [],
+    tempAssetCompensation: false,
+    ...(window.saraV3EmotionCoordinatorDiagnostics ?? {}),
+    ...update,
+  };
+}
+
+/**
+ * C11: development-only transition-engine diagnostics. Gated on
+ * `import.meta.env.DEV` so production neither runs nor ships this write — the
+ * transition engine emits no production logs.
+ */
+export function writeSaraV3TransitionDiagnostics(
+  update: Partial<SaraV3TransitionDiagnostics>
+) {
+  if (!import.meta.env.DEV) return;
+  if (typeof window === "undefined") return;
+  window.saraV3TransitionDiagnostics = {
+    enabled: false,
+    transitionActive: false,
+    fromState: null,
+    toState: null,
+    startedAtMs: 0,
+    durationMs: 0,
+    rawProgress: 0,
+    easedProgress: 0,
+    transitionReason: "none",
+    replacementCount: 0,
+    baselineCrossfadeActive: false,
+    gazeTransitionMetadataActive: false,
+    interruptionSource: "unavailable",
+    ...(window.saraV3TransitionDiagnostics ?? {}),
     ...update,
   };
 }

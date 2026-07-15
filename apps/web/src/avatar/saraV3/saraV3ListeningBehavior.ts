@@ -50,6 +50,15 @@ function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
+// Each acknowledgement samples its own peak in [70%, 100%] of the configured
+// value, so repeated events never land on the exact same strength. Sampled once
+// at event start and held for the whole envelope — never re-rolled per frame.
+const MAGNITUDE_JITTER_FLOOR = 0.7;
+
+function sampleMagnitude(peak: number) {
+  return randomBetween(peak * MAGNITUDE_JITTER_FLOOR, peak);
+}
+
 function nextEventDelayMs() {
   const ack = SARA_V3_AVATAR_DEFINITION.saraV3.listeningBehaviorConfig.acknowledgement;
   return randomBetween(ack.minIntervalMs, ack.maxIntervalMs);
@@ -125,6 +134,11 @@ export function updateSaraV3ListeningBehavior(args: {
       state.nextEventAtMs = 0;
       state.enteredAtMs = null;
       state.timeInListeningMs = 0;
+      // Clear the sampled peaks so a stale magnitude can never leak into the
+      // next entry — the next acknowledgement resamples them from scratch.
+      state.eventSmilePeak = 0;
+      state.eventCheekPeak = 0;
+      state.eventEyebrowPeak = 0;
       state.stateExpressionTargets = {};
       state.scheduledMicroTargets = {};
     }
@@ -165,9 +179,9 @@ export function updateSaraV3ListeningBehavior(args: {
     state.eventFadeInMs = randomBetween(ack.fadeInMs[0], ack.fadeInMs[1]);
     state.eventHoldMs = randomBetween(ack.holdMs[0], ack.holdMs[1]);
     state.eventFadeOutMs = randomBetween(ack.fadeOutMs[0], ack.fadeOutMs[1]);
-    state.eventSmilePeak = isSmile ? ack.smilePeak : 0;
-    state.eventCheekPeak = isSmile ? ack.cheekPeak : 0;
-    state.eventEyebrowPeak = isSmile ? 0 : ack.eyebrowPeak;
+    state.eventSmilePeak = isSmile ? sampleMagnitude(ack.smilePeak) : 0;
+    state.eventCheekPeak = isSmile ? sampleMagnitude(ack.cheekPeak) : 0;
+    state.eventEyebrowPeak = isSmile ? 0 : sampleMagnitude(ack.eyebrowPeak);
   }
 
   const { phase, strength, done } = resolveEventPhase(state, nowMs);

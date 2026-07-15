@@ -163,6 +163,40 @@ export type SaraV3AvatarDefinition = AvatarDefinition & {
       readonly reentrySmileDelayMs: readonly [number, number];
       readonly routeBreathingToIdleBaseline: boolean;
     };
+    /**
+     * EXPERIMENT (idle-only): "Attention Refresh" — a coordinated idle micro-event
+     * with its own 5–10s schedule, separate from the existing micro-smile/brow
+     * events (see saraV3AttentionRefresh.ts). Every value lives here; the runtime
+     * hard-codes none. Peaks are TEMP CURRENT-ASSET COMPENSATION (weak-deforming
+     * GLB) and intentionally visible for this experiment only.
+     */
+    readonly attentionRefreshConfig: {
+      /** Own schedule window (ms) between successive Attention Refresh events. */
+      readonly intervalMinMs: number;
+      readonly intervalMaxMs: number;
+      /** Per-fire combination probabilities (A blink-only … D eyeball-only). */
+      readonly combinationWeights: {
+        readonly a: number;
+        readonly b: number;
+        readonly c: number;
+        readonly d: number;
+      };
+      /** Staged onset delays (ms) from event start — nothing starts together. */
+      readonly browDelayMs: number;
+      readonly cheekDelayMs: number;
+      readonly eyeDelayMs: number;
+      /** Shared brow/cheek envelope (ms): fade-in → hold → fade-out. */
+      readonly fadeInMs: number;
+      readonly holdMs: number;
+      readonly fadeOutMs: number;
+      /** Additive brow/cheek peaks (TEMP visible compensation for the weak GLB). */
+      readonly eyebrowPeak: number;
+      readonly cheekPeak: number;
+      /** Tiny signed eyeball refocus — additive on top of the C8 gaze value and
+       *  clamped to the shared gaze safety bound. Out-and-back, never held. */
+      readonly eyeRefocusStrength: number;
+      readonly eyeRefocusDurationMs: number;
+    };
     /** C5: listening-personality behavior (see saraV3ListeningBehavior.ts). All
      *  values are TEMP current-asset compensation, re-tuned after the new GLB. */
     readonly listeningBehaviorConfig: {
@@ -181,6 +215,187 @@ export type SaraV3AvatarDefinition = AvatarDefinition & {
       readonly eyeAttention: {
         readonly reuseIdleEyeDrift: boolean;
       };
+    };
+    /** C6: thinking-personality behavior (see saraV3ThinkingBehavior.ts). All
+     *  values are TEMP current-asset compensation, re-tuned after the new GLB. */
+    readonly thinkingBehaviorConfig: {
+      readonly base: Readonly<Record<string, number>>;
+      readonly microEvent: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly fadeInMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly fadeOutMs: readonly [number, number];
+        readonly eyebrowPeak: number;
+        readonly cheekPeak: number;
+        readonly lipPressPeak: number;
+        readonly browShiftChance: number;
+      };
+      /** Declarative only — consumed by the C8 gaze controller, never written. */
+      readonly gazeIntent: {
+        readonly emitIntent: boolean;
+        readonly direction: string;
+        readonly strength: number;
+      };
+    };
+    /** C7: speaking body-language behavior (see saraV3SpeakingBehavior.ts). All
+     *  values are TEMP current-asset compensation, re-tuned after the new GLB. */
+    readonly speakingBehaviorConfig: {
+      /** Stable speaking baseline (mild cheek / small brow / very low smile /
+       *  slight eye squint). Replaces expressionConfig.speaking while C7 runs. */
+      readonly base: Readonly<Record<string, number>>;
+      /** Multiplier applied to the baseline smile support when the C3 sentiment
+       *  direction is `concern` — keeps concern speech empathetic, not cheerful. */
+      readonly concernBaseSmileScale: number;
+      /** Occasional phrase/sentence-level emphasis pulse, triggered at chunk
+       *  boundaries (never per phoneme). */
+      readonly emphasis: {
+        /** Probability a new sentence/chunk boundary starts an emphasis pulse. */
+        readonly chancePerChunk: number;
+        readonly fadeInMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly fadeOutMs: readonly [number, number];
+        readonly eyebrowPeak: number;
+        readonly cheekPeak: number;
+        readonly eyeSquintPeak: number;
+        /** Very low smile support; zeroed entirely when direction is `concern`. */
+        readonly smileSupportPeak: number;
+        /** Extra scale on the emphasis smile support when direction is `positive`,
+         *  so C7 never stacks onto C3's positive smile into a grin. */
+        readonly positiveSmileScale: number;
+      };
+      /** Declarative only — consumed by the C8 gaze controller, never written. */
+      readonly gazeIntent: {
+        readonly emitIntent: boolean;
+        readonly direction: string;
+        readonly strength: number;
+      };
+    };
+    /** C8: unified gaze controller tuning (see saraV3GazeController.ts). All
+     *  influence magnitudes are TEMP current-asset compensation, re-tuned after
+     *  the new GLB. `safety` is shared across every state (single clamp/damp
+     *  contract that guarantees coordinated, non-crossed, non-snapping eyes). */
+    readonly gazeConfig: {
+      readonly safety: {
+        /** Max signed influence on LeftEyeball/RightEyeball (horizontal gaze).
+         *  Both eyes always receive the identical signed value. */
+        readonly maxEyeballInfluence: number;
+        /** Max magnitude of the signed vertical channel before it is split into
+         *  the non-negative eyeLookUp / eyeLookDown pair (mirrored L/R). */
+        readonly maxVerticalInfluence: number;
+        /** Per-frame damp lambda easing the applied value toward its target. */
+        readonly dampLambda: number;
+        /** During a blink, horizontal eyeball movement is scaled down by
+         *  `blinkValue * blinkReductionFactor` (preserves the pre-C8 feel). */
+        readonly blinkReductionFactor: number;
+      };
+      readonly idle: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly moveMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly returnMs: readonly [number, number];
+        readonly minInfluence: number;
+        readonly maxInfluence: number;
+        /** Chance a side glance also carries a small vertical refocus. */
+        readonly verticalChance: number;
+        readonly verticalInfluence: number;
+      };
+      readonly listening: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly moveMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly returnMs: readonly [number, number];
+        readonly horizontalInfluence: number;
+        readonly verticalInfluence: number;
+        /** Probability a refocus is instead a rare brief gaze-away. */
+        readonly gazeAwayChance: number;
+        readonly gazeAwayInfluence: number;
+      };
+      readonly thinking: {
+        /** Randomized delay before the first gaze-away fires after entering
+         *  thinking — never zero, so nothing snaps away on the entry frame. */
+        readonly entryDelayMs: readonly [number, number];
+        /** Gap between successive gaze-away holds while thinking persists. */
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly moveMs: readonly [number, number];
+        /** Longer than idle — a held, deliberate disengagement. */
+        readonly holdMs: readonly [number, number];
+        readonly returnMs: readonly [number, number];
+        /** Applied horizontal influence = intentStrength * strengthScale. */
+        readonly strengthScale: number;
+        /** Horizontal sign for the away look: -1/+1 fixed side, 0 = random. */
+        readonly horizontalBias: number;
+        /** Slight downward cast that reads as "processing". */
+        readonly verticalInfluence: number;
+        /** Subtle drift used when C6 gazeIntent is inactive. */
+        readonly fallback: {
+          readonly minIntervalMs: number;
+          readonly maxIntervalMs: number;
+          readonly moveMs: readonly [number, number];
+          readonly holdMs: readonly [number, number];
+          readonly returnMs: readonly [number, number];
+          readonly horizontalInfluence: number;
+          readonly verticalInfluence: number;
+        };
+      };
+      readonly speaking: {
+        readonly minIntervalMs: number;
+        readonly maxIntervalMs: number;
+        readonly moveMs: readonly [number, number];
+        readonly holdMs: readonly [number, number];
+        readonly returnMs: readonly [number, number];
+        readonly horizontalInfluence: number;
+        readonly verticalInfluence: number;
+        /** Optional brief emphasis glance when C7 gazeIntent is active. */
+        readonly emphasisStrengthScale: number;
+      };
+    };
+    /** C10: unified emotion-coordination tuning (see saraV3EmotionCoordinator.ts).
+     *  The coordinator OWNS NO MORPHS — these knobs only scale the existing
+     *  additive expression layers so opposing signals cannot co-exist. Boost
+     *  values are TEMP current-asset compensation for the weak-deforming GLB. */
+    readonly emotionCoordinatorConfig: {
+      /** Ceiling on any single channel scale and on overall expressiveness. */
+      readonly maxExpressiveness: number;
+      /** Positive: amplify warm channels (per-unit-weight boost above 1). */
+      readonly positiveSmileBoost: number;
+      readonly positiveCheekBoost: number;
+      readonly positiveEyeBoost: number;
+      /** Positive: fully suppress opposing channels (1 → 0 at full weight). */
+      readonly positiveFrownSuppression: number;
+      readonly positiveSadSuppression: number;
+      readonly positiveMouthPressSuppression: number;
+      /** Concern: suppress the warm/engaged channels (1 → 0 at full weight). */
+      readonly concernSmileSuppression: number;
+      readonly concernCheekReduction: number;
+      readonly concernEyeReduction: number;
+      readonly concernBrowReduction: number;
+      /** Concern: keep/boost the empathetic channels C3 already supplies. */
+      readonly concernFrownBoost: number;
+      readonly concernSadBoost: number;
+      /** Reserved concern-tension lip-press boost; 0 preserves neutral-identity. */
+      readonly mouthPressBoost: number;
+    };
+    /** C11: cross-state transition tuning (see saraV3StateTransitionController.ts).
+     *  Durations only — C11 creates no new expression/event, it just crossfades
+     *  the existing state baselines over these windows. All timings live here;
+     *  the runtime hard-codes none. Conservative for the current asset. */
+    readonly transitionConfig: {
+      /** Eased-progress curve applied to the raw 0..1 transition progress. */
+      readonly easing: SaraV3TransitionEasing;
+      /** Fallback crossfade duration for any edge not explicitly listed. */
+      readonly defaultMs: number;
+      /** Per-edge crossfade durations, keyed `${from}To${Capitalized(to)}`. */
+      readonly edges: Readonly<Record<string, number>>;
+      /** Config/type-ready (currently inactive — no explicit barge-in signal). */
+      readonly interruptionMs: number;
+      /** Config/type-ready (currently not actively triggered). */
+      readonly sessionStartMs: number;
+      /** Config/type-ready (currently not actively triggered). */
+      readonly sessionEndMs: number;
     };
     readonly expressionConfig: {
       readonly idle: Readonly<Record<string, number>>;
@@ -565,6 +780,62 @@ export type SaraV3IdleBehaviorDiagnostics = {
   scheduledMicroTargets: Record<string, number>;
 };
 
+// ── EXPERIMENT: idle "Attention Refresh" coordinated micro-event ─────────────
+/** Which natural combination this Attention Refresh fired; "none" when idle. */
+export type SaraV3AttentionRefreshCombination = "none" | "A" | "B" | "C" | "D";
+
+/**
+ * EXPERIMENT (idle-only): lifecycle + scheduler state for the Attention Refresh
+ * event. It owns its own 5–10s schedule (independent of blink and of the smile
+ * event). Brow/cheek are routed additively into C2's scheduledMicro slot; the
+ * blink is delegated to the eye runtime (it just re-arms the next blink); the
+ * tiny eyeball refocus is applied on top of the C8 gaze value and clamped to the
+ * shared gaze safety bound. The module never owns smile/jaw/lip/viseme morphs.
+ */
+export type SaraV3AttentionRefreshState = {
+  /** Idle on the previous frame (entry/exit edge detection). */
+  wasIdle: boolean;
+  /** Frame-clock timestamp (ms) the next event is allowed to start. */
+  nextEventAtMs: number;
+  /** When the in-flight event started, or null between events. */
+  eventStartedAtMs: number | null;
+  /** Total lifetime (ms) of the in-flight event (depends on the combination). */
+  eventDurationMs: number;
+  /** The combination selected for the in-flight event. */
+  combination: SaraV3AttentionRefreshCombination;
+  hasBlink: boolean;
+  hasBrowCheek: boolean;
+  hasEyeRefocus: boolean;
+  /** Whether this event has already re-armed the eye runtime's blink. */
+  blinkTriggered: boolean;
+  /** Signed direction (-1/+1) of this event's eyeball refocus. */
+  eyeRefocusSign: number;
+  /** Last routed brow/cheek additive targets (into scheduledMicro). */
+  scheduledMicroTargets: Record<string, number>;
+  /** Last applied signed eyeball refocus offset (before C8 combine/clamp). */
+  eyeRefocusOffset: number;
+};
+
+/**
+ * EXPERIMENT: development-only Attention Refresh diagnostics. Written to
+ * `window.saraV3AttentionRefreshDiagnostics` under `import.meta.env.DEV` only.
+ */
+export type SaraV3AttentionRefreshDiagnostics = {
+  enabled: boolean;
+  idleActive: boolean;
+  eventActive: boolean;
+  combination: SaraV3AttentionRefreshCombination;
+  elapsedMs: number;
+  eventDurationMs: number;
+  nextEventAtMs: number;
+  blinkTriggered: boolean;
+  browValue: number;
+  cheekValue: number;
+  eyeRefocusOffset: number;
+  scheduledMicroTargets: Record<string, number>;
+  tempAssetCompensation: boolean;
+};
+
 // ── C5: listening-personality behavior layer ────────────────────────────────
 /** Discrete listening acknowledgement currently in flight. */
 export type SaraV3ListeningEventType = "none" | "smilePulse" | "browLift";
@@ -593,7 +864,10 @@ export type SaraV3ListeningBehaviorState = {
   eventFadeInMs: number;
   eventHoldMs: number;
   eventFadeOutMs: number;
-  /** Peak magnitudes chosen for the current acknowledgement. */
+  /**
+   * Peak magnitudes sampled once at the start of the current acknowledgement,
+   * each in [70%, 100%] of its configured peak, and held for the whole envelope.
+   */
   eventSmilePeak: number;
   eventCheekPeak: number;
   eventEyebrowPeak: number;
@@ -617,6 +891,317 @@ export type SaraV3ListeningBehaviorDiagnostics = {
   nextEventAtMs: number;
   stateExpressionTargets: Record<string, number>;
   scheduledMicroTargets: Record<string, number>;
+  /** True while the TEMP current-asset compensation values are in use. */
+  tempAssetCompensation: boolean;
+};
+
+// ── C6: thinking-personality behavior layer ─────────────────────────────────
+/** Discrete thinking micro-event currently in flight. Never a smile. */
+export type SaraV3ThinkingEventType = "none" | "browShift" | "lipPress";
+/** Envelope phase of the current thinking micro-event. */
+export type SaraV3ThinkingEventPhase = "inactive" | "fadeIn" | "hold" | "fadeOut";
+
+/**
+ * C6: declarative gaze request published while thinking. C6 never writes a gaze
+ * morph — this is metadata for the future C8 gaze controller to consume, so the
+ * eye runtime stays the single gaze writer.
+ */
+export type SaraV3GazeIntent = {
+  active: boolean;
+  direction: string;
+  strength: number;
+};
+
+/**
+ * C8: the gaze "mode" the unified controller is currently driving, one per C1
+ * behavior state. `sourceIntent` (on the controller state) carries the finer
+ * detail (which scheduler / whether a C6/C7 intent is being honored).
+ */
+export type SaraV3GazeMode = "idle" | "listening" | "thinking" | "speaking";
+
+/** Envelope phase of the current gaze event. */
+export type SaraV3GazeEventPhase = "inactive" | "move" | "hold" | "return";
+
+/**
+ * C8: single-owner gaze controller state. Owns all four `eyeLook*` morphs plus
+ * `LeftEyeball`/`RightEyeball`; blink stays owned by the eye runtime. Horizontal
+ * gaze is one signed scalar written identically to both eyeballs (never crossed,
+ * never divergent); vertical is one signed scalar split into the non-negative
+ * up/down pair, mirrored L/R. Both channels are damped every frame — targets are
+ * approached, never snapped.
+ */
+export type SaraV3GazeControllerState = {
+  /** Presence mode seen last frame (entry/exit detection). */
+  lastMode: SaraV3RuntimeMode | null;
+  /** When the next gaze event is allowed to start. */
+  nextEventAtMs: number;
+  /** Start time of the in-flight event, or null when between events. */
+  eventStartedAtMs: number | null;
+  eventMoveMs: number;
+  eventHoldMs: number;
+  eventReturnMs: number;
+  /** Signed pre-envelope targets sampled once at event start (already clamped). */
+  eventTargetH: number;
+  eventTargetV: number;
+  /** Damped applied signed values (what actually reaches the morphs). */
+  appliedH: number;
+  appliedV: number;
+  /** dt tracking for frame-rate-independent damping. */
+  lastNowMs: number;
+  /** Last resolved outputs (also surfaced to diagnostics/consumers). */
+  eyeLookTargets: Record<string, number>;
+  eyeballTargets: Record<string, number>;
+  gazeMode: SaraV3GazeMode;
+  sourceIntent: string;
+  eventPhase: SaraV3GazeEventPhase;
+  /** True on the frame a target had to be clamped to a safety bound. */
+  clampApplied: boolean;
+};
+
+/**
+ * C8: development-only gaze diagnostics. Written to
+ * `window.saraV3GazeDiagnostics` under `import.meta.env.DEV` only.
+ */
+export type SaraV3GazeDiagnostics = {
+  enabled: boolean;
+  gazeActive: boolean;
+  behaviorState: SaraV3RuntimeMode;
+  gazeMode: SaraV3GazeMode;
+  sourceIntent: string;
+  targetDirection: { horizontal: number; vertical: number };
+  eyeLookValues: Record<string, number>;
+  eyeballValues: Record<string, number>;
+  eventPhase: SaraV3GazeEventPhase;
+  eventStartedAtMs: number | null;
+  eventEndsAtMs: number | null;
+  nextEventAtMs: number;
+  clampApplied: boolean;
+  tempAssetCompensation: boolean;
+};
+
+/**
+ * C10: which single state personality owns the face this frame (derived from the
+ * authoritative C1 mode — sentiment never changes ownership).
+ */
+export type SaraV3EmotionPersonality = "idle" | "listening" | "thinking" | "speaking";
+
+/** C10: emotional polarity in effect (only ever non-neutral while speaking). */
+export type SaraV3EmotionDirection = "neutral" | "positive" | "concern";
+
+/**
+ * C10: the normalized overlay DECISION. Owns no morphs — it is a set of
+ * per-channel scalar multipliers (1 = unchanged) applied to the existing
+ * additive expression layers so contradictory signals cannot co-exist. All
+ * scales are 1 when disabled or emotionally neutral, so the output is
+ * byte-identical to the pre-C10 (C3–C8) behavior in those cases.
+ */
+export type SaraV3EmotionCoordinatorDecision = {
+  enabled: boolean;
+  activePersonality: SaraV3EmotionPersonality;
+  emotionDirection: SaraV3EmotionDirection;
+  emotionIntensity: number;
+  positiveWeight: number;
+  concernWeight: number;
+  smileScale: number;
+  browScale: number;
+  cheekScale: number;
+  eyeScale: number;
+  frownScale: number;
+  sadScale: number;
+  mouthPressScale: number;
+};
+
+/**
+ * C10: development-only coordinator diagnostics. Written to
+ * `window.saraV3EmotionCoordinatorDiagnostics` under `import.meta.env.DEV` only.
+ */
+export type SaraV3EmotionCoordinatorDiagnostics = {
+  enabled: boolean;
+  currentState: SaraV3RuntimeMode;
+  activePersonality: SaraV3EmotionPersonality;
+  emotionDirection: SaraV3EmotionDirection;
+  emotionIntensity: number;
+  positiveWeight: number;
+  concernWeight: number;
+  scales: Record<string, number>;
+  /** Channels fully zeroed (scale === 0). */
+  suppressedChannels: string[];
+  /** Channels reduced but not zeroed (0 < scale < 1). */
+  attenuatedChannels: string[];
+  /** Channels amplified (scale > 1). */
+  boostedChannels: string[];
+  tempAssetCompensation: boolean;
+};
+
+/** C11: eased-progress curve for a transition (config-selected). */
+export type SaraV3TransitionEasing = "smoothstep" | "easeInOutSine";
+
+/**
+ * C11: cross-state transition controller state. Metadata + a small crossfade
+ * buffer only — it OWNS NO MORPHS and never replaces the authoritative C1
+ * current state. It detects state edges, runs one time-boxed baseline crossfade
+ * per edge, and hands the blended baseline back to the C2 stateExpression slot.
+ */
+export type SaraV3TransitionState = {
+  /** Mode seen last frame (edge detection). */
+  lastMode: SaraV3RuntimeMode | null;
+  transitionActive: boolean;
+  transitionFrom: SaraV3RuntimeMode | null;
+  transitionTo: SaraV3RuntimeMode | null;
+  transitionStartedAtMs: number;
+  transitionDurationMs: number;
+  /** Raw clamped progress 0..1. */
+  transitionProgress: number;
+  /** Eased progress 0..1 (per the configured curve). */
+  easedProgress: number;
+  transitionReason: string;
+  /** How many times an in-flight transition was replaced by a newer edge. */
+  replacementCount: number;
+  /** Snapshot of the outgoing displayed baseline (the crossfade "from"). */
+  fromBaseline: Record<string, number>;
+  /** Last baseline actually displayed (blended while active, else current). */
+  lastDisplayedBaseline: Record<string, number>;
+};
+
+/** C11: development-only transition diagnostics. */
+export type SaraV3TransitionDiagnostics = {
+  enabled: boolean;
+  transitionActive: boolean;
+  fromState: SaraV3RuntimeMode | null;
+  toState: SaraV3RuntimeMode | null;
+  startedAtMs: number;
+  durationMs: number;
+  rawProgress: number;
+  easedProgress: number;
+  transitionReason: string;
+  replacementCount: number;
+  /** Whether the stateExpression baseline crossfade is currently driving output. */
+  baselineCrossfadeActive: boolean;
+  /** C11 provides no gaze metadata — C8's own entry/exit handles transitions. */
+  gazeTransitionMetadataActive: boolean;
+  /** Source of the interruption signal, or "unavailable" when none is wired. */
+  interruptionSource: string;
+};
+
+/**
+ * C6: lifecycle + scheduler state owned by the thinking behavior coordinator.
+ * Pure metadata — routes a concentration baseline into C2's stateExpression
+ * override and micro-events into the scheduledMicro slot.
+ */
+export type SaraV3ThinkingBehaviorState = {
+  wasThinking: boolean;
+  enteredAtMs: number | null;
+  timeInThinkingMs: number;
+  nextEventAtMs: number;
+  eventStartedAtMs: number | null;
+  eventType: SaraV3ThinkingEventType;
+  eventFadeInMs: number;
+  eventHoldMs: number;
+  eventFadeOutMs: number;
+  /**
+   * Peak magnitudes sampled once at the start of the current micro-event, each
+   * in [70%, 100%] of its configured peak, and held for the whole envelope.
+   */
+  eventEyebrowPeak: number;
+  eventCheekPeak: number;
+  eventLipPressPeak: number;
+  stateExpressionTargets: Record<string, number>;
+  scheduledMicroTargets: Record<string, number>;
+};
+
+/**
+ * C6: development-only thinking-behavior diagnostics. Written to
+ * `window.saraV3ThinkingBehaviorDiagnostics` under `import.meta.env.DEV` only.
+ */
+export type SaraV3ThinkingBehaviorDiagnostics = {
+  enabled: boolean;
+  thinkingActive: boolean;
+  timeInThinkingMs: number;
+  baselineTargets: Record<string, number>;
+  currentEventType: SaraV3ThinkingEventType;
+  eventPhase: SaraV3ThinkingEventPhase;
+  eventMagnitude: number;
+  nextEventAtMs: number;
+  stateExpressionTargets: Record<string, number>;
+  scheduledMicroTargets: Record<string, number>;
+  /** Declarative gaze request for C8; no gaze morph is written by C6. */
+  gazeIntent: SaraV3GazeIntent;
+  /** True while the TEMP current-asset compensation values are in use. */
+  tempAssetCompensation: boolean;
+};
+
+// ── C7: speaking body-language behavior layer ───────────────────────────────
+/** Discrete speaking emphasis pulse currently in flight. */
+export type SaraV3SpeakingEventType = "none" | "emphasis";
+/** Envelope phase of the current speaking emphasis pulse. */
+export type SaraV3SpeakingEventPhase = "inactive" | "fadeIn" | "hold" | "fadeOut";
+
+/**
+ * C7: lifecycle + chunk-trigger state owned by the speaking behavior coordinator.
+ * Pure metadata — the coordinator never writes morphs; it routes a stable
+ * speaking baseline into C2's stateExpression override and occasional
+ * phrase/sentence emphasis pulses into the scheduledMicro slot. Emphasis is
+ * triggered at sentence/chunk boundaries (a new AvatarPhonemeTimeline object
+ * reference), never per phoneme.
+ */
+export type SaraV3SpeakingBehaviorState = {
+  /** Whether speaking was active on the previous frame (entry/exit edge). */
+  wasSpeaking: boolean;
+  /** Frame-clock timestamp (ms) speaking was last entered, or null. */
+  enteredAtMs: number | null;
+  /** Milliseconds spent in the current speaking stretch (0 when not speaking). */
+  timeInSpeakingMs: number;
+  /**
+   * Stable identity of the sentence/chunk last evaluated — the timeline object
+   * reference. A null timeline while still speaking is a transient gap (held),
+   * not a reset.
+   */
+  chunkIdentity: unknown;
+  /** When the current emphasis pulse started, or null when none is active. */
+  eventStartedAtMs: number | null;
+  eventType: SaraV3SpeakingEventType;
+  eventFadeInMs: number;
+  eventHoldMs: number;
+  eventFadeOutMs: number;
+  /**
+   * Peak magnitudes sampled once at the start of the current pulse, each in
+   * [70%, 100%] of its configured peak, and held for the whole envelope. The
+   * smile peak already bakes in the C3-direction scaling seen at event start.
+   */
+  eventEyebrowPeak: number;
+  eventCheekPeak: number;
+  eventEyeSquintPeak: number;
+  eventSmilePeak: number;
+  /** Last chunk-eligibility roll and its outcome (diagnostics only). */
+  lastChanceRoll: number;
+  lastChanceTriggered: boolean;
+  /** Last routed baseline / emphasis target maps. */
+  stateExpressionTargets: Record<string, number>;
+  scheduledMicroTargets: Record<string, number>;
+};
+
+/**
+ * C7: development-only speaking-behavior diagnostics. Written to
+ * `window.saraV3SpeakingBehaviorDiagnostics` under `import.meta.env.DEV` only.
+ */
+export type SaraV3SpeakingBehaviorDiagnostics = {
+  enabled: boolean;
+  speakingActive: boolean;
+  timeInSpeakingMs: number;
+  chunkIdentity: string | null;
+  baselineTargets: Record<string, number>;
+  currentEventType: SaraV3SpeakingEventType;
+  eventPhase: SaraV3SpeakingEventPhase;
+  eventMagnitude: number;
+  /** Last chunk-boundary eligibility roll and whether it started a pulse. */
+  lastChanceRoll: number;
+  lastChanceTriggered: boolean;
+  /** Sentiment direction seen from C3 this frame (drives smile suppression). */
+  sentimentDirection: SaraV3SentimentDirection;
+  stateExpressionTargets: Record<string, number>;
+  scheduledMicroTargets: Record<string, number>;
+  /** Declarative gaze request for C8; no gaze morph is written by C7. */
+  gazeIntent: SaraV3GazeIntent;
   /** True while the TEMP current-asset compensation values are in use. */
   tempAssetCompensation: boolean;
 };
