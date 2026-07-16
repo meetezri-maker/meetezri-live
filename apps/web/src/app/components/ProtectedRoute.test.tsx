@@ -120,3 +120,122 @@ describe('ProtectedRoute onboarding restore', () => {
     expect(screen.getByText('Member app')).toBeInTheDocument();
   });
 });
+
+describe('ProtectedRoute trial onboarding guard', () => {
+  function trialProfile(overrides: Record<string, unknown> = {}) {
+    return {
+      onboarding_completed: false,
+      signup_type: 'trial',
+      subscription_plan: 'trial',
+      email_verified: false,
+      role: 'user',
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    authState = {
+      user: { id: 'trial-user', email_confirmed_at: null },
+      profile: trialProfile(),
+      profileStatus: 'ready',
+      isLoading: false,
+      hasRole: () => true,
+      signOut: vi.fn(),
+      refreshProfile,
+    };
+  });
+
+  it('keeps a trial user out of /onboarding/welcome', () => {
+    renderProtectedRoute('/onboarding/welcome');
+
+    expect(screen.queryByText('Onboarding flow')).not.toBeInTheDocument();
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+
+  it('keeps a trial user out of /onboarding/profile-setup', () => {
+    renderProtectedRoute('/onboarding/profile-setup');
+
+    expect(screen.queryByText('Onboarding flow')).not.toBeInTheDocument();
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+
+  it('keeps a legacy trial user (null signup_type) out of onboarding', () => {
+    authState = {
+      ...authState,
+      profile: trialProfile({ signup_type: null }),
+    };
+    renderProtectedRoute('/onboarding/welcome');
+
+    expect(screen.queryByText('Onboarding flow')).not.toBeInTheDocument();
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+
+  it('renders the dashboard normally for a trial user', () => {
+    renderProtectedRoute('/app/dashboard');
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+
+  it('renders other app routes normally for a trial user', () => {
+    renderProtectedRoute('/app/session-lobby');
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+});
+
+describe('ProtectedRoute paid onboarding behavior is unchanged', () => {
+  function paidProfile(overrides: Record<string, unknown> = {}) {
+    return {
+      onboarding_completed: false,
+      signup_type: 'plan',
+      subscription_plan: 'core',
+      email_verified: true,
+      role: 'user',
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    authState = {
+      user: { id: 'paid-user', email_confirmed_at: '2026-06-20T00:00:00Z' },
+      profile: paidProfile(),
+      profileStatus: 'ready',
+      isLoading: false,
+      hasRole: () => true,
+      signOut: vi.fn(),
+      refreshProfile,
+    };
+  });
+
+  it('still redirects an incomplete paid user from the app into onboarding', () => {
+    renderProtectedRoute('/app/dashboard');
+
+    expect(screen.getByText('Onboarding flow')).toBeInTheDocument();
+    expect(screen.queryByText('Member app')).not.toBeInTheDocument();
+  });
+
+  it('lets an incomplete paid user render onboarding', () => {
+    renderProtectedRoute('/onboarding/welcome');
+    expect(screen.getByText('Onboarding flow')).toBeInTheDocument();
+  });
+
+  it('still sends a completed paid user out of onboarding to the dashboard', () => {
+    authState = {
+      ...authState,
+      profile: paidProfile({ onboarding_completed: true }),
+    };
+    renderProtectedRoute('/onboarding/welcome');
+
+    expect(screen.queryByText('Onboarding flow')).not.toBeInTheDocument();
+    expect(screen.getByText('Member app')).toBeInTheDocument();
+  });
+
+  it('still blocks unverified paid onboarding behind email verification', () => {
+    authState = {
+      ...authState,
+      user: { id: 'paid-user', email_confirmed_at: null },
+      profile: paidProfile({ email_verified: false }),
+    };
+    renderProtectedRoute('/onboarding/welcome');
+
+    expect(screen.queryByText('Onboarding flow')).not.toBeInTheDocument();
+  });
+});

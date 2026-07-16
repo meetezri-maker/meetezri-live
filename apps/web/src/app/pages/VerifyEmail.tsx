@@ -7,6 +7,7 @@ import { BrandLogo } from "../components/BrandLogo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "@/lib/api";
+import { resolvePostAuthRoute } from "@/lib/auth/postAuthRoute";
 import {
   getPendingVerificationEmail,
   maskEmail,
@@ -340,13 +341,14 @@ export function VerifyEmail() {
     return profile?.email_verified === true || Boolean(user.email_confirmed_at);
   }, [profile?.email_verified, profile?.needs_email_verification, profile?.signup_type, user]);
 
+  // Post-verification destination. The rules live in resolvePostAuthRoute; an
+  // unresolved profile means "wait", not "send them to onboarding".
   useEffect(() => {
     if (!isVerifiedForPlanFlow) return;
-    const signupType = profile?.signup_type === "trial" ? "trial" : "plan";
-    const destination =
-      signupType === "trial" ? "/app/user-profile" : "/onboarding/welcome";
+    const destination = resolvePostAuthRoute(profile);
+    if (!destination) return;
     navigate(destination, { replace: true });
-  }, [isVerifiedForPlanFlow, navigate, profile?.signup_type]);
+  }, [isVerifiedForPlanFlow, navigate, profile]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;

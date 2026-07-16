@@ -6,6 +6,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import { emailService } from '../email/email.service';
 import prisma from '../../lib/prisma';
 import { inferAdminRoleFromAuthUser, isAdminRole, normalizeAppRole } from '../../lib/adminRoles';
+import { normalizeSignupType } from './signupType';
 
 interface UserPayload {
   sub: string;
@@ -584,6 +585,10 @@ export async function initProfileHandler(
   const user = request.user as UserPayload;
   request.log.info({ user }, 'Initializing profile for user');
 
+  // The flow the caller started from. Only consulted when the server has no stronger
+  // evidence, and only at creation time - after that the stored column is authoritative.
+  const intentHint = normalizeSignupType((request.body as any)?.signup_type);
+
   let email = user.email;
   if (!email) {
     email = (await userService.getUserEmail(user.sub)) ?? undefined;
@@ -593,16 +598,22 @@ export async function initProfileHandler(
   if (existingProfile) {
     let profile = existingProfile;
 
-    if (!profile.signup_type) {
-      try {
-        const signupType = await userService.getSignupTypeFromAuthMeta(user.sub);
+    // Profile repair: persist a signup_type only when the stored column is still empty
+    // and we have real evidence. getProfile() now always returns a resolved value, so
+    // read the raw column rather than the resolved one to avoid persisting a default.
+    try {
+      const storedSignupType = await userService.getStoredSignupType(user.sub);
+      if (!storedSignupType) {
+        const signupType =
+          (await userService.getSignupTypeFromAuthMeta(user.sub)) ?? intentHint;
         if (signupType) {
           await userService.setSignupTypeForProfile(user.sub, signupType);
+          userService.invalidateUserProfileCache(user.sub);
           profile = (await userService.getProfile(user.sub)) ?? profile;
         }
-      } catch (e) {
-        request.log.warn({ e }, 'Failed to backfill signup_type on initProfile');
       }
+    } catch (e) {
+      request.log.warn({ e }, 'Failed to backfill signup_type on initProfile');
     }
 
     const profileEmail = email ?? profile.email;
@@ -636,7 +647,8 @@ export async function initProfileHandler(
       email,
       fullName ?? undefined,
       undefined,
-      'app'
+      'app',
+      intentHint
     );
     request.log.info({ profile }, 'Profile initialized successfully');
     return sanitizeSelfProfileResponse(profile as any);

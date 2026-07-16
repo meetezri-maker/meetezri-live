@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { APP_DASHBOARD_ROUTE, resolvePostAuthRoute } from "@/lib/auth/postAuthRoute";
 
 const SS_REDIRECT = "ezri.auth.callback.redirect";
 const SS_FLOW = "ezri.auth.callback.flow";
@@ -62,11 +63,20 @@ function shouldFinalizeOAuthOnce(key: string) {
 }
 
 export function AuthCallback() {
-  const { user, isLoading: isAuthLoading, refreshProfile } = useAuth();
+  const { user, profile, profileStatus, isLoading: isAuthLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  // Both effects can reach a destination; the callback must only leave once.
+  const hasNavigatedRef = useRef(false);
+
+  const leaveCallback = (destination: string) => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    clearStoredCallbackParams();
+    navigate(destination, { replace: true });
+  };
 
   // Capture ?redirect= / ?flow= before any async auth exchange mutates the URL.
   useLayoutEffect(() => {
@@ -80,11 +90,18 @@ export function AuthCallback() {
     return !blockedPrefixes.some((prefix) => value === prefix || value.startsWith(`${prefix}?`));
   };
 
-  const getRedirectPath = (currentUser?: any) => {
-    const targetUser = currentUser || user;
+  /**
+   * An explicit ?redirect= / ?next= asked for by whoever built the link. This is caller
+   * intent (deep links), not an inference about the account, so it still wins. Every
+   * other destination now comes from resolvePostAuthRoute.
+   *
+   * Deliberately gone from here: the flow=trial|plan destinations, the
+   * user_metadata.signup_type guesses, and the "account younger than five minutes must
+   * be a new paid user" heuristic. Each of those decided a final route from something
+   * other than the server profile, which is exactly what this phase removes.
+   */
+  const getRequestedRedirect = (): string | null => {
     const stored = readStoredCallbackParams();
-
-    // 1. Check standard search params
     const searchParams = new URLSearchParams(location.search);
     let requested =
       searchParams.get("redirect") ||
@@ -92,55 +109,44 @@ export function AuthCallback() {
       stored.redirect ||
       null;
 
-    // 2. Check hash params (Supabase Implicit Flow / PKCE edge cases)
+    // Hash params (Supabase Implicit Flow / PKCE edge cases)
     if (!requested && location.hash) {
-      const hashStr = location.hash.substring(1);
-      const hashParams = new URLSearchParams(hashStr);
+      const hashParams = new URLSearchParams(location.hash.substring(1));
       requested = hashParams.get("redirect") || hashParams.get("next");
     }
 
-    if (!requested && (stored.flow === "plan" || stored.flow === "trial")) {
-      requested =
-        stored.flow === "trial" ? "/app/user-profile" : "/onboarding/welcome";
+    return requested && isSafeRedirectPath(requested) ? requested : null;
+  };
+
+  /**
+   * The final destination, from the authoritative profile only.
+   *
+   * Recovery is bounded and reuses what already exists: one getMe, then AuthContext's
+   * refreshProfile (getMe x3 + /users/init on 404). No new retry loop. If the profile
+   * still cannot be classified we hand off to ProtectedRoute via the dashboard rather
+   * than guess "paid" and force onboarding — trial users are admitted, paid-incomplete
+   * users get redirected by the gate once their profile resolves.
+   */
+  const resolveDestinationFromServer = async (): Promise<string> => {
+    let candidate: unknown = null;
+    try {
+      candidate = await api.getMe();
+    } catch (e) {
+      console.warn("AuthCallback: getMe failed, falling back to profile recovery", e);
     }
 
-    console.log("Resolved Redirect Path:", requested);
+    const direct = resolvePostAuthRoute(candidate as never);
+    if (direct) return direct;
 
-    if (requested && isSafeRedirectPath(requested)) return requested;
-
-    const viaParam = searchParams.get("via") || stored.via;
-    const flowParam = searchParams.get("flow") || stored.flow;
-    if (viaParam === "verification") {
-      if (flowParam === "plan") return "/onboarding/welcome";
-      if (flowParam === "trial") return "/app/user-profile";
-      const su = targetUser?.user_metadata?.signup_type;
-      if (su === "trial") return "/app/user-profile";
-      return "/onboarding/welcome";
+    try {
+      const refreshed = await refreshProfile();
+      const recovered = refreshed ? resolvePostAuthRoute(refreshed) : null;
+      if (recovered) return recovered;
+    } catch (e) {
+      console.warn("AuthCallback: profile recovery failed", e);
     }
 
-    // 3. Smart Fallback based on User Metadata
-    // Trial users (Soft Verification) -> Profile to complete setup
-    if (targetUser?.user_metadata?.email_verification_required) {
-      // Only trial users land on the profile route after verification.
-      const signupType = targetUser?.user_metadata?.signup_type;
-      if (signupType === 'trial') return '/app/user-profile';
-      return '/onboarding/welcome';
-    }
-
-    // 4. Heuristic for New Paid Users (if param is lost)
-    if (targetUser?.created_at) {
-      const created = new Date(targetUser.created_at).getTime();
-      const now = Date.now();
-      const isNew = (now - created) < 5 * 60 * 1000; // 5 minutes threshold
-      
-      if (isNew) {
-         console.log("AuthCallback: Detected new user (heuristic), redirecting to onboarding");
-         return '/onboarding/welcome';
-      }
-    }
-
-    // Default Fallback
-    return '/app/dashboard';
+    return APP_DASHBOARD_ROUTE;
   };
 
   const finalizeVerification = async (sessionUser: any) => {
@@ -155,26 +161,16 @@ export function AuthCallback() {
           : location.hash.replace(/^#/, "")
       );
 
-      let via =
+      const via =
         searchParams.get("via") ||
         hashParams.get("via") ||
         stored.via;
-      let requested =
+      const requested =
         searchParams.get("redirect") ||
         searchParams.get("next") ||
         hashParams.get("redirect") ||
         hashParams.get("next") ||
         stored.redirect;
-
-      const flow =
-        searchParams.get("flow") ||
-        hashParams.get("flow") ||
-        stored.flow;
-
-      if (!requested && (flow === "plan" || flow === "trial")) {
-        requested =
-          flow === "trial" ? "/app/user-profile" : "/onboarding/welcome";
-      }
 
       // Verification magiclink: confirm server-side, then refresh profile so ProtectedRoute sees email_verified.
       if (via === "verification") {
@@ -188,21 +184,10 @@ export function AuthCallback() {
         } catch (e) {
           console.warn("AuthCallback: refreshProfile after verify", e);
         }
-
-        // Paid plan: go straight to onboarding. ProtectedRoute also trusts `user.email_confirmed_at`
-        // so we don't bounce through /verify-email while profile cache catches up.
-        if (flow !== "trial") {
-          const destination =
-            requested && isSafeRedirectPath(requested)
-              ? requested
-              : "/onboarding/welcome";
-          clearStoredCallbackParams();
-          navigate(destination, { replace: true });
-          return;
-        }
       }
 
-      // Trial user soft-verification: land on profile.
+      // Trial soft-verification: clear the metadata flag and acknowledge. This is
+      // verification work, so it stays; only the destination moved to the resolver below.
       if (sessionUser?.user_metadata?.email_verification_required) {
         const signupType = sessionUser?.user_metadata?.signup_type;
         if (signupType === "trial") {
@@ -211,9 +196,6 @@ export function AuthCallback() {
               data: { email_verification_required: false },
             });
             toast.success("Email verified successfully!");
-            clearStoredCallbackParams();
-            navigate("/app/user-profile", { replace: true });
-            return;
           } catch (e) {
             console.error("Failed to clear verification flag", e);
           }
@@ -221,8 +203,7 @@ export function AuthCallback() {
       }
 
       if (requested && isSafeRedirectPath(requested)) {
-        clearStoredCallbackParams();
-        navigate(requested, { replace: true });
+        leaveCallback(requested);
         return;
       }
 
@@ -269,55 +250,10 @@ export function AuthCallback() {
           .catch(() => undefined);
       }
 
-      try {
-        const me = await api.getMe();
-        console.log("AuthCallback: api.getMe after verification", {
-          email_verified: me?.email_verified,
-          signup_type: me?.signup_type,
-          onboarding_completed: me?.onboarding_completed,
-        });
-
-        // Email verification hand-off: run before `onboarding_completed` (DB can be wrong for new signups).
-        if (via === "verification" && flow === "plan") {
-          clearStoredCallbackParams();
-          navigate("/onboarding/welcome", { replace: true });
-          return;
-        }
-        if (via === "verification" && flow === "trial") {
-          clearStoredCallbackParams();
-          navigate("/app/user-profile", { replace: true });
-          return;
-        }
-        if (via === "verification" && me?.signup_type === "plan") {
-          clearStoredCallbackParams();
-          navigate("/onboarding/welcome", { replace: true });
-          return;
-        }
-        if (via === "verification" && me?.signup_type === "trial") {
-          clearStoredCallbackParams();
-          navigate("/app/user-profile", { replace: true });
-          return;
-        }
-
-        if (me?.onboarding_completed === true) {
-          clearStoredCallbackParams();
-          navigate("/app/dashboard", { replace: true });
-          return;
-        }
-
-        if (me?.signup_type === "trial") {
-          clearStoredCallbackParams();
-          navigate("/app/user-profile", { replace: true });
-          return;
-        }
-
-        clearStoredCallbackParams();
-        navigate("/onboarding/welcome", { replace: true });
-        return;
-      } catch (e) {
-        clearStoredCallbackParams();
-        navigate(getRedirectPath(sessionUser), { replace: true });
-      }
+      // One destination rule for every callback type. The old six branches here keyed off
+      // flow, user_metadata and signup_type and disagreed with each other; the server
+      // profile is now the only authority, with a bounded recovery inside.
+      leaveCallback(await resolveDestinationFromServer());
   };
 
   useEffect(() => {
@@ -353,25 +289,37 @@ export function AuthCallback() {
 
       if (hasCode || hasHash) return;
 
-      // If user has the "email_verification_required" flag, clear it since they just completed an auth flow
+      // If user has the "email_verification_required" flag, clear it since they just
+      // completed an auth flow. Trial only, as before — this is metadata upkeep, not routing.
       if (user.user_metadata?.email_verification_required) {
         const signupType = user.user_metadata?.signup_type;
-        if (signupType !== 'trial') {
-          navigate('/onboarding/welcome', { replace: true });
-          return;
+        if (signupType === 'trial') {
+          supabase.auth.updateUser({
+            data: { email_verification_required: false }
+          }).then(() => {
+            toast.success("Email verified successfully!");
+          });
         }
-        supabase.auth.updateUser({
-          data: { email_verification_required: false }
-        }).then(() => {
-          toast.success("Email verified successfully!");
-        });
-        // Trial users should land on the in-app profile page.
-        navigate('/app/user-profile', { replace: true });
+      }
+
+      // An explicitly requested redirect still wins; it is caller intent, not a guess.
+      const requested = getRequestedRedirect();
+      if (requested) {
+        leaveCallback(requested);
         return;
       }
-      navigate(getRedirectPath(), { replace: true });
+
+      // Otherwise wait for the authoritative profile. No session-age or metadata guessing.
+      if (!profile) {
+        // Bounded: AuthContext has already exhausted getMe x3 + /users/init by the time it
+        // reports 'error'. Hand off to ProtectedRoute rather than sit here forever.
+        if (profileStatus === 'error') leaveCallback(APP_DASHBOARD_ROUTE);
+        return;
+      }
+
+      leaveCallback(resolvePostAuthRoute(profile) ?? APP_DASHBOARD_ROUTE);
     }
-  }, [user, navigate, location.search, location.hash, isAuthLoading]);
+  }, [user, profile, profileStatus, navigate, location.search, location.hash, isAuthLoading]);
 
   useEffect(() => {
     console.log("AuthCallback mounted. URL:", window.location.href);

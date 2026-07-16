@@ -26,6 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
+import { resolvePostAuthRoute } from "@/lib/auth/postAuthRoute";
 import {
   isValidRequiredAppPhone,
   REQUIRED_PHONE_VALIDATION_MESSAGE,
@@ -331,6 +332,9 @@ export function Signup() {
     },
   });
 
+  // Redirect for a user who is already authenticated when they land on /signup.
+  // The trial wizard's second step runs while authenticated, so the phase guard below
+  // must stay: it keeps this effect from yanking the user out of an unfinished signup.
   useEffect(() => {
     if (!isAuthLoading && user && profile) {
       try {
@@ -339,7 +343,11 @@ export function Signup() {
           return;
         }
       } catch {}
-      navigate(profile?.onboarding_completed === true ? "/app/dashboard" : "/onboarding/welcome");
+      // Destination rules live in resolvePostAuthRoute. An unresolved profile means
+      // "wait for authoritative data", not "assume paid and send to onboarding".
+      const destination = resolvePostAuthRoute(profile);
+      if (!destination) return;
+      navigate(destination, { replace: true });
     }
   }, [user, profile, isAuthLoading, navigate, phase]);
 

@@ -15,6 +15,8 @@ import {
 import { Button } from '@/app/components/ui/button';
 import { isOnboardingResumeMode } from '@/lib/onboarding/onboardingResume';
 import { isPaidPlanUser, isTrialPlanUser } from '@/lib/onboarding/paidOnboardingSteps';
+import { isTrialUser } from '@/lib/auth/trialUser';
+import { APP_DASHBOARD_ROUTE, PAID_ONBOARDING_START_ROUTE } from '@/lib/auth/postAuthRoute';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -156,15 +158,16 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // Onboarding access control (server-derived, not client heuristics)
   const onboardingCompleted = profile.onboarding_completed === true;
   const onboardingIncomplete = profile.onboarding_completed === false;
-  const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
+  const signupType: 'trial' | 'plan' = isTrialUser(profile) ? 'trial' : 'plan';
   // After a magic-link verify, Supabase session is confirmed immediately but `/users/me`
   // can still return a cached profile with `email_verified: false` for a moment.
   const sessionEmailVerified = Boolean(user.email_confirmed_at);
   const emailVerified =
     profile?.email_verified === true ||
     (signupType !== 'trial' && sessionEmailVerified);
-  const onboardingStartRoute =
-    signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+  // Only paid users are ever sent into onboarding (trial users are stopped below),
+  // so the start route is the paid one.
+  const onboardingStartRoute = PAID_ONBOARDING_START_ROUTE;
   const isAppRoute = location.pathname.startsWith('/app');
   const isPlanPackageExpired =
     signupType === 'plan' &&
@@ -225,19 +228,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
-  // Trial flow rule (per spec):
-  // - trial users must NEVER be redirected to any /onboarding/* route
-  // - trial users may access session lobby + dashboard + user profile
+  // Trial flow rule: trial users must never see onboarding. This is the hard guard —
+  // whatever any auth page navigates to, /onboarding/* never renders for a trial user.
+  // Every other route renders as before; trial feature limits are enforced by the pages.
   if (signupType === 'trial') {
-    if (
-      location.pathname === '/app/dashboard' ||
-      location.pathname === '/app/user-profile' ||
-      location.pathname === '/app/session-lobby'
-    ) {
-      return <>{children}</>;
+    if (isOnboardingRoute) {
+      return <Navigate to={APP_DASHBOARD_ROUTE} replace />;
     }
-    // For other /app routes, preserve existing trial behavior: allow route rendering
-    // unless upstream pages enforce their own restrictions.
     return <>{children}</>;
   }
 
@@ -257,29 +254,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/app/user-profile" replace />;
   }
 
-  // Never allow paid onboarding steps until email is verified.
-  // Trial flow should allow the "complete profile" step from the dashboard stage,
-  // so we do NOT block trial onboarding routes on email verification.
-  if (isOnboardingRoute && onboardingIncomplete && !emailVerified && signupType !== 'trial') {
+  // Never allow paid onboarding steps until email is verified. Only paid users reach
+  // this point, so no trial exemption is needed here.
+  if (isOnboardingRoute && onboardingIncomplete && !emailVerified) {
     return <Navigate to="/verify-email" replace />;
-  }
-
-  // Flow-specific: trial users should not begin at the welcome landing.
-  if (
-    isOnboardingRoute &&
-    onboardingIncomplete &&
-    signupType === 'trial' &&
-    location.pathname === '/onboarding/welcome'
-  ) {
-    return <Navigate to="/onboarding/profile-setup" replace />;
-  }
-
-  // Trial flow isolation: while trial profile is incomplete, only allow the
-  // Trial "complete profile" route. Prevent entry into the paid onboarding steps.
-  if (isOnboardingRoute && onboardingIncomplete && signupType === 'trial') {
-    if (!location.pathname.startsWith(onboardingStartRoute)) {
-      return <Navigate to={onboardingStartRoute} replace />;
-    }
   }
 
   if (allowedRoles && allowedRoles.length > 0 && !hasRole(allowedRoles)) {

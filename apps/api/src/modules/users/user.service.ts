@@ -8,6 +8,14 @@ import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
+import {
+  detectSignupTypeConflict,
+  normalizeSignupType,
+  resolveNeedsOnboarding,
+  resolveSignupType,
+  type SignupTypeEvidence,
+  type SignupTypeResolution,
+} from './signupType';
 
 export function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
@@ -444,6 +452,55 @@ const accountStateByEmailCache = new Map<string, { data: any; timestamp: number 
 const ACCOUNT_STATE_CACHE_TTL = 10 * 1000; // 10s: absorbs fast retries on signup/check.
 const accountStateByEmailInFlight = new Map<string, Promise<any>>();
 
+const PAID_PLAN_TYPES = new Set(['core', 'pro']);
+
+/**
+ * Gather everything we know about how this account started, for resolveSignupType.
+ * `subscription_plan` is derived from the newest active subscription, and every profile
+ * is created with a trial subscription — so a trial plan here is not evidence.
+ */
+function buildSignupTypeEvidence(
+  profile: any,
+  authMeta?: Record<string, any> | null
+): SignupTypeEvidence {
+  const plan = String(profile?.subscription_plan ?? '').toLowerCase();
+  return {
+    storedSignupType: profile?.signup_type,
+    authMetadataSignupType:
+      authMeta?.signup_type ?? authMeta?.signupType ?? authMeta?.signup ?? null,
+    hasStripeCustomer: !!profile?.stripe_customer_id,
+    hasPaidSubscription: PAID_PLAN_TYPES.has(plan),
+    hasTrialSubscription: plan === 'trial',
+  };
+}
+
+/** Observability for the cases this phase exists to fix. Ids only - never PII. */
+function logSignupTypeResolution(
+  userId: string,
+  resolution: SignupTypeResolution,
+  evidence: SignupTypeEvidence
+) {
+  if (!resolution.confident) {
+    console.warn('[signup_type] unresolved; using product default', {
+      userId,
+      resolved: resolution.signupType,
+      hasTrialSubscription: !!evidence.hasTrialSubscription,
+      hasStripeCustomer: !!evidence.hasStripeCustomer,
+      hasPaidSubscription: !!evidence.hasPaidSubscription,
+    });
+    return;
+  }
+
+  const conflict = detectSignupTypeConflict(evidence);
+  if (conflict) {
+    console.warn('[signup_type] conflicting account evidence', {
+      userId,
+      stored: resolution.signupType,
+      conflict,
+    });
+  }
+}
+
 function resolveOnboardingCompleted(profile: any): boolean {
   const signupType =
     normalizeSignupType(profile?.signup_type) ??
@@ -740,9 +797,21 @@ export async function getProfileNameBackfillFromAuth(
   return getFullNameFromAuthMeta(userId);
 }
 
-function normalizeSignupType(raw: any): 'trial' | 'plan' | null {
-  if (raw === 'trial' || raw === 'plan') return raw;
-  return null;
+/**
+ * The raw `profiles.signup_type` column, before any resolution. Callers deciding whether
+ * to persist a value must use this: getProfile() always returns a resolved, non-null
+ * signup_type now, so reading that would make an unresolved default look like a stored fact.
+ */
+export async function getStoredSignupType(userId: string): Promise<'trial' | 'plan' | null> {
+  try {
+    const row = await prisma.profiles.findUnique({
+      where: { id: userId },
+      select: { signup_type: true },
+    });
+    return normalizeSignupType(row?.signup_type);
+  } catch {
+    return null;
+  }
 }
 
 export async function setSignupTypeForProfile(userId: string, signupType: 'trial' | 'plan' | null) {
@@ -766,11 +835,25 @@ export async function createProfile(
   email: string,
   fullName?: string,
   signupType?: 'trial' | 'plan' | null,
-  signupSource?: SignupSource | null
+  signupSource?: SignupSource | null,
+  /**
+   * The flow the user actually started from, for paths that carry no auth metadata
+   * (Google OAuth). Used only when nothing stronger is known; see resolveSignupType.
+   */
+  intentHint?: 'trial' | 'plan' | null
 ) {
-  // If signupType isn't explicitly provided, infer from Supabase auth metadata.
+  // Write signup_type at creation on every path. Explicit argument wins, then auth
+  // metadata, then the caller's intent hint. Without this an OAuth profile is born with
+  // signup_type = null plus an auto-created trial subscription, which is precisely the
+  // ambiguity this phase removes.
   const resolvedSignupType =
-    normalizeSignupType(signupType) ?? (await getSignupTypeFromAuthMeta(userId));
+    normalizeSignupType(signupType) ??
+    (await getSignupTypeFromAuthMeta(userId)) ??
+    normalizeSignupType(intentHint);
+
+  if (!resolvedSignupType) {
+    console.warn('[signup_type] creating profile without resolvable intent', { userId });
+  }
   let profile: any;
   try {
     profile = await prisma.profiles.upsert({
@@ -1182,12 +1265,29 @@ export async function getProfile(userId: string) {
   result.email_verified = emailVerified;
   result.needs_email_verification = planType === "trial" && !emailVerified;
 
-  // Resolve onboarding completion deterministically:
-  // - use explicit DB flag when present
-  // - otherwise infer from legacy onboarding fields (for backwards-compatibility)
+  // `signup_type` is the contract: GET /users/me must never return null for it, so the
+  // client never has to guess. Resolved from the strongest evidence available here; the
+  // stored column still wins whenever it is set.
+  const signupEvidence = buildSignupTypeEvidence(
+    result,
+    (authForEmail?.raw_user_meta_data ?? null) as Record<string, any> | null
+  );
+  const signupResolution = resolveSignupType(signupEvidence);
+  result.signup_type = signupResolution.signupType;
+
+  logSignupTypeResolution(userId, signupResolution, signupEvidence);
+
+  // Two separate facts, deliberately:
+  //   onboarding_completed — has this profile's setup been finished? (unchanged; the
+  //     dashboard and profile checklists read it)
+  //   needs_onboarding     — must this account run the onboarding wizard? Trial accounts
+  //     are exempt by product rule, with no profile fields required.
   const onboardingCompletedResolved = resolveOnboardingCompleted(result);
   result.onboarding_completed = onboardingCompletedResolved;
-  result.needs_onboarding = !onboardingCompletedResolved;
+  result.needs_onboarding = resolveNeedsOnboarding(
+    signupResolution.signupType,
+    onboardingCompletedResolved
+  );
 
   // Update cache with fresh verification flags
   userProfileCache.set(userId, { data: result, timestamp: Date.now() });

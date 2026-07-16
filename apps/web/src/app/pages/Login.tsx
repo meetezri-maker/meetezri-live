@@ -27,6 +27,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import {
+  APP_DASHBOARD_ROUTE,
+  resolvePostAuthRoute,
+  type PostAuthProfile,
+} from "@/lib/auth/postAuthRoute";
+import {
   Form,
   FormControl,
   FormField,
@@ -705,7 +710,7 @@ function LoginAuthPanel({
 
 export function Login() {
   const navigate = useNavigate();
-  const { user, profile, isLoading: isAuthLoading } = useAuth();
+  const { user, profile, isLoading: isAuthLoading, refreshProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [loginStep, setLoginStep] = useState<"credentials" | "mfa" | "knowledge">(
     "credentials",
@@ -726,9 +731,6 @@ export function Login() {
     return data.nextLevel === "aal2" && data.currentLevel !== "aal2";
   };
 
-  const onboardingStartRoute =
-    profile?.signup_type === "trial" ? "/app/dashboard" : "/onboarding/welcome";
-
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema as z.ZodTypeAny),
     defaultValues: {
@@ -737,6 +739,8 @@ export function Login() {
     },
   });
 
+  // Already-authenticated user landing on /login. Wait for the authoritative profile:
+  // while it is missing we render the login page rather than guessing a destination.
   useEffect(() => {
     if (loginStep !== "credentials") return;
     if (isAuthLoading || !user || !profile) return;
@@ -744,16 +748,14 @@ export function Login() {
     (async () => {
       const needsMfa = await isMfaStillRequired();
       if (cancelled || needsMfa) return;
-      if (profile.onboarding_completed === true) {
-        navigate("/app/dashboard");
-      } else {
-        navigate(onboardingStartRoute);
-      }
+      // The profile is loaded but unclassifiable: hand off to ProtectedRoute rather
+      // than assume this user is paid and push them into onboarding.
+      navigate(resolvePostAuthRoute(profile) ?? APP_DASHBOARD_ROUTE, { replace: true });
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, profile, isAuthLoading, navigate, onboardingStartRoute, loginStep]);
+  }, [user, profile, isAuthLoading, navigate, loginStep]);
 
   useEffect(() => {
     if (loginStep !== "knowledge") return;
@@ -840,20 +842,34 @@ export function Login() {
     }
   };
 
+  // Final post-login destination. All routing rules live in resolvePostAuthRoute; this
+  // only decides what to do when the profile is not authoritative yet.
+  const goToPostAuthDestination = async (candidate: PostAuthProfile | null) => {
+    const destination = resolvePostAuthRoute(candidate);
+    if (destination) {
+      navigate(destination, { replace: true });
+      return;
+    }
+    // Unresolved. Let AuthContext finish its /users/init + retry cycle, then re-resolve.
+    const refreshed = await refreshProfile();
+    const resolved = refreshed ? resolvePostAuthRoute(refreshed) : null;
+    // Still unresolved: send them into the app and let ProtectedRoute gate it. Never
+    // assume "paid" and never default to onboarding, but never hang here either.
+    navigate(resolved ?? APP_DASHBOARD_ROUTE, { replace: true });
+  };
+
   const continueAfterLogin = async () => {
     try {
       const needsMfa = await isMfaStillRequired();
       if (needsMfa) return;
       const me = await api.getMe();
-      const resolvedOnboardingStartRoute =
-        me?.signup_type === "trial" ? "/app/dashboard" : "/onboarding/welcome";
-      navigate(
-        me?.onboarding_completed === true ? "/app/dashboard" : resolvedOnboardingStartRoute,
-      );
+      await goToPostAuthDestination(me);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
       if (message === "Profile not found") {
-        navigate(onboardingStartRoute);
+        // The profile has not been created yet. refreshProfile() runs /users/init;
+        // route only once it reports back.
+        await goToPostAuthDestination(null);
       } else {
         console.error("Profile fetch error:", err);
         toast.error("Failed to load profile. Please try again.");
