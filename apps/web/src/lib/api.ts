@@ -263,12 +263,18 @@ export const api = {
     return getMeInFlight;
   },
 
-  async initProfile() {
+  /**
+   * `signupType` is the OAuth signup intent, sent only when it is one of the two valid
+   * values. The server treats it as a hint ranked below its own evidence, so an invalid
+   * or absent value simply falls back to server-side resolution.
+   */
+  async initProfile(signupType?: 'trial' | 'plan') {
     const headers = await getHeaders();
+    const body = signupType === 'trial' || signupType === 'plan' ? { signup_type: signupType } : {};
     const res = await fetch(`${API_URL}/users/init`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({}),
+      body: JSON.stringify(body),
     });
     return handleResponse(res, 'Failed to initialize profile');
   },

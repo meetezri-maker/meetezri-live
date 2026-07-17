@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
 import { isSupabaseSessionExpiredLocally } from '@/lib/jwtUtils';
+import { clearOAuthSignupIntent, readOAuthSignupIntent } from '@/lib/oauthSignupIntent';
 
 interface AuthContextType {
   user: User | null;
@@ -215,7 +216,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (error: any) {
             if (error.message === 'Profile not found') {
               try {
-                const newProfile = await api.initProfile();
+                // Hand the OAuth signup intent to the server as it creates the profile.
+                // Cleared only on success, so a failed init can safely retry with it.
+                const signupIntent = readOAuthSignupIntent() ?? undefined;
+                const newProfile = await api.initProfile(signupIntent);
+                clearOAuthSignupIntent();
                 setProfile(newProfile);
                 setProfileStatus('ready');
                 return newProfile;

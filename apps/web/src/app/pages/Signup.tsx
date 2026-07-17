@@ -28,6 +28,11 @@ import * as z from "zod";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { resolvePostAuthRoute } from "@/lib/auth/postAuthRoute";
 import {
+  clearOAuthSignupIntent,
+  signupIntentFromSelectedPlan,
+  storeOAuthSignupIntent,
+} from "@/lib/oauthSignupIntent";
+import {
   isValidRequiredAppPhone,
   REQUIRED_PHONE_VALIDATION_MESSAGE,
 } from "@meetezri/shared";
@@ -385,6 +390,19 @@ export function Signup() {
   const handleGoogleLogin = async () => {
     try {
       await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+
+      // Record the chosen account type before we leave for Google. React state does not
+      // survive the redirect, so without this the returning user's profile is created
+      // with signup_type = null and has to be inferred at runtime.
+      const intent = signupIntentFromSelectedPlan(
+        window.localStorage.getItem("selectedPlan"),
+      );
+      if (intent) {
+        storeOAuthSignupIntent(intent);
+      } else {
+        // Unrecognised plan: send no hint rather than a guess, and drop any stale one.
+        clearOAuthSignupIntent();
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",

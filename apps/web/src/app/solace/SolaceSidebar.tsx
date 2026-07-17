@@ -1,72 +1,20 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import {
-  Home,
-  Video,
-  Heart,
-  BookOpen,
-  Target,
-  Moon,
-  Brain,
-  TrendingUp,
-  Clock,
-  Sparkles,
-  Users,
-  CreditCard,
-  Trophy,
-  User,
-  Settings,
-  LifeBuoy,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useMemo } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import { cn } from "@/lib/utils";
-
-interface NavItem {
-  path: string;
-  label: string;
-  icon: LucideIcon;
-}
-
-const mainNav: NavItem[] = [
-  { path: "/app/dashboard", label: "Home", icon: Home },
-  { path: "/app/session-lobby", label: "Talk It Out", icon: Video },
-  { path: "/app/mood-checkin", label: "Mood", icon: Heart },
-  { path: "/app/journal", label: "Journal", icon: BookOpen },
-  { path: "/app/habit-tracker", label: "Habit Tracker", icon: Target },
-  { path: "/app/sleep-tracker", label: "Sleep Tracker", icon: Moon },
-  { path: "/app/brain-health", label: "Brain Health", icon: Brain },
-  { path: "/app/progress", label: "Progress", icon: TrendingUp },
-  { path: "/app/session-history", label: "Talk It Out History", icon: Clock },
-  { path: "/app/wellness-tools", label: "Wellness Tools", icon: Sparkles },
-  { path: "/app/community", label: "Community", icon: Users },
-  { path: "/app/billing", label: "Billing & Credits", icon: CreditCard },
-  { path: "/app/settings/achievements", label: "Achievements", icon: Trophy },
-  { path: "/app/user-profile", label: "Profile", icon: User },
-  { path: "/app/settings", label: "Settings", icon: Settings },
-  { path: "/app/settings/help-support", label: "Help and Support", icon: LifeBuoy },
-];
+import { MEMBER_NAV_ITEMS, findActiveNavPath } from "./memberNav";
 
 export function SolaceSidebar() {
   const location = useLocation();
   const { profile, user } = useAuth();
 
-  const isActive = useMemo(() => {
-    const matches = (path: string) =>
-      location.pathname === path ||
-      (path !== "/app/dashboard" && location.pathname.startsWith(`${path}/`));
-
-    const activeItem = mainNav
-      .filter((item) => matches(item.path))
-      .reduce<NavItem | null>(
-        (best, item) => (!best || item.path.length > best.path.length ? item : best),
-        null
-      );
-
-    return (path: string) => activeItem?.path === path;
-  }, [location.pathname]);
+  const activePath = useMemo(
+    () => findActiveNavPath(location.pathname, MEMBER_NAV_ITEMS),
+    [location.pathname]
+  );
+  const isActive = (path: string) => activePath === path;
 
   const displayName =
     (typeof profile?.full_name === "string" && profile.full_name.trim()) ||
@@ -91,7 +39,7 @@ export function SolaceSidebar() {
     >
      
 
-      {mainNav.map((item) => {
+      {MEMBER_NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const active = isActive(item.path);
         return (

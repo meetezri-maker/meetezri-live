@@ -177,6 +177,18 @@ describe('Login post-login destination', () => {
   });
 });
 
+describe('Login does not carry a signup intent', () => {
+  it('clears a stale OAuth signup intent when starting Google login', async () => {
+    // An abandoned signup in this tab must not classify the account being logged into.
+    sessionStorage.setItem('ezri_oauth_signup_intent', 'plan');
+    const user = userEvent.setup();
+    renderLogin();
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => expect(sessionStorage.getItem('ezri_oauth_signup_intent')).toBeNull());
+  });
+});
+
 describe('Login redirect for an already-authenticated visitor', () => {
   it('routes a trial user to the dashboard', async () => {
     authState = { ...authState, user: { id: 'u1' }, profile: TRIAL };

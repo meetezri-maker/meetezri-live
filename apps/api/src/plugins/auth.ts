@@ -2,6 +2,12 @@ import fp from 'fastify-plugin';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../lib/prisma';
 import { verifySupabaseAccessToken } from '../lib/verifySupabaseToken';
+import {
+  buildSignupTypeEvidence,
+  resolveNeedsOnboarding,
+  resolveSignupType,
+  type SignupType,
+} from '../modules/users/signupType';
 
 function extractBearerToken(request: FastifyRequest): string | null {
   const auth = request.headers.authorization;
@@ -19,7 +25,8 @@ const userRoleCache = new Map<
     role: string;
     permissions: any;
     onboardingCompleted: boolean;
-    signupType: 'trial' | 'plan' | null;
+    /** Resolved via the shared resolver, so never null - see resolveSignupTypeForRequest. */
+    signupType: SignupType;
     accountStatus: string | null;
     timestamp: number;
   }
@@ -171,6 +178,60 @@ async function resolveAppRole(
   return inferredAdminRole;
 }
 
+/**
+ * Resolve signup_type for the middleware using the SAME algorithm and the SAME evidence
+ * as GET /users/me, so the two can never disagree about a user.
+ *
+ * The evidence must match what user.service.getProfile() feeds the resolver:
+ *   - profiles.signup_type / stripe_customer_id (selected alongside the profile)
+ *   - plan_type of the newest active subscription (queried here with the same filter
+ *     and ordering getProfile uses)
+ *   - auth metadata signup_type (only fetched when nothing stronger has decided it)
+ *
+ * Dropping any of these would silently downgrade a legacy paid account to the trial
+ * default and weaken the paid onboarding gate, so they are gathered up front.
+ */
+async function resolveSignupTypeForRequest(
+  userId: string,
+  profile: { signup_type?: unknown; stripe_customer_id?: unknown } | null
+): Promise<SignupType> {
+  // Mirrors getProfile(): newest subscription in an active-ish state.
+  let subscriptionPlan: string | null = null;
+  try {
+    const subscription = await prisma.subscriptions.findFirst({
+      where: { user_id: userId, status: { in: ['active', 'trialing', 'past_due'] } },
+      orderBy: { created_at: 'desc' },
+      select: { plan_type: true },
+    });
+    subscriptionPlan = subscription?.plan_type ?? null;
+  } catch {
+    // Fall through: absent subscription evidence only ever costs us the paid tiers,
+    // and an explicit signup_type still decides below.
+  }
+
+  let authMeta: Record<string, any> | null = null;
+  try {
+    const authUser = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { raw_user_meta_data: true },
+    });
+    authMeta = (authUser?.raw_user_meta_data ?? null) as Record<string, any> | null;
+  } catch {
+    authMeta = null;
+  }
+
+  const evidence = buildSignupTypeEvidence(
+    {
+      signup_type: profile?.signup_type,
+      subscription_plan: subscriptionPlan,
+      stripe_customer_id: profile?.stripe_customer_id,
+    },
+    authMeta
+  );
+
+  return resolveSignupType(evidence).signupType;
+}
+
 export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -248,14 +309,21 @@ export default fp(async (fastify: FastifyInstance) => {
           const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
           const isBillingApi = path.startsWith('/api/billing');
 
+          // Same shared rule as the DB path below; the cached signup type came from the
+          // shared resolver, so the two paths cannot disagree.
+          const cachedNeedsOnboarding = resolveNeedsOnboarding(
+            cached.signupType,
+            cached.onboardingCompleted
+          );
+
           // Cache-staleness guard: when cached onboarding status is incomplete for paid users,
           // re-check once before denying app/billing access.
-          if ((isAppApi || isBillingApi) && !cached.onboardingCompleted && cached.signupType !== 'trial') {
+          if ((isAppApi || isBillingApi) && cachedNeedsOnboarding) {
             userRoleCache.delete(user.sub);
           } else {
 
           // Plan buyers must not initiate billing while onboarding is incomplete.
-            if (isBillingApi && !cached.onboardingCompleted && cached.signupType === 'plan') {
+            if (isBillingApi && cachedNeedsOnboarding) {
               reply.code(403).send({
                 statusCode: 403,
                 error: 'Forbidden',
@@ -275,8 +343,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
             if (
               isAppApi &&
-              !cached.onboardingCompleted &&
-              cached.signupType !== 'trial' &&
+              cachedNeedsOnboarding &&
               !adminBypassesUserOnboarding(cached.role)
             ) {
               reply.code(403).send({
@@ -306,6 +373,7 @@ export default fp(async (fastify: FastifyInstance) => {
                 notification_preferences: true,
                 timezone: true,
                 signup_type: true,
+                stripe_customer_id: true,
                 account_status: true,
               } as any,
             });
@@ -335,29 +403,14 @@ export default fp(async (fastify: FastifyInstance) => {
             user.appRole = resolvedAppRole;
             user.permissions = profile.permissions;
 
-            let signupTypeResolved: 'trial' | 'plan' | null = null;
-
-            const profileSignupType = (profile as any)?.signup_type;
-            if (profileSignupType === 'trial' || profileSignupType === 'plan') {
-              signupTypeResolved = profileSignupType;
-            }
-
-            // Fallback for cases where the DB column isn't available yet.
-            if (!signupTypeResolved) {
-              try {
-                const authUser = await prisma.users.findUnique({
-                  where: { id: user.sub },
-                  select: { raw_user_meta_data: true },
-                });
-                const rawMeta: any = authUser?.raw_user_meta_data as any;
-                const raw = rawMeta?.signup_type ?? rawMeta?.signupType ?? rawMeta?.signup;
-                if (raw === 'trial' || raw === 'plan') {
-                  signupTypeResolved = raw;
-                }
-              } catch {
-                // ignore
-              }
-            }
+            // One algorithm, shared with GET /users/me. Previously this middleware ran its
+            // own chain that stopped at auth metadata and left null, so an OAuth user whom
+            // /users/me called 'trial' was treated here as "not trial" and 403'd out of
+            // every app API.
+            const signupTypeResolved: SignupType = await resolveSignupTypeForRequest(
+              user.sub,
+              profile as any
+            );
 
             // Resolve onboarding completion deterministically.
             // Trial completion == "required trial profile setup is done".
@@ -444,7 +497,15 @@ export default fp(async (fastify: FastifyInstance) => {
 
             const isBillingApi = path.startsWith('/api/billing');
 
-            if (isBillingApi && !onboardingCompletedResolved && signupTypeResolved === 'plan') {
+            // The shared rule: trial accounts are onboarding-exempt, paid accounts are not
+            // until they finish. Identical to the old inline conditions for a non-null
+            // signup type - which is now guaranteed.
+            const needsOnboarding = resolveNeedsOnboarding(
+              signupTypeResolved,
+              onboardingCompletedResolved
+            );
+
+            if (isBillingApi && needsOnboarding) {
               reply.code(403).send({
                 statusCode: 403,
                 error: 'Forbidden',
@@ -464,8 +525,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
             if (
               isAppApi &&
-              !onboardingCompletedResolved &&
-              signupTypeResolved !== 'trial' &&
+              needsOnboarding &&
               !adminBypassesUserOnboarding(resolvedAppRole)
             ) {
               reply.code(403).send({

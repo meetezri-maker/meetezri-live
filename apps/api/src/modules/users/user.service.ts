@@ -9,6 +9,7 @@ import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
 import {
+  buildSignupTypeEvidence,
   detectSignupTypeConflict,
   normalizeSignupType,
   resolveNeedsOnboarding,
@@ -451,28 +452,6 @@ type AccountState =
 const accountStateByEmailCache = new Map<string, { data: any; timestamp: number }>();
 const ACCOUNT_STATE_CACHE_TTL = 10 * 1000; // 10s: absorbs fast retries on signup/check.
 const accountStateByEmailInFlight = new Map<string, Promise<any>>();
-
-const PAID_PLAN_TYPES = new Set(['core', 'pro']);
-
-/**
- * Gather everything we know about how this account started, for resolveSignupType.
- * `subscription_plan` is derived from the newest active subscription, and every profile
- * is created with a trial subscription — so a trial plan here is not evidence.
- */
-function buildSignupTypeEvidence(
-  profile: any,
-  authMeta?: Record<string, any> | null
-): SignupTypeEvidence {
-  const plan = String(profile?.subscription_plan ?? '').toLowerCase();
-  return {
-    storedSignupType: profile?.signup_type,
-    authMetadataSignupType:
-      authMeta?.signup_type ?? authMeta?.signupType ?? authMeta?.signup ?? null,
-    hasStripeCustomer: !!profile?.stripe_customer_id,
-    hasPaidSubscription: PAID_PLAN_TYPES.has(plan),
-    hasTrialSubscription: plan === 'trial',
-  };
-}
 
 /** Observability for the cases this phase exists to fix. Ids only - never PII. */
 function logSignupTypeResolution(

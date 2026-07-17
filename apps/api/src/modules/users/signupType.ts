@@ -55,6 +55,43 @@ export interface SignupTypeResolution {
   confident: boolean;
 }
 
+/** The profile fields the evidence builder reads. */
+export interface SignupTypeProfileLike {
+  signup_type?: unknown;
+  /** plan_type of the newest active subscription ('trial' | 'core' | 'pro'). */
+  subscription_plan?: unknown;
+  stripe_customer_id?: unknown;
+}
+
+const PAID_PLAN_TYPES = new Set(['core', 'pro']);
+
+/**
+ * Map a profile row + auth metadata onto evidence. Every consumer must build evidence
+ * through this one function: if two callers map the same row differently they will reach
+ * different conclusions, which is exactly the class of bug this module exists to end.
+ *
+ * Callers are responsible for supplying the same *inputs* — in particular
+ * `subscription_plan` (newest subscription with status active/trialing/past_due) and
+ * `stripe_customer_id`. Omitting them silently downgrades a paid account to the trial
+ * default.
+ */
+export function buildSignupTypeEvidence(
+  profile: SignupTypeProfileLike | null | undefined,
+  authMeta?: Record<string, any> | null,
+  intentHint?: unknown
+): SignupTypeEvidence {
+  const plan = String(profile?.subscription_plan ?? '').toLowerCase();
+  return {
+    storedSignupType: profile?.signup_type,
+    authMetadataSignupType:
+      authMeta?.signup_type ?? authMeta?.signupType ?? authMeta?.signup ?? null,
+    oauthIntentHint: intentHint ?? null,
+    hasStripeCustomer: !!profile?.stripe_customer_id,
+    hasPaidSubscription: PAID_PLAN_TYPES.has(plan),
+    hasTrialSubscription: plan === 'trial',
+  };
+}
+
 export function normalizeSignupType(raw: unknown): SignupType | null {
   if (raw === 'trial' || raw === 'plan') return raw;
   if (typeof raw !== 'string') return null;

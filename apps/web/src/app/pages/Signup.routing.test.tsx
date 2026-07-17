@@ -294,3 +294,59 @@ describe('Signup regression guards', () => {
     expect(signInWithOAuth.mock.calls[0][0].provider).toBe('google');
   });
 });
+
+describe('Signup captures OAuth signup intent before the redirect', () => {
+  const readIntent = () => sessionStorage.getItem('ezri_oauth_signup_intent');
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('stores a trial intent when the trial plan is selected', async () => {
+    window.localStorage.setItem('selectedPlan', 'trial');
+    const user = userEvent.setup();
+    renderSignup();
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled());
+    expect(readIntent()).toBe('trial');
+  });
+
+  it('stores a plan intent when a paid plan is selected', async () => {
+    window.localStorage.setItem('selectedPlan', 'core');
+    const user = userEvent.setup();
+    renderSignup();
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled());
+    expect(readIntent()).toBe('plan');
+  });
+
+  it('stores the intent before OAuth starts, not after', async () => {
+    window.localStorage.setItem('selectedPlan', 'pro');
+    let intentAtRedirect: string | null = null;
+    signInWithOAuth.mockImplementation(async () => {
+      // The redirect happens here; whatever is stored now is all that survives.
+      intentAtRedirect = readIntent();
+      return { error: null };
+    });
+
+    const user = userEvent.setup();
+    renderSignup();
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled());
+    expect(intentAtRedirect).toBe('plan');
+  });
+
+  it('stores no intent for an unrecognised plan and drops a stale one', async () => {
+    sessionStorage.setItem('ezri_oauth_signup_intent', 'plan');
+    window.localStorage.setItem('selectedPlan', 'price_1A2B3C');
+    const user = userEvent.setup();
+    renderSignup();
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled());
+    expect(readIntent()).toBeNull();
+  });
+});

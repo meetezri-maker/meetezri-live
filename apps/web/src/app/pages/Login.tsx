@@ -31,6 +31,7 @@ import {
   resolvePostAuthRoute,
   type PostAuthProfile,
 } from "@/lib/auth/postAuthRoute";
+import { clearOAuthSignupIntent } from "@/lib/oauthSignupIntent";
 import {
   Form,
   FormControl,
@@ -784,6 +785,10 @@ export function Login() {
   const handleGoogleLogin = async () => {
     try {
       await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+
+      // Logging in is not signing up. Drop any intent left over from an abandoned signup
+      // in this tab so it cannot classify the account being logged into.
+      clearOAuthSignupIntent();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
