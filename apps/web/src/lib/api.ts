@@ -455,6 +455,26 @@ export const api = {
     return handleResponse(res, 'Failed to send verification email');
   },
 
+  /**
+   * Initial trial verification email (welcome-verification template), sent through the shared
+   * backend EmailService pipeline. Distinct from resendVerificationEmail (which sends the
+   * reminder template). Awaited by trial signup; failure is surfaced but must not block the
+   * dashboard, since the persistent banner + resend remain available.
+   */
+  async sendInitialVerificationEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/verification/send-initial`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'x-web-base-url':
+          import.meta.env.VITE_WEB_BASE_URL ||
+          (typeof window !== 'undefined' ? window.location.origin : ''),
+      },
+    });
+    return handleResponse(res, 'Failed to send verification email');
+  },
+
   async resendVerificationEmailPublic(email: string) {
     const res = await fetch(`${API_URL}/users/resend-verification-public`, {
       method: 'POST',

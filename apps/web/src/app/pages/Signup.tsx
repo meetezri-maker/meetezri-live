@@ -1005,7 +1005,7 @@ export function Signup() {
                                 const { api } = await import("@/lib/api");
 
                                 console.log("Initializing profile...");
-                                await api.initProfile();
+                                await api.initProfile("trial");
 
                                 const signupFirstName = form.getValues("firstName").trim();
                                 const signupLastName = form.getValues("lastName").trim();
@@ -1032,6 +1032,20 @@ export function Signup() {
                                 });
                               } catch (subErr) {
                                 console.error("Post-signup setup error:", subErr);
+                              }
+
+                              // Send the initial trial verification email via the backend
+                              // EmailService (welcome template). Awaited so we can report a
+                              // failure, but a send failure must NEVER block dashboard access:
+                              // the account's email_verification_required flag is already set,
+                              // so the persistent banner + resend remain available.
+                              try {
+                                await api.sendInitialVerificationEmail();
+                              } catch (emailErr) {
+                                console.error("Initial verification email failed:", emailErr);
+                                toast.error(
+                                  "We couldn't send your verification email. You can resend it from the banner on your dashboard.",
+                                );
                               }
 
                               navigate("/app/dashboard");

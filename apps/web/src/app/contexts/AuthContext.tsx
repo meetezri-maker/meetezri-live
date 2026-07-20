@@ -77,7 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const needsClear =
           (sessionUser.user_metadata as any)?.email_verification_required === true;
         const emailConfirmedAt = (sessionUser as any)?.email_confirmed_at;
-        if (needsClear && emailConfirmedAt) {
+        // Trial verification is an app-level fact: `email_verification_required` is the trial
+        // truth and must be cleared ONLY by the successful verification callback. Trial
+        // accounts are auto-confirmed at signup, so clearing on `email_confirmed_at` here
+        // would wrongly wipe the flag on every hydration and hide the banner. Keep this
+        // stale-flag cleanup for paid (non-trial) users only.
+        const isTrial = (sessionUser.user_metadata as any)?.signup_type === 'trial';
+        if (needsClear && emailConfirmedAt && !isTrial) {
           await supabase.auth.updateUser({
             data: { email_verification_required: false },
           });

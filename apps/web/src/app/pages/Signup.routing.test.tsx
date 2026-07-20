@@ -29,12 +29,14 @@ const apiSignup = vi.fn();
 const initProfile = vi.fn();
 const updateProfile = vi.fn();
 const createSubscription = vi.fn();
+const sendInitialVerificationEmail = vi.fn();
 vi.mock('@/lib/api', () => ({
   api: {
     checkUserExists: (...a: unknown[]) => checkUserExists(...a),
     signup: (...a: unknown[]) => apiSignup(...a),
     initProfile: (...a: unknown[]) => initProfile(...a),
     updateProfile: (...a: unknown[]) => updateProfile(...a),
+    sendInitialVerificationEmail: (...a: unknown[]) => sendInitialVerificationEmail(...a),
     billing: { createSubscription: (...a: unknown[]) => createSubscription(...a) },
   },
 }));
@@ -111,6 +113,7 @@ beforeEach(() => {
   initProfile.mockResolvedValue({});
   updateProfile.mockResolvedValue({});
   createSubscription.mockResolvedValue({});
+  sendInitialVerificationEmail.mockResolvedValue({ success: true });
   apiSignup.mockResolvedValue({ action: 'verification_sent' });
 });
 
@@ -217,7 +220,39 @@ describe('Signup trial flow', () => {
         billing_cycle: 'monthly',
       }),
     );
-    expect(initProfile).toHaveBeenCalled();
+    expect(initProfile).toHaveBeenCalledWith('trial');
+  });
+
+  it('sends the initial trial verification email through the backend', async () => {
+    renderSignup();
+    const user = await fillAndSubmitSignupForm();
+
+    await waitFor(() => expect(screen.getByPlaceholderText('e.g., Jane Doe')).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText('e.g., Jane Doe'), 'Jane Roe');
+    await user.type(screen.getByPlaceholderText('Phone number'), '+14155552671');
+    await user.type(screen.getByPlaceholderText('e.g., Sister'), 'Sister');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /start your first talk/i }));
+
+    await waitFor(() => expect(sendInitialVerificationEmail).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(currentPath()).toBe('/app/dashboard'));
+  });
+
+  it('still reaches the dashboard when the initial verification email fails to send', async () => {
+    sendInitialVerificationEmail.mockRejectedValueOnce(new Error('smtp down'));
+    renderSignup();
+    const user = await fillAndSubmitSignupForm();
+
+    await waitFor(() => expect(screen.getByPlaceholderText('e.g., Jane Doe')).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText('e.g., Jane Doe'), 'Jane Roe');
+    await user.type(screen.getByPlaceholderText('Phone number'), '+14155552671');
+    await user.type(screen.getByPlaceholderText('e.g., Sister'), 'Sister');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /start your first talk/i }));
+
+    // Email failure must not block dashboard access.
+    await waitFor(() => expect(sendInitialVerificationEmail).toHaveBeenCalled());
+    await waitFor(() => expect(currentPath()).toBe('/app/dashboard'));
   });
 });
 

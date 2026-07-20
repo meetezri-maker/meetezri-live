@@ -17,6 +17,7 @@ import {
   signupHandler,
   resendVerificationHandler,
   resendVerificationPublicHandler,
+  sendInitialTrialVerificationHandler,
   confirmEmailHandler,
   getKnowledgeTwoFactorStatusHandler,
   setupKnowledgeTwoFactorHandler,
@@ -82,6 +83,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     resendVerificationHandler
+  );
+
+  fastify.post(
+    '/verification/send-initial',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    sendInitialTrialVerificationHandler
   );
 
   fastify.post(

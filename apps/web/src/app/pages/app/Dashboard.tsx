@@ -55,8 +55,9 @@ export function Dashboard() {
     profile?.signup_type ??
     (String(rawSignupType).toLowerCase() === "trial" ? "trial" : null) ??
     (profile?.subscription_plan === "trial" ? "trial" : null);
-  const isUnverified =
-    !!user && (!user.email_confirmed_at || (user as any)?.user_metadata?.email_verification_required);
+  // Single UI truth: the authoritative, server-computed `needs_email_verification` (trial-only;
+  // false for paid). Matches the AppLayout banner; no stale session/JWT flags.
+  const isUnverified = profile?.needs_email_verification === true;
   const showConfirmEmailPopup =
     signupType === "trial" && isUnverified && !confirmEmailDismissed;
   const canCancelSubscription =

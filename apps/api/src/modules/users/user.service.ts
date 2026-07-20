@@ -566,9 +566,14 @@ export async function resolveAccountStateByEmail(email: string) {
   const emailConfirmed = !!authUser.email_confirmed_at;
   const rawMeta: any = authUser.raw_user_meta_data as any;
   const verificationRequired = rawMeta?.email_verification_required === true;
-  // Supabase confirmation wins over a stale client metadata flag left from signup.
-  const emailVerified =
-    emailConfirmed && (!verificationRequired || emailConfirmed);
+  const isTrialSignup =
+    normalizeSignupType(rawMeta?.signup_type ?? rawMeta?.signupType ?? rawMeta?.signup) === 'trial';
+  // Trial accounts are auto-confirmed at signup, so `email_confirmed_at` is not a
+  // verification signal for them; the app-level (non-security) `email_verification_required`
+  // flag is the trial truth. Paid: Supabase confirmation wins over a stale metadata flag.
+  const emailVerified = isTrialSignup
+    ? !verificationRequired
+    : emailConfirmed && (!verificationRequired || emailConfirmed);
 
   let profile: any = null;
   try {
@@ -1203,6 +1208,18 @@ export async function getProfile(userId: string) {
   result.credits_total = result.total_minutes;
   result.credits_total_seconds = totalAccountSeconds;
 
+  // Resolve `signup_type` first. Trial verification is an application-level fact (see below),
+  // so we must know the account type before computing email_verified. `signup_type` is also
+  // the GET /users/me contract: it must never be null, so the client never has to guess.
+  // The stored column still wins whenever it is set.
+  const signupEvidence = buildSignupTypeEvidence(
+    result,
+    (authForEmail?.raw_user_meta_data ?? null) as Record<string, any> | null
+  );
+  const signupResolution = resolveSignupType(signupEvidence);
+  result.signup_type = signupResolution.signupType;
+  logSignupTypeResolution(userId, signupResolution, signupEvidence);
+
   // Resolve email verification from local auth mirror (`auth.users` exposed via prisma.users)
   // to keep GET /users/me fast and avoid remote Supabase Admin API latency on dashboard load.
   // IMPORTANT: default to `false` when we cannot verify, so UI doesn't incorrectly
@@ -1211,27 +1228,36 @@ export async function getProfile(userId: string) {
   try {
     const isConfirmed = !!authForEmail?.email_confirmed_at;
     const rawMeta = (authForEmail?.raw_user_meta_data ?? {}) as Record<string, any>;
-    // Check custom metadata flag we set during trial signup.
+    // `email_verification_required` is a NON-SECURITY reminder flag. It is client-mutable
+    // (auth user_metadata) and must NEVER be used as an authorization or identity gate — it
+    // only drives the trial "verify your email" reminder banner. Set at trial signup and
+    // cleared solely by the successful verification callback (confirmEmailHandler).
     const verificationRequired = rawMeta?.email_verification_required === true;
 
-    // If Supabase has confirmed the email, ignore a stale `email_verification_required`
-    // flag that can remain in JWT metadata after password login (callback-only clear).
-    const verificationRequiredAfter =
-      isConfirmed && verificationRequired ? false : verificationRequired;
-
-    // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
-    emailVerified = isConfirmed && !verificationRequiredAfter;
+    if (signupResolution.signupType === 'trial') {
+      // Trial accounts are auto-confirmed by Supabase at signup (Confirm-email OFF), so
+      // `email_confirmed_at` is set immediately and is NOT a meaningful verification signal
+      // for them. The app-level `email_verification_required` flag is the trial truth,
+      // regardless of `email_confirmed_at`.
+      emailVerified = !verificationRequired;
+    } else {
+      // Paid: UNCHANGED — Supabase confirmation is the authoritative truth. Ignore a stale
+      // flag that can remain in JWT metadata after password login (callback-only clear).
+      const verificationRequiredAfter =
+        isConfirmed && verificationRequired ? false : verificationRequired;
+      emailVerified = isConfirmed && !verificationRequiredAfter;
+    }
 
     // Debug visibility: explain why `email_verified` was computed.
     if (process.env.DEBUG_API === '1' || process.env.DEBUG_API === 'true') {
       console.log("[emailVerified debug]", {
         userId,
+        signup_type: signupResolution.signupType,
         email_confirmed_at: authForEmail?.email_confirmed_at ?? null,
         email_verification_required: rawMeta?.email_verification_required ?? null,
         verificationRequired,
         computedEmailVerified: emailVerified,
         subscription_plan: result?.subscription_plan ?? null,
-        signup_type: (result as any)?.signup_type ?? null,
       });
     }
   } catch {
@@ -1243,18 +1269,6 @@ export async function getProfile(userId: string) {
   const planType = (result.subscription_plan || "trial") as keyof typeof PLAN_LIMITS;
   result.email_verified = emailVerified;
   result.needs_email_verification = planType === "trial" && !emailVerified;
-
-  // `signup_type` is the contract: GET /users/me must never return null for it, so the
-  // client never has to guess. Resolved from the strongest evidence available here; the
-  // stored column still wins whenever it is set.
-  const signupEvidence = buildSignupTypeEvidence(
-    result,
-    (authForEmail?.raw_user_meta_data ?? null) as Record<string, any> | null
-  );
-  const signupResolution = resolveSignupType(signupEvidence);
-  result.signup_type = signupResolution.signupType;
-
-  logSignupTypeResolution(userId, signupResolution, signupEvidence);
 
   // Two separate facts, deliberately:
   //   onboarding_completed — has this profile's setup been finished? (unchanged; the

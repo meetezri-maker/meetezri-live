@@ -140,15 +140,20 @@ function buildVerificationRedirectTo(
   return { redirectTo, targetPath };
 }
 
-async function sendVerificationReminderForUser(
+async function sendVerificationEmailForUser(
   request: FastifyRequest,
   params: {
     userId: string;
     email: string;
     signupTypeHint?: 'trial' | 'plan' | null;
+    /**
+     * Which template to send. 'welcome' is the initial signup verification email (the same
+     * template family paid signup uses); 'reminder' is for explicit Resend actions only.
+     */
+    kind?: 'welcome' | 'reminder';
   }
 ): Promise<void> {
-  const { userId, email, signupTypeHint } = params;
+  const { userId, email, signupTypeHint, kind = 'reminder' } = params;
 
   const profile = await userService.getProfile(userId);
   let signupTypeResolved: 'trial' | 'plan' | null = signupTypeHint ?? null;
@@ -233,16 +238,24 @@ async function sendVerificationReminderForUser(
     // ignore
   }
 
-  const verificationReminderEmail = emailService.buildVerificationReminderEmail({
-    verificationLink,
-    audience: signupTypeResolved === 'trial' ? 'trial' : 'plan',
-  });
+  const audience = signupTypeResolved === 'trial' ? 'trial' : 'plan';
+  const emailPayload =
+    kind === 'welcome'
+      ? emailService.buildWelcomeVerificationEmail({
+          firstName: (profile?.full_name ?? '').trim().split(/\s+/)[0] || undefined,
+          verificationLink,
+          audience,
+        })
+      : emailService.buildVerificationReminderEmail({
+          verificationLink,
+          audience,
+        });
 
   await emailService.sendEmail(
     email,
-    verificationReminderEmail.subject,
-    verificationReminderEmail.html,
-    verificationReminderEmail.text
+    emailPayload.subject,
+    emailPayload.html,
+    emailPayload.text
   );
 }
 
@@ -464,10 +477,37 @@ export async function resendVerificationHandler(
   }
 
   try {
-    await sendVerificationReminderForUser(request, { userId, email });
+    await sendVerificationEmailForUser(request, { userId, email });
     return reply.code(200).send({ success: true, message: 'Verification email sent' });
   } catch (error: any) {
     request.log.error({ error }, 'Resend verification failed');
+    return reply.code(500).send({ message: error.message || 'Failed to send verification email' });
+  }
+}
+
+/**
+ * Initial trial verification email. Trial accounts are auto-confirmed by Supabase at signup,
+ * so the frontend sends this explicit welcome-verification email through the shared backend
+ * pipeline (same EmailService + template family paid signup uses). Called once, awaited, from
+ * the trial signup flow; failure is surfaced to the UI but never blocks dashboard access.
+ */
+export async function sendInitialTrialVerificationHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload & { email?: string };
+  const userId = user.sub;
+  const email = user.email || await userService.getUserEmail(userId);
+
+  if (!email) {
+    return reply.code(400).send({ message: 'Email not found' });
+  }
+
+  try {
+    await sendVerificationEmailForUser(request, { userId, email, kind: 'welcome' });
+    return reply.code(200).send({ success: true, message: 'Verification email sent' });
+  } catch (error: any) {
+    request.log.error({ error }, 'Send initial trial verification failed');
     return reply.code(500).send({ message: error.message || 'Failed to send verification email' });
   }
 }
@@ -499,7 +539,7 @@ export async function resendVerificationPublicHandler(
       return reply.code(400).send({ message: 'Unable to resend verification email.' });
     }
 
-    await sendVerificationReminderForUser(request, {
+    await sendVerificationEmailForUser(request, {
       userId: authUserId,
       email,
       signupTypeHint: accountState.signup_type,

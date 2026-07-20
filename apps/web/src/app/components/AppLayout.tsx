@@ -92,13 +92,11 @@ export function AppLayout() {
       ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
       : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
 
-  // Prefer backend-derived verification (source of truth), fall back to Supabase session flags.
-  // Supabase user metadata can remain stale in the client session after verification.
-  const isUnverified =
-    (profile
-      ? profile.needs_email_verification === true || profile.email_verified !== true
-      : false) ||
-    (user ? (!user.email_confirmed_at || user.user_metadata?.email_verification_required) : false);
+  // Single UI truth: the authoritative, server-computed `needs_email_verification` from
+  // GET /users/me (trial-only; false for paid). Deliberately no session/JWT fallbacks —
+  // those go stale and caused inconsistency. This self-heals via refreshProfile() after
+  // the verification callback clears the flag.
+  const isUnverified = profile?.needs_email_verification === true;
 
   const resendVerification = async () => {
     if (!user?.email) return;
