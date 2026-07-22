@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../../lib/prisma";
 import {
   CreateGoalCheckInInput,
@@ -5,8 +6,28 @@ import {
   UpdateGoalInput,
   UpdateGoalStatusInput,
 } from "./goals.schema";
+import { COMPLETION_PROGRESS, TrackingType } from "../gamification/rewards.constants";
+import { userCalendarDate } from "../gamification/calendar";
+import { applyCheckIn, computeNumericProgress } from "../gamification/progress.service";
+import { completeItemWithinTx, CompletionResult } from "../gamification/completion.service";
 
 const nowIso = () => new Date().toISOString();
+
+/** Raised when a second check-in is attempted for the same item on the same user calendar day. */
+export class DuplicateCheckInError extends Error {
+  constructor() {
+    super("A check-in already exists for this goal today");
+    this.name = "DuplicateCheckInError";
+  }
+}
+
+/** Raised when a client tries to set completion directly instead of via the completion service. */
+export class DirectCompletionError extends Error {
+  constructor() {
+    super("Goals are completed automatically when progress reaches 100%");
+    this.name = "DirectCompletionError";
+  }
+}
 
 const goalsListCache = new Map<string, { data: any[]; timestamp: number }>();
 const goalByIdCache = new Map<string, { data: any; timestamp: number }>();
@@ -48,9 +69,10 @@ export async function getGoalById(userId: string, goalId: string) {
 }
 
 export async function createGoal(userId: string, input: CreateGoalInput) {
-  const progress = Number(input.progress_percentage ?? 0);
-  const status =
-    progress >= 100 ? "completed" : progress > 0 ? "active" : "not_started";
+  // Progress is backend-owned: a new goal always starts at 0. Numeric tracking
+  // requires a positive target; manual tracking needs none.
+  const trackingType = input.tracking_type ?? "manual_milestone";
+  const isNumeric = trackingType === "count" || trackingType === "duration" || trackingType === "amount";
 
   const created = await prisma.personal_goals.create({
     data: {
@@ -61,10 +83,14 @@ export async function createGoal(userId: string, input: CreateGoalInput) {
       why_this_goal_matters: input.why_this_goal_matters,
       target_outcome: input.target_outcome,
       priority_level: input.priority_level,
-      status,
+      status: "not_started",
       start_date: input.start_date,
       target_date: input.target_date || null,
-      progress_percentage: progress,
+      progress_percentage: 0,
+      tracking_type: trackingType,
+      target_value: isNumeric && input.target_value != null ? input.target_value : null,
+      current_value: 0,
+      tracking_unit: input.tracking_unit || null,
       check_in_frequency: input.check_in_frequency ?? "daily",
       reminder_enabled: input.reminder_enabled ?? false,
       reminder_time: input.reminder_time || null,
@@ -85,38 +111,86 @@ export async function createGoal(userId: string, input: CreateGoalInput) {
 }
 
 export async function updateGoal(userId: string, goalId: string, patch: UpdateGoalInput) {
-  const existing = await getGoalById(userId, goalId);
+  // Fresh read (the write path must not trust the cache).
+  const existing = await prisma.personal_goals.findFirst({
+    where: { id: goalId, user_id: userId },
+  });
   if (!existing) return null;
 
-  const nextProgress =
-    patch.progress_percentage == null
-      ? existing.progress_percentage
-      : Number(patch.progress_percentage);
-  const nextStatus =
-    patch.status ??
-    (nextProgress >= 100
-      ? "completed"
-      : nextProgress > 0 && existing.status === "not_started"
-        ? "active"
-        : existing.status);
+  // Completion is reached only via the completion service (progress hits 100%).
+  // A client may not mark a goal completed through a descriptive edit.
+  if (patch.status === "completed" && existing.status !== "completed") {
+    throw new DirectCompletionError();
+  }
 
-  const updated = await prisma.personal_goals.update({
-    where: { id: goalId },
-    data: {
-      ...patch,
-      target_date: patch.target_date === undefined ? undefined : patch.target_date || null,
-      reminder_time: patch.reminder_time === undefined ? undefined : patch.reminder_time || null,
-      emotion_tag: patch.emotion_tag === undefined ? undefined : patch.emotion_tag || null,
-      support_type_needed:
-        patch.support_type_needed === undefined ? undefined : patch.support_type_needed || null,
-      notes: patch.notes === undefined ? undefined : patch.notes || null,
-      progress_percentage: nextProgress,
-      status: nextStatus,
-      updated_at: nowIso(),
-    },
+  // Only descriptive/tracking-config fields are patchable here. Official
+  // progress, current value, completion, and reward fields are never accepted.
+  const {
+    status: _status,
+    completion_note: _completionNote,
+    ...descriptive
+  } = patch;
+
+  // Recompute official progress from the STORED current value + the (possibly
+  // edited) target, so an edited target is reflected immediately and the label/
+  // bar can never show a stale percentage. Numeric tracking only; manual keeps
+  // its milestone-derived progress untouched.
+  const effTrackingType = (patch.tracking_type ??
+    existing.tracking_type ??
+    "manual_milestone") as TrackingType;
+  const effTarget =
+    patch.target_value !== undefined
+      ? patch.target_value
+      : existing.target_value == null
+        ? null
+        : Number(existing.target_value);
+  const isNumeric =
+    effTrackingType === "count" || effTrackingType === "duration" || effTrackingType === "amount";
+  const currentValue = Number(existing.current_value ?? 0);
+  const recomputedProgress =
+    isNumeric && effTarget != null && Number(effTarget) > 0
+      ? computeNumericProgress(currentValue, Number(effTarget))
+      : null;
+
+  const baseStatus = patch.status ?? existing.status;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.personal_goals.update({
+      where: { id: goalId },
+      data: {
+        ...descriptive,
+        target_date: patch.target_date === undefined ? undefined : patch.target_date || null,
+        reminder_time: patch.reminder_time === undefined ? undefined : patch.reminder_time || null,
+        emotion_tag: patch.emotion_tag === undefined ? undefined : patch.emotion_tag || null,
+        support_type_needed:
+          patch.support_type_needed === undefined ? undefined : patch.support_type_needed || null,
+        notes: patch.notes === undefined ? undefined : patch.notes || null,
+        tracking_unit: patch.tracking_unit === undefined ? undefined : patch.tracking_unit || null,
+        progress_percentage: recomputedProgress == null ? undefined : recomputedProgress,
+        status:
+          recomputedProgress != null && recomputedProgress > 0 && baseStatus === "not_started"
+            ? "active"
+            : baseStatus,
+        updated_at: nowIso(),
+      },
+    });
+
+    // If the edit brings progress to 100%, complete + reward through the SAME
+    // centralized, idempotent completion service (never a second reward; the
+    // frontend computes/awards nothing).
+    let completion: CompletionResult | null = null;
+    if (recomputedProgress != null && recomputedProgress >= COMPLETION_PROGRESS) {
+      completion = await completeItemWithinTx(tx, {
+        userId,
+        itemType: "personal_goal",
+        itemId: goalId,
+      });
+    }
+    return { updated, completion };
   });
+
   invalidateGoalsCache(userId, goalId);
-  return updated;
+  return result.completion?.item ?? result.updated;
 }
 
 export async function updateGoalStatus(
@@ -126,6 +200,12 @@ export async function updateGoalStatus(
 ) {
   const existing = await getGoalById(userId, goalId);
   if (!existing) return null;
+
+  // Direct "completed" transitions are rejected — completion (and its reward)
+  // can only happen through the centralized completion service.
+  if (input.status === "completed" && existing.status !== "completed") {
+    throw new DirectCompletionError();
+  }
 
   const updated = await prisma.personal_goals.update({
     where: { id: goalId },
@@ -163,37 +243,89 @@ export async function addGoalCheckIn(
   goalId: string,
   input: CreateGoalCheckInInput
 ) {
-  const goal = await getGoalById(userId, goalId);
+  // Ownership check (fetch fresh; the write path must not trust the cache).
+  const goal = await prisma.personal_goals.findFirst({
+    where: { id: goalId, user_id: userId },
+  });
   if (!goal) return null;
 
-  const created = await prisma.goal_check_ins.create({
-    data: {
-      user_id: userId,
-      goal_id: goalId,
-      progress_percentage: input.progress_percentage,
-      mood: input.mood || null,
-      reflection: input.reflection || null,
-      challenges_faced: input.challenges_faced || null,
-      wins: input.wins || null,
-      notes: input.notes || null,
-    },
+  // One check-in per item per USER calendar day (enforced in DB below).
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
   });
+  const checkInDate = userCalendarDate(profile?.timezone);
 
-  await prisma.personal_goals.update({
-    where: { id: goalId },
-    data: {
-      progress_percentage: input.progress_percentage,
-      last_check_in_date: created.created_at.toISOString(),
-      status:
-        input.progress_percentage >= 100
-          ? "completed"
-          : goal.status === "not_started"
-            ? "active"
-            : goal.status,
-      updated_at: nowIso(),
-    },
+  const progressBefore = Number(goal.progress_percentage ?? 0);
+  // The backend derives the official progress from the submitted value/milestone
+  // and the goal's stored tracking config — never from a client percentage.
+  const applied = applyCheckIn({
+    trackingType: (goal.tracking_type as TrackingType) ?? "manual_milestone",
+    currentValue: Number(goal.current_value ?? 0),
+    targetValue: goal.target_value == null ? null : Number(goal.target_value),
+    submission: { value: input.value, milestone: input.milestone },
+  });
+  const progressAfter = applied.progress;
+
+  // Insert + progress update + (optional) completion in ONE transaction so a
+  // failure at any step rolls back both the check-in and the progress change.
+  const result = await prisma.$transaction(async (tx) => {
+    let checkIn;
+    try {
+      checkIn = await tx.goal_check_ins.create({
+        data: {
+          user_id: userId,
+          goal_id: goalId,
+          progress_percentage: progressAfter,
+          progress_before: progressBefore,
+          progress_after: progressAfter,
+          value_added: applied.valueAdded ?? null,
+          milestone: applied.milestone ?? null,
+          check_in_date: new Date(`${checkInDate}T00:00:00.000Z`),
+          mood: input.mood || null,
+          reflection: input.reflection || null,
+          challenges_faced: input.challenges_faced || null,
+          wins: input.wins || null,
+          notes: input.note || input.notes || null,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new DuplicateCheckInError();
+      }
+      throw err;
+    }
+
+    await tx.personal_goals.update({
+      where: { id: goalId },
+      data: {
+        progress_percentage: progressAfter,
+        current_value: applied.currentValue,
+        last_check_in_date: checkIn.created_at.toISOString(),
+        status:
+          progressAfter >= COMPLETION_PROGRESS
+            ? "completed"
+            : goal.status === "not_started"
+              ? "active"
+              : goal.status,
+        updated_at: nowIso(),
+      },
+    });
+
+    // Reaching 100% routes through the centralized completion service, which
+    // awards the reward at most once (idempotent via the ledger constraint).
+    let completion: CompletionResult | null = null;
+    if (progressAfter >= COMPLETION_PROGRESS) {
+      completion = await completeItemWithinTx(tx, {
+        userId,
+        itemType: "personal_goal",
+        itemId: goalId,
+      });
+    }
+
+    return { checkIn, completion };
   });
 
   invalidateGoalsCache(userId, goalId);
-  return created;
+  return { ...result.checkIn, completion: result.completion };
 }

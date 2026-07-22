@@ -17,8 +17,10 @@ export const customAchievementSchema = z.object({
   ]),
   progress: z.number().min(0),
   total: z.number().min(1),
-  unlocked: z.boolean(),
-  points: z.number().min(0),
+  // NOTE: `unlocked` and `points` are intentionally NOT accepted from the client.
+  // The backend derives `unlocked` from progress/total and awards `points` only
+  // through the centralized completion service (POST /:id/complete). Any client-
+  // supplied values are stripped by the schema.
   rarity: z.enum(["common", "rare", "epic", "legendary"]),
   goalType: z.enum(["gym", "money_management", "career", "learning", "health", "custom"]).optional(),
   lastCheckInDate: z.string().optional(),
@@ -48,7 +50,31 @@ export const customAchievementSchema = z.object({
   linkedGoalId: z.string().uuid().optional(),
   /** When true, check-ins also sync to the personal goals API. False = achievement-only streak (custom_achievements only). */
   syncWithGoals: z.boolean().optional(),
+  /** Tracking configuration (Task 2.5). */
+  trackingType: z.enum(["count", "duration", "amount", "manual_milestone"]).optional(),
+  trackingUnit: z.string().trim().max(40).optional(),
 });
+
+const milestoneValues = [
+  "not_started",
+  "started",
+  "making_progress",
+  "significant_progress",
+  "completed",
+] as const;
+
+// Achievement check-in submits ONLY the user action; progress is backend-derived.
+export const createAchievementCheckInSchema = z
+  .object({
+    value: z.number().min(0).optional(),
+    milestone: z.enum(milestoneValues).optional(),
+    note: z.string().optional(),
+  })
+  .refine((d) => d.value !== undefined || d.milestone !== undefined, {
+    message: "A check-in requires either a value or a milestone",
+  });
+
+export type CreateAchievementCheckInInput = z.infer<typeof createAchievementCheckInSchema>;
 
 export const createCustomAchievementSchema = customAchievementSchema;
 export const updateCustomAchievementSchema = customAchievementSchema.partial();

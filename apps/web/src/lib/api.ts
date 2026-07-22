@@ -1441,6 +1441,60 @@ export const api = {
       });
       return handleResponseAllowEmpty(res, "Failed to delete custom achievement");
     },
+
+    /** Award the personal-achievement completion reward (backend-controlled, idempotent). */
+    async complete(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}/complete`, {
+        method: "POST",
+        headers,
+      });
+      return handleResponse(res, "Failed to complete achievement");
+    },
+
+    async listCheckIns(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}/check-ins`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch achievement check-ins");
+    },
+
+    /** Submit a value or milestone; the backend derives progress + completion. */
+    async addCheckIn(id: string, payload: { value?: number; milestone?: string; note?: string }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}/check-ins`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      return handleResponse(res, "Failed to save achievement check-in");
+    },
+  },
+
+  // Gamification: single backend source of truth for points + levels.
+  gamification: {
+    async getPoints() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/gamification/points`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch points");
+    },
+
+    async listTransactions(limit = 100) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/gamification/transactions?limit=${encodeURIComponent(String(limit))}`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch point transactions");
+    },
   },
 
   // Habits API

@@ -892,6 +892,13 @@ model personal_goals {
   partner_visibility      Boolean        @default(false)
   partner_comment_enabled Boolean        @default(false)
   completion_note         String?
+  completed_at            DateTime?      @db.Timestamptz(6)
+  reward_awarded          Boolean        @default(false)
+  tracking_type           String         @default("manual_milestone")
+  target_value            Decimal?       @db.Decimal
+  current_value           Decimal        @default(0) @db.Decimal
+  tracking_unit           String?
+  legacy_tracking         Boolean        @default(false)
   created_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   updated_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   profiles                profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -935,10 +942,37 @@ model custom_achievements {
   linked_goal_id     String?  @db.Uuid
   /// When true, daily check-ins also write to `personal_goals` / `goal_check_ins`. When false, only this row is updated (personal achievement streaks).
   sync_with_goals    Boolean  @default(true)
+  completed_at       DateTime? @db.Timestamptz(6)
+  reward_awarded     Boolean  @default(false)
+  tracking_type      String   @default("count")
+  tracking_unit      String?
+  legacy_tracking    Boolean  @default(false)
   created_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   updated_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   profiles           profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  achievement_check_ins achievement_check_ins[]
 
+  @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
+/// Daily check-ins attached to a custom (personal) achievement — mirror of goal_check_ins.
+model achievement_check_ins {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  achievement_id   String              @db.Uuid
+  user_id          String              @db.Uuid
+  check_in_date    DateTime            @db.Date
+  value_added      Decimal?            @db.Decimal
+  milestone        String?
+  progress_before  Int?
+  progress_after   Int?
+  note             String?
+  created_at       DateTime            @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  custom_achievements custom_achievements @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles         profiles            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, achievement_id, check_in_date])
+  @@index([achievement_id, created_at(sort: Desc)])
   @@index([user_id, created_at(sort: Desc)])
   @@schema("public")
 }
@@ -954,12 +988,36 @@ model goal_check_ins {
   challenges_faced String?
   wins             String?
   notes            String?
+  check_in_date    DateTime?      @db.Date
+  value_added      Decimal?       @db.Decimal
+  milestone        String?
+  progress_before  Int?
+  progress_after   Int?
   created_at       DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   personal_goals   personal_goals @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   profiles         profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@unique([user_id, goal_id, check_in_date])
   @@index([goal_id, created_at(sort: Desc)])
   @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
+/// Append-only point ledger. A user's total points are derived from SUM(points).
+/// The unique (user_id, source_type, source_item_id) guarantees each reward is granted once.
+model point_transactions {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id        String   @db.Uuid
+  source_type    String
+  source_item_id String   @db.Uuid
+  points         Int
+  reason         String?
+  created_at     DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles       profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, source_type, source_item_id])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([source_type, source_item_id])
   @@schema("public")
 }
 
@@ -1113,6 +1171,8 @@ model profiles {
   custom_achievements                                   custom_achievements[]
   personal_goals                                        personal_goals[]
   goal_check_ins                                        goal_check_ins[]
+  achievement_check_ins                                 achievement_check_ins[]
+  point_transactions                                    point_transactions[]
   nudges                                                nudges[]
   org_members                                           org_members[]
   users                                                 users                          @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)

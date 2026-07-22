@@ -30,6 +30,14 @@ const supportTypeValues = [
   "motivation",
   "partner_support",
 ] as const;
+const trackingTypeValues = ["count", "duration", "amount", "manual_milestone"] as const;
+const milestoneValues = [
+  "not_started",
+  "started",
+  "making_progress",
+  "significant_progress",
+  "completed",
+] as const;
 
 export const createGoalSchema = z.object({
   goal_title: z.string().trim().min(2),
@@ -40,7 +48,11 @@ export const createGoalSchema = z.object({
   priority_level: z.enum(goalPriorityValues),
   start_date: z.string().trim().min(1),
   target_date: z.string().trim().optional(),
-  progress_percentage: z.number().min(0).max(100).optional(),
+  // Tracking configuration (Task 2.5). Progress itself is backend-derived; the
+  // client configures the method + target, never an official percentage.
+  tracking_type: z.enum(trackingTypeValues).optional(),
+  target_value: z.number().positive().optional(),
+  tracking_unit: z.string().trim().max(40).optional(),
   check_in_frequency: z.enum(goalCheckInFrequencyValues).optional(),
   reminder_enabled: z.boolean().optional(),
   reminder_time: z.string().trim().optional(),
@@ -61,14 +73,23 @@ export const updateGoalStatusSchema = z.object({
   status: z.enum(goalStatusValues),
 });
 
-export const createGoalCheckInSchema = z.object({
-  progress_percentage: z.number().min(0).max(100),
-  mood: z.enum(emotionTagValues).optional(),
-  reflection: z.string().optional(),
-  challenges_faced: z.string().optional(),
-  wins: z.string().optional(),
-  notes: z.string().optional(),
-});
+// Check-in submits ONLY the user action (a numeric value or a milestone) plus
+// optional notes. The backend derives the official progress percentage; any
+// client-supplied progress/completion/reward fields are not accepted here.
+export const createGoalCheckInSchema = z
+  .object({
+    value: z.number().min(0).optional(),
+    milestone: z.enum(milestoneValues).optional(),
+    note: z.string().optional(),
+    mood: z.enum(emotionTagValues).optional(),
+    reflection: z.string().optional(),
+    challenges_faced: z.string().optional(),
+    wins: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  .refine((d) => d.value !== undefined || d.milestone !== undefined, {
+    message: "A check-in requires either a value or a milestone",
+  });
 
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;

@@ -2,6 +2,8 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import {
   addGoalCheckIn,
   createGoal,
+  DirectCompletionError,
+  DuplicateCheckInError,
   getGoalById,
   listGoalCheckIns,
   listGoals,
@@ -9,6 +11,7 @@ import {
   updateGoal,
   updateGoalStatus,
 } from "./goals.service";
+import { ProgressValidationError } from "../gamification/progress.service";
 import {
   CreateGoalCheckInInput,
   CreateGoalInput,
@@ -46,9 +49,16 @@ export async function updateGoalHandler(
   reply: FastifyReply
 ) {
   const user = request.user as { sub: string };
-  const goal = await updateGoal(user.sub, request.params.goalId, request.body);
-  if (!goal) return reply.code(404).send({ message: "Goal not found" });
-  return reply.send(goal);
+  try {
+    const goal = await updateGoal(user.sub, request.params.goalId, request.body);
+    if (!goal) return reply.code(404).send({ message: "Goal not found" });
+    return reply.send(goal);
+  } catch (err) {
+    if (err instanceof DirectCompletionError) {
+      return reply.code(409).send({ message: err.message });
+    }
+    throw err;
+  }
 }
 
 export async function updateGoalStatusHandler(
@@ -56,9 +66,16 @@ export async function updateGoalStatusHandler(
   reply: FastifyReply
 ) {
   const user = request.user as { sub: string };
-  const goal = await updateGoalStatus(user.sub, request.params.goalId, request.body);
-  if (!goal) return reply.code(404).send({ message: "Goal not found" });
-  return reply.send(goal);
+  try {
+    const goal = await updateGoalStatus(user.sub, request.params.goalId, request.body);
+    if (!goal) return reply.code(404).send({ message: "Goal not found" });
+    return reply.send(goal);
+  } catch (err) {
+    if (err instanceof DirectCompletionError) {
+      return reply.code(409).send({ message: err.message });
+    }
+    throw err;
+  }
 }
 
 export async function deleteGoalHandler(
@@ -87,7 +104,17 @@ export async function createGoalCheckInHandler(
   reply: FastifyReply
 ) {
   const user = request.user as { sub: string };
-  const row = await addGoalCheckIn(user.sub, request.params.goalId, request.body);
-  if (!row) return reply.code(404).send({ message: "Goal not found" });
-  return reply.code(201).send(row);
+  try {
+    const row = await addGoalCheckIn(user.sub, request.params.goalId, request.body);
+    if (!row) return reply.code(404).send({ message: "Goal not found" });
+    return reply.code(201).send(row);
+  } catch (err) {
+    if (err instanceof DuplicateCheckInError) {
+      return reply.code(409).send({ message: "A check-in already exists for this goal today" });
+    }
+    if (err instanceof ProgressValidationError) {
+      return reply.code(400).send({ message: err.message });
+    }
+    throw err;
+  }
 }

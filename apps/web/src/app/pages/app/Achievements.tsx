@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Trophy,
@@ -47,6 +47,28 @@ import { toast } from 'sonner';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { GOAL_CATEGORY_OPTIONS, GOAL_EMOTION_TAG_OPTIONS } from '@/app/features/goals/constants';
+import {
+  AMOUNT_UNITS,
+  CHECK_IN_FIELD_LABELS,
+  DURATION_UNITS,
+  MILESTONE_STAGES,
+  TRACKING_METHOD_LABELS,
+  isAmountPresetUnit,
+  requiresTrackingChangeConfirmation,
+  type TrackingMethod,
+} from '@/app/features/goals/tracking';
+import {
+  goalCardView,
+  goalCategoryToFormCategory,
+  goalPriorityToFormPriority,
+} from '@/app/features/goals/goalCardView';
+import {
+  combineAndFilter,
+  type CombinedItem,
+  type GamificationFilter,
+} from '@/app/features/goals/combinedItems';
+import { normalizeHistory, type NormalizedCheckIn } from '@/app/features/goals/checkInHistory';
+import { buildAchievementDetail, buildGoalDetail } from '@/app/features/goals/detailView';
 import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
 import { SolaceSelect } from '@/app/solace';
@@ -124,12 +146,24 @@ interface Achievement {
   moodTag?: 'Stress' | 'Sadness' | 'Fear' | 'Confidence' | 'Motivation';
   supportType?: 'Encouragement' | 'Accountability' | 'Reflection' | 'Coping Help';
   notes?: string;
+  completedAt?: string;
+  rewardAwarded?: boolean;
   linkedGoalId?: string;
   /** When true (default), daily check-ins also write to the personal goals API. False = streak only on this achievement. */
   syncWithGoals?: boolean;
+  /** Which authoritative entity this display card came from (Task 2.5 view model). */
+  __source?: 'goal' | 'achievement';
+  trackingType?: 'count' | 'duration' | 'amount' | 'manual_milestone';
+  targetValue?: number;
+  currentValue?: number;
+  trackingUnit?: string;
 }
 
 type PersonalGoalTemplateKey = '' | `pre:${number}` | 'custom';
+
+/** Frontend-only combined display model. Backend models stay separate: a goal is
+ * a raw personal_goals record; an achievement is the existing Achievement type. */
+type GamificationCardItem = CombinedItem<Record<string, unknown>, Achievement>;
 
 function mapSeedCategoryToGoalCategory(cat: GoalCategory): NonNullable<Achievement['goalCategory']> {
   switch (cat) {
@@ -209,6 +243,7 @@ function ensureMinText(value: string | undefined, min: number, fallback: string)
 
 type DailyGoalCheckInFields = {
   amount: string;
+  milestone: string;
   mood: string;
   reflection: string;
   challenges: string;
@@ -219,6 +254,7 @@ type DailyGoalCheckInFields = {
 function emptyDailyGoalCheckIn(): DailyGoalCheckInFields {
   return {
     amount: '',
+    milestone: '',
     mood: '',
     reflection: '',
     challenges: '',
@@ -304,8 +340,19 @@ function VaultParticles({ className }: VaultParticlesProps) {
 export function Achievements() {
   const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // Combined Goals & Achievements type filter (default 'all').
+  const [gamificationFilter, setGamificationFilter] = useState<GamificationFilter>('all');
+  // Gates the empty state so it never flashes while the initial load is pending.
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [showAllAchievements, setShowAllAchievements] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  // Read-only detail modal: stores the clicked item's type + id; live data is
+  // derived from the loaded lists so it stays fresh after check-ins.
+  const [detailItem, setDetailItem] = useState<{ itemType: 'goal' | 'achievement'; id: string } | null>(null);
+  const [detailHistory, setDetailHistory] = useState<NormalizedCheckIn[]>([]);
+  const [detailHistoryLoading, setDetailHistoryLoading] = useState(false);
+  // Bumped after a successful check-in so an open detail modal refetches history.
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   const [wellnessExercises, setWellnessExercises] = useState(0);
   const journeyRingId = useId().replace(/:/g, '');
 
@@ -316,6 +363,15 @@ export function Achievements() {
 
   const [communityPosts, setCommunityPosts] = useState(0);
   const [customAchievements, setCustomAchievements] = useState<Achievement[]>([]);
+  // Personal Goals are loaded from their authoritative API (personal_goals),
+  // NOT mirrored into custom_achievements (Task 2.5 — no dual-record model).
+  const [personalGoals, setPersonalGoals] = useState<Record<string, unknown>[]>([]);
+  // When set, the personal-goal form in the create modal edits this goal id
+  // (via api.goals.update) instead of creating a new goal.
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  // When set, the personal-achievement form edits this custom achievement id
+  // (via api.customAchievements.update) instead of creating a new one.
+  const [editingAchievementId, setEditingAchievementId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newTotal, setNewTotal] = useState('1');
@@ -343,12 +399,33 @@ export function Achievements() {
   const [goalNotes, setGoalNotes] = useState('');
   const [goalReminderEnabled, setGoalReminderEnabled] = useState(true);
   const [goalTemplateKey, setGoalTemplateKey] = useState<PersonalGoalTemplateKey>('');
+  // Tracking configuration for the create form (Task 2.5, Phase 7/8).
+  const [goalTrackingType, setGoalTrackingType] =
+    useState<'count' | 'duration' | 'amount' | 'manual_milestone'>('manual_milestone');
+  const [goalTargetValue, setGoalTargetValue] = useState('');
+  const [goalTrackingUnit, setGoalTrackingUnit] = useState('');
+  // Amount-unit "Custom" mode (shows a free-text unit field).
+  const [goalAmountCustom, setGoalAmountCustom] = useState(false);
+  // Original method + whether the edited goal has check-ins (Phase 6 confirmation).
+  const [editingGoalOriginalTracking, setEditingGoalOriginalTracking] = useState<TrackingMethod | undefined>();
+  const [editingGoalHasCheckIns, setEditingGoalHasCheckIns] = useState(false);
+  // Tracking configuration for the personal-achievement create form.
+  const [achTrackingType, setAchTrackingType] =
+    useState<'count' | 'duration' | 'amount' | 'manual_milestone'>('count');
+  const [achTargetValue, setAchTargetValue] = useState('');
+  const [achTrackingUnit, setAchTrackingUnit] = useState('');
+  const [achAmountCustom, setAchAmountCustom] = useState(false);
+  const [editingAchievementOriginalTracking, setEditingAchievementOriginalTracking] = useState<TrackingMethod | undefined>();
+  const [editingAchievementHasCheckIns, setEditingAchievementHasCheckIns] = useState(false);
   const [personalGoalFormOpen, setPersonalGoalFormOpen] = useState(false);
   const [dailyCheckInInputs, setDailyCheckInInputs] = useState<Record<string, DailyGoalCheckInFields>>({});
-  const customStorageKey = useMemo(
-    () => `ezri_custom_achievements_${profile?.id || 'guest'}`,
-    [profile?.id]
-  );
+  // Backend is the single source of truth for points + level (Task 1 foundation).
+  const [backendPoints, setBackendPoints] = useState<{
+    totalPoints: number;
+    level: number;
+    levelProgressPercentage: number;
+    pointsToNextLevel: number;
+  }>({ totalPoints: 0, level: 1, levelProgressPercentage: 0, pointsToNextLevel: 100 });
 
   const achievementGoalTemplateGroups = useMemo(
     () =>
@@ -393,6 +470,10 @@ export function Achievements() {
     notes: item.notes || undefined,
     linkedGoalId: item.linked_goal_id || undefined,
     syncWithGoals: item.sync_with_goals !== false,
+    trackingType: item.tracking_type || undefined,
+    trackingUnit: item.tracking_unit || undefined,
+    completedAt: item.completed_at || undefined,
+    rewardAwarded: Boolean(item.reward_awarded),
   });
 
   const mapAchievementToApiPayload = (item: Achievement) => ({
@@ -402,8 +483,8 @@ export function Achievements() {
     category: item.category,
     progress: item.progress,
     total: item.total,
-    unlocked: item.unlocked,
-    points: item.points,
+    // `unlocked` and `points` are intentionally omitted: the backend derives
+    // unlock state and awards points. The client is not the source of truth.
     rarity: item.rarity,
     goalType: item.goalType,
     lastCheckInDate: item.lastCheckInDate,
@@ -424,6 +505,8 @@ export function Achievements() {
     notes: item.notes,
     linkedGoalId: item.linkedGoalId,
     syncWithGoals: item.syncWithGoals !== false,
+    trackingType: item.trackingType,
+    trackingUnit: item.trackingUnit,
   });
 
   useEffect(() => {
@@ -455,46 +538,59 @@ export function Achievements() {
     if (!showCreateModal) {
       setGoalTemplateKey('');
       setPersonalGoalFormOpen(false);
+      setEditingGoalId(null);
+      setEditingAchievementId(null);
+      setGoalAmountCustom(false);
+      setAchAmountCustom(false);
+      setEditingGoalOriginalTracking(undefined);
+      setEditingGoalHasCheckIns(false);
+      setEditingAchievementOriginalTracking(undefined);
+      setEditingAchievementHasCheckIns(false);
     }
   }, [showCreateModal]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadCustomAchievements = async () => {
-      try {
-        const rows = await api.customAchievements.list();
-        if (cancelled) return;
-        setCustomAchievements(Array.isArray(rows) ? rows.map(mapApiCustomAchievement) : []);
-      } catch (error) {
-        console.error('Failed to load custom achievements from database', error);
-        try {
-          const stored = localStorage.getItem(customStorageKey);
-          if (!stored) {
-            if (!cancelled) setCustomAchievements([]);
-            return;
-          }
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && !cancelled) {
-            setCustomAchievements(
-              parsed.map((item: Achievement) => ({
-                ...item,
-                goalType: item.goalType || 'custom',
-                checkInHistory: Array.isArray(item.checkInHistory) ? item.checkInHistory : [],
-                checkInEntries: Array.isArray(item.checkInEntries) ? item.checkInEntries : [],
-              })) as Achievement[]
-            );
-          }
-        } catch (storageError) {
-          console.error('Failed to load custom achievements fallback cache', storageError);
-        }
-      }
-    };
+  // Reload custom achievements straight from the backend (no localStorage cache).
+  const reloadCustomAchievements = useCallback(async () => {
+    try {
+      const rows = await api.customAchievements.list();
+      setCustomAchievements(Array.isArray(rows) ? rows.map(mapApiCustomAchievement) : []);
+    } catch (error) {
+      console.error('Failed to load custom achievements from database', error);
+      setCustomAchievements([]);
+    }
+  }, []);
 
-    void loadCustomAchievements();
-    return () => {
-      cancelled = true;
-    };
-  }, [customStorageKey]);
+  // Reload the backend-owned points + level summary.
+  const reloadPoints = useCallback(async () => {
+    try {
+      const p = await api.gamification.getPoints();
+      setBackendPoints({
+        totalPoints: Number(p?.totalPoints ?? 0),
+        level: Number(p?.level ?? 1),
+        levelProgressPercentage: Number(p?.levelProgressPercentage ?? 0),
+        pointsToNextLevel: Number(p?.pointsToNextLevel ?? 100),
+      });
+    } catch (error) {
+      console.error('Failed to load gamification points', error);
+    }
+  }, []);
+
+  // Reload Personal Goals from their authoritative API.
+  const reloadGoals = useCallback(async () => {
+    try {
+      const rows = await api.goals.list();
+      setPersonalGoals(Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []);
+    } catch (error) {
+      console.error('Failed to load personal goals from database', error);
+      setPersonalGoals([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    Promise.all([reloadCustomAchievements(), reloadGoals(), reloadPoints()]).finally(() =>
+      setInitialLoadDone(true)
+    );
+  }, [reloadCustomAchievements, reloadGoals, reloadPoints]);
 
   const sessionsCompleted = Number(profile?.stats?.completed_sessions || 0);
   const moodCheckins = Number(profile?.stats?.total_checkins || 0);
@@ -601,8 +697,68 @@ export function Achievements() {
     ...customAchievements
   ]), [communityPosts, customAchievements, journalEntries, moodCheckins, sessionsCompleted, streakDays, wellnessExercises]);
 
+  // Ids of the current user's OWN custom achievements (api.customAchievements.list
+  // is user-scoped, so every id here is owned by the user). Predefined/system
+  // achievements (hardcoded ids '1'..'8') are never in this set, so they stay
+  // read-only.
+  const customAchievementIds = useMemo(
+    () => new Set(customAchievements.map((a) => a.id)),
+    [customAchievements]
+  );
+
+  // Fetch check-in history for the open detail modal. Goals and CUSTOM
+  // achievements have backend check-ins; predefined achievements do not.
+  useEffect(() => {
+    if (!detailItem) {
+      setDetailHistory([]);
+      return;
+    }
+    const checkInable = detailItem.itemType === 'goal' || customAchievementIds.has(detailItem.id);
+    if (!checkInable) {
+      setDetailHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setDetailHistoryLoading(true);
+    (async () => {
+      try {
+        const rows =
+          detailItem.itemType === 'goal'
+            ? await api.goals.listCheckIns(detailItem.id)
+            : await api.customAchievements.listCheckIns(detailItem.id);
+        if (!cancelled) setDetailHistory(normalizeHistory(rows, detailItem.itemType));
+      } catch (error) {
+        console.error('Failed to load check-in history', error);
+        if (!cancelled) setDetailHistory([]);
+      } finally {
+        if (!cancelled) setDetailHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailItem, customAchievementIds, detailRefreshKey]);
+
+  // Escape closes the read-only detail modal (no editable fields → no data loss).
+  useEffect(() => {
+    if (!detailItem) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDetailItem(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [detailItem]);
+
+  const openGoalDetail = (raw: Record<string, unknown>) =>
+    setDetailItem({ itemType: 'goal', id: String((raw as { id?: unknown }).id) });
+  const openAchievementDetail = (a: Achievement) => {
+    setSelectedAchievement(a); // keep the existing Achievement Journey highlight
+    setDetailItem({ itemType: 'achievement', id: a.id });
+  };
+
   const stats = {
-    totalPoints: achievements.filter(a => a.unlocked).reduce((sum, a) => sum + a.points, 0),
+    // Backend-owned total points (Task 1 ledger). Never computed on the client.
+    totalPoints: backendPoints.totalPoints,
     unlockedCount: achievements.filter(a => a.unlocked).length,
     totalCount: achievements.length,
     currentStreak: streakDays,
@@ -675,12 +831,10 @@ export function Achievements() {
     [journeyActiveIndex, selectedAchievement]
   );
 
-  const nextPointsMilestone = useMemo(() => {
-    const step = 250;
-    return Math.max(step, Math.ceil(stats.totalPoints / step) * step);
-  }, [stats.totalPoints]);
-
-  const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
+  // Level + progress-to-next come straight from the backend level service.
+  const currentLevel = backendPoints.level;
+  const levelProgressPct = backendPoints.levelProgressPercentage;
+  const pointsToNext = backendPoints.pointsToNextLevel;
 
   const iconMap: Record<string, LucideIcon> = {
     footprints: Target,
@@ -700,13 +854,208 @@ export function Achievements() {
     ? filteredAchievements
     : filteredAchievements.slice(0, 8);
 
+  // ---- Combined Goals & Achievements display model (frontend-only) ----------
+  // Backend models stay separate; we only merge for display. Goal items carry
+  // the raw personal_goals record; achievement items carry the Achievement.
+  const goalItems: GamificationCardItem[] = personalGoals
+    .filter((raw) => String((raw as { status?: unknown }).status) !== 'archived')
+    .map((raw) => ({ itemType: 'goal', id: String((raw as { id?: unknown }).id), data: raw }));
+  const achievementItems: GamificationCardItem[] = visibleAchievementList.map((a) => ({
+    itemType: 'achievement',
+    id: a.id,
+    data: a,
+  }));
+  // All -> goals + achievements; Goals -> goals only; Achievements -> custom +
+  // predefined achievements (both live in achievementItems).
+  const combinedItems: GamificationCardItem[] = combineAndFilter(
+    goalItems,
+    achievementItems,
+    gamificationFilter
+  );
+  const combinedEmptyMessage =
+    gamificationFilter === 'goals'
+      ? 'No personal goals yet.'
+      : gamificationFilter === 'achievements'
+        ? 'No achievements found.'
+        : 'No goals or achievements found.';
+
+  // Existing GOAL card — extracted verbatim so the exact card is reused.
+  const renderGoalCard = (raw: Record<string, unknown>) => {
+    const g = goalCardView(raw);
+    return (
+      <article
+        key={`goal:${g.id}`}
+        data-testid="goal-card"
+        data-goal-id={g.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => openGoalDetail(raw)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openGoalDetail(raw);
+          }
+        }}
+        aria-label={`${g.title}. Open details.`}
+        className="flex cursor-pointer flex-col gap-3 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl outline-none transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.16] hover:shadow-lg hover:shadow-black/25 focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
+      >
+        <div className="min-w-0">
+          <h3 className="truncate text-[15px] font-semibold text-white">{g.title}</h3>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {g.category} · {TRACKING_METHOD_LABELS[g.trackingType]}
+          </p>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 capitalize',
+              g.completed ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/[0.06] text-zinc-400'
+            )}
+          >
+            {g.completed ? (
+              <>
+                <CheckCircle className="h-3.5 w-3.5" aria-hidden /> Completed
+              </>
+            ) : (
+              g.status.replace(/_/g, ' ')
+            )}
+          </span>
+          {g.isNumeric && g.targetValue != null ? (
+            <span className="tabular-nums text-zinc-400">
+              {g.currentValue}/{g.targetValue}
+              {g.trackingUnit ? ` ${g.trackingUnit}` : ''}
+            </span>
+          ) : null}
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-zinc-500">
+            <span>Progress</span>
+            <span className="tabular-nums text-zinc-400">{g.progressPct}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500/90 to-teal-400/90"
+              style={{ width: `${g.progressPct}%` }}
+            />
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  // Existing ACHIEVEMENT badge card — extracted verbatim (predefined + custom).
+  const renderAchievementCard = (achievement: Achievement, index: number) => {
+    const Icon = getIcon(achievement.icon);
+    const isUnlocked = achievement.unlocked;
+    const total = Math.max(1, achievement.total);
+    const pct = Math.min(100, (achievement.progress / total) * 100);
+    const isSelected = selectedAchievement?.id === achievement.id;
+    const showProgressBar = !isUnlocked && achievement.progress < total;
+
+    return (
+      <motion.article
+        key={`achievement:${achievement.id}`}
+        id={`ach-${achievement.id}`}
+        layout={false}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
+        className={cn(
+          achievementsBadgeCard,
+          'cursor-pointer transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/25',
+          isUnlocked
+            ? 'border-emerald-400/12 hover:border-emerald-400/22 [html[data-ezri-theme=light]_&:border-emerald-300/45 [html[data-theme=light]_&:border-emerald-300/45'
+            : 'border-white/[0.06] hover:border-white/12',
+          isSelected &&
+            'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d] [html[data-ezri-theme=light]_&:ring-offset-white [html[data-theme=light]_&:ring-offset-white'
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => openAchievementDetail(achievement)}
+          className="flex flex-1 flex-col items-center gap-3 p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
+          aria-pressed={isSelected}
+          aria-label={`${achievement.title}. ${isUnlocked ? 'Unlocked' : 'Locked'}. Open details.`}
+        >
+          <div
+            className={cn(
+              'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
+              isUnlocked ? achievementsBadgeEmblemUnlocked : achievementsBadgeEmblemLocked
+            )}
+          >
+            <Icon
+              className={cn('h-9 w-9', isUnlocked ? achievementsBadgeIconUnlocked : 'text-zinc-500')}
+              aria-hidden
+            />
+            {!isUnlocked ? (
+              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 [html[data-ezri-theme=light]_&:bg-violet-100/60 [html[data-theme=light]_&:bg-violet-100/60">
+                <Lock className="h-5 w-5 text-zinc-500" aria-hidden />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="min-w-0 space-y-1.5 px-0.5">
+            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-white">
+              {achievement.title}
+            </h3>
+            <p className="line-clamp-2 text-center text-xs leading-relaxed text-zinc-500">
+              {achievement.description}
+            </p>
+          </div>
+
+          {showProgressBar ? (
+            <div className="w-full space-y-1 px-1">
+              <div className="flex justify-between text-[10px] text-zinc-500">
+                <span>Progress</span>
+                <span className="tabular-nums text-zinc-400">
+                  {achievement.progress}/{total}
+                </span>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ delay: index * 0.05, duration: 0.5, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
+            {isUnlocked ? (
+              <>
+                <span className="inline-flex items-center gap-1 text-emerald-300/90">
+                  <CheckCircle className="h-3.5 w-3.5" aria-hidden />
+                  Unlocked
+                </span>
+                {formatUnlockDate(achievement) ? (
+                  <span className="text-zinc-500">{formatUnlockDate(achievement)}</span>
+                ) : null}
+                {achievement.points > 0 ? (
+                  <span className="text-zinc-600">+{achievement.points} pts</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1 text-zinc-500">
+                  <Lock className="h-3.5 w-3.5" aria-hidden />
+                  Locked
+                </span>
+                {achievement.points > 0 ? (
+                  <span className="text-zinc-600">+{achievement.points} pts on unlock</span>
+                ) : null}
+              </>
+            )}
+          </div>
+        </button>
+      </motion.article>
+    );
+  };
+
+  // State-only update. The backend is the source of truth; no localStorage cache.
   const saveCustomAchievements = (items: Achievement[]) => {
     setCustomAchievements(items);
-    try {
-      localStorage.setItem(customStorageKey, JSON.stringify(items));
-    } catch (error) {
-      console.error('Failed to save custom achievements', error);
-    }
   };
 
   const goalTypeLabels: Record<NonNullable<Achievement['goalType']>, string> = {
@@ -776,75 +1125,67 @@ export function Achievements() {
   const addPersonalGoalFromTab = async () => {
     const title = goalTitle.trim();
     const description = goalDescription.trim();
-    const progress = Math.max(0, Math.min(100, Number(goalProgress) || 0));
     if (!title || !description) return;
 
-    const next: Achievement = {
-      id: `goal-${Date.now()}`,
-      title,
-      description,
-      icon: 'target',
-      category: 'personal',
-      progress,
-      total: 100,
-      unlocked: progress >= 100,
-      points: 0,
-      rarity: 'common',
-      goalType: 'custom',
-      goalCategory,
-      whyItMatters: goalWhyItMatters.trim(),
-      targetOutcome: goalTargetOutcome.trim(),
-      startDate: goalStartDate || undefined,
-      targetDate: goalTargetDate || undefined,
-      priority: goalPriority,
-      progressStatus: progress >= 100 ? 'Achieved' : progress > 0 ? 'In Progress' : 'Not Started',
-      checkInFrequency: goalCheckInFrequency,
-      reminderEnabled: goalReminderEnabled,
-      actionSteps: goalActionSteps.trim(),
-      moodTag: goalMoodTag,
-      supportType: goalSupportType,
-      notes: goalNotes.trim(),
-      syncWithGoals: true,
-    };
+    const isNumeric =
+      goalTrackingType === 'count' || goalTrackingType === 'duration' || goalTrackingType === 'amount';
+    const targetValue = Math.max(0, Number(goalTargetValue) || 0);
+    if (isNumeric && !(targetValue > 0)) {
+      toast.error('Enter a target value greater than zero for this tracking method.');
+      return;
+    }
 
+    // Phase 6: changing the tracking method on a goal that already has check-ins
+    // requires explicit confirmation. If the user cancels, do nothing.
+    if (
+      editingGoalId &&
+      requiresTrackingChangeConfirmation(editingGoalOriginalTracking, goalTrackingType, editingGoalHasCheckIns) &&
+      !window.confirm('Changing the tracking method may affect this goal’s historical progress. Continue?')
+    ) {
+      return;
+    }
+
+    // Authoritative personal_goals record only — no custom_achievements mirror.
+    const payload = {
+      goal_title: ensureMinText(title, 2, 'Personal Goal'),
+      goal_category: mapAchievementCategoryToGoalCategory(goalCategory),
+      goal_description: ensureMinText(description, 10, 'Personal growth goal to track progress over time.'),
+      why_this_goal_matters: ensureMinText(goalWhyItMatters, 5, 'Improve wellbeing'),
+      target_outcome: ensureMinText(goalTargetOutcome, 5, 'Steady progress'),
+      priority_level: mapAchievementPriorityToGoalPriority(goalPriority),
+      start_date: goalStartDate || new Date().toISOString().slice(0, 10),
+      target_date: goalTargetDate || undefined,
+      tracking_type: goalTrackingType,
+      target_value: isNumeric ? targetValue : undefined,
+      tracking_unit: isNumeric ? goalTrackingUnit.trim() || undefined : undefined,
+      check_in_frequency: mapAchievementFrequencyToGoalFrequency(goalCheckInFrequency),
+      reminder_enabled: goalReminderEnabled,
+      small_action_steps: goalActionSteps
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      emotion_tag: mapMoodTagToGoalEmotionTag(goalMoodTag),
+      support_type_needed: mapSupportTypeToGoalSupportType(goalSupportType),
+      notes: goalNotes.trim() || undefined,
+    };
     try {
-      const created = await api.goals.create({
-        goal_title: ensureMinText(title, 2, 'Personal Goal'),
-        goal_category: mapAchievementCategoryToGoalCategory(goalCategory),
-        goal_description: ensureMinText(description, 10, 'Personal growth goal to track progress over time.'),
-        why_this_goal_matters: ensureMinText(goalWhyItMatters, 5, 'Improve wellbeing'),
-        target_outcome: ensureMinText(goalTargetOutcome, 5, 'Steady progress'),
-        priority_level: mapAchievementPriorityToGoalPriority(goalPriority),
-        start_date: goalStartDate || new Date().toISOString().slice(0, 10),
-        target_date: goalTargetDate || undefined,
-        progress_percentage: progress,
-        check_in_frequency: mapAchievementFrequencyToGoalFrequency(goalCheckInFrequency),
-        reminder_enabled: goalReminderEnabled,
-        small_action_steps: goalActionSteps
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-        emotion_tag: mapMoodTagToGoalEmotionTag(goalMoodTag),
-        support_type_needed: mapSupportTypeToGoalSupportType(goalSupportType),
-        notes: goalNotes.trim() || undefined,
-      });
-      if (created?.id) {
-        next.linkedGoalId = created.id;
+      if (editingGoalId) {
+        // Edit path: update the SAME goal id (never creates a new goal).
+        await api.goals.update(editingGoalId, payload);
+      } else {
+        await api.goals.create(payload);
       }
     } catch (error) {
-      console.error('Failed to create linked goal in database', error);
-      toast.error('Failed to create linked goal in database.');
+      console.error('Failed to save personal goal', error);
+      toast.error(editingGoalId ? 'Failed to update personal goal.' : 'Failed to create personal goal.');
       return;
     }
-
-    try {
-      const createdAchievement = await api.customAchievements.create(mapAchievementToApiPayload(next));
-      saveCustomAchievements([mapApiCustomAchievement(createdAchievement), ...customAchievements]);
-    } catch (error) {
-      console.error('Failed to save personal goal in custom achievements table', error);
-      toast.error('Failed to save personal goal.');
-      return;
-    }
+    // Refetch so BOTH the goal card grid and Daily Check-in update immediately.
+    await Promise.all([reloadGoals(), reloadPoints()]);
+    setEditingGoalId(null);
+    setGoalTrackingType('manual_milestone');
+    setGoalTargetValue('');
+    setGoalTrackingUnit('');
     setGoalTitle('');
     setGoalCategory('Mental');
     setGoalDescription('');
@@ -863,6 +1204,54 @@ export function Achievements() {
     setGoalTemplateKey('');
     setPersonalGoalFormOpen(false);
     setShowCreateModal(false);
+  };
+
+  // Open the existing goal form pre-filled with a goal's values, in EDIT mode.
+  const openEditGoal = (raw: Record<string, unknown>) => {
+    const g = goalCardView(raw);
+    setEditingGoalId(g.id);
+    setGoalTitle(String(raw.goal_title ?? ''));
+    setGoalDescription(String(raw.goal_description ?? ''));
+    setGoalCategory(goalCategoryToFormCategory(g.rawCategory));
+    setGoalWhyItMatters(String(raw.why_this_goal_matters ?? ''));
+    setGoalTargetOutcome(String(raw.target_outcome ?? ''));
+    setGoalPriority(goalPriorityToFormPriority(raw.priority_level));
+    setGoalStartDate((raw.start_date as string) || '');
+    setGoalTargetDate((raw.target_date as string) || '');
+    setGoalTrackingType(g.trackingType);
+    setGoalTargetValue(g.targetValue != null ? String(g.targetValue) : '');
+    setGoalTrackingUnit(g.trackingUnit);
+    setGoalAmountCustom(g.trackingType === 'amount' && !!g.trackingUnit && !isAmountPresetUnit(g.trackingUnit));
+    setGoalNotes((raw.notes as string) || '');
+    setGoalActionSteps(
+      Array.isArray(raw.small_action_steps) ? (raw.small_action_steps as string[]).join(', ') : ''
+    );
+    setGoalReminderEnabled(Boolean(raw.reminder_enabled));
+    // Phase 6 confirmation inputs: original method + whether check-ins exist.
+    setEditingGoalOriginalTracking(g.trackingType);
+    setEditingGoalHasCheckIns(Boolean(raw.last_check_in_date) || Number(raw.current_value ?? 0) > 0);
+    setActiveAddTab('personal_goals');
+    setPersonalGoalFormOpen(true);
+    setShowCreateModal(true);
+  };
+
+  // Open the existing achievement form pre-filled, in EDIT mode. Only used for
+  // the user's own custom achievements (never predefined ones).
+  const openEditAchievement = (a: Achievement) => {
+    const isNumeric =
+      a.trackingType === 'count' || a.trackingType === 'duration' || a.trackingType === 'amount';
+    setEditingAchievementId(a.id);
+    setNewTitle(a.title);
+    setNewDescription(a.description);
+    setAchTrackingType(a.trackingType ?? 'count');
+    setAchTargetValue(isNumeric && a.total ? String(a.total) : '');
+    setAchTrackingUnit(a.trackingUnit ?? '');
+    setAchAmountCustom(a.trackingType === 'amount' && !!a.trackingUnit && !isAmountPresetUnit(a.trackingUnit));
+    setEditingAchievementOriginalTracking(a.trackingType ?? 'count');
+    // Custom achievements track a check-in via last check-in date or progress.
+    setEditingAchievementHasCheckIns(Boolean(a.lastCheckInDate) || Number(a.progress ?? 0) > 0);
+    setActiveAddTab('personal_achievements');
+    setShowCreateModal(true);
   };
 
   const resetPersonalGoalDraftFields = () => {
@@ -913,6 +1302,7 @@ export function Achievements() {
   const backToPersonalGoalTemplatePicker = () => {
     setPersonalGoalFormOpen(false);
     setGoalTemplateKey('');
+    setEditingGoalId(null);
     resetPersonalGoalDraftFields();
   };
 
@@ -921,188 +1311,397 @@ export function Achievements() {
     const description = newDescription.trim();
     if (!title || !description) return;
 
-    const next: Achievement = {
-      id: `personal-achievement-${Date.now()}`,
-      title,
-      description,
-      icon: 'trophy',
-      category: 'personal',
-      progress: 0,
-      total: 1,
-      unlocked: false,
-      points: 0,
-      rarity: 'common',
-      goalType: 'custom',
-      syncWithGoals: false,
-    };
-
-    try {
-      const created = await api.customAchievements.create(mapAchievementToApiPayload(next));
-      saveCustomAchievements([mapApiCustomAchievement(created), ...customAchievements]);
-    } catch (error) {
-      console.error('Failed to save personal achievement in database', error);
-      toast.error('Failed to save personal achievement.');
+    const isNumeric =
+      achTrackingType === 'count' || achTrackingType === 'duration' || achTrackingType === 'amount';
+    const target = Math.max(0, Number(achTargetValue) || 0);
+    if (
+      editingAchievementId &&
+      requiresTrackingChangeConfirmation(
+        editingAchievementOriginalTracking,
+        achTrackingType,
+        editingAchievementHasCheckIns
+      ) &&
+      !window.confirm('Changing the tracking method may affect this achievement’s historical progress. Continue?')
+    ) {
       return;
     }
+    if (isNumeric && !(target > 0)) {
+      toast.error('Enter a target value greater than zero for this tracking method.');
+      return;
+    }
+
+    try {
+      if (editingAchievementId) {
+        // Edit path: update the SAME record. Send ONLY metadata + target/tracking
+        // — never `progress`/`unlocked`/`points`, so current progress, completion
+        // state, and reward flags are preserved. If the new target makes progress
+        // reach it, the BACKEND completes + rewards (once) via the completion
+        // service — the client computes/awards nothing.
+        await api.customAchievements.update(editingAchievementId, {
+          title,
+          description,
+          trackingType: achTrackingType,
+          trackingUnit: isNumeric ? achTrackingUnit.trim() || undefined : undefined,
+          total: isNumeric ? target : 100,
+        });
+      } else {
+        const next: Achievement = {
+          id: `personal-achievement-${Date.now()}`,
+          title,
+          description,
+          icon: 'trophy',
+          category: 'personal',
+          progress: 0,
+          // Manual milestone uses 100 (backend normalizes); numeric uses the target.
+          total: isNumeric ? target : 100,
+          unlocked: false,
+          points: 0,
+          rarity: 'common',
+          goalType: 'custom',
+          syncWithGoals: false,
+          trackingType: achTrackingType,
+          trackingUnit: isNumeric ? achTrackingUnit.trim() || undefined : undefined,
+        };
+        await api.customAchievements.create(mapAchievementToApiPayload(next));
+      }
+    } catch (error) {
+      console.error('Failed to save personal achievement in database', error);
+      toast.error(editingAchievementId ? 'Failed to update achievement.' : 'Failed to save personal achievement.');
+      return;
+    }
+    // Refetch so the card grid reflects the change immediately (points/level too).
+    await Promise.all([reloadCustomAchievements(), reloadPoints()]);
+    setEditingAchievementId(null);
     setNewTitle('');
     setNewDescription('');
+    setAchTrackingType('count');
+    setAchTargetValue('');
+    setAchTrackingUnit('');
     setShowCreateModal(false);
   };
 
-  const personalTrackItems = customAchievements.filter((a) =>
-    ['personal', 'self_improvement', 'professional'].includes(a.category)
-  );
-  const personalGoalsSynced = personalTrackItems.filter((a) => a.syncWithGoals !== false);
-  const personalAchievementsOnly = personalTrackItems.filter((a) => a.syncWithGoals === false);
+  // Personal Goals come from the authoritative goals API (personal_goals),
+  // normalized into the existing card shape so the approved cards are reused.
+  const goalRowToDisplay = (g: Record<string, unknown>): Achievement => {
+    const tracking = ((g.tracking_type as string) || 'manual_milestone') as NonNullable<Achievement['trackingType']>;
+    const isNumeric = tracking === 'count' || tracking === 'duration' || tracking === 'amount';
+    const pct = Math.max(0, Math.min(100, Math.round(Number(g.progress_percentage) || 0)));
+    const target = g.target_value != null ? Number(g.target_value) : undefined;
+    const current = g.current_value != null ? Number(g.current_value) : 0;
+    return {
+      id: String(g.id),
+      title: String(g.goal_title || ''),
+      description: String(g.goal_description || ''),
+      icon: 'target',
+      category: 'personal',
+      progress: isNumeric && target ? Math.min(current, target) : pct,
+      total: isNumeric && target ? target : 100,
+      unlocked: String(g.status) === 'completed',
+      points: 20,
+      rarity: 'common',
+      goalType: 'custom',
+      lastCheckInDate: (g.last_check_in_date as string) || undefined,
+      whyItMatters: (g.why_this_goal_matters as string) || undefined,
+      targetOutcome: (g.target_outcome as string) || undefined,
+      notes: (g.notes as string) || undefined,
+      __source: 'goal',
+      trackingType: tracking,
+      targetValue: target,
+      currentValue: current,
+      trackingUnit: (g.tracking_unit as string) || undefined,
+    };
+  };
 
-  const handleDailyGoalCheckIn = async (achievementId: string) => {
-    const today = new Date().toISOString().slice(0, 10);
+  // Backend-owned display rows used ONLY to resolve a Detail Workspace check-in
+  // back to its source record. Covers personal goals + every custom achievement
+  // (the check-in itself is submitted + validated by the existing handler).
+  const allTrackItems: Achievement[] = [
+    ...personalGoals.map(goalRowToDisplay),
+    ...customAchievements.map((a) => ({ ...a, __source: 'achievement' as const })),
+  ];
+
+  const handleDailyGoalCheckIn = async (itemId: string) => {
     const entry: DailyGoalCheckInFields = {
       ...emptyDailyGoalCheckIn(),
-      ...dailyCheckInInputs[achievementId],
+      ...dailyCheckInInputs[itemId],
     };
-    const deltaAmount = Math.max(0, Number(entry.amount) || 0);
-    const legacyCheckInNote = [entry.reflection, entry.challenges, entry.wins, entry.notes]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(' · ') || undefined;
-    const source = customAchievements.find((a) => a.id === achievementId);
+    const source = allTrackItems.find((a) => a.id === itemId);
     if (!source) return;
-    if (source.lastCheckInDate === today) return;
 
-    const buildUpdated = (linkedGoalIdForRow: string | undefined) =>
-      customAchievements.map((achievement) => {
-        if (achievement.id !== achievementId) return achievement;
-        if (achievement.lastCheckInDate === today) return achievement;
+    // Submit ONLY the user action (value or milestone). The backend derives the
+    // official progress, completion, and reward — never the client.
+    const tracking = source.trackingType ?? (source.__source === 'goal' ? 'manual_milestone' : 'count');
+    const isManual = tracking === 'manual_milestone';
+    const note =
+      [entry.reflection, entry.challenges, entry.wins, entry.notes]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(' · ') || undefined;
 
-        const increment = achievement.goalType === 'money_management'
-          ? (deltaAmount > 0 ? deltaAmount : 0)
-          : 1;
-        const nextProgress = Math.min(achievement.total, achievement.progress + increment);
-        const nextHistory = Array.isArray(achievement.checkInHistory)
-          ? [...achievement.checkInHistory, today]
-          : [today];
-        const nextEntries = Array.isArray(achievement.checkInEntries)
-          ? [
-              ...achievement.checkInEntries,
-              {
-                date: today,
-                amount: achievement.goalType === 'money_management' ? deltaAmount : undefined,
-                note: legacyCheckInNote,
-              },
-            ]
-          : [
-              {
-                date: today,
-                amount: achievement.goalType === 'money_management' ? deltaAmount : undefined,
-                note: legacyCheckInNote,
-              },
-            ];
-        return {
-          ...achievement,
-          progress: nextProgress,
-          unlocked: nextProgress >= achievement.total,
-          lastCheckInDate: today,
-          checkInHistory: nextHistory,
-          checkInEntries: nextEntries,
-          linkedGoalId: linkedGoalIdForRow ?? achievement.linkedGoalId,
-        };
-      });
-
-    if (source.syncWithGoals === false) {
-      const updated = buildUpdated(undefined);
-      const updatedGoal = updated.find((a) => a.id === achievementId);
-      if (!updatedGoal) return;
-      try {
-        await api.customAchievements.update(achievementId, mapAchievementToApiPayload(updatedGoal));
-      } catch (error) {
-        console.error('Failed to save daily achievement check-in', error);
-        toast.error('Check-in failed to save.');
+    const payload: { value?: number; milestone?: string; note?: string } = { note };
+    if (isManual) {
+      if (!entry.milestone) {
+        toast.error('Select a progress milestone for this check-in.');
         return;
       }
-      saveCustomAchievements(updated);
-      setDailyCheckInInputs((prev) => ({
-        ...prev,
-        [achievementId]: emptyDailyGoalCheckIn(),
-      }));
-      return;
+      payload.milestone = entry.milestone;
+    } else {
+      const value = Number(entry.amount);
+      if (!(value > 0)) {
+        toast.error('Enter a value greater than zero for this check-in.');
+        return;
+      }
+      payload.value = value;
     }
 
-    let linkedGoalId = source.linkedGoalId;
-    if (!linkedGoalId) {
-      try {
-        const created = await api.goals.create({
-          goal_title: ensureMinText(source.title, 2, 'Personal Goal'),
-          goal_category: mapAchievementCategoryToGoalCategory(source.goalCategory),
-          goal_description: ensureMinText(
-            source.description,
-            10,
-            'Custom personal goal to track progress over time.'
-          ),
-          why_this_goal_matters: ensureMinText(source.whyItMatters, 5, 'Improve wellbeing'),
-          target_outcome: ensureMinText(source.targetOutcome, 5, 'Steady progress'),
-          priority_level: mapAchievementPriorityToGoalPriority(source.priority),
-          start_date: source.startDate || new Date().toISOString().slice(0, 10),
-          target_date: source.targetDate || undefined,
-          progress_percentage: Math.max(0, Math.min(100, Math.round((source.progress / Math.max(1, source.total)) * 100))),
-          check_in_frequency: mapAchievementFrequencyToGoalFrequency(source.checkInFrequency),
-          reminder_enabled: Boolean(source.reminderEnabled),
-          small_action_steps: (source.actionSteps || '')
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-          emotion_tag: mapMoodTagToGoalEmotionTag(source.moodTag),
-          support_type_needed: mapSupportTypeToGoalSupportType(source.supportType),
-          notes: source.notes || undefined,
+    try {
+      if (source.__source === 'goal') {
+        // Personal Goal: authoritative personal_goals record. Backend enforces
+        // one check-in per calendar day (409 -> message), owns progress + reward.
+        await api.goals.addCheckIn(source.id, {
+          ...payload,
+          mood: parseMoodForApi(entry.mood, source.moodTag),
+          reflection: entry.reflection.trim() || undefined,
+          challenges_faced: entry.challenges.trim() || undefined,
+          wins: entry.wins.trim() || undefined,
         });
-        linkedGoalId = created?.id;
-      } catch (error) {
-        console.error('Failed to create linked goal before check-in', error);
-        toast.error('Check-in not saved. Could not create DB goal.');
-        return;
+      } else {
+        // Personal Achievement: DB-backed check-in table + backend-owned reward.
+        await api.customAchievements.addCheckIn(source.id, payload);
       }
-    }
-
-    const updated = buildUpdated(linkedGoalId);
-
-    if (!linkedGoalId) {
-      toast.error('Check-in not saved. Missing linked goal id.');
-      return;
-    }
-
-    const updatedGoal = updated.find((a) => a.id === achievementId);
-    if (!updatedGoal) return;
-    try {
-      await api.goals.addCheckIn(linkedGoalId, {
-        progress_percentage: Math.max(
-          0,
-          Math.min(100, Math.round((updatedGoal.progress / Math.max(1, updatedGoal.total)) * 100))
-        ),
-        mood: parseMoodForApi(entry.mood, source.moodTag),
-        reflection: entry.reflection.trim() || undefined,
-        challenges_faced: entry.challenges.trim() || undefined,
-        wins: entry.wins.trim() || undefined,
-        notes: entry.notes.trim() || undefined,
-      });
     } catch (error) {
-      console.error('Failed to save daily check-in to database', error);
-      toast.error('Check-in failed to save in database.');
+      // Surfaces the backend validation message (e.g. duplicate daily check-in).
+      const message = error instanceof Error ? error.message : 'Check-in failed to save.';
+      console.error('Daily check-in failed', error);
+      toast.error(message);
       return;
     }
 
-    try {
-      await api.customAchievements.update(achievementId, mapAchievementToApiPayload(updatedGoal));
-    } catch (error) {
-      console.error('Failed to update custom achievement after check-in', error);
-      toast.error('Check-in saved in goal history, but custom achievement sync failed.');
-      return;
-    }
-
-    saveCustomAchievements(updated);
+    // Backend is the source of truth: refresh progress, unlocked, points, level.
+    await Promise.all([reloadGoals(), reloadCustomAchievements(), reloadPoints()]);
+    // If a detail modal is open, refetch its history so it updates immediately.
+    setDetailRefreshKey((k) => k + 1);
     setDailyCheckInInputs((prev) => ({
       ...prev,
-      [achievementId]: emptyDailyGoalCheckIn(),
+      [itemId]: emptyDailyGoalCheckIn(),
     }));
+  };
+
+  const checkInInputReady = (item: Achievement, inputState: DailyGoalCheckInFields): boolean => {
+    const tracking = (item.trackingType ??
+      (item.__source === 'goal' ? 'manual_milestone' : 'count')) as TrackingMethod;
+    return tracking === 'manual_milestone'
+      ? Boolean(inputState.milestone)
+      : Number(inputState.amount) > 0;
+  };
+
+  // Tracking-aware check-in input: a numeric value or a milestone selector.
+  // The client submits the raw action; the backend derives official progress.
+  const renderCheckInValueField = (
+    item: Achievement,
+    inputState: DailyGoalCheckInFields,
+    patchFields: (patch: Partial<DailyGoalCheckInFields>) => void,
+    checkedToday: boolean
+  ) => {
+    const tracking = (item.trackingType ??
+      (item.__source === 'goal' ? 'manual_milestone' : 'count')) as TrackingMethod;
+    if (tracking === 'manual_milestone') {
+      return (
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor={`ms-${item.id}`} className="text-zinc-300">
+            Progress milestone
+          </Label>
+          <SolaceSelect
+            value={inputState.milestone || '__none__'}
+            onValueChange={(v) => patchFields({ milestone: v === '__none__' ? '' : v })}
+            disabled={checkedToday}
+            ariaLabel="Progress milestone"
+            placeholder="Select milestone"
+            variant="default"
+            size="sm"
+            triggerClassName="h-9"
+            options={[
+              { value: '__none__', label: 'Select milestone' },
+              ...MILESTONE_STAGES.map((s) => ({ value: s.value, label: s.label })),
+            ]}
+          />
+          <p className="text-[11px] text-zinc-500">
+            A note is strongly encouraged for milestone check-ins — capture what changed.
+          </p>
+        </div>
+      );
+    }
+    const unit = item.trackingUnit ? ` (${item.trackingUnit})` : '';
+    return (
+      <div className="space-y-1.5 md:col-span-2">
+        <Label htmlFor={`val-${item.id}`} className="text-zinc-300">
+          {CHECK_IN_FIELD_LABELS[tracking]}
+          {unit}
+        </Label>
+        <input
+          id={`val-${item.id}`}
+          type="number"
+          min={0}
+          value={inputState.amount}
+          onChange={(e) => patchFields({ amount: e.target.value })}
+          placeholder="0"
+          disabled={checkedToday}
+          className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
+        />
+      </div>
+    );
+  };
+
+  // Today's Check-In for the Detail Workspace. Relocates (does NOT rewrite) the
+  // existing daily check-in form: the tracking-aware field + the same optional
+  // detail fields. Goals + custom achievements share the same submit handler,
+  // validation, and backend endpoints. Live updates happen inside that handler.
+  const renderTodayCheckIn = (item: Achievement) => {
+    const checkedToday = item.lastCheckInDate === new Date().toISOString().slice(0, 10);
+    const inputState = { ...emptyDailyGoalCheckIn(), ...dailyCheckInInputs[item.id] };
+    const patchFields = (patch: Partial<DailyGoalCheckInFields>) => {
+      setDailyCheckInInputs((prev) => ({
+        ...prev,
+        [item.id]: { ...emptyDailyGoalCheckIn(), ...prev[item.id], ...patch },
+      }));
+    };
+    const isGoal = item.__source === 'goal';
+    return (
+      <div className="mt-6 border-t border-white/10 pt-5" data-testid="detail-checkin">
+        <h3 className="mb-1 text-sm font-semibold text-white">Today's Check-In</h3>
+        <p className="mb-3 text-xs text-zinc-500">
+          {checkedToday
+            ? 'You already checked in today. Come back tomorrow to keep the streak going.'
+            : 'Log today’s progress — the backend updates your progress, reward, points, and level.'}
+        </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {renderCheckInValueField(item, inputState, patchFields, checkedToday)}
+          {isGoal ? (
+            <>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor={`detail-mood-${item.id}`} className="text-zinc-300">
+                  Emotion tag
+                </Label>
+                <SolaceSelect
+                  value={inputState.mood || '__none__'}
+                  onValueChange={(mood) => patchFields({ mood: mood === '__none__' ? '' : mood })}
+                  disabled={checkedToday}
+                  ariaLabel="Emotion tag"
+                  placeholder="How are you feeling? (optional)"
+                  variant="default"
+                  size="sm"
+                  triggerClassName="h-9"
+                  options={[
+                    { value: '__none__', label: 'How are you feeling? (optional)' },
+                    ...GOAL_EMOTION_TAG_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
+                  ]}
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor={`detail-refl-${item.id}`} className="text-zinc-300">
+                  Reflection
+                </Label>
+                <Textarea
+                  id={`detail-refl-${item.id}`}
+                  value={inputState.reflection}
+                  onChange={(e) => patchFields({ reflection: e.target.value })}
+                  placeholder="What stood out today?"
+                  disabled={checkedToday}
+                  rows={3}
+                  className="min-h-[80px] border-white/15 bg-black/40 text-white"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`detail-chal-${item.id}`} className="text-zinc-300">
+                  Challenges faced
+                </Label>
+                <Textarea
+                  id={`detail-chal-${item.id}`}
+                  value={inputState.challenges}
+                  onChange={(e) => patchFields({ challenges: e.target.value })}
+                  placeholder="Optional"
+                  disabled={checkedToday}
+                  rows={3}
+                  className="border-white/15 bg-black/40 text-white"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`detail-wins-${item.id}`} className="text-zinc-300">
+                  Wins
+                </Label>
+                <Textarea
+                  id={`detail-wins-${item.id}`}
+                  value={inputState.wins}
+                  onChange={(e) => patchFields({ wins: e.target.value })}
+                  placeholder="Optional"
+                  disabled={checkedToday}
+                  rows={3}
+                  className="border-white/15 bg-black/40 text-white"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor={`detail-notes-${item.id}`} className="text-zinc-300">
+                  Notes for this check-in
+                </Label>
+                <Textarea
+                  id={`detail-notes-${item.id}`}
+                  value={inputState.notes}
+                  onChange={(e) => patchFields({ notes: e.target.value })}
+                  placeholder="Optional"
+                  disabled={checkedToday}
+                  rows={2}
+                  className="border-white/15 bg-black/40 text-white"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-1.5 md:col-span-2">
+              <Label htmlFor={`detail-note-${item.id}`} className="text-zinc-300">
+                Note for this check-in
+              </Label>
+              <Textarea
+                id={`detail-note-${item.id}`}
+                value={inputState.notes}
+                onChange={(e) => patchFields({ notes: e.target.value })}
+                placeholder="Optional"
+                disabled={checkedToday}
+                rows={2}
+                className="border-white/15 bg-black/40 text-white"
+              />
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          data-testid="detail-checkin-submit"
+          onClick={() => void handleDailyGoalCheckIn(item.id)}
+          disabled={checkedToday || !checkInInputReady(item, inputState)}
+          className="mt-4 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {checkedToday ? 'Checked in today' : 'Submit check-in'}
+        </button>
+      </div>
+    );
+  };
+
+  // Phase 12: the create modal must not dismiss on outside click, and must
+  // protect unsaved changes. It closes only via Close/Cancel (guarded) or a
+  // successful save (which sets showCreateModal false directly).
+  const isCreateFormDirty = () =>
+    Boolean(
+      newTitle.trim() ||
+        newDescription.trim() ||
+        goalTitle.trim() ||
+        goalDescription.trim() ||
+        goalWhyItMatters.trim() ||
+        goalTargetOutcome.trim() ||
+        goalActionSteps.trim() ||
+        goalNotes.trim()
+    );
+
+  const requestCloseCreateModal = () => {
+    if (isCreateFormDirty() && !window.confirm('Discard your unsaved changes?')) return;
+    setShowCreateModal(false);
   };
 
   const generateThirtyDayReport = () => {
@@ -1366,135 +1965,68 @@ export function Achievements() {
                 )}
               </section>
 
-              <section className="space-y-5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <section className="space-y-5" data-testid="goals-achievements-section">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">Your achievements</h2>
+                    <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">Goals &amp; Achievements</h2>
                     <p className="mt-1 text-sm text-zinc-500">
-                      {filteredAchievements.length} visible · {stats.unlockedCount} of {stats.totalCount} unlocked
-                      overall
+                      {combinedItems.length} shown · {stats.unlockedCount} of {stats.totalCount} achievements unlocked
                     </p>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Filter goals and achievements"
+                    className="inline-flex rounded-full border border-white/12 bg-white/[0.04] p-1"
+                  >
+                    {(
+                      [
+                        { id: 'all', label: 'All' },
+                        { id: 'goals', label: 'Goals' },
+                        { id: 'achievements', label: 'Achievements' },
+                      ] as const
+                    ).map((f) => {
+                      const active = gamificationFilter === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          data-testid={`gamification-filter-${f.id}`}
+                          aria-pressed={active}
+                          onClick={() => setGamificationFilter(f.id)}
+                          className={cn(
+                            'min-h-[36px] rounded-full px-4 text-sm font-medium transition',
+                            active ? 'bg-white/[0.12] text-white' : 'text-zinc-400 hover:text-zinc-200'
+                          )}
+                        >
+                          {f.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {visibleAchievementList.map((achievement, index) => {
-                    const Icon = getIcon(achievement.icon);
-                    const isUnlocked = achievement.unlocked;
-                    const total = Math.max(1, achievement.total);
-                    const pct = Math.min(100, (achievement.progress / total) * 100);
-                    const isSelected = selectedAchievement?.id === achievement.id;
-                    const showProgressBar = !isUnlocked && achievement.progress < total;
+                {combinedItems.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {combinedItems.map((item, index) =>
+                      item.itemType === 'goal'
+                        ? renderGoalCard(item.data)
+                        : renderAchievementCard(item.data, index)
+                    )}
+                  </div>
+                ) : initialLoadDone ? (
+                  <div
+                    data-testid="gamification-empty-state"
+                    className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl"
+                  >
+                    <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
+                    <h3 className="font-serif text-xl font-semibold text-white">{combinedEmptyMessage}</h3>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+                      Create a personal goal or achievement to get started.
+                    </p>
+                  </div>
+                ) : null}
 
-                    return (
-                      <motion.article
-                        key={achievement.id}
-                        id={`ach-${achievement.id}`}
-                        layout={false}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
-                        className={cn(
-                          achievementsBadgeCard,
-                          isUnlocked
-                            ? 'border-emerald-400/12 hover:border-emerald-400/22 [html[data-ezri-theme=light]_&:border-emerald-300/45 [html[data-theme=light]_&:border-emerald-300/45'
-                            : 'border-white/[0.06] hover:border-white/12',
-                          isSelected &&
-                            'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d] [html[data-ezri-theme=light]_&:ring-offset-white [html[data-theme=light]_&:ring-offset-white'
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedAchievement((prev) =>
-                              prev?.id === achievement.id ? null : achievement
-                            )
-                          }
-                          className="flex flex-1 flex-col items-center gap-3 p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
-                          aria-pressed={isSelected}
-                          aria-label={`${achievement.title}. ${isUnlocked ? 'Unlocked' : 'Locked'}. Tap to preview your journey.`}
-                        >
-                          <div
-                            className={cn(
-                              'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
-                              isUnlocked ? achievementsBadgeEmblemUnlocked : achievementsBadgeEmblemLocked
-                            )}
-                          >
-                            <Icon
-                              className={cn(
-                                'h-9 w-9',
-                                isUnlocked ? achievementsBadgeIconUnlocked : 'text-zinc-500'
-                              )}
-                              aria-hidden
-                            />
-                            {!isUnlocked ? (
-                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 [html[data-ezri-theme=light]_&:bg-violet-100/60 [html[data-theme=light]_&:bg-violet-100/60">
-                                <Lock className="h-5 w-5 text-zinc-500" aria-hidden />
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="min-w-0 space-y-1.5 px-0.5">
-                            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-white">
-                              {achievement.title}
-                            </h3>
-                            <p className="line-clamp-2 text-center text-xs leading-relaxed text-zinc-500">
-                              {achievement.description}
-                            </p>
-                          </div>
-
-                          {showProgressBar ? (
-                            <div className="w-full space-y-1 px-1">
-                              <div className="flex justify-between text-[10px] text-zinc-500">
-                                <span>Progress</span>
-                                <span className="tabular-nums text-zinc-400">
-                                  {achievement.progress}/{total}
-                                </span>
-                              </div>
-                              <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                                <motion.div
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${pct}%` }}
-                                  transition={{ delay: index * 0.05, duration: 0.5, ease: 'easeOut' }}
-                                  className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
-                            {isUnlocked ? (
-                              <>
-                                <span className="inline-flex items-center gap-1 text-emerald-300/90">
-                                  <CheckCircle className="h-3.5 w-3.5" aria-hidden />
-                                  Unlocked
-                                </span>
-                                {formatUnlockDate(achievement) ? (
-                                  <span className="text-zinc-500">{formatUnlockDate(achievement)}</span>
-                                ) : null}
-                                {achievement.points > 0 ? (
-                                  <span className="text-zinc-600">+{achievement.points} pts</span>
-                                ) : null}
-                              </>
-                            ) : (
-                              <>
-                                <span className="inline-flex items-center gap-1 text-zinc-500">
-                                  <Lock className="h-3.5 w-3.5" aria-hidden />
-                                  Locked
-                                </span>
-                                {achievement.points > 0 ? (
-                                  <span className="text-zinc-600">+{achievement.points} pts on unlock</span>
-                                ) : null}
-                              </>
-                            )}
-                          </div>
-                        </button>
-                      </motion.article>
-                    );
-                  })}
-                </div>
-
-                {filteredAchievements.length > 8 ? (
+                {gamificationFilter !== 'goals' && filteredAchievements.length > 8 ? (
                   <div className="flex justify-center pt-2">
                     <button
                       type="button"
@@ -1506,17 +2038,6 @@ export function Achievements() {
                   </div>
                 ) : null}
               </section>
-
-          {filteredAchievements.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl">
-              <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
-              <h3 className="font-serif text-xl font-semibold text-white">No trophies in this view</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
-                Adjust your filters—or keep showing up in Talk It Out, Mood, and Journal. Your next unlock is already
-                forming.
-              </p>
-            </div>
-          ) : null}
 
           {/* Achievement Journey */}
           <section className={achievementsJourneySection}>
@@ -1599,272 +2120,6 @@ export function Achievements() {
             </div>
           </section>
 
-          {/* Daily check-ins: goals sync to the goals API; personal achievements stay on this page only */}
-          <div className="space-y-6 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
-            {personalTrackItems.length === 0 ? (
-              <>
-                <h2 className="text-lg font-semibold text-white">Daily rhythm</h2>
-                <p className="text-sm text-zinc-400">
-                  Add a personal goal or personal achievement first—then return here to check in once a day.
-                </p>
-              </>
-            ) : null}
-
-            {personalGoalsSynced.length > 0 ? (
-              <div>
-                <h2 className="text-lg font-semibold text-white">Daily goal check-in</h2>
-                <p className="mb-4 text-sm text-zinc-400">
-                  These items sync with your personal goals planner (one check-in per item each day).
-                </p>
-                <div className="space-y-4">
-                  {personalGoalsSynced.map((goal) => {
-                    const checkedToday = goal.lastCheckInDate === new Date().toISOString().slice(0, 10);
-                    const inputState = { ...emptyDailyGoalCheckIn(), ...dailyCheckInInputs[goal.id] };
-                    const patchFields = (patch: Partial<DailyGoalCheckInFields>) => {
-                      setDailyCheckInInputs((prev) => ({
-                        ...prev,
-                        [goal.id]: { ...emptyDailyGoalCheckIn(), ...prev[goal.id], ...patch },
-                      }));
-                    };
-                    return (
-                      <div
-                        key={goal.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4"
-                      >
-                        <div>
-                          <p className="font-semibold text-white">{goal.title}</p>
-                          <p className="mt-0.5 text-xs text-zinc-400">
-                            {goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'} · Progress{' '}
-                            {goal.progress}/{goal.total}
-                            {goal.goalCategory ? ` · ${goal.goalCategory}` : ''}
-                          </p>
-                        </div>
-
-                        {(goal.whyItMatters || goal.targetOutcome || goal.actionSteps) && (
-                          <div className="space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-300">
-                            <p className="text-xs font-medium text-zinc-500">From your goal</p>
-                            {goal.whyItMatters ? (
-                              <p>
-                                <span className="font-medium text-white">Why it matters: </span>
-                                {goal.whyItMatters}
-                              </p>
-                            ) : null}
-                            {goal.targetOutcome ? (
-                              <p>
-                                <span className="font-medium text-white">Target outcome: </span>
-                                {goal.targetOutcome}
-                              </p>
-                            ) : null}
-                            {goal.actionSteps ? (
-                              <p>
-                                <span className="font-medium text-white">Action steps: </span>
-                                {goal.actionSteps}
-                              </p>
-                            ) : null}
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {goal.goalType === 'money_management' && (
-                            <div className="space-y-1.5">
-                              <Label htmlFor={`amt-${goal.id}`} className="text-zinc-300">
-                                Amount added today ($)
-                              </Label>
-                              <input
-                                id={`amt-${goal.id}`}
-                                type="number"
-                                min={0}
-                                value={inputState.amount}
-                                onChange={(e) => patchFields({ amount: e.target.value })}
-                                placeholder="0"
-                                disabled={checkedToday}
-                                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
-                              />
-                            </div>
-                          )}
-                          <div className="space-y-1.5 md:col-span-2">
-                            <Label htmlFor={`mood-${goal.id}`} className="text-zinc-300">
-                              Emotion tag
-                            </Label>
-                            <SolaceSelect
-                              value={inputState.mood || "__none__"}
-                              onValueChange={(mood) =>
-                                patchFields({ mood: mood === "__none__" ? "" : mood })
-                              }
-                              disabled={checkedToday}
-                              ariaLabel="Emotion tag"
-                              placeholder="How are you feeling? (optional)"
-                              variant="default"
-                              size="sm"
-                              triggerClassName="h-9"
-                              options={[
-                                { value: "__none__", label: "How are you feeling? (optional)" },
-                                ...GOAL_EMOTION_TAG_OPTIONS.map((item) => ({
-                                  value: item.value,
-                                  label: item.label,
-                                })),
-                              ]}
-                            />
-                            {goal.moodTag ? (
-                              <p className="text-xs text-zinc-500">
-                                Default on your goal: {goal.moodTag} (when left blank)
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`refl-${goal.id}`} className="text-zinc-300">
-                              Reflection
-                            </Label>
-                            <Textarea
-                              id={`refl-${goal.id}`}
-                              value={inputState.reflection}
-                              onChange={(e) => patchFields({ reflection: e.target.value })}
-                              placeholder="What stood out today?"
-                              disabled={checkedToday}
-                              rows={3}
-                              className="min-h-[80px] border-white/15 bg-black/40 text-white"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor={`chal-${goal.id}`} className="text-zinc-300">
-                              Challenges faced
-                            </Label>
-                            <Textarea
-                              id={`chal-${goal.id}`}
-                              value={inputState.challenges}
-                              onChange={(e) => patchFields({ challenges: e.target.value })}
-                              placeholder="Optional"
-                              disabled={checkedToday}
-                              rows={3}
-                              className="border-white/15 bg-black/40 text-white"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor={`wins-${goal.id}`} className="text-zinc-300">
-                              Wins
-                            </Label>
-                            <Textarea
-                              id={`wins-${goal.id}`}
-                              value={inputState.wins}
-                              onChange={(e) => patchFields({ wins: e.target.value })}
-                              placeholder="Optional"
-                              disabled={checkedToday}
-                              rows={3}
-                              className="border-white/15 bg-black/40 text-white"
-                            />
-                          </div>
-                          <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`notes-${goal.id}`} className="text-zinc-300">
-                              Notes for this check-in
-                            </Label>
-                            <Textarea
-                              id={`notes-${goal.id}`}
-                              value={inputState.notes}
-                              onChange={(e) => patchFields({ notes: e.target.value })}
-                              placeholder="Optional"
-                              disabled={checkedToday}
-                              rows={2}
-                              className="border-white/15 bg-black/40 text-white"
-                            />
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => void handleDailyGoalCheckIn(goal.id)}
-                          disabled={
-                            checkedToday ||
-                            (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
-                          }
-                          className="self-start rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {checkedToday ? 'Checked today' : 'Daily check-in'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {personalAchievementsOnly.length > 0 ? (
-              <div>
-                <h2 className="text-lg font-semibold text-white">Daily achievements</h2>
-                <p className="mb-4 text-sm text-zinc-400">
-                  Streak items you keep only on this page (no goals API sync).
-                </p>
-                <div className="space-y-3">
-                  {personalAchievementsOnly.map((goal) => {
-                    const checkedToday = goal.lastCheckInDate === new Date().toISOString().slice(0, 10);
-                    const inputState = { ...emptyDailyGoalCheckIn(), ...dailyCheckInInputs[goal.id] };
-                    return (
-                      <div
-                        key={goal.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="w-full">
-                          <p className="font-semibold text-white">{goal.title}</p>
-                          <p className="text-xs text-zinc-400">
-                            Personal achievement · {goal.progress}/{goal.total}
-                          </p>
-                          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                            {goal.goalType === 'money_management' && (
-                              <input
-                                type="number"
-                                min={0}
-                                value={inputState.amount}
-                                onChange={(e) =>
-                                  setDailyCheckInInputs((prev) => ({
-                                    ...prev,
-                                    [goal.id]: {
-                                      ...emptyDailyGoalCheckIn(),
-                                      ...prev[goal.id],
-                                      amount: e.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="Amount added today ($)"
-                                disabled={checkedToday}
-                                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
-                              />
-                            )}
-                            <input
-                              type="text"
-                              value={inputState.notes}
-                              onChange={(e) =>
-                                setDailyCheckInInputs((prev) => ({
-                                  ...prev,
-                                  [goal.id]: {
-                                    ...emptyDailyGoalCheckIn(),
-                                    ...prev[goal.id],
-                                    notes: e.target.value,
-                                  },
-                                }))
-                              }
-                              placeholder="Note (optional)"
-                              disabled={checkedToday}
-                              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleDailyGoalCheckIn(goal.id)}
-                          disabled={
-                            checkedToday ||
-                            (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
-                          }
-                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {checkedToday ? 'Checked today' : 'Daily achievements'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </div>
 
           <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1942,28 +2197,21 @@ export function Achievements() {
                     <Diamond className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 text-left">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Achievement Points</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Total Points · Level {currentLevel}</p>
                     <p className="font-serif text-xl text-white sm:text-2xl">{stats.totalPoints.toLocaleString()}</p>
                   </div>
                 </div>
                 <p className="mt-3 text-xs text-zinc-500">
-                  {pointsToNext > 0
-                    ? `${pointsToNext.toLocaleString()} pts to the next reward`
-                    : 'You are at this reward threshold'}
+                  {`${pointsToNext.toLocaleString()} pts to Level ${currentLevel + 1}`}
                 </p>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        stats.totalPoints > 0 ? (stats.totalPoints / nextPointsMilestone) * 100 : 0
-                      )}%`,
-                    }}
+                    style={{ width: `${Math.min(100, Math.max(0, levelProgressPct))}%` }}
                   />
                 </div>
                 <p className="mt-1.5 text-[10px] text-zinc-600">
-                  Next reward · {nextPointsMilestone.toLocaleString()} pts
+                  Current level · Level {currentLevel}
                 </p>
               </div>
 
@@ -2024,7 +2272,7 @@ export function Achievements() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className={modalOverlay}
-          onClick={() => setShowCreateModal(false)}
+          /* Phase 12: outside-click must NOT dismiss the create modal. */
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
@@ -2036,7 +2284,7 @@ export function Achievements() {
               <h2 className={modalTitle}>Add your own achievement</h2>
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={requestCloseCreateModal}
                 className={modalCloseButton}
               >
                 Close
@@ -2163,9 +2411,76 @@ export function Achievements() {
                     <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-progress" className={modalLabel}>Current Progress (0–100%)</label>
-                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className={modalInput} />
+                    <label htmlFor="pg-tracking" className={modalLabel}>How would you like to track your progress?</label>
+                    <SolaceSelect
+                      id="pg-tracking"
+                      value={goalTrackingType}
+                      onValueChange={(v) => {
+                        const t = v as typeof goalTrackingType;
+                        setGoalTrackingType(t);
+                        setGoalAmountCustom(false);
+                        setGoalTrackingUnit(t === 'duration' ? 'minutes' : t === 'amount' ? 'currency' : '');
+                      }}
+                      ariaLabel="How would you like to track your progress?"
+                      variant="form"
+                      options={[
+                        { value: "count", label: TRACKING_METHOD_LABELS.count },
+                        { value: "duration", label: TRACKING_METHOD_LABELS.duration },
+                        { value: "amount", label: TRACKING_METHOD_LABELS.amount },
+                        { value: "manual_milestone", label: TRACKING_METHOD_LABELS.manual_milestone },
+                      ]}
+                    />
                   </div>
+                  {goalTrackingType !== 'manual_milestone' ? (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label htmlFor="pg-target-value" className={modalLabel}>Target Value</label>
+                        <input id="pg-target-value" type="number" min={1} value={goalTargetValue} onChange={(e) => setGoalTargetValue(e.target.value)} placeholder="e.g. 10" className={modalInput} />
+                      </div>
+                      {goalTrackingType === 'duration' ? (
+                        <div className="flex flex-col gap-1">
+                          <label htmlFor="pg-duration-unit" className={modalLabel}>Unit</label>
+                          <SolaceSelect
+                            id="pg-duration-unit"
+                            value={goalTrackingUnit || 'minutes'}
+                            onValueChange={(v) => setGoalTrackingUnit(v)}
+                            ariaLabel="Duration unit"
+                            variant="form"
+                            options={DURATION_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                          />
+                        </div>
+                      ) : null}
+                      {goalTrackingType === 'amount' ? (
+                        <>
+                          <div className="flex flex-col gap-1">
+                            <label htmlFor="pg-amount-unit" className={modalLabel}>Unit</label>
+                            <SolaceSelect
+                              id="pg-amount-unit"
+                              value={goalAmountCustom ? 'custom' : goalTrackingUnit || 'currency'}
+                              onValueChange={(v) => {
+                                if (v === 'custom') {
+                                  setGoalAmountCustom(true);
+                                  setGoalTrackingUnit('');
+                                } else {
+                                  setGoalAmountCustom(false);
+                                  setGoalTrackingUnit(v);
+                                }
+                              }}
+                              ariaLabel="Amount unit"
+                              variant="form"
+                              options={AMOUNT_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                            />
+                          </div>
+                          {goalAmountCustom ? (
+                            <div className="flex flex-col gap-1">
+                              <label htmlFor="pg-custom-unit" className={modalLabel}>Custom unit</label>
+                              <input id="pg-custom-unit" type="text" value={goalTrackingUnit} onChange={(e) => setGoalTrackingUnit(e.target.value)} placeholder="e.g. reps, pages, glasses" className={modalInput} />
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-frequency" className={modalLabel}>Check-in Frequency</label>
                     <SolaceSelect
@@ -2231,8 +2546,11 @@ export function Achievements() {
                   <input type="checkbox" checked={goalReminderEnabled} onChange={(e) => setGoalReminderEnabled(e.target.checked)} />
                   Reminder Enabled
                 </label>
+                <p className="mt-3 text-xs text-zinc-400">
+                  Goal Completion Reward: <span className="font-semibold text-white">20 Points</span> — awarded automatically by the backend at 100%.
+                </p>
                 <button type="button" onClick={addPersonalGoalFromTab} className={cn(modalPrimaryButton, "mt-4")}>
-                  Save Personal Goal
+                  {editingGoalId ? 'Update Personal Goal' : 'Save Personal Goal'}
                 </button>
                   </>
                 )}
@@ -2242,15 +2560,238 @@ export function Achievements() {
                 <div className="grid grid-cols-1 gap-3">
                   <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className={modalInput} />
                   <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className={modalInput} />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pa-tracking" className={modalLabel}>How would you like to track your progress?</label>
+                    <SolaceSelect
+                      id="pa-tracking"
+                      value={achTrackingType}
+                      onValueChange={(v) => {
+                        const t = v as typeof achTrackingType;
+                        setAchTrackingType(t);
+                        setAchAmountCustom(false);
+                        setAchTrackingUnit(t === 'duration' ? 'minutes' : t === 'amount' ? 'currency' : '');
+                      }}
+                      ariaLabel="How would you like to track your progress?"
+                      variant="form"
+                      options={[
+                        { value: "count", label: TRACKING_METHOD_LABELS.count },
+                        { value: "duration", label: TRACKING_METHOD_LABELS.duration },
+                        { value: "amount", label: TRACKING_METHOD_LABELS.amount },
+                        { value: "manual_milestone", label: TRACKING_METHOD_LABELS.manual_milestone },
+                      ]}
+                    />
+                  </div>
+                  {achTrackingType !== 'manual_milestone' ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <input type="number" min={1} value={achTargetValue} onChange={(e) => setAchTargetValue(e.target.value)} placeholder="Target value (e.g. 10)" className={modalInput} />
+                      {achTrackingType === 'duration' ? (
+                        <SolaceSelect
+                          id="pa-duration-unit"
+                          value={achTrackingUnit || 'minutes'}
+                          onValueChange={(v) => setAchTrackingUnit(v)}
+                          ariaLabel="Duration unit"
+                          variant="form"
+                          options={DURATION_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                        />
+                      ) : null}
+                      {achTrackingType === 'amount' ? (
+                        <SolaceSelect
+                          id="pa-amount-unit"
+                          value={achAmountCustom ? 'custom' : achTrackingUnit || 'currency'}
+                          onValueChange={(v) => {
+                            if (v === 'custom') {
+                              setAchAmountCustom(true);
+                              setAchTrackingUnit('');
+                            } else {
+                              setAchAmountCustom(false);
+                              setAchTrackingUnit(v);
+                            }
+                          }}
+                          ariaLabel="Amount unit"
+                          variant="form"
+                          options={AMOUNT_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                        />
+                      ) : null}
+                      {achTrackingType === 'amount' && achAmountCustom ? (
+                        <input id="pa-custom-unit" type="text" value={achTrackingUnit} onChange={(e) => setAchTrackingUnit(e.target.value)} placeholder="Custom unit (e.g. reps)" className={modalInput} />
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
+                <p className="mt-3 text-xs text-zinc-400">
+                  Achievement Completion Reward: <span className="font-semibold text-white">10 Points</span> — awarded automatically by the backend at 100%.
+                </p>
                 <button type="button" onClick={addPersonalAchievementFromTab} className={cn(modalPrimaryButton, "mt-4")}>
-                  Save Personal Achievement
+                  {editingAchievementId ? 'Update Personal Achievement' : 'Save Personal Achievement'}
                 </button>
               </>
             )}
           </motion.div>
         </motion.div>
       )}
+
+      {detailItem
+        ? (() => {
+            const isGoal = detailItem.itemType === 'goal';
+            const goalRaw = isGoal
+              ? personalGoals.find((g) => String((g as { id?: unknown }).id) === detailItem.id)
+              : undefined;
+            const ach = !isGoal ? achievements.find((a) => a.id === detailItem.id) : undefined;
+            if ((isGoal && !goalRaw) || (!isGoal && !ach)) return null;
+            const view = isGoal
+              ? buildGoalDetail(goalRaw as Record<string, unknown>)
+              : buildAchievementDetail(ach as Achievement, customAchievementIds.has(detailItem.id));
+            const fmtDate = (d: string | null) => {
+              if (!d) return null;
+              try {
+                return format(new Date(d.length <= 10 ? `${d}T12:00:00` : d), 'MMM d, yyyy');
+              } catch {
+                return d;
+              }
+            };
+            return (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className={modalOverlay}
+                data-testid="detail-modal"
+                /* Phase 5: outside-click / focus-loss must NOT dismiss. */
+              >
+                <motion.div
+                  initial={{ scale: 0.96, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+                  className={cn(modalPanelLg, 'max-h-[90vh] overflow-y-auto p-6')}
+                >
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{view.typeLabel}</p>
+                      <h2 className={modalTitle}>{view.title}</h2>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {isGoal || customAchievementIds.has(detailItem.id) ? (
+                        <button
+                          type="button"
+                          data-testid="detail-edit"
+                          onClick={() => {
+                            // Phase 5: reuse the existing edit form. Close the
+                            // workspace first (chosen: no stacked modals).
+                            setDetailItem(null);
+                            if (isGoal && goalRaw) openEditGoal(goalRaw as Record<string, unknown>);
+                            else if (ach) openEditAchievement(ach);
+                          }}
+                          className={modalCloseButton}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      <button type="button" data-testid="detail-close" onClick={() => setDetailItem(null)} className={modalCloseButton}>
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-sm text-zinc-300">
+                    {view.category ? (<p><span className="text-zinc-500">Category: </span>{view.category}</p>) : null}
+                    {view.description ? (<p><span className="text-zinc-500">Description: </span>{view.description}</p>) : null}
+                    <p className="capitalize"><span className="text-zinc-500">Status: </span>{view.completed ? 'Completed' : view.status.replace(/_/g, ' ')}</p>
+                  </div>
+
+                  <div className="mt-4 space-y-1.5">
+                    <div className="flex justify-between text-xs text-zinc-500">
+                      <span>Progress · {view.trackingMethodLabel}</span>
+                      <span className="tabular-nums text-zinc-300">{view.progressPct}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-500/90 to-teal-400/90" style={{ width: `${view.progressPct}%` }} />
+                    </div>
+                    {view.targetValue != null ? (
+                      <p className="text-xs text-zinc-400">{view.currentValue ?? 0}/{view.targetValue}{view.trackingUnit ? ` ${view.trackingUnit}` : ''}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm" data-testid="detail-reward">
+                      <p className="text-[11px] uppercase tracking-wider text-zinc-500">Reward</p>
+                      <p className="font-semibold text-white">{view.rewardPoints} Points</p>
+                    </div>
+                    {view.completed ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300" data-testid="detail-completed-badge">
+                        <CheckCircle className="h-3.5 w-3.5" aria-hidden /> Completed
+                      </span>
+                    ) : null}
+                    {view.rewardAwarded ? (
+                      <span className="text-xs text-emerald-300/80">Reward awarded{view.completedAt ? ` · ${fmtDate(view.completedAt)}` : ''}</span>
+                    ) : null}
+                  </div>
+
+                  {view.startDate || view.targetDate || view.completedAt ? (
+                    <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                      {view.startDate ? (<p><span className="text-zinc-500">Start: </span>{fmtDate(view.startDate)}</p>) : null}
+                      {view.targetDate ? (<p><span className="text-zinc-500">Target: </span>{fmtDate(view.targetDate)}</p>) : null}
+                      {view.completedAt ? (<p><span className="text-zinc-500">Completion: </span>{fmtDate(view.completedAt)}</p>) : null}
+                    </div>
+                  ) : null}
+
+                  {view.additional.length > 0 ? (
+                    <div className="mt-4 space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-300" data-testid="detail-additional">
+                      {view.additional.map((s) => (
+                        <p key={s.label}><span className="text-zinc-500">{s.label}: </span>{s.value}</p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {view.checkInable ? (
+                    <div className="mt-5" data-testid="detail-history">
+                      <h3 className="mb-2 text-sm font-semibold text-white">Check-in history</h3>
+                      {detailHistoryLoading ? (
+                        <p className="text-sm text-zinc-500">Loading…</p>
+                      ) : detailHistory.length === 0 ? (
+                        <p className="text-sm text-zinc-500">No check-ins yet.</p>
+                      ) : (
+                        <ol className="space-y-2">
+                          {detailHistory.map((c) => (
+                            <li key={c.id} className="rounded-xl border border-white/10 bg-black/25 p-3 text-xs text-zinc-300">
+                              <div className="flex items-center justify-between">
+                                <span className="text-zinc-400">{fmtDate(c.checkInDate || c.createdAt)}</span>
+                                <span className="tabular-nums text-zinc-500">
+                                  {c.progressBefore != null && c.progressAfter != null
+                                    ? `${c.progressBefore}% → ${c.progressAfter}%`
+                                    : c.progressAfter != null
+                                      ? `${c.progressAfter}%`
+                                      : ''}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-400">
+                                {c.milestone ? <span>Milestone: {c.milestone}</span> : null}
+                                {c.valueAdded != null ? <span>+{c.valueAdded}</span> : null}
+                              </div>
+                              {c.note ? <p className="mt-1 text-zinc-300">{c.note}</p> : null}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {view.checkInable
+                    ? renderTodayCheckIn(
+                        isGoal
+                          ? goalRowToDisplay(goalRaw as Record<string, unknown>)
+                          : ({ ...(ach as Achievement), __source: 'achievement' as const })
+                      )
+                    : null}
+
+                  <div className="mt-6 flex justify-end">
+                    <button type="button" onClick={() => setDetailItem(null)} className={modalPrimaryButton}>
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })()
+        : null}
     </>
   );
 }
