@@ -48,4 +48,9 @@ export const queryKeys = {
       window?: string;
     }) => ["safetyResourceInteractions", "list", params] as const,
   },
+  gamification: {
+    all: () => ["gamification"] as const,
+    /** Progress Report — one cache entry per range. */
+    progressReport: (range: string) => ["gamification-progress-report", range] as const,
+  },
 } as const;

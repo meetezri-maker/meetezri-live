@@ -90,6 +90,7 @@ const AccessibilitySettings  = lazy(() => import('./pages/app/AccessibilitySetti
 const AppearanceSettings     = lazy(() => import('./pages/app/AppearanceSettings').then(m => ({ default: m.AppearanceSettings })));
 const ChangeAvatar           = lazy(() => import('./pages/app/ChangeAvatar').then(m => ({ default: m.ChangeAvatar })));
 const Achievements           = lazy(() => import('./pages/app/Achievements').then(m => ({ default: m.Achievements })));
+const ProgressReportPage     = lazy(() => import('./features/goals/progress-report/ProgressReportPage').then(m => ({ default: m.ProgressReportPage })));
 const NotificationHistory    = lazy(() => import('./pages/app/NotificationHistory').then(m => ({ default: m.NotificationHistory })));
 const RecentActivityHistory  = lazy(() => import('./pages/app/RecentActivityHistory').then(m => ({ default: m.RecentActivityHistory })));
 // const GoalsList           = lazy(() => import('./pages/app/GoalsList').then(m => ({ default: m.GoalsList })));
@@ -487,6 +488,11 @@ export default function App() {
                 <Route path="/app/settings/appearance" element={<AppearanceSettings />} />
                 <Route path="/app/settings/change-avatar" element={<ChangeAvatar />} />
                 <Route path="/app/settings/achievements" element={<Achievements />} />
+                {/* Goals & Achievements progress report (separate from /app/progress). */}
+                <Route
+                  path="/app/settings/achievements/progress-report"
+                  element={<ProgressReportPage />}
+                />
                 <Route
                   path="/app/settings/notification-history"
                   element={<Navigate to="/app/settings/emergency-notifications" replace />}

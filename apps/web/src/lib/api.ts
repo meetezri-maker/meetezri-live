@@ -1495,6 +1495,17 @@ export const api = {
       });
       return handleResponse(res, "Failed to fetch point transactions");
     },
+
+    /** Read-only Progress Report for the authenticated user (backend-computed). */
+    async getReport(range: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/gamification/report?range=${encodeURIComponent(range)}`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch progress report");
+    },
   },
 
   // Habits API

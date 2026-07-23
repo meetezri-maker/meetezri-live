@@ -157,8 +157,11 @@ function writeWrapped(
  * jsPDF core fonts do not support emoji and many pictographic glyphs, which can
  * show as garbled characters in generated PDFs. Strip those symbols and normalize
  * whitespace so exported reports stay readable.
+ *
+ * Exported so other PDF exports (e.g. the Progress Report) reuse the same
+ * sanitisation instead of duplicating it.
  */
-function cleanPdfText(value: string): string {
+export function cleanPdfText(value: string): string {
   return value
     .replace(/[\uFE0F\u200D]/g, "")
     .replace(/\p{Extended_Pictographic}/gu, "")

@@ -136,6 +136,27 @@ export async function updateCustomAchievement(
   input: UpdateCustomAchievementInput
 ) {
   const payload = toPayload(input);
+
+  // Historical integrity: once an achievement is unlocked (completed) AND
+  // rewarded, its tracking configuration is frozen. Silently drop any tracking
+  // changes (descriptive fields still apply) so no client — UI or direct API —
+  // can alter the recorded progress/completion/reward. It stays 100% forever.
+  const existingRows = await prisma.$queryRaw<Array<{ unlocked: boolean; reward_awarded: boolean }>>`
+    SELECT unlocked, reward_awarded
+    FROM public.custom_achievements
+    WHERE id = ${achievementId}::uuid
+      AND user_id = ${userId}::uuid
+    LIMIT 1
+  `;
+  const existing = Array.isArray(existingRows) ? existingRows[0] : undefined;
+  const isLocked = Boolean(existing?.unlocked) && Boolean(existing?.reward_awarded);
+  if (isLocked) {
+    payload.tracking_type = undefined;
+    payload.tracking_unit = undefined;
+    payload.total = undefined;
+    payload.unlocked = undefined;
+  }
+
   const assignments: Prisma.Sql[] = [];
   const entries = Object.entries(payload) as Array<[keyof typeof payload, unknown]>;
 

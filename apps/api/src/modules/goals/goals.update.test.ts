@@ -87,3 +87,65 @@ describe("updateGoal — edit target recompute + idempotent completion", () => {
     expect(mockPrisma.personal_goals.update).not.toHaveBeenCalled();
   });
 });
+
+describe("updateGoal — tracking locked after completion + reward", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => unknown) =>
+      fn(mockPrisma)
+    );
+    mockPrisma.personal_goals.update.mockImplementation(async ({ data }: never) => ({ id: goalId, ...(data as object) }));
+    mockPrisma.point_transactions.create.mockResolvedValue({ id: "t1" });
+    mockPrisma.point_transactions.aggregate.mockResolvedValue({ _sum: { points: 20 } });
+  });
+
+  it("ignores tracking changes on a completed + rewarded goal (progress unchanged, no re-reward)", async () => {
+    mockPrisma.personal_goals.findFirst.mockResolvedValue({
+      id: goalId, user_id: userId, status: "completed", reward_awarded: true,
+      tracking_type: "count", current_value: 10, target_value: 10, progress_percentage: 100,
+    });
+
+    await updateGoal(userId, goalId, {
+      goal_description: "New description",
+      tracking_type: "manual_milestone",
+      target_value: 999,
+      tracking_unit: "hacked",
+    } as never);
+
+    const data = (mockPrisma.personal_goals.update.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    // Descriptive edit applied…
+    expect(data.goal_description).toBe("New description");
+    // …but every tracking field is omitted, and progress is never recomputed.
+    expect(data.tracking_type).toBeUndefined();
+    expect(data.target_value).toBeUndefined();
+    expect(data.tracking_unit).toBeUndefined();
+    expect(data.progress_percentage).toBeUndefined();
+    // No completion path runs → no second reward.
+    expect(mockPrisma.point_transactions.create).not.toHaveBeenCalled();
+  });
+
+  it("still applies tracking changes when completed but NOT yet rewarded (not locked)", async () => {
+    mockPrisma.personal_goals.findFirst.mockResolvedValue({
+      id: goalId, user_id: userId, status: "completed", reward_awarded: false,
+      tracking_type: "count", current_value: 2, target_value: 10, progress_percentage: 20,
+    });
+
+    await updateGoal(userId, goalId, { tracking_type: "count", target_value: 4 } as never);
+
+    const data = (mockPrisma.personal_goals.update.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    // Not locked → target applies and progress recomputes (2/4 = 50%).
+    expect(data.progress_percentage).toBe(50);
+  });
+
+  it("keeps descriptive-only edits working on a locked goal", async () => {
+    mockPrisma.personal_goals.findFirst.mockResolvedValue({
+      id: goalId, user_id: userId, status: "completed", reward_awarded: true,
+      tracking_type: "count", current_value: 10, target_value: 10, progress_percentage: 100,
+    });
+
+    const result = await updateGoal(userId, goalId, { goal_title: "Renamed" } as never);
+    expect(result).toBeTruthy();
+    const data = (mockPrisma.personal_goals.update.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(data.goal_title).toBe("Renamed");
+  });
+});

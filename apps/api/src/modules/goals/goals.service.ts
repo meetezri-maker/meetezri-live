@@ -123,6 +123,17 @@ export async function updateGoal(userId: string, goalId: string, patch: UpdateGo
     throw new DirectCompletionError();
   }
 
+  // Historical integrity: once a goal is completed AND rewarded, its tracking
+  // configuration is frozen. Silently ignore any tracking changes (descriptive
+  // fields still apply) so no client — UI or direct API — can alter the recorded
+  // progress/completion/reward. Completed goals stay completed + 100% forever.
+  const isLocked = existing.status === "completed" && Boolean(existing.reward_awarded);
+  if (isLocked) {
+    patch.tracking_type = undefined;
+    patch.target_value = undefined;
+    patch.tracking_unit = undefined;
+  }
+
   // Only descriptive/tracking-config fields are patchable here. Official
   // progress, current value, completion, and reward fields are never accepted.
   const {
@@ -147,8 +158,9 @@ export async function updateGoal(userId: string, goalId: string, patch: UpdateGo
   const isNumeric =
     effTrackingType === "count" || effTrackingType === "duration" || effTrackingType === "amount";
   const currentValue = Number(existing.current_value ?? 0);
+  // Locked goals never recompute progress (it stays exactly as recorded).
   const recomputedProgress =
-    isNumeric && effTarget != null && Number(effTarget) > 0
+    !isLocked && isNumeric && effTarget != null && Number(effTarget) > 0
       ? computeNumericProgress(currentValue, Number(effTarget))
       : null;
 

@@ -92,7 +92,8 @@ describe('Personal goals render in the main card grid + are editable (this fix)'
 
   it('editing updates the SAME goal id via api.goals.update (not create)', () => {
     expect(achievementsSrc).toMatch(/if \(editingGoalId\)\s*\{[\s\S]*api\.goals\.update\(editingGoalId, payload\)/);
-    expect(achievementsSrc).toContain("editingGoalId ? 'Update Personal Goal' : 'Save Personal Goal'");
+    expect(achievementsSrc).toContain("'Update Personal Goal'");
+    expect(achievementsSrc).toContain("'Save Personal Goal'");
   });
 
   it('refetches goals after save so grid + Daily Check-in both update', () => {
@@ -120,14 +121,16 @@ describe('Custom achievements are editable; predefined stay read-only (this fix)
   });
 
   it('wires Edit to openEditAchievement (pre-fills the existing form)', () => {
-    expect(achievementsSrc).toContain('openEditAchievement(ach)');
+    // The detail Edit control defers to openEditAchievement via the transition.
+    expect(achievementsSrc).toContain('openEditAchievement(a)');
     expect(achievementsSrc).toContain('const openEditAchievement =');
     expect(achievementsSrc).toContain("setActiveAddTab('personal_achievements')");
   });
 
   it('editing updates the SAME achievement id via the existing update method (not create)', () => {
     expect(achievementsSrc).toMatch(/if \(editingAchievementId\)\s*\{[\s\S]*api\.customAchievements\.update\(editingAchievementId/);
-    expect(achievementsSrc).toContain("editingAchievementId ? 'Update Personal Achievement' : 'Save Personal Achievement'");
+    expect(achievementsSrc).toContain("'Update Personal Achievement'");
+    expect(achievementsSrc).toContain("'Save Personal Achievement'");
   });
 
   it('does NOT send progress on edit (preserves existing progress/completion/reward)', () => {
@@ -193,13 +196,15 @@ describe('Combined Goals & Achievements list + filters (final structure)', () =>
     expect(achievementsSrc).toContain('key={`achievement:${achievement.id}`}');
   });
 
-  it('shows a filter-specific empty state, gated by initial load', () => {
+  it('shows a filter-specific empty state, gated by a successful (ready) load', () => {
     expect(achievementsSrc).toContain('data-testid="gamification-empty-state"');
     expect(achievementsSrc).toContain('combinedEmptyMessage');
     expect(achievementsSrc).toContain('No personal goals yet.');
     expect(achievementsSrc).toContain('No achievements found.');
     expect(achievementsSrc).toContain('No goals or achievements found.');
-    expect(achievementsSrc).toMatch(/initialLoadDone \? \(/);
+    // Empty state is only reachable in the ready branch (not loading, not error).
+    expect(achievementsSrc).toContain("useState<'loading' | 'ready' | 'error'>('loading')");
+    expect(achievementsSrc).not.toContain('initialLoadDone');
   });
 
   it('removes the standalone Daily Check-in section (single check-in surface)', () => {
@@ -302,12 +307,15 @@ describe('Goal & Achievement detail modal + check-in history (this task)', () =>
 describe('Detail Workspace: in-modal Edit + Today\'s Check-In (this task)', () => {
   it('provides an Edit control inside the workspace that reuses the existing edit form', () => {
     expect(achievementsSrc).toContain('data-testid="detail-edit"');
-    expect(achievementsSrc).toMatch(/openEditGoal\(goalRaw as Record<string, unknown>\)/);
-    expect(achievementsSrc).toContain('openEditAchievement(ach)');
+    // The Edit control defers to the existing openEditGoal / openEditAchievement.
+    expect(achievementsSrc).toContain('() => openEditGoal(raw)');
+    expect(achievementsSrc).toContain('() => openEditAchievement(a)');
   });
 
-  it('closes the workspace before opening the reused edit form (no stacked modals)', () => {
-    expect(achievementsSrc).toMatch(/setDetailItem\(null\);\s*\n\s*if \(isGoal && goalRaw\) openEditGoal/);
+  it('routes the Edit control through the deferred transition (no stacked modals)', () => {
+    expect(achievementsSrc).toContain('startEditFromDetail(');
+    // setDetailItem(null) inside the transition triggers the close animation.
+    expect(achievementsSrc).toMatch(/setEditTransition\('closing-detail-for-edit'\);\s*\n\s*setDetailItem\(null\)/);
   });
 
   it('renders Today\'s Check-In inside the workspace, gated to check-inable items', () => {
@@ -334,5 +342,188 @@ describe('Detail Workspace: in-modal Edit + Today\'s Check-In (this task)', () =
     // The handler reloads the backend sources of truth + refetches history.
     expect(achievementsSrc).toMatch(/Promise\.all\(\[reloadGoals\(\), reloadCustomAchievements\(\), reloadPoints\(\)\]\)/);
     expect(achievementsSrc).toMatch(/setDetailRefreshKey\(\(k\) => k \+ 1\)/);
+  });
+});
+
+describe('Loading / empty / error states (this task)', () => {
+  it('models a distinct loading → ready/error lifecycle for personal data', () => {
+    expect(achievementsSrc).toContain("const [loadStatus, setLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading')");
+    expect(achievementsSrc).toContain('const loadPersonalData');
+  });
+
+  it('loads goals and custom achievements in parallel, decoupled from points', () => {
+    // Personal data uses its own Promise.all; points is fetched separately.
+    expect(achievementsSrc).toMatch(/Promise\.all\(\[\s*api\.goals\.list\(\),\s*api\.customAchievements\.list\(\),?\s*\]\)/);
+    expect(achievementsSrc).toMatch(/void loadPersonalData\(\);\s*\n\s*void reloadPoints\(\);/);
+  });
+
+  it('guards against a duplicate initial load (incl. StrictMode double effect)', () => {
+    expect(achievementsSrc).toContain('initialLoadStartedRef');
+    expect(achievementsSrc).toMatch(/if \(initialLoadStartedRef\.current\) return;/);
+  });
+
+  it('shows a loading indicator with accessible text while loading', () => {
+    expect(achievementsSrc).toContain('data-testid="gamification-loading"');
+    expect(achievementsSrc).toContain('Loading your goals and achievements…');
+    expect(achievementsSrc).toContain('data-testid="gamification-skeleton"');
+    expect(achievementsSrc).toMatch(/role="status" aria-live="polite"/);
+  });
+
+  it('never shows the empty state while loading (loading branch precedes it)', () => {
+    // The empty state lives in the else branch, after loading + error are handled.
+    expect(achievementsSrc).toMatch(/loadStatus === 'loading' && combinedItems\.length === 0 \?/);
+  });
+
+  it('shows an error state with a Retry that re-runs loadPersonalData', () => {
+    expect(achievementsSrc).toContain('data-testid="gamification-error-state"');
+    expect(achievementsSrc).toContain('data-testid="gamification-retry"');
+    expect(achievementsSrc).toMatch(/onClick=\{\(\) => void loadPersonalData\(\)\}/);
+  });
+
+  it('adds dev-only timing instrumentation, not noisy production logging', () => {
+    expect(achievementsSrc).toContain('import.meta.env.DEV');
+    expect(achievementsSrc).toMatch(/console\.debug\(`\[Achievements\] personal data loaded/);
+  });
+});
+
+describe('Detail → Edit transition (this task)', () => {
+  it('models an explicit idle / closing-detail-for-edit / editing transition', () => {
+    expect(achievementsSrc).toContain("useState<'idle' | 'closing-detail-for-edit' | 'editing'>('idle')");
+  });
+
+  it('preserves the selected item and defers opening the edit form', () => {
+    expect(achievementsSrc).toContain('const startEditFromDetail');
+    expect(achievementsSrc).toContain('pendingEditRef.current = openEdit');
+    expect(achievementsSrc).toMatch(/setEditTransition\('closing-detail-for-edit'\)/);
+  });
+
+  it('opens the edit modal only after the detail close animation completes', () => {
+    expect(achievementsSrc).toContain('AnimatePresence onExitComplete={handleDetailExitComplete}');
+    expect(achievementsSrc).toContain('const handleDetailExitComplete');
+    expect(achievementsSrc).toMatch(/editTransition === 'closing-detail-for-edit' && pendingEditRef\.current/);
+    expect(achievementsSrc).toMatch(/setEditTransition\('editing'\)/);
+    // The detail overlay must have an exit animation for onExitComplete to fire.
+    expect(achievementsSrc).toContain('exit={{ opacity: 0 }}');
+  });
+
+  it('prevents repeated Edit clicks during the transition', () => {
+    expect(achievementsSrc).toMatch(/if \(editTransition !== 'idle'\) return;/);
+    expect(achievementsSrc).toContain("disabled={editTransition !== 'idle'}");
+  });
+
+  it('resets the transition to idle when the edit modal closes', () => {
+    expect(achievementsSrc).toMatch(/setEditTransition\('idle'\)/);
+  });
+});
+
+describe('Update submission pending state (this task)', () => {
+  it('uses SEPARATE scoped pending flags for goal and achievement paths', () => {
+    expect(achievementsSrc).toContain('const [goalSubmitting, setGoalSubmitting]');
+    expect(achievementsSrc).toContain('const [achievementSubmitting, setAchievementSubmitting]');
+  });
+
+  it('prevents duplicate submissions on both paths', () => {
+    expect(achievementsSrc).toMatch(/if \(goalSubmitting\) return;/);
+    expect(achievementsSrc).toMatch(/if \(achievementSubmitting\) return;/);
+  });
+
+  it('resets pending through a finally path so it cannot get stuck', () => {
+    expect(achievementsSrc).toMatch(/finally \{[\s\S]*setGoalSubmitting\(false\)/);
+    expect(achievementsSrc).toMatch(/finally \{[\s\S]*setAchievementSubmitting\(false\)/);
+  });
+
+  it('shows Updating… + spinner + aria-busy and disables the buttons', () => {
+    expect(achievementsSrc).toContain("'Updating…'");
+    expect(achievementsSrc).toContain('data-testid="goal-submit-button"');
+    expect(achievementsSrc).toContain('data-testid="achievement-submit-button"');
+    expect(achievementsSrc).toContain('aria-busy={goalSubmitting}');
+    expect(achievementsSrc).toContain('aria-busy={achievementSubmitting}');
+    expect(achievementsSrc).toMatch(/disabled=\{goalSubmitting\}/);
+    expect(achievementsSrc).toMatch(/disabled=\{achievementSubmitting\}/);
+  });
+
+  it('surfaces the real error message and keeps the form open on failure', () => {
+    // Real message from the thrown Error; no early return before finally.
+    expect(achievementsSrc).toMatch(/error instanceof Error && error\.message/);
+  });
+
+  it('shows a success toast and refreshes data on success', () => {
+    expect(achievementsSrc).toContain("toast.success(wasEditing ? 'Personal goal updated.'");
+    expect(achievementsSrc).toContain("toast.success(wasEditing ? 'Personal achievement updated.'");
+  });
+
+  it('disables conflicting modal actions (Close) while a submit is in flight', () => {
+    expect(achievementsSrc).toContain('disabled={goalSubmitting || achievementSubmitting}');
+  });
+});
+
+describe('Modal focus management (accessibility, this task)', () => {
+  it('moves focus into the detail workspace and the edit modal when they open', () => {
+    expect(achievementsSrc).toContain('detailPanelRef');
+    expect(achievementsSrc).toContain('createPanelRef');
+    expect(achievementsSrc).toMatch(/if \(detailItem\) detailPanelRef\.current\?\.focus\(\)/);
+    expect(achievementsSrc).toMatch(/if \(showCreateModal\) createPanelRef\.current\?\.focus\(\)/);
+  });
+});
+
+describe('Progress Report entry point (this task)', () => {
+  it('links to the Progress Report route from the page header', () => {
+    expect(achievementsSrc).toContain('data-testid="view-progress-report-link"');
+    expect(achievementsSrc).toContain('/app/settings/achievements/progress-report');
+    expect(achievementsSrc).toContain('View Progress Report');
+  });
+
+  it('keeps the existing creation action visible alongside it', () => {
+    expect(achievementsSrc).toContain('Add personal milestone');
+    expect(achievementsSrc).toMatch(/setShowCreateModal\(true\)/);
+  });
+});
+
+describe('Tracking configuration lock after completion (this task)', () => {
+  it('derives the lock from completed + rewarded state for both item types', () => {
+    expect(achievementsSrc).toContain('const [editingGoalLocked, setEditingGoalLocked]');
+    expect(achievementsSrc).toContain('const [editingAchievementLocked, setEditingAchievementLocked]');
+    expect(achievementsSrc).toContain("String(raw.status) === 'completed' && Boolean(raw.reward_awarded)");
+    expect(achievementsSrc).toContain('Boolean(a.unlocked) && Boolean(a.rewardAwarded)');
+  });
+
+  it('disables every tracking control on a locked GOAL form', () => {
+    expect(achievementsSrc).toMatch(/id="pg-tracking"[\s\S]{0,200}disabled=\{editingGoalLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pg-target-value"[\s\S]{0,300}disabled=\{editingGoalLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pg-duration-unit"[\s\S]{0,200}disabled=\{editingGoalLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pg-amount-unit"[\s\S]{0,200}disabled=\{editingGoalLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pg-custom-unit"[\s\S]{0,300}disabled=\{editingGoalLocked\}/);
+  });
+
+  it('disables every tracking control on a locked ACHIEVEMENT form', () => {
+    expect(achievementsSrc).toMatch(/id="pa-tracking"[\s\S]{0,200}disabled=\{editingAchievementLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pa-duration-unit"[\s\S]{0,200}disabled=\{editingAchievementLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pa-amount-unit"[\s\S]{0,200}disabled=\{editingAchievementLocked\}/);
+    expect(achievementsSrc).toMatch(/id="pa-custom-unit"[\s\S]{0,300}disabled=\{editingAchievementLocked\}/);
+    // The achievement target input is disabled too.
+    expect(achievementsSrc).toMatch(/setAchTargetValue\(e\.target\.value\)[\s\S]{0,200}disabled=\{editingAchievementLocked\}/);
+  });
+
+  it('shows the informational notice only when locked, using the design system', () => {
+    expect(achievementsSrc).toContain('data-testid="goal-tracking-locked-notice"');
+    expect(achievementsSrc).toContain('data-testid="achievement-tracking-locked-notice"');
+    expect(achievementsSrc).toContain('Tracking is locked because this item has already been completed and rewarded.');
+    expect(achievementsSrc).toContain('modalInsetPanel');
+    // Notices are gated on the lock flags (not shown for incomplete items).
+    expect(achievementsSrc).toMatch(/editingGoalLocked \? \(/);
+    expect(achievementsSrc).toMatch(/editingAchievementLocked \? \(/);
+  });
+
+  it('omits tracking fields from the update payloads when locked', () => {
+    expect(achievementsSrc).toContain('tracking_type: editingGoalLocked ? undefined : goalTrackingType');
+    expect(achievementsSrc).toMatch(/target_value: editingGoalLocked \? undefined/);
+    expect(achievementsSrc).toMatch(/tracking_unit: editingGoalLocked \? undefined/);
+    expect(achievementsSrc).toMatch(/editingAchievementLocked\s*\?\s*\{\}/);
+  });
+
+  it('skips tracking validation + change-confirmation when locked', () => {
+    expect(achievementsSrc).toMatch(/!editingGoalLocked && isNumeric && !\(targetValue > 0\)/);
+    expect(achievementsSrc).toMatch(/editingGoalId &&\s*\n\s*!editingGoalLocked &&/);
+    expect(achievementsSrc).toMatch(/!editingAchievementLocked && isNumeric && !\(target > 0\)/);
   });
 });

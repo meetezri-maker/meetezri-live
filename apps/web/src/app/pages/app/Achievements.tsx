@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Trophy,
   Award,
@@ -21,6 +21,9 @@ import {
   Diamond,
   BookOpen,
   Headphones,
+  Loader2,
+  AlertCircle,
+  FileText,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
@@ -31,6 +34,7 @@ import {
   modalCheckboxLabel,
   modalCloseButton,
   modalInput,
+  modalInsetPanel,
   modalLabel,
   modalLink,
   modalOverlay,
@@ -342,8 +346,22 @@ export function Achievements() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   // Combined Goals & Achievements type filter (default 'all').
   const [gamificationFilter, setGamificationFilter] = useState<GamificationFilter>('all');
-  // Gates the empty state so it never flashes while the initial load is pending.
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  // Distinct loading lifecycle for the PERSONAL data (goals + custom achievements).
+  // 'loading' → skeletons; 'ready' → grid/empty; 'error' → retry. Deliberately
+  // NOT coupled to the gamification points request (that loads independently).
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  // Scoped submit-pending flags: the goal and achievement update paths never
+  // share one boolean, so their in-flight states can't collide.
+  const [goalSubmitting, setGoalSubmitting] = useState(false);
+  const [achievementSubmitting, setAchievementSubmitting] = useState(false);
+  // Detail → Edit transition lifecycle. The edit modal opens only AFTER the
+  // detail workspace finishes its close animation (no stacked modals, no flash).
+  const [editTransition, setEditTransition] = useState<'idle' | 'closing-detail-for-edit' | 'editing'>('idle');
+  const pendingEditRef = useRef<null | (() => void)>(null);
+  // Phase 6: focus targets so focus moves into whichever modal is active and
+  // never lands on the page underneath during the transition.
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
   const [showAllAchievements, setShowAllAchievements] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   // Read-only detail modal: stores the clicked item's type + id; live data is
@@ -372,6 +390,11 @@ export function Achievements() {
   // When set, the personal-achievement form edits this custom achievement id
   // (via api.customAchievements.update) instead of creating a new one.
   const [editingAchievementId, setEditingAchievementId] = useState<string | null>(null);
+  // Tracking configuration is locked once an item is completed AND rewarded, to
+  // preserve historical integrity (progress/completion/reward can't be altered).
+  // Descriptive fields stay editable. The backend enforces this independently.
+  const [editingGoalLocked, setEditingGoalLocked] = useState(false);
+  const [editingAchievementLocked, setEditingAchievementLocked] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newTotal, setNewTotal] = useState('1');
@@ -381,7 +404,6 @@ export function Achievements() {
   const [moneyCurrentAmount, setMoneyCurrentAmount] = useState('0');
   const [moneyTargetAmount, setMoneyTargetAmount] = useState('1000');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [reportText, setReportText] = useState('');
   const [activeAddTab, setActiveAddTab] = useState<'personal_goals' | 'personal_achievements'>('personal_goals');
   const [goalTitle, setGoalTitle] = useState('');
   const [goalCategory, setGoalCategory] = useState<NonNullable<Achievement['goalCategory']>>('Mental');
@@ -546,6 +568,11 @@ export function Achievements() {
       setEditingGoalHasCheckIns(false);
       setEditingAchievementOriginalTracking(undefined);
       setEditingAchievementHasCheckIns(false);
+      setEditingGoalLocked(false);
+      setEditingAchievementLocked(false);
+      // The edit modal has fully closed → the Detail → Edit transition is done.
+      setEditTransition('idle');
+      pendingEditRef.current = null;
     }
   }, [showCreateModal]);
 
@@ -586,11 +613,43 @@ export function Achievements() {
     }
   }, []);
 
+  // Initial PERSONAL data load (goals + custom achievements) with an explicit
+  // loading/ready/error lifecycle. Goals and achievements are fetched in
+  // PARALLEL. The gamification points request is intentionally NOT awaited here
+  // so a slow/failed points call never blocks or breaks the primary content.
+  const loadPersonalData = useCallback(async () => {
+    setLoadStatus('loading');
+    const started = import.meta.env.DEV ? performance.now() : 0;
+    try {
+      const [goals, achievements] = await Promise.all([
+        api.goals.list(),
+        api.customAchievements.list(),
+      ]);
+      setPersonalGoals(Array.isArray(goals) ? (goals as Record<string, unknown>[]) : []);
+      setCustomAchievements(
+        Array.isArray(achievements) ? achievements.map(mapApiCustomAchievement) : []
+      );
+      setLoadStatus('ready');
+      if (import.meta.env.DEV) {
+        // Dev-only timing to pinpoint slow requests; no production logging.
+        console.debug(`[Achievements] personal data loaded in ${Math.round(performance.now() - started)}ms`);
+      }
+    } catch (error) {
+      console.error('Failed to load goals & achievements', error);
+      setLoadStatus('error');
+    }
+  }, []);
+
+  // Guard against a duplicate initial load (incl. React 18 StrictMode's
+  // dev-only double effect invocation). Retry goes through loadPersonalData directly.
+  const initialLoadStartedRef = useRef(false);
   useEffect(() => {
-    Promise.all([reloadCustomAchievements(), reloadGoals(), reloadPoints()]).finally(() =>
-      setInitialLoadDone(true)
-    );
-  }, [reloadCustomAchievements, reloadGoals, reloadPoints]);
+    if (initialLoadStartedRef.current) return;
+    initialLoadStartedRef.current = true;
+    // Points load independently — decoupled from the primary content lifecycle.
+    void loadPersonalData();
+    void reloadPoints();
+  }, [loadPersonalData, reloadPoints]);
 
   const sessionsCompleted = Number(profile?.stats?.completed_sessions || 0);
   const moodCheckins = Number(profile?.stats?.total_checkins || 0);
@@ -749,11 +808,45 @@ export function Achievements() {
     return () => document.removeEventListener('keydown', onKey);
   }, [detailItem]);
 
+  // Phase 6: move focus into the detail workspace when it opens.
+  useEffect(() => {
+    if (detailItem) detailPanelRef.current?.focus();
+  }, [detailItem]);
+
+  // Phase 6: move focus into the edit modal when it opens (whether from a card
+  // or via the Detail → Edit transition), so focus never lands on the page
+  // underneath while the two overlays hand off.
+  useEffect(() => {
+    if (showCreateModal) createPanelRef.current?.focus();
+  }, [showCreateModal]);
+
   const openGoalDetail = (raw: Record<string, unknown>) =>
     setDetailItem({ itemType: 'goal', id: String((raw as { id?: unknown }).id) });
   const openAchievementDetail = (a: Achievement) => {
     setSelectedAchievement(a); // keep the existing Achievement Journey highlight
     setDetailItem({ itemType: 'achievement', id: a.id });
+  };
+
+  // Phase 4: begin the Detail → Edit transition. Captures the selected item as a
+  // deferred open action, then starts closing the workspace. Repeated clicks are
+  // ignored while a transition is in flight. The edit modal is opened later, from
+  // the detail modal's exit-animation-complete callback (no stacked modals).
+  const startEditFromDetail = (openEdit: () => void) => {
+    if (editTransition !== 'idle') return;
+    pendingEditRef.current = openEdit;
+    setEditTransition('closing-detail-for-edit');
+    setDetailItem(null); // triggers the AnimatePresence exit animation
+  };
+
+  // Fires after the detail workspace finishes its close animation. Only then do
+  // we open the reused edit form with the preserved item prefilled.
+  const handleDetailExitComplete = () => {
+    if (editTransition === 'closing-detail-for-edit' && pendingEditRef.current) {
+      const openEdit = pendingEditRef.current;
+      pendingEditRef.current = null;
+      openEdit();
+      setEditTransition('editing');
+    }
   };
 
   const stats = {
@@ -1123,6 +1216,8 @@ export function Achievements() {
   };
 
   const addPersonalGoalFromTab = async () => {
+    // Phase 5: ignore repeat submissions while a save is already in flight.
+    if (goalSubmitting) return;
     const title = goalTitle.trim();
     const description = goalDescription.trim();
     if (!title || !description) return;
@@ -1130,7 +1225,8 @@ export function Achievements() {
     const isNumeric =
       goalTrackingType === 'count' || goalTrackingType === 'duration' || goalTrackingType === 'amount';
     const targetValue = Math.max(0, Number(goalTargetValue) || 0);
-    if (isNumeric && !(targetValue > 0)) {
+    // Skip tracking validation/confirmation when locked — those fields are not sent.
+    if (!editingGoalLocked && isNumeric && !(targetValue > 0)) {
       toast.error('Enter a target value greater than zero for this tracking method.');
       return;
     }
@@ -1139,6 +1235,7 @@ export function Achievements() {
     // requires explicit confirmation. If the user cancels, do nothing.
     if (
       editingGoalId &&
+      !editingGoalLocked &&
       requiresTrackingChangeConfirmation(editingGoalOriginalTracking, goalTrackingType, editingGoalHasCheckIns) &&
       !window.confirm('Changing the tracking method may affect this goal’s historical progress. Continue?')
     ) {
@@ -1155,9 +1252,11 @@ export function Achievements() {
       priority_level: mapAchievementPriorityToGoalPriority(goalPriority),
       start_date: goalStartDate || new Date().toISOString().slice(0, 10),
       target_date: goalTargetDate || undefined,
-      tracking_type: goalTrackingType,
-      target_value: isNumeric ? targetValue : undefined,
-      tracking_unit: isNumeric ? goalTrackingUnit.trim() || undefined : undefined,
+      // Locked (completed + rewarded): never submit tracking-config changes. The
+      // UI disables these controls; this guarantees the request omits them too.
+      tracking_type: editingGoalLocked ? undefined : goalTrackingType,
+      target_value: editingGoalLocked ? undefined : isNumeric ? targetValue : undefined,
+      tracking_unit: editingGoalLocked ? undefined : isNumeric ? goalTrackingUnit.trim() || undefined : undefined,
       check_in_frequency: mapAchievementFrequencyToGoalFrequency(goalCheckInFrequency),
       reminder_enabled: goalReminderEnabled,
       small_action_steps: goalActionSteps
@@ -1168,6 +1267,8 @@ export function Achievements() {
       support_type_needed: mapSupportTypeToGoalSupportType(goalSupportType),
       notes: goalNotes.trim() || undefined,
     };
+    const wasEditing = Boolean(editingGoalId);
+    setGoalSubmitting(true);
     try {
       if (editingGoalId) {
         // Edit path: update the SAME goal id (never creates a new goal).
@@ -1175,35 +1276,46 @@ export function Achievements() {
       } else {
         await api.goals.create(payload);
       }
+      // Refetch so BOTH the goal card grid and Daily Check-in update immediately.
+      // Points are refreshed too (a new target can complete + reward on the backend).
+      await Promise.all([reloadGoals(), reloadPoints()]);
+      setEditingGoalId(null);
+      setGoalTrackingType('manual_milestone');
+      setGoalTargetValue('');
+      setGoalTrackingUnit('');
+      setGoalTitle('');
+      setGoalCategory('Mental');
+      setGoalDescription('');
+      setGoalWhyItMatters('');
+      setGoalTargetOutcome('');
+      setGoalPriority('Medium');
+      setGoalStartDate('');
+      setGoalTargetDate('');
+      setGoalProgress('0');
+      setGoalCheckInFrequency('Daily');
+      setGoalActionSteps('');
+      setGoalMoodTag('Stress');
+      setGoalSupportType('Encouragement');
+      setGoalNotes('');
+      setGoalReminderEnabled(true);
+      setGoalTemplateKey('');
+      setPersonalGoalFormOpen(false);
+      setShowCreateModal(false);
+      toast.success(wasEditing ? 'Personal goal updated.' : 'Personal goal created.');
     } catch (error) {
+      // Keep the form open + restore controls; surface the real error message.
       console.error('Failed to save personal goal', error);
-      toast.error(editingGoalId ? 'Failed to update personal goal.' : 'Failed to create personal goal.');
-      return;
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : wasEditing
+            ? 'Failed to update personal goal.'
+            : 'Failed to create personal goal.';
+      toast.error(message);
+    } finally {
+      // Pending always resets so the button can never get stuck.
+      setGoalSubmitting(false);
     }
-    // Refetch so BOTH the goal card grid and Daily Check-in update immediately.
-    await Promise.all([reloadGoals(), reloadPoints()]);
-    setEditingGoalId(null);
-    setGoalTrackingType('manual_milestone');
-    setGoalTargetValue('');
-    setGoalTrackingUnit('');
-    setGoalTitle('');
-    setGoalCategory('Mental');
-    setGoalDescription('');
-    setGoalWhyItMatters('');
-    setGoalTargetOutcome('');
-    setGoalPriority('Medium');
-    setGoalStartDate('');
-    setGoalTargetDate('');
-    setGoalProgress('0');
-    setGoalCheckInFrequency('Daily');
-    setGoalActionSteps('');
-    setGoalMoodTag('Stress');
-    setGoalSupportType('Encouragement');
-    setGoalNotes('');
-    setGoalReminderEnabled(true);
-    setGoalTemplateKey('');
-    setPersonalGoalFormOpen(false);
-    setShowCreateModal(false);
   };
 
   // Open the existing goal form pre-filled with a goal's values, in EDIT mode.
@@ -1230,6 +1342,8 @@ export function Achievements() {
     // Phase 6 confirmation inputs: original method + whether check-ins exist.
     setEditingGoalOriginalTracking(g.trackingType);
     setEditingGoalHasCheckIns(Boolean(raw.last_check_in_date) || Number(raw.current_value ?? 0) > 0);
+    // Lock tracking config once the goal is completed AND rewarded.
+    setEditingGoalLocked(String(raw.status) === 'completed' && Boolean(raw.reward_awarded));
     setActiveAddTab('personal_goals');
     setPersonalGoalFormOpen(true);
     setShowCreateModal(true);
@@ -1250,6 +1364,8 @@ export function Achievements() {
     setEditingAchievementOriginalTracking(a.trackingType ?? 'count');
     // Custom achievements track a check-in via last check-in date or progress.
     setEditingAchievementHasCheckIns(Boolean(a.lastCheckInDate) || Number(a.progress ?? 0) > 0);
+    // Lock tracking config once the achievement is unlocked AND rewarded.
+    setEditingAchievementLocked(Boolean(a.unlocked) && Boolean(a.rewardAwarded));
     setActiveAddTab('personal_achievements');
     setShowCreateModal(true);
   };
@@ -1307,6 +1423,8 @@ export function Achievements() {
   };
 
   const addPersonalAchievementFromTab = async () => {
+    // Phase 5: ignore repeat submissions while a save is already in flight.
+    if (achievementSubmitting) return;
     const title = newTitle.trim();
     const description = newDescription.trim();
     if (!title || !description) return;
@@ -1316,6 +1434,7 @@ export function Achievements() {
     const target = Math.max(0, Number(achTargetValue) || 0);
     if (
       editingAchievementId &&
+      !editingAchievementLocked &&
       requiresTrackingChangeConfirmation(
         editingAchievementOriginalTracking,
         achTrackingType,
@@ -1325,24 +1444,32 @@ export function Achievements() {
     ) {
       return;
     }
-    if (isNumeric && !(target > 0)) {
+    // Skip tracking validation when locked — those fields are not sent.
+    if (!editingAchievementLocked && isNumeric && !(target > 0)) {
       toast.error('Enter a target value greater than zero for this tracking method.');
       return;
     }
 
+    const wasEditing = Boolean(editingAchievementId);
+    setAchievementSubmitting(true);
     try {
       if (editingAchievementId) {
         // Edit path: update the SAME record. Send ONLY metadata + target/tracking
         // — never `progress`/`unlocked`/`points`, so current progress, completion
         // state, and reward flags are preserved. If the new target makes progress
         // reach it, the BACKEND completes + rewards (once) via the completion
-        // service — the client computes/awards nothing.
+        // service — the client computes/awards nothing. When locked (completed +
+        // rewarded), tracking fields are omitted entirely so config can't change.
         await api.customAchievements.update(editingAchievementId, {
           title,
           description,
-          trackingType: achTrackingType,
-          trackingUnit: isNumeric ? achTrackingUnit.trim() || undefined : undefined,
-          total: isNumeric ? target : 100,
+          ...(editingAchievementLocked
+            ? {}
+            : {
+                trackingType: achTrackingType,
+                trackingUnit: isNumeric ? achTrackingUnit.trim() || undefined : undefined,
+                total: isNumeric ? target : 100,
+              }),
         });
       } else {
         const next: Achievement = {
@@ -1364,20 +1491,30 @@ export function Achievements() {
         };
         await api.customAchievements.create(mapAchievementToApiPayload(next));
       }
+      // Refetch so the card grid reflects the change immediately (points/level too).
+      await Promise.all([reloadCustomAchievements(), reloadPoints()]);
+      setEditingAchievementId(null);
+      setNewTitle('');
+      setNewDescription('');
+      setAchTrackingType('count');
+      setAchTargetValue('');
+      setAchTrackingUnit('');
+      setShowCreateModal(false);
+      toast.success(wasEditing ? 'Personal achievement updated.' : 'Personal achievement saved.');
     } catch (error) {
+      // Keep the form open + restore controls; surface the real error message.
       console.error('Failed to save personal achievement in database', error);
-      toast.error(editingAchievementId ? 'Failed to update achievement.' : 'Failed to save personal achievement.');
-      return;
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : wasEditing
+            ? 'Failed to update achievement.'
+            : 'Failed to save personal achievement.';
+      toast.error(message);
+    } finally {
+      // Pending always resets so the button can never get stuck.
+      setAchievementSubmitting(false);
     }
-    // Refetch so the card grid reflects the change immediately (points/level too).
-    await Promise.all([reloadCustomAchievements(), reloadPoints()]);
-    setEditingAchievementId(null);
-    setNewTitle('');
-    setNewDescription('');
-    setAchTrackingType('count');
-    setAchTargetValue('');
-    setAchTrackingUnit('');
-    setShowCreateModal(false);
   };
 
   // Personal Goals come from the authoritative goals API (personal_goals),
@@ -1704,58 +1841,6 @@ export function Achievements() {
     setShowCreateModal(false);
   };
 
-  const generateThirtyDayReport = () => {
-    const now = new Date();
-    const lastThirtyDaysStart = new Date(now);
-    lastThirtyDaysStart.setDate(now.getDate() - 29);
-    const startKey = lastThirtyDaysStart.toISOString().slice(0, 10);
-    const endKey = now.toISOString().slice(0, 10);
-
-    const goals = customAchievements.filter((a) =>
-      ['personal', 'self_improvement', 'professional'].includes(a.category)
-    );
-
-    const reportLines = goals.map((goal) => {
-      const history = Array.isArray(goal.checkInHistory) ? goal.checkInHistory : [];
-      const checkInsInRange = history.filter((d) => d >= startKey && d <= endKey);
-      return `- ${goal.title} (${goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'}): ${checkInsInRange.length} check-ins, progress ${goal.progress}/${goal.total}${goal.unlocked ? ' (completed)' : ''}`;
-    });
-
-    const generated = [
-      '30-Day Personal Goals Report',
-      `Period: ${lastThirtyDaysStart.toLocaleDateString()} - ${now.toLocaleDateString()}`,
-      '',
-      `Total goals tracked: ${goals.length}`,
-      `Completed goals: ${goals.filter((g) => g.unlocked).length}`,
-      '',
-      'Goal details:',
-      ...(reportLines.length ? reportLines : ['- No personal goals added yet.']),
-    ].join('\n');
-
-    const fileDate = now.toISOString().slice(0, 10);
-    const fileName = `personal-goals-report-${fileDate}.txt`;
-    const blob = new Blob([generated], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    setReportText(generated);
-  };
-
-  const copyReport = async () => {
-    if (!reportText.trim()) return;
-    try {
-      await navigator.clipboard.writeText(reportText);
-    } catch (error) {
-      console.error('Failed to copy report', error);
-    }
-  };
-
   const scrollToAchievement = (id: string) => {
     document.getElementById(`ach-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -1793,13 +1878,24 @@ export function Achievements() {
               <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
               Back to Settings
             </Link>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex min-h-[44px] w-fit items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-fuchsia-400/25 hover:bg-white/[0.09]"
-            >
-              Add personal milestone
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Secondary action — must not compete with the creation action. */}
+              <Link
+                to="/app/settings/achievements/progress-report"
+                data-testid="view-progress-report-link"
+                className="inline-flex min-h-[44px] w-fit items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-zinc-300 transition hover:text-white"
+              >
+                <FileText className="h-4 w-4 shrink-0" aria-hidden />
+                View Progress Report
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex min-h-[44px] w-fit items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-fuchsia-400/25 hover:bg-white/[0.09]"
+              >
+                Add personal milestone
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
@@ -2005,26 +2101,108 @@ export function Achievements() {
                   </div>
                 </div>
 
-                {combinedItems.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {combinedItems.map((item, index) =>
-                      item.itemType === 'goal'
-                        ? renderGoalCard(item.data)
-                        : renderAchievementCard(item.data, index)
-                    )}
-                  </div>
-                ) : initialLoadDone ? (
-                  <div
-                    data-testid="gamification-empty-state"
-                    className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl"
-                  >
-                    <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
-                    <h3 className="font-serif text-xl font-semibold text-white">{combinedEmptyMessage}</h3>
-                    <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
-                      Create a personal goal or achievement to get started.
+                {loadStatus === 'loading' && combinedItems.length === 0 ? (
+                  // Initial load, nothing to show yet → skeletons + accessible status.
+                  // The empty state is NEVER shown while loading.
+                  <div data-testid="gamification-loading">
+                    <p role="status" aria-live="polite" className="mb-4 text-sm text-zinc-400">
+                      Loading your goals and achievements…
                     </p>
+                    <div aria-hidden className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={`skeleton-${i}`}
+                          data-testid="gamification-skeleton"
+                          className="flex flex-col gap-3 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5"
+                        >
+                          <div className="h-4 w-2/3 animate-pulse rounded-md bg-white/10" />
+                          <div className="h-3 w-1/3 animate-pulse rounded-md bg-white/10" />
+                          <div className="mt-2 h-1.5 w-full animate-pulse rounded-full bg-white/10" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ) : null}
+                ) : loadStatus === 'error' && combinedItems.length === 0 ? (
+                  // Load failed with nothing else to show → full error state + Retry.
+                  <div
+                    data-testid="gamification-error-state"
+                    role="alert"
+                    className="rounded-3xl border border-dashed border-red-400/30 bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl"
+                  >
+                    <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400/70" aria-hidden />
+                    <h3 className="font-serif text-xl font-semibold text-white">
+                      We couldn’t load your goals and achievements.
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+                      Something went wrong while fetching your data.
+                    </p>
+                    <button
+                      type="button"
+                      data-testid="gamification-retry"
+                      onClick={() => void loadPersonalData()}
+                      className={cn(modalPrimaryButton, 'mt-5 inline-flex items-center gap-2')}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {combinedItems.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {combinedItems.map((item, index) =>
+                          item.itemType === 'goal'
+                            ? renderGoalCard(item.data)
+                            : renderAchievementCard(item.data, index)
+                        )}
+                      </div>
+                    ) : (
+                      // Reached ONLY when the load succeeded and returned no items.
+                      <div
+                        data-testid="gamification-empty-state"
+                        className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl"
+                      >
+                        <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
+                        <h3 className="font-serif text-xl font-semibold text-white">{combinedEmptyMessage}</h3>
+                        <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+                          Create a personal goal or achievement to get started.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Predefined achievements render independently above; while the
+                        personal data is still loading, keep an accessible indicator so
+                        the personal sections never look permanently missing. */}
+                    {loadStatus === 'loading' && combinedItems.length > 0 ? (
+                      <p
+                        data-testid="gamification-loading-inline"
+                        role="status"
+                        aria-live="polite"
+                        className="flex items-center justify-center gap-2 pt-2 text-sm text-zinc-400"
+                      >
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        Loading your goals and achievements…
+                      </p>
+                    ) : null}
+
+                    {loadStatus === 'error' && combinedItems.length > 0 ? (
+                      <div
+                        data-testid="gamification-error-inline"
+                        role="alert"
+                        className="flex flex-col items-center gap-2 rounded-2xl border border-red-400/25 bg-red-500/[0.06] p-4 text-center text-sm text-zinc-300"
+                      >
+                        <span>We couldn’t load your personal goals and achievements.</span>
+                        <button
+                          type="button"
+                          data-testid="gamification-retry"
+                          onClick={() => void loadPersonalData()}
+                          className="rounded-lg border border-white/12 bg-white/[0.06] px-4 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.1]"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
 
                 {gamificationFilter !== 'goals' && filteredAchievements.length > 8 ? (
                   <div className="flex justify-center pt-2">
@@ -2119,39 +2297,6 @@ export function Achievements() {
               </div>
             </div>
           </section>
-
-
-          <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="font-serif text-lg font-semibold text-white">30-day reflection export</h2>
-                <p className="text-sm text-zinc-400">A quiet text snapshot of your personal goal check-ins.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={generateThirtyDayReport}
-                  className="rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]"
-                >
-                  Generate
-                </button>
-                <button
-                  type="button"
-                  onClick={copyReport}
-                  disabled={!reportText}
-                  className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-medium text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-            <textarea
-              value={reportText}
-              readOnly
-              placeholder="Generate to view your last 30 days summary."
-              className="min-h-40 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200"
-            />
-          </div>
             </div>
 
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
@@ -2275,17 +2420,20 @@ export function Achievements() {
           /* Phase 12: outside-click must NOT dismiss the create modal. */
         >
           <motion.div
+            ref={createPanelRef}
+            tabIndex={-1}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-            className={cn(modalPanelLg, "max-h-[90vh] overflow-y-auto p-6")}
+            className={cn(modalPanelLg, "max-h-[90vh] overflow-y-auto p-6 outline-none")}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className={modalTitle}>Add your own achievement</h2>
               <button
                 type="button"
                 onClick={requestCloseCreateModal}
-                className={modalCloseButton}
+                disabled={goalSubmitting || achievementSubmitting}
+                className={cn(modalCloseButton, 'disabled:opacity-50')}
               >
                 Close
               </button>
@@ -2410,11 +2558,21 @@ export function Achievements() {
                     <label htmlFor="pg-target" className={modalLabel}>Target Date</label>
                     <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className={modalInput} />
                   </div>
+                  {editingGoalLocked ? (
+                    <div className={cn(modalInsetPanel, 'flex items-start gap-3')} data-testid="goal-tracking-locked-notice" role="note">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
+                      <p className={modalBodyText}>
+                        Tracking is locked because this item has already been completed and rewarded.
+                        You can still update its descriptive information, but progress settings can no longer be changed.
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-tracking" className={modalLabel}>How would you like to track your progress?</label>
                     <SolaceSelect
                       id="pg-tracking"
                       value={goalTrackingType}
+                      disabled={editingGoalLocked}
                       onValueChange={(v) => {
                         const t = v as typeof goalTrackingType;
                         setGoalTrackingType(t);
@@ -2435,7 +2593,7 @@ export function Achievements() {
                     <>
                       <div className="flex flex-col gap-1">
                         <label htmlFor="pg-target-value" className={modalLabel}>Target Value</label>
-                        <input id="pg-target-value" type="number" min={1} value={goalTargetValue} onChange={(e) => setGoalTargetValue(e.target.value)} placeholder="e.g. 10" className={modalInput} />
+                        <input id="pg-target-value" type="number" min={1} value={goalTargetValue} onChange={(e) => setGoalTargetValue(e.target.value)} placeholder="e.g. 10" disabled={editingGoalLocked} className={cn(modalInput, 'disabled:opacity-60')} />
                       </div>
                       {goalTrackingType === 'duration' ? (
                         <div className="flex flex-col gap-1">
@@ -2443,6 +2601,7 @@ export function Achievements() {
                           <SolaceSelect
                             id="pg-duration-unit"
                             value={goalTrackingUnit || 'minutes'}
+                            disabled={editingGoalLocked}
                             onValueChange={(v) => setGoalTrackingUnit(v)}
                             ariaLabel="Duration unit"
                             variant="form"
@@ -2457,6 +2616,7 @@ export function Achievements() {
                             <SolaceSelect
                               id="pg-amount-unit"
                               value={goalAmountCustom ? 'custom' : goalTrackingUnit || 'currency'}
+                              disabled={editingGoalLocked}
                               onValueChange={(v) => {
                                 if (v === 'custom') {
                                   setGoalAmountCustom(true);
@@ -2474,7 +2634,7 @@ export function Achievements() {
                           {goalAmountCustom ? (
                             <div className="flex flex-col gap-1">
                               <label htmlFor="pg-custom-unit" className={modalLabel}>Custom unit</label>
-                              <input id="pg-custom-unit" type="text" value={goalTrackingUnit} onChange={(e) => setGoalTrackingUnit(e.target.value)} placeholder="e.g. reps, pages, glasses" className={modalInput} />
+                              <input id="pg-custom-unit" type="text" value={goalTrackingUnit} onChange={(e) => setGoalTrackingUnit(e.target.value)} placeholder="e.g. reps, pages, glasses" disabled={editingGoalLocked} className={cn(modalInput, 'disabled:opacity-60')} />
                             </div>
                           ) : null}
                         </>
@@ -2549,8 +2709,22 @@ export function Achievements() {
                 <p className="mt-3 text-xs text-zinc-400">
                   Goal Completion Reward: <span className="font-semibold text-white">20 Points</span> — awarded automatically by the backend at 100%.
                 </p>
-                <button type="button" onClick={addPersonalGoalFromTab} className={cn(modalPrimaryButton, "mt-4")}>
-                  {editingGoalId ? 'Update Personal Goal' : 'Save Personal Goal'}
+                <button
+                  type="button"
+                  data-testid="goal-submit-button"
+                  onClick={addPersonalGoalFromTab}
+                  disabled={goalSubmitting}
+                  aria-busy={goalSubmitting}
+                  className={cn(modalPrimaryButton, 'mt-4 inline-flex items-center justify-center gap-2 disabled:opacity-60')}
+                >
+                  {goalSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                  {goalSubmitting
+                    ? editingGoalId
+                      ? 'Updating…'
+                      : 'Saving…'
+                    : editingGoalId
+                      ? 'Update Personal Goal'
+                      : 'Save Personal Goal'}
                 </button>
                   </>
                 )}
@@ -2560,11 +2734,21 @@ export function Achievements() {
                 <div className="grid grid-cols-1 gap-3">
                   <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className={modalInput} />
                   <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className={modalInput} />
+                  {editingAchievementLocked ? (
+                    <div className={cn(modalInsetPanel, 'flex items-start gap-3')} data-testid="achievement-tracking-locked-notice" role="note">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
+                      <p className={modalBodyText}>
+                        Tracking is locked because this item has already been completed and rewarded.
+                        You can still update its descriptive information, but progress settings can no longer be changed.
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pa-tracking" className={modalLabel}>How would you like to track your progress?</label>
                     <SolaceSelect
                       id="pa-tracking"
                       value={achTrackingType}
+                      disabled={editingAchievementLocked}
                       onValueChange={(v) => {
                         const t = v as typeof achTrackingType;
                         setAchTrackingType(t);
@@ -2583,11 +2767,12 @@ export function Achievements() {
                   </div>
                   {achTrackingType !== 'manual_milestone' ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <input type="number" min={1} value={achTargetValue} onChange={(e) => setAchTargetValue(e.target.value)} placeholder="Target value (e.g. 10)" className={modalInput} />
+                      <input type="number" min={1} value={achTargetValue} onChange={(e) => setAchTargetValue(e.target.value)} placeholder="Target value (e.g. 10)" disabled={editingAchievementLocked} className={cn(modalInput, 'disabled:opacity-60')} />
                       {achTrackingType === 'duration' ? (
                         <SolaceSelect
                           id="pa-duration-unit"
                           value={achTrackingUnit || 'minutes'}
+                          disabled={editingAchievementLocked}
                           onValueChange={(v) => setAchTrackingUnit(v)}
                           ariaLabel="Duration unit"
                           variant="form"
@@ -2598,6 +2783,7 @@ export function Achievements() {
                         <SolaceSelect
                           id="pa-amount-unit"
                           value={achAmountCustom ? 'custom' : achTrackingUnit || 'currency'}
+                          disabled={editingAchievementLocked}
                           onValueChange={(v) => {
                             if (v === 'custom') {
                               setAchAmountCustom(true);
@@ -2613,7 +2799,7 @@ export function Achievements() {
                         />
                       ) : null}
                       {achTrackingType === 'amount' && achAmountCustom ? (
-                        <input id="pa-custom-unit" type="text" value={achTrackingUnit} onChange={(e) => setAchTrackingUnit(e.target.value)} placeholder="Custom unit (e.g. reps)" className={modalInput} />
+                        <input id="pa-custom-unit" type="text" value={achTrackingUnit} onChange={(e) => setAchTrackingUnit(e.target.value)} placeholder="Custom unit (e.g. reps)" disabled={editingAchievementLocked} className={cn(modalInput, 'disabled:opacity-60')} />
                       ) : null}
                     </div>
                   ) : null}
@@ -2621,8 +2807,22 @@ export function Achievements() {
                 <p className="mt-3 text-xs text-zinc-400">
                   Achievement Completion Reward: <span className="font-semibold text-white">10 Points</span> — awarded automatically by the backend at 100%.
                 </p>
-                <button type="button" onClick={addPersonalAchievementFromTab} className={cn(modalPrimaryButton, "mt-4")}>
-                  {editingAchievementId ? 'Update Personal Achievement' : 'Save Personal Achievement'}
+                <button
+                  type="button"
+                  data-testid="achievement-submit-button"
+                  onClick={addPersonalAchievementFromTab}
+                  disabled={achievementSubmitting}
+                  aria-busy={achievementSubmitting}
+                  className={cn(modalPrimaryButton, 'mt-4 inline-flex items-center justify-center gap-2 disabled:opacity-60')}
+                >
+                  {achievementSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                  {achievementSubmitting
+                    ? editingAchievementId
+                      ? 'Updating…'
+                      : 'Saving…'
+                    : editingAchievementId
+                      ? 'Update Personal Achievement'
+                      : 'Save Personal Achievement'}
                 </button>
               </>
             )}
@@ -2630,6 +2830,10 @@ export function Achievements() {
         </motion.div>
       )}
 
+      {/* Phase 4: AnimatePresence gives the detail workspace a real close
+          animation + an exit-complete event, so the edit modal opens only after
+          it has fully closed (never stacked). */}
+      <AnimatePresence onExitComplete={handleDetailExitComplete}>
       {detailItem
         ? (() => {
             const isGoal = detailItem.itemType === 'goal';
@@ -2651,17 +2855,22 @@ export function Achievements() {
             };
             return (
               <motion.div
+                key="detail-modal"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 className={modalOverlay}
                 data-testid="detail-modal"
                 /* Phase 5: outside-click / focus-loss must NOT dismiss. */
               >
                 <motion.div
+                  ref={detailPanelRef}
+                  tabIndex={-1}
                   initial={{ scale: 0.96, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.96, opacity: 0 }}
                   onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-                  className={cn(modalPanelLg, 'max-h-[90vh] overflow-y-auto p-6')}
+                  className={cn(modalPanelLg, 'max-h-[90vh] overflow-y-auto p-6 outline-none')}
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -2673,14 +2882,22 @@ export function Achievements() {
                         <button
                           type="button"
                           data-testid="detail-edit"
+                          disabled={editTransition !== 'idle'}
+                          aria-disabled={editTransition !== 'idle'}
                           onClick={() => {
-                            // Phase 5: reuse the existing edit form. Close the
-                            // workspace first (chosen: no stacked modals).
-                            setDetailItem(null);
-                            if (isGoal && goalRaw) openEditGoal(goalRaw as Record<string, unknown>);
-                            else if (ach) openEditAchievement(ach);
+                            // Phase 4: preserve the item, then start the close
+                            // animation. The edit form opens on exit-complete.
+                            const raw = goalRaw as Record<string, unknown>;
+                            const a = ach;
+                            startEditFromDetail(
+                              isGoal && raw
+                                ? () => openEditGoal(raw)
+                                : a
+                                  ? () => openEditAchievement(a)
+                                  : () => {}
+                            );
                           }}
-                          className={modalCloseButton}
+                          className={cn(modalCloseButton, 'disabled:opacity-50')}
                         >
                           Edit
                         </button>
@@ -2792,6 +3009,7 @@ export function Achievements() {
             );
           })()
         : null}
+      </AnimatePresence>
     </>
   );
 }
