@@ -12,6 +12,13 @@ export type { ProgressReportRange };
 
 export type ProgressReportItemType = "goal" | "achievement";
 
+/**
+ * Where an item came from. `personal` = user-created (personal_goals /
+ * custom_achievements). `system` = backend-defined activity achievement
+ * (system-achievements catalog + user_achievements state).
+ */
+export type ProgressReportOrigin = "personal" | "system";
+
 /** Tracking strategies (mirrors the gamification foundation). */
 export type ProgressReportTrackingType = "count" | "duration" | "amount" | "manual_milestone";
 
@@ -28,6 +35,10 @@ export interface ProgressReportTextEntry {
 export interface ProgressReportItemBase {
   id: string;
   title: string;
+  /** Item origin (added in Phase 5; personal items keep their previous meaning). */
+  origin: ProgressReportOrigin;
+  /** Icon name for UI/PDF rendering (system items only; null for personal). */
+  iconName: string | null;
   category: string | null;
   status: string;
   priority: string | null;
@@ -66,6 +77,7 @@ export interface ProgressReportCompletion {
   itemType: ProgressReportItemType;
   itemId: string;
   title: string;
+  origin: ProgressReportOrigin;
   completedAt: string; // YYYY-MM-DD (user calendar day)
   /** Points actually awarded per the point_transactions ledger (never derived). */
   rewardPointsAwarded: number;

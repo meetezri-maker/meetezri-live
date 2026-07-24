@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import prisma from '../../lib/prisma';
+import prisma, { type PrismaClientLike } from '../../lib/prisma';
 
 /**
  * Single balance bucket: sub-minute precision lives in `*_seconds` columns; whole-minute fallbacks
@@ -31,11 +31,23 @@ export function resolveProfileRemainingSeconds(profile: {
 /**
  * Add plan-granted minutes to the subscription bucket (profiles.credits / credits_seconds).
  * Stack-safe: never replaces existing remaining time.
+ *
+ * The single stacking implementation for every automated grant path (checkout linking,
+ * customer reconciliation, webhook checkout completion, renewals). Reset/overwrite paths —
+ * admin plan override and trial credit assignment — are deliberately NOT routed here; their
+ * contract is "replace the balance", which is a different operation.
+ *
+ * Pass `client` to enlist the read and the write in a caller-owned interactive transaction;
+ * omitting it uses the Prisma singleton exactly as before.
  */
-export async function addSubscriptionAllowanceMinutes(userId: string, minutesToAdd: number): Promise<void> {
+export async function addSubscriptionAllowanceMinutes(
+  userId: string,
+  minutesToAdd: number,
+  client: PrismaClientLike = prisma
+): Promise<void> {
   if (!minutesToAdd || minutesToAdd <= 0) return;
 
-  const profile = await prisma.profiles.findUnique({
+  const profile = await client.profiles.findUnique({
     where: { id: userId },
     select: { credits: true, credits_seconds: true },
   });
@@ -49,7 +61,7 @@ export async function addSubscriptionAllowanceMinutes(userId: string, minutesToA
   const newSeconds = existingSeconds + minutesToAdd * 60;
   const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
 
-  await prisma.profiles.update({
+  await client.profiles.update({
     where: { id: userId },
     data: { credits: newMinutes, credits_seconds: newSeconds },
   });

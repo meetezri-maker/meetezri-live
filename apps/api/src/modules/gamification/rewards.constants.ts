@@ -23,6 +23,12 @@ export type GamificationItemType = "personal_goal" | "personal_achievement";
 export const POINT_SOURCE_TYPES = {
   PERSONAL_GOAL_COMPLETION: "personal_goal_completion",
   PERSONAL_ACHIEVEMENT_COMPLETION: "personal_achievement_completion",
+  /**
+   * System-generated achievements (activity-derived, backend-awarded). Kept as a
+   * distinct source type so reporting can tell personal and system rewards apart
+   * without overloading the personal types.
+   */
+  SYSTEM_ACHIEVEMENT_COMPLETION: "system_achievement_completion",
 } as const;
 
 export type PointSourceType =

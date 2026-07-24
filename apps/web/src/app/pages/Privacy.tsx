@@ -441,8 +441,8 @@ export function Privacy() {
           </div>
         </section>
 
-        {/* Understanding Safety at Solace */}
-        <section className="landing-section py-12 md:py-16">
+        {/* Understanding Safety at Solace — `#safety` is deep-linked from the pre-launch FAQ. */}
+        <section id="safety" className="landing-section scroll-mt-24 py-12 md:py-16">
           <SectionHeading title="Understanding Safety at Solace" />
 
           <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-3 lg:gap-6">

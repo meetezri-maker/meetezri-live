@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma';
 import { CreateJournalInput, UpdateJournalInput } from './journal.schema';
+import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import { notificationsService } from '../notifications/notifications.service';
 import { invalidateRecentActivityCache } from '../users/user.service';
 
@@ -25,6 +26,8 @@ export async function createJournalEntry(userId: string, data: CreateJournalInpu
   });
   invalidateJournalCache(userId);
   invalidateRecentActivityCache(userId);
+  // Award any system achievement this entry newly unlocks (failure-isolated).
+  await onUserActivity(userId, "journal_created");
   return created;
 }
 

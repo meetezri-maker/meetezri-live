@@ -526,3 +526,81 @@ describe("no additional API calls", () => {
     }
   });
 });
+
+describe("system achievements in the PDF (Phase 5)", () => {
+  it("renders a system achievement with its origin label", async () => {
+    const report = makeReport({
+      activeAchievements: [
+        goal({ id: "s1", title: "First Steps", origin: "system", iconName: "footprints", status: "active", currentProgress: 30 }),
+      ],
+    });
+    const d = (await buildProgressReportPdf(report)) as unknown as { texts: Array<{ text: string }> };
+    const text = allText(d);
+    expect(text).toContain("First Steps");
+    expect(text).toContain("Origin: System");
+  });
+
+  it("renders the reward-pending status verbatim (never Active 100%)", async () => {
+    const report = makeReport({
+      activeAchievements: [
+        goal({ id: "s1", title: "First Steps", origin: "system", status: "completed_reward_pending", currentProgress: 100 }),
+      ],
+    });
+    const d = (await buildProgressReportPdf(report)) as unknown as { texts: Array<{ text: string }> };
+    expect(allText(d)).toContain("Completed · Reward pending");
+  });
+
+  it("renders a system completion with origin + ledger reward, and no invented reward without a ledger row", async () => {
+    const withReward = makeReport({
+      completedDuringPeriod: [
+        {
+          itemType: "achievement",
+          itemId: "s1",
+          title: "First Steps",
+          origin: "system",
+          completedAt: "2026-07-19",
+          rewardPointsAwarded: 10,
+          trackingType: "count",
+          finalCurrentValue: 1,
+          finalTargetValue: 1,
+        },
+      ],
+    });
+    const d1 = (await buildProgressReportPdf(withReward)) as unknown as { texts: Array<{ text: string }> };
+    const t1 = allText(d1);
+    expect(t1).toContain("First Steps");
+    expect(t1).toContain("System");
+    expect(t1).toContain("10 pts");
+
+    const noReward = makeReport({
+      completedDuringPeriod: [
+        {
+          itemType: "achievement",
+          itemId: "s2",
+          title: "Mood Master",
+          origin: "system",
+          completedAt: "2026-07-19",
+          rewardPointsAwarded: 0, // no ledger row yet
+          trackingType: "count",
+          finalCurrentValue: 7,
+          finalTargetValue: 7,
+        },
+      ],
+    });
+    const d2 = (await buildProgressReportPdf(noReward)) as unknown as { texts: Array<{ text: string }> };
+    expect(allText(d2)).toContain("0 pts");
+  });
+
+  it("paginates a mixed personal + system report across multiple pages", async () => {
+    const many = Array.from({ length: 16 }, (_, i) =>
+      goal({ id: `s${i}`, title: `System achievement ${i}`, origin: i % 2 ? "system" : "personal" })
+    );
+    const d = (await buildProgressReportPdf(
+      makeReport({ activeAchievements: many })
+    )) as unknown as { pages: number; texts: Array<{ page: number; text: string }> };
+    expect(d.pages).toBeGreaterThan(1);
+    for (let p = 1; p <= d.pages; p += 1) {
+      expect(pageText(d, p)).toContain(`Page ${p} of ${d.pages}`);
+    }
+  });
+});

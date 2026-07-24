@@ -14,6 +14,8 @@ import type { jsPDF } from "jspdf";
 import { cleanPdfText, localDateKey } from "@/lib/journalExport";
 import {
   ITEM_TYPE_LABELS,
+  originLabel,
+  statusLabel,
   TRACKING_METHOD_LABELS,
   attentionReasonLabel,
   formatNumericProgress,
@@ -190,8 +192,9 @@ function itemCard(d: Doc, cur: Cursor, item: ProgressReportItem): void {
   const titleLines = wrap(d, item.title || "Untitled", innerW);
 
   const metaBits = [
+    `Origin: ${originLabel(item.origin)}`,
     humanizeToken(item.category),
-    humanizeToken(item.status),
+    statusLabel(item.status),
     item.priority ? `Priority: ${humanizeToken(item.priority)}` : null,
     `Tracking: ${TRACKING_METHOD_LABELS[item.trackingType]}`,
   ].filter(Boolean) as string[];
@@ -593,7 +596,7 @@ export async function buildProgressReportPdf(report: ProgressReport): Promise<Do
         d,
         cur,
         formatReportDate(c.completedAt) ?? "",
-        `${c.title}  ·  ${ITEM_TYPE_LABELS[c.itemType]}`,
+        `${c.title}  ·  ${ITEM_TYPE_LABELS[c.itemType]}  ·  ${originLabel(c.origin)}`,
         `${c.rewardPointsAwarded} pts`
       );
     }

@@ -6,6 +6,7 @@ import {
   TRACKING_METHOD_LABELS,
   formatNumericProgress,
   formatReportDate,
+  originLabel,
   pluralize,
 } from "./progress-report.utils";
 import type { ProgressReportCompletion } from "./progress-report.types";
@@ -45,10 +46,18 @@ export function ProgressReportCompletedSection({
                 key={`${c.itemType}:${c.itemId}`}
                 className={cn(achievementsCard, "min-w-0 space-y-2 rounded-2xl p-4")}
               >
-                <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-emerald-300/90">
-                  <CheckCircle className="h-3.5 w-3.5" aria-hidden />
-                  {TYPE_LABEL[c.itemType]}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-emerald-300/90">
+                    <CheckCircle className="h-3.5 w-3.5" aria-hidden />
+                    {TYPE_LABEL[c.itemType]}
+                  </p>
+                  <span
+                    data-testid="report-completed-origin"
+                    className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400"
+                  >
+                    {originLabel(c.origin)}
+                  </span>
+                </div>
                 <h3 className="break-words text-sm font-semibold text-white">{c.title}</h3>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
                   {date ? (

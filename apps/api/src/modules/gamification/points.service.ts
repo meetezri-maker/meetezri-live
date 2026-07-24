@@ -8,12 +8,16 @@
  * item can never award the same reward twice (idempotency).
  */
 import { Prisma } from "@prisma/client";
-import prisma from "../../lib/prisma";
+import prisma, { type PrismaClientLike } from "../../lib/prisma";
 import { PointSourceType } from "./rewards.constants";
 import { LevelInfo, calculateLevel } from "./level.service";
 
-/** Accepts either the base client or an interactive-transaction client. */
-export type PrismaClientLike = Prisma.TransactionClient | typeof prisma;
+/**
+ * Re-exported for backwards compatibility: `completion.service.ts` and
+ * `system-achievements.service.ts` import this name from here. The canonical
+ * declaration now lives in `lib/prisma.ts`.
+ */
+export type { PrismaClientLike };
 
 export interface RecordPointsInput {
   userId: string;

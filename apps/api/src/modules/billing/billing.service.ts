@@ -23,35 +23,6 @@ const CLIENT_URL =
     ? 'https://sub.talktosolace2.ai'
     : 'http://localhost:5173');
 
-async function addSubscriptionAllowance(userId: string, minutesToAdd: number) {
-  if (!minutesToAdd || minutesToAdd <= 0) return;
-
-  const profile = await prisma.profiles.findUnique({
-    where: { id: userId },
-    select: {
-      credits: true,
-      credits_seconds: true,
-    },
-  });
-
-  const existingMinutes = profile?.credits ?? 0;
-  const existingSeconds =
-    profile?.credits_seconds && profile.credits_seconds > 0
-      ? profile.credits_seconds
-      : existingMinutes * 60;
-
-  const newSeconds = existingSeconds + minutesToAdd * 60;
-  const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
-
-  await prisma.profiles.update({
-    where: { id: userId },
-    data: {
-      credits: newMinutes,
-      credits_seconds: newSeconds,
-    },
-  });
-}
-
 async function getOrCreateStripeCustomer(userId: string, email: string) {
   const profile = await prisma.profiles.findUnique({ where: { id: userId } });
   
@@ -346,7 +317,7 @@ export async function linkSubscriptionToUser(userId: string, sessionId: string) 
     },
   });
 
-  await addSubscriptionAllowance(userId, PLAN_LIMITS[planType].credits);
+  await addSubscriptionAllowanceMinutes(userId, PLAN_LIMITS[planType].credits);
 }
 
 export async function createPortalSession(userId: string) {
@@ -812,7 +783,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
     (!existingByStripeId || previousPlanType !== planType);
 
   if (shouldGrant) {
-    await addSubscriptionAllowance(userId, PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS].credits);
+    await addSubscriptionAllowanceMinutes(userId, PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS].credits);
   }
 
   return updatedSub;

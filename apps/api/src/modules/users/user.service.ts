@@ -5,6 +5,7 @@ import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing/billing.service';
 import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
+import { ensureSingleActiveTrial } from '../billing/services/trial.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
@@ -882,23 +883,17 @@ export async function createProfile(
     });
   }
 
-  // Create Trial Subscription (7 days)
-  const existingTrial = await prisma.subscriptions.findFirst({
-    where: { user_id: userId, plan_type: 'trial' },
-    select: { id: true },
+  // Create Trial Subscription (7 days) via the canonical helper, which owns the
+  // at-most-one-active-trial invariant. `match: 'any_trial'` preserves this path's historical
+  // semantics exactly: any pre-existing trial row — active or not — suppresses creation, and
+  // an existing row is never reshaped here.
+  const trialStart = new Date();
+  await ensureSingleActiveTrial(userId, {
+    match: 'any_trial',
+    billingCycle: 'monthly',
+    startDate: trialStart,
+    endDate: new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000),
   });
-  if (!existingTrial) {
-    await prisma.subscriptions.create({
-      data: {
-        user_id: userId,
-        plan_type: 'trial',
-        status: 'active',
-        start_date: new Date(),
-        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        billing_cycle: 'monthly',
-      },
-    });
-  }
 
   return profile;
 }
@@ -999,29 +994,148 @@ export function invalidateRecentActivityCache(userId: string) {
   }
 }
 
+/**
+ * ---------------------------------------------------------------------------------------
+ * `/users/me` subscription self-heal — plan §10.
+ *
+ * Reconciliation is opportunistic recovery for a checkout whose linking did not complete. It
+ * is NOT a general refresh, and it must never be the reason a profile read is slow.
+ *
+ * Correctness hierarchy (plan §10.2) — do not blur these:
+ *   - The database constraint (not yet added) is the ONLY cross-instance correctness guarantee.
+ *   - The atomic transaction keeps a subscription row and its allowance consistent.
+ *   - Single-flight below is per-process duplicate REDUCTION. It is NOT a concurrency guarantee:
+ *     two API instances can still each start a sync.
+ *   - Cooldown below is load reduction only.
+ * ---------------------------------------------------------------------------------------
+ */
+export type SelfHealDecision =
+  | 'reconcile_eligible'
+  | 'skip_already_linked'
+  | 'skip_canceled'
+  | 'skip_valid_trial'
+  | 'skip_valid_paid'
+  | 'skip_cooldown';
+
+/** Per-process in-flight syncs, keyed by user. Reduction only — see the hierarchy above. */
+const selfHealInFlight = new Map<string, Promise<void>>();
+/** Last completed attempt per user; suppresses re-attempts inside the window. */
+const selfHealLastAttempt = new Map<string, number>();
+const SELF_HEAL_COOLDOWN_MS = 60 * 1000;
+/** An interrupted checkout is only worth recovering for a bounded period after it started. */
+const SELF_HEAL_INCOMPLETE_RECOVERY_MS = 30 * 60 * 1000;
+
+/** Test seam: reset the guard state so cases do not leak into one another. */
+export function resetSelfHealStateForTests() {
+  selfHealInFlight.clear();
+  selfHealLastAttempt.clear();
+}
+
+/**
+ * Decide whether local billing state is genuinely incomplete relative to an existing Stripe
+ * customer (plan §10.4). The distinguishing predicate is "is there an unlinked-but-should-be-
+ * linked state", NOT "does the plan say trial" — which is what made every canceled subscriber
+ * reconcile forever.
+ *
+ * Only reads the database when a Stripe customer exists, so the common trial user costs nothing.
+ */
+async function evaluateSelfHealEligibility(
+  userId: string,
+  hasStripeCustomer: boolean,
+  activePlanType: string | null
+): Promise<SelfHealDecision> {
+  // A trial user who never reached Stripe has nothing to reconcile.
+  if (!hasStripeCustomer) return 'skip_valid_trial';
+
+  // A valid active paid subscription is already the state we would be syncing towards.
+  if (activePlanType && activePlanType !== 'trial') return 'skip_valid_paid';
+
+  const lastAttempt = selfHealLastAttempt.get(userId);
+  if (lastAttempt && Date.now() - lastAttempt < SELF_HEAL_COOLDOWN_MS) {
+    return 'skip_cooldown';
+  }
+
+  // The newest row that was ever linked to a Stripe subscription. Its existence — and its
+  // status — is what separates "never linked" from "linked and since churned".
+  const linkedRow = await prisma.subscriptions.findFirst({
+    where: { user_id: userId, stripe_sub_id: { not: null } },
+    orderBy: { created_at: 'desc' },
+    select: { status: true, created_at: true },
+  });
+
+  // Never linked, but a Stripe customer exists: this is the genuinely-incomplete case.
+  if (!linkedRow) return 'reconcile_eligible';
+
+  const status = (linkedRow.status || '').toLowerCase();
+
+  // Churned. Explicitly covers the repeated-reconciliation-after-cancellation loop, and does so
+  // regardless of whether the row still carries a plan_type mislabeled by cancellation.
+  if (status === 'canceled' || status === 'cancelled') return 'skip_canceled';
+
+  // An interrupted checkout is recoverable, but only for a bounded window.
+  if (status === 'incomplete' || status === 'incomplete_expired') {
+    const age = Date.now() - new Date(linkedRow.created_at).getTime();
+    return age <= SELF_HEAL_INCOMPLETE_RECOVERY_MS ? 'reconcile_eligible' : 'skip_canceled';
+  }
+
+  // active / trialing / past_due — already linked to a live Stripe subscription.
+  return 'skip_already_linked';
+}
+
+/**
+ * Run one reconciliation for this user, collapsing concurrent callers onto a single promise.
+ * Never throws: a sync failure must never fail a profile read (unchanged from today).
+ */
+function runSelfHeal(userId: string): Promise<void> {
+  const existing = selfHealInFlight.get(userId);
+  if (existing) return existing;
+
+  const run = (async () => {
+    try {
+      await billingService.syncSubscriptionWithStripe(userId);
+      // Same invalidation the old cache-hit path performed, so the next read observes any
+      // plan the sync recovered.
+      userProfileCache.delete(userId);
+    } catch {
+      // Swallow: fall back to local state.
+    } finally {
+      selfHealLastAttempt.set(userId, Date.now());
+      selfHealInFlight.delete(userId);
+    }
+  })();
+
+  selfHealInFlight.set(userId, run);
+  return run;
+}
+
 export async function getProfile(userId: string) {
   // Check cache first
   const cached = userProfileCache.get(userId);
   let result: any;
   let fromCache = false;
 
+  /** Set once per request, so reconciliation can never be evaluated twice for one read. */
+  let selfHealDecision: SelfHealDecision | null = null;
+
   if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
-    // If user just upgraded, cache can keep returning trial for a short window.
-    // When we detect "trial" and the user has a Stripe customer, do a one-time sync.
+    // A cache hit always returns the cached value. When local billing state looks genuinely
+    // incomplete we start a reconciliation OUT OF BAND (plan §10.5) rather than awaiting a
+    // Stripe round-trip — previously a cache hit was slower than a miss, because it awaited
+    // the sync and then fell through to a full cold reload anyway (two syncs per warm read).
     const cachedPlan = (cached.data?.subscription_plan || 'trial') as keyof typeof PLAN_LIMITS;
     const hasStripeCustomer = !!cached.data?.stripe_customer_id;
 
     if (cachedPlan === 'trial' && hasStripeCustomer) {
-      try {
-        await billingService.syncSubscriptionWithStripe(userId);
-        userProfileCache.delete(userId);
-      } catch {
-        // ignore and fall back to cached
+      selfHealDecision = await evaluateSelfHealEligibility(userId, hasStripeCustomer, null);
+      if (selfHealDecision === 'reconcile_eligible') {
+        // Not awaited: the response must not wait on Stripe. The sync invalidates the profile
+        // cache when it completes, so the next read observes anything it recovered.
+        void runSelfHeal(userId);
       }
-    } else {
-      result = { ...cached.data };
-      fromCache = true;
     }
+
+    result = { ...cached.data };
+    fromCache = true;
   }
 
   // When the cache is valid, return immediately: the cached object already includes
@@ -1105,22 +1219,29 @@ export async function getProfile(userId: string) {
     let activeSubscription = profileResult.subscriptions[0];
     const latestEmergencyContact = profileResult.emergency_contacts[0];
 
-    // If we still think the user is on trial but they have a Stripe customer,
-    // try a sync to recover from missing/rewritten billing tables.
+    // Recover a checkout whose linking never completed. Eligibility is evaluated at most once
+    // per request (plan §10.4): if the cache-hit branch above already decided, we do not
+    // re-decide here — that double evaluation is what made one warm request issue two syncs.
     const maybePlanType = (activeSubscription?.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
-    if (maybePlanType === 'trial' && profileResult.stripe_customer_id) {
-      try {
-        await billingService.syncSubscriptionWithStripe(userId);
-        activeSubscription = await prisma.subscriptions.findFirst({
-          where: {
-            user_id: userId,
-            status: { in: ['active', 'trialing', 'past_due'] },
-          },
-          orderBy: { created_at: 'desc' },
-        }) || activeSubscription;
-      } catch {
-        // ignore sync failures; fall back to DB state
-      }
+    if (selfHealDecision === null) {
+      selfHealDecision = await evaluateSelfHealEligibility(
+        userId,
+        !!profileResult.stripe_customer_id,
+        activeSubscription?.plan_type ?? null
+      );
+    }
+
+    // The cold path reconciles inline: this is the interrupted-checkout case the user is
+    // actively waiting on. Single-flight collapses concurrent readers onto one Stripe call.
+    if (selfHealDecision === 'reconcile_eligible' && maybePlanType === 'trial') {
+      await runSelfHeal(userId);
+      activeSubscription = await prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          status: { in: ['active', 'trialing', 'past_due'] },
+        },
+        orderBy: { created_at: 'desc' },
+      }) || activeSubscription;
     }
 
     const completedSessionsCount = profileResult._count.app_sessions;

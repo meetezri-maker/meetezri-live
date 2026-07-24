@@ -5,12 +5,24 @@ const mockPrisma = {
   goal_check_ins: { findMany: jest.fn() },
   achievement_check_ins: { findMany: jest.fn() },
   point_transactions: { findMany: jest.fn(), aggregate: jest.fn() },
+  // Phase 5: system achievement state + activity metrics.
+  user_achievements: { findMany: jest.fn() },
+  app_sessions: { count: jest.fn() },
+  mood_entries: { count: jest.fn(), findMany: jest.fn() },
+  journal_entries: { count: jest.fn() },
+  user_wellness_progress: { count: jest.fn() },
+  community_posts: { count: jest.fn() },
 };
 
 jest.mock("../../lib/prisma", () => ({ __esModule: true, default: mockPrisma }));
+jest.mock("../users/user.service", () => ({ calculateStreak: jest.fn(() => 0) }));
 
 import { generateProgressReport } from "./progress-report.service";
 import { isProgressReportRange } from "./progress-report.constants";
+import { SYSTEM_ACHIEVEMENTS } from "../system-achievements/system-achievements.constants";
+
+const FIRST_STEPS = SYSTEM_ACHIEVEMENTS[0]; // sessions >= 1, 10 pts
+const CONSISTENT = SYSTEM_ACHIEVEMENTS[1]; // sessions >= 10, 50 pts
 
 const USER = "user-1";
 const NOW = new Date("2026-07-23T12:00:00Z"); // UTC today = 2026-07-23
@@ -107,6 +119,8 @@ function setData(opts: {
   achCheckIns?: unknown[];
   transactions?: unknown[];
   totalPoints?: number;
+  systemEarned?: unknown[];
+  sessions?: number;
 } = {}) {
   mockPrisma.profiles.findUnique.mockResolvedValue({
     timezone: opts.timezone === undefined ? "UTC" : opts.timezone,
@@ -118,6 +132,14 @@ function setData(opts: {
   mockPrisma.achievement_check_ins.findMany.mockResolvedValue(opts.achCheckIns ?? []);
   mockPrisma.point_transactions.findMany.mockResolvedValue(opts.transactions ?? []);
   mockPrisma.point_transactions.aggregate.mockResolvedValue({ _sum: { points: opts.totalPoints ?? 0 } });
+  // System achievements default to: no earned rows, no qualifying activity.
+  mockPrisma.user_achievements.findMany.mockResolvedValue(opts.systemEarned ?? []);
+  mockPrisma.app_sessions.count.mockResolvedValue(opts.sessions ?? 0);
+  mockPrisma.mood_entries.count.mockResolvedValue(0);
+  mockPrisma.mood_entries.findMany.mockResolvedValue([]);
+  mockPrisma.journal_entries.count.mockResolvedValue(0);
+  mockPrisma.user_wellness_progress.count.mockResolvedValue(0);
+  mockPrisma.community_posts.count.mockResolvedValue(0);
 }
 
 beforeEach(() => {
@@ -585,5 +607,135 @@ describe("closing summary", () => {
   it("falls back to a single neutral line when nothing happened", async () => {
     const r = await generateProgressReport(USER, "7d", NOW);
     expect(r.closingSummary).toEqual(["No tracked progress activity in this period."]);
+  });
+});
+
+// ===========================================================================
+describe("system achievements in the report (Phase 5)", () => {
+  const sysTxn = (over: Record<string, unknown> = {}) => ({
+    id: `st-${Math.random()}`,
+    user_id: USER,
+    source_type: "system_achievement_completion",
+    source_item_id: FIRST_STEPS.id,
+    points: FIRST_STEPS.points,
+    reason: "System achievement completed: First Steps",
+    created_at: new Date("2026-07-19T10:00:00Z"),
+    ...over,
+  });
+
+  it("personal items carry origin personal; system items carry origin system", async () => {
+    setData({ achievements: [achievement()], sessions: 0 });
+    const r = await generateProgressReport(USER, "all", NOW);
+    const personal = r.activeAchievements.find((a) => a.origin === "personal");
+    const system = r.activeAchievements.find((a) => a.origin === "system");
+    expect(personal).toBeTruthy();
+    expect(system).toBeTruthy();
+    // System items expose an icon name; personal items do not.
+    expect(system!.iconName).toBe(FIRST_STEPS.icon);
+    expect(personal!.iconName).toBeNull();
+  });
+
+  it("renders in-progress system achievements with derived percentage", async () => {
+    setData({ sessions: 3 }); // Consistent Journey: 3/10 = 30%
+    const r = await generateProgressReport(USER, "all", NOW);
+    const cj = r.activeAchievements.find((a) => a.id === CONSISTENT.id)!;
+    expect(cj.origin).toBe("system");
+    expect(cj.currentProgress).toBe(30);
+    expect(cj.status).toBe("active");
+  });
+
+  it("represents a threshold-met-but-unpersisted item as completed_reward_pending, not active 100%", async () => {
+    setData({ sessions: 1 }); // First Steps met (>=1) but no user_achievements row
+    const r = await generateProgressReport(USER, "all", NOW);
+    const fs = r.activeAchievements.find((a) => a.id === FIRST_STEPS.id)!;
+    expect(fs.currentProgress).toBe(100);
+    expect(fs.status).toBe("completed_reward_pending");
+    expect(fs.rewardAwarded).toBe(false);
+    // NOT counted as a completion until genuinely earned + rewarded.
+    expect(r.currentSnapshot.completedAchievementsAllTime).toBe(0);
+    expect(r.completedDuringPeriod.filter((c) => c.origin === "system")).toHaveLength(0);
+  });
+
+  it("moves an earned+rewarded system achievement into completedDuringPeriod with ledger points", async () => {
+    setData({
+      sessions: 1,
+      systemEarned: [
+        { user_id: USER, achievement_id: FIRST_STEPS.id, earned_at: new Date("2026-07-19T10:00:00Z"), progress: 1 },
+      ],
+      transactions: [sysTxn()],
+    });
+    const r = await generateProgressReport(USER, "7d", NOW);
+
+    const completion = r.completedDuringPeriod.find((c) => c.itemId === FIRST_STEPS.id)!;
+    expect(completion).toBeTruthy();
+    expect(completion.origin).toBe("system");
+    expect(completion.completedAt).toBe("2026-07-19");
+    expect(completion.rewardPointsAwarded).toBe(FIRST_STEPS.points); // FROM the ledger
+    // Not also present in the active list (no double counting).
+    expect(r.activeAchievements.find((a) => a.id === FIRST_STEPS.id)).toBeUndefined();
+    expect(r.currentSnapshot.completedAchievementsAllTime).toBe(1);
+    expect(r.periodSummary.completedAchievements).toBe(1);
+  });
+
+  it("earned reward points come from the ledger, never the definition (0 when no ledger row)", async () => {
+    setData({
+      sessions: 1,
+      systemEarned: [
+        { user_id: USER, achievement_id: FIRST_STEPS.id, earned_at: new Date("2026-07-19T10:00:00Z"), progress: 1 },
+      ],
+      transactions: [], // earned but NOT yet rewarded (historical gap)
+    });
+    const r = await generateProgressReport(USER, "7d", NOW);
+    const completion = r.completedDuringPeriod.find((c) => c.itemId === FIRST_STEPS.id)!;
+    expect(completion.rewardPointsAwarded).toBe(0);
+  });
+
+  it("excludes an earn completed outside the period from completedDuringPeriod", async () => {
+    setData({
+      sessions: 1,
+      systemEarned: [
+        { user_id: USER, achievement_id: FIRST_STEPS.id, earned_at: new Date("2026-06-01T10:00:00Z"), progress: 1 },
+      ],
+    });
+    const r = await generateProgressReport(USER, "7d", NOW);
+    expect(r.completedDuringPeriod.find((c) => c.itemId === FIRST_STEPS.id)).toBeUndefined();
+    // Still counted all-time.
+    expect(r.currentSnapshot.completedAchievementsAllTime).toBe(1);
+  });
+
+  it("includes system reward transactions in the rewards ledger view", async () => {
+    setData({
+      sessions: 1,
+      systemEarned: [
+        { user_id: USER, achievement_id: FIRST_STEPS.id, earned_at: new Date("2026-07-19T10:00:00Z"), progress: 1 },
+      ],
+      transactions: [sysTxn()],
+    });
+    const r = await generateProgressReport(USER, "7d", NOW);
+    expect(r.rewards.transactions.some((t) => t.sourceType === "system_achievement_completion")).toBe(true);
+    expect(r.rewards.pointsEarned).toBe(FIRST_STEPS.points);
+  });
+
+  it("never double-counts personal + system achievements", async () => {
+    setData({
+      achievements: [achievement({ unlocked: true, completed_at: new Date("2026-07-19T10:00:00Z"), progress: 10, total: 10 })],
+      sessions: 1,
+      systemEarned: [
+        { user_id: USER, achievement_id: FIRST_STEPS.id, earned_at: new Date("2026-07-19T10:00:00Z"), progress: 1 },
+      ],
+      transactions: [sysTxn()],
+    });
+    const r = await generateProgressReport(USER, "7d", NOW);
+    // One personal + one system completion this period.
+    expect(r.periodSummary.completedAchievements).toBe(2);
+    expect(r.completedDuringPeriod.filter((c) => c.itemType === "achievement")).toHaveLength(2);
+  });
+
+  it("does not add system items to needs-attention or the consistency denominator", async () => {
+    setData({ sessions: 3 });
+    const r = await generateProgressReport(USER, "7d", NOW);
+    expect(r.needsAttention.every((a) => a.itemId !== CONSISTENT.id)).toBe(true);
+    // No fixed-frequency system items -> overall consistency stays null here.
+    expect(r.periodSummary.overallConsistencyRate).toBeNull();
   });
 });

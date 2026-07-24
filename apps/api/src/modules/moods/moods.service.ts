@@ -1,5 +1,6 @@
 import prisma from "../../lib/prisma";
 import { CreateMoodInput } from "./moods.schema";
+import { onUserActivity } from "../system-achievements/system-achievements.triggers";
 import { invalidateRecentActivityCache, invalidateUserProfileCache } from "../users/user.service";
 import { notificationsService } from "../notifications/notifications.service";
 
@@ -39,6 +40,8 @@ export async function createMood(userId: string, input: CreateMoodInput) {
   invalidateRecentActivityCache(userId);
   clearUserMoodsCache(userId);
   clearMoodsCache();
+  // A mood entry moves both the mood count and the derived streak.
+  await onUserActivity(userId, "mood_logged");
   return created;
 }
 

@@ -973,66 +973,107 @@ export function Achievements() {
         : 'No goals or achievements found.';
 
   // Existing GOAL card — extracted verbatim so the exact card is reused.
-  const renderGoalCard = (raw: Record<string, unknown>) => {
+  // Personal GOAL card — mirrors renderAchievementCard slot-for-slot using the
+  // SAME shared style tokens (achievementsBadgeCard / emblem / icon classes) and
+  // the SAME getIcon() + iconMap, so Goal and Achievement cards are visually
+  // consistent. `personal_goals` has no icon column, so the icon name comes from
+  // goalRowToDisplay — the single existing place a goal's icon name is assigned.
+  const renderGoalCard = (raw: Record<string, unknown>, index: number) => {
     const g = goalCardView(raw);
+    const display = goalRowToDisplay(raw);
+    const Icon = getIcon(display.icon);
+    const isCompleted = g.completed;
+    const showProgressBar = !isCompleted;
+    const rightValue =
+      g.isNumeric && g.targetValue != null
+        ? `${g.currentValue}/${g.targetValue}${g.trackingUnit ? ` ${g.trackingUnit}` : ''}`
+        : `${g.progressPct}%`;
+
     return (
-      <article
+      <motion.article
         key={`goal:${g.id}`}
         data-testid="goal-card"
         data-goal-id={g.id}
-        role="button"
-        tabIndex={0}
-        onClick={() => openGoalDetail(raw)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openGoalDetail(raw);
-          }
-        }}
-        aria-label={`${g.title}. Open details.`}
-        className="flex cursor-pointer flex-col gap-3 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl outline-none transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.16] hover:shadow-lg hover:shadow-black/25 focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
+        layout={false}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
+        className={cn(
+          achievementsBadgeCard,
+          'cursor-pointer transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/25',
+          isCompleted
+            ? 'border-emerald-400/12 hover:border-emerald-400/22 [html[data-ezri-theme=light]_&:border-emerald-300/45 [html[data-theme=light]_&:border-emerald-300/45'
+            : 'border-white/[0.06] hover:border-white/12'
+        )}
       >
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold text-white">{g.title}</h3>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {g.category} · {TRACKING_METHOD_LABELS[g.trackingType]}
-          </p>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span
+        <button
+          type="button"
+          onClick={() => openGoalDetail(raw)}
+          className="flex flex-1 flex-col items-center gap-3 p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
+          aria-label={`${g.title}. Open details.`}
+        >
+          <div
             className={cn(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 capitalize',
-              g.completed ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/[0.06] text-zinc-400'
+              'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
+              isCompleted ? achievementsBadgeEmblemUnlocked : achievementsBadgeEmblemLocked
             )}
           >
-            {g.completed ? (
-              <>
-                <CheckCircle className="h-3.5 w-3.5" aria-hidden /> Completed
-              </>
-            ) : (
-              g.status.replace(/_/g, ' ')
-            )}
-          </span>
-          {g.isNumeric && g.targetValue != null ? (
-            <span className="tabular-nums text-zinc-400">
-              {g.currentValue}/{g.targetValue}
-              {g.trackingUnit ? ` ${g.trackingUnit}` : ''}
-            </span>
-          ) : null}
-        </div>
-        <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-zinc-500">
-            <span>Progress</span>
-            <span className="tabular-nums text-zinc-400">{g.progressPct}%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500/90 to-teal-400/90"
-              style={{ width: `${g.progressPct}%` }}
+            <Icon
+              className={cn('h-9 w-9', isCompleted ? achievementsBadgeIconUnlocked : 'text-zinc-500')}
+              aria-hidden
             />
           </div>
-        </div>
-      </article>
+
+          <div className="min-w-0 space-y-1.5 px-0.5">
+            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-white">
+              {g.title}
+            </h3>
+            <p className="line-clamp-2 text-center text-xs leading-relaxed text-zinc-500">
+              {g.category} · {TRACKING_METHOD_LABELS[g.trackingType]}
+            </p>
+          </div>
+
+          {showProgressBar ? (
+            <div className="w-full space-y-1 px-1">
+              <div className="flex justify-between text-[10px] text-zinc-500">
+                <span>Progress</span>
+                <span className="tabular-nums text-zinc-400">{rightValue}</span>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${g.progressPct}%` }}
+                  transition={{ delay: index * 0.05, duration: 0.5, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
+            {isCompleted ? (
+              <>
+                <span className="inline-flex items-center gap-1 text-emerald-300/90">
+                  <CheckCircle className="h-3.5 w-3.5" aria-hidden />
+                  Completed
+                </span>
+                {display.points > 0 ? (
+                  <span className="text-zinc-600">+{display.points} pts</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1 capitalize text-zinc-500">
+                  {g.status.replace(/_/g, ' ')}
+                </span>
+                {display.points > 0 ? (
+                  <span className="text-zinc-600">+{display.points} pts on completion</span>
+                ) : null}
+              </>
+            )}
+          </div>
+        </button>
+      </motion.article>
     );
   };
 
@@ -2151,7 +2192,7 @@ export function Achievements() {
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {combinedItems.map((item, index) =>
                           item.itemType === 'goal'
-                            ? renderGoalCard(item.data)
+                            ? renderGoalCard(item.data, index)
                             : renderAchievementCard(item.data, index)
                         )}
                       </div>

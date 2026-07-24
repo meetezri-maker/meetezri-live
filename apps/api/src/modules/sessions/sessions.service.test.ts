@@ -31,6 +31,10 @@ jest.mock('../../lib/prisma', () => ({
   default: mockPrisma,
 }));
 
+jest.mock("../system-achievements/system-achievements.triggers", () => ({
+  onUserActivity: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('../email/email.service', () => ({
   emailService: mockEmailService,
 }));

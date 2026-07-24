@@ -60,6 +60,7 @@ export const ITEM_TYPE_LABELS: Record<ProgressReportItemType, string> = {
 const REWARD_SOURCE_LABELS: Record<string, string> = {
   personal_goal_completion: "Goal completion",
   personal_achievement_completion: "Personal Achievement completion",
+  system_achievement_completion: "Achievement completion",
 };
 
 /** Never expose a raw technical code; unknown codes degrade to readable text. */
@@ -130,3 +131,24 @@ export function formatNumericProgress(
   const unit = trackingUnit ? ` ${trackingUnit}` : "";
   return `${currentValue} / ${targetValue}${unit}`;
 }
+
+/** Origin badge label (Phase 5). Defaults to Personal when absent. */
+export function originLabel(origin: string | null | undefined): "Personal" | "System" {
+  return origin === "system" ? "System" : "Personal";
+}
+
+/**
+ * Display label for a report item's status, including the Phase 5
+ * `completed_reward_pending` state so a historically-qualified system
+ * achievement never reads as "Active 100%".
+ */
+export function statusLabel(status: string): string {
+  if (status === "completed_reward_pending") return "Completed · Reward pending";
+  return humanizeToken(status) ?? status;
+}
+
+/** True when the item is a historical system unlock awaiting an approved backfill. */
+export function isRewardPending(status: string): boolean {
+  return status === "completed_reward_pending";
+}
+

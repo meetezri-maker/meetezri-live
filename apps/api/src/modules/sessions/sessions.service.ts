@@ -1,9 +1,10 @@
-import prisma from '../../lib/prisma';
+import prisma, { type PrismaClientLike } from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import {
   deriveSessionSummaryFromTranscript,
   formatTranscriptForSummary,
 } from '@meetezri/shared';
+import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import { resolveProfileRemainingSeconds } from '../billing/credit-balance.service';
 import { emailService } from '../email/email.service';
 import {
@@ -14,7 +15,8 @@ import {
 } from './sessions.schema';
 import { invalidateRecentActivityCache, invalidateUserProfileCache } from '../users/user.service';
 
-type DbClient = Prisma.TransactionClient | typeof prisma;
+/** Local alias for the shared type; keeps every existing `DbClient` signature unchanged. */
+type DbClient = PrismaClientLike;
 
 const sessionsListCache = new Map<string, { data: any; timestamp: number }>();
 const SESSIONS_LIST_CACHE_TTL = 5 * 1000; // 5s: absorbs UI polling / rapid navigation without going stale long.
@@ -155,6 +157,8 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     }
 
     invalidateSessionsCache(userId);
+    // Award any system achievement this session newly unlocks (failure-isolated).
+    await onUserActivity(userId, "session_completed");
     return result;
   } catch (error) {
     const code = (error as { statusCode?: number })?.statusCode;

@@ -11,6 +11,9 @@ export type ProgressReportRange = (typeof PROGRESS_REPORT_RANGES)[number];
 
 export type ProgressReportItemType = "goal" | "achievement";
 
+/** Where an item came from (Phase 5). Optional on read for backward compat. */
+export type ProgressReportOrigin = "personal" | "system";
+
 export type ProgressReportTrackingType = "count" | "duration" | "amount" | "manual_milestone";
 
 export type ProgressReportAttentionReason =
@@ -30,6 +33,10 @@ export interface ProgressReportTextEntry {
 export interface ProgressReportItem {
   id: string;
   title: string;
+  /** Item origin (Phase 5). Optional so pre-Phase-5 fixtures stay valid. */
+  origin?: ProgressReportOrigin;
+  /** Backend-provided icon name (system items). */
+  iconName?: string | null;
   category: string | null;
   status: string;
   priority: string | null;
@@ -59,6 +66,7 @@ export interface ProgressReportCompletion {
   itemType: ProgressReportItemType;
   itemId: string;
   title: string;
+  origin?: ProgressReportOrigin;
   completedAt: string;
   rewardPointsAwarded: number;
   trackingType: ProgressReportTrackingType;

@@ -25,6 +25,7 @@ import {
   type CheckInFrequency,
   type ProgressReportRange,
 } from "./progress-report.constants";
+import { listSystemAchievementStates } from "../system-achievements/system-achievements.service";
 import type {
   ProgressReport,
   ProgressReportAttentionItem,
@@ -32,6 +33,7 @@ import type {
   ProgressReportCompletion,
   ProgressReportItemBase,
   ProgressReportItemType,
+  ProgressReportOrigin,
   ProgressReportTextEntry,
   ProgressReportTrackingType,
 } from "./progress-report.types";
@@ -115,6 +117,10 @@ export async function generateProgressReport(
       getUserPointsSummary(userId),
     ]);
 
+  // System achievements: READ-ONLY persisted state. This never awards points —
+  // reward issuance happens only in the activity-triggered evaluator.
+  const systemStates = await listSystemAchievementStates(userId);
+
   const timezone = profile?.timezone ?? "UTC";
   const end = todayInTimezone(timezone, now); // inclusive period end = user's current calendar date
   const start = range === "all" ? null : addCalendarDays(end, -(RANGE_DAYS[range] - 1));
@@ -159,7 +165,8 @@ export async function generateProgressReport(
   for (const t of transactions) {
     if (
       t.source_type === POINT_SOURCE_TYPES.PERSONAL_GOAL_COMPLETION ||
-      t.source_type === POINT_SOURCE_TYPES.PERSONAL_ACHIEVEMENT_COMPLETION
+      t.source_type === POINT_SOURCE_TYPES.PERSONAL_ACHIEVEMENT_COMPLETION ||
+      t.source_type === POINT_SOURCE_TYPES.SYSTEM_ACHIEVEMENT_COMPLETION
     ) {
       awardedByItem.set(String(t.source_item_id), num(t.points));
     }
@@ -222,6 +229,8 @@ export async function generateProgressReport(
       id,
       itemType: "goal",
       title: String(g.goal_title ?? ""),
+      origin: "personal",
+      iconName: null,
       category: text(g.goal_category),
       status,
       priority: text(g.priority_level),
@@ -274,6 +283,8 @@ export async function generateProgressReport(
       id,
       itemType: "achievement",
       title: String(a.title ?? ""),
+      origin: "personal",
+      iconName: null,
       category: text(a.goal_category) ?? text(a.category),
       status: currentProgress > 0 ? "active" : "not_started",
       priority: text(a.priority),
@@ -300,6 +311,82 @@ export async function generateProgressReport(
   const activeGoalItems = activeBuilt.filter((b) => b.itemType === "goal").map((b) => b.item);
   const activeAchievementItems = activeBuilt.filter((b) => b.itemType === "achievement").map((b) => b.item);
 
+  // ---- System achievements ---------------------------------------------
+  // Not-yet-earned (locked / in-progress) system achievements join the active
+  // list. They have no check-in mechanism, so they contribute nothing to the
+  // consistency denominator and are excluded from attention rules (no target
+  // dates, no check-in cadence). Historical period progress is NOT fabricated:
+  // start == end == current, change == 0.
+  const systemCompletions: ProgressReportCompletion[] = [];
+  let systemCompletedInPeriod = 0;
+  let systemCompletedAllTime = 0;
+
+  for (const state of systemStates) {
+    const def = state.definition;
+    if (state.unlocked) {
+      systemCompletedAllTime += 1;
+      const day = state.earnedAt ? timestampToCalendarDate(timezone, state.earnedAt) : null;
+      if (day && isWithinRange(day, start, end)) {
+        systemCompletedInPeriod += 1;
+        systemCompletions.push({
+          itemType: "achievement",
+          itemId: def.id,
+          title: def.title,
+          origin: "system",
+          completedAt: day,
+          // Ledger only. Never inferred from the definition's point value.
+          rewardPointsAwarded: awardedByItem.get(def.id) ?? 0,
+          trackingType: "count",
+          finalCurrentValue: def.threshold,
+          finalTargetValue: def.threshold,
+        });
+      }
+      continue;
+    }
+
+    const currentProgress =
+      def.threshold > 0 ? computeNumericProgress(state.progress, def.threshold) : 0;
+    // `state.progress` is capped at the threshold, so meeting it means the user
+    // qualifies but has no persisted earn/reward yet (a "historical" unlock that
+    // predates activation, awaiting an approved backfill). Represent that
+    // distinctly instead of a misleading "Active 100%". No completion date or
+    // reward is fabricated: rewardAwarded stays false, and it is NOT counted in
+    // completedAchievementsAllTime until it is genuinely earned + rewarded.
+    const rewardPending = state.progress >= def.threshold;
+    const status = rewardPending
+      ? "completed_reward_pending"
+      : currentProgress > 0
+        ? "active"
+        : "not_started";
+    activeAchievementItems.push({
+      id: def.id,
+      title: def.title,
+      origin: "system",
+      iconName: def.icon,
+      category: def.category,
+      status,
+      priority: null,
+      trackingType: "count",
+      trackingUnit: null,
+      currentValue: state.progress,
+      targetValue: def.threshold,
+      currentProgress,
+      progressAtStart: currentProgress,
+      progressAtEnd: currentProgress,
+      progressChange: 0,
+      checkInsDuringPeriod: 0,
+      activeCheckInDays: 0,
+      consistencyRate: null,
+      startDate: null,
+      targetDate: null,
+      isOverdue: false,
+      isApproachingTarget: false,
+      hasNoRecentCheckIns: false,
+      hasNoProgressDuringPeriod: false,
+      rewardAwarded: state.rewarded,
+    });
+  }
+
   // ---- Completed during the period (from completed_at only) --------------
   const completedDuringPeriod: ProgressReportCompletion[] = [];
   let completedGoalsInPeriod = 0;
@@ -316,6 +403,7 @@ export async function generateProgressReport(
       itemType: "goal",
       itemId: String(g.id),
       title: String(g.goal_title ?? ""),
+      origin: "personal",
       completedAt: day,
       rewardPointsAwarded: awardedByItem.get(String(g.id)) ?? 0,
       trackingType,
@@ -334,6 +422,7 @@ export async function generateProgressReport(
       itemType: "achievement",
       itemId: String(a.id),
       title: String(a.title ?? ""),
+      origin: "personal",
       completedAt: day,
       rewardPointsAwarded: awardedByItem.get(String(a.id)) ?? 0,
       trackingType,
@@ -341,13 +430,17 @@ export async function generateProgressReport(
       finalTargetValue: isNumeric ? num(a.total) : null,
     });
   }
+  for (const c of systemCompletions) completedDuringPeriod.push(c);
+  completedAchievementsInPeriod += systemCompletedInPeriod;
+
   completedDuringPeriod.sort((x, y) =>
     x.completedAt < y.completedAt ? 1 : x.completedAt > y.completedAt ? -1 : 0
   );
 
   // ---- Snapshot counts --------------------------------------------------
   const completedGoalsAllTime = goals.filter((g) => String(g.status) === "completed").length;
-  const completedAchievementsAllTime = achievements.filter((a) => Boolean(a.unlocked)).length;
+  const completedAchievementsAllTime =
+    achievements.filter((a) => Boolean(a.unlocked)).length + systemCompletedAllTime;
 
   // ---- Overall consistency (totals, never averaged item percentages) ----
   const overallConsistencyRate =
@@ -456,6 +549,8 @@ interface BuildItemParams {
   id: string;
   itemType: ProgressReportItemType;
   title: string;
+  origin: ProgressReportOrigin;
+  iconName: string | null;
   category: string | null;
   status: string;
   priority: string | null;
@@ -523,6 +618,8 @@ function buildItem(p: BuildItemParams): BuiltItem {
   const item: ProgressReportItemBase = {
     id: p.id,
     title: p.title,
+    origin: p.origin,
+    iconName: p.iconName,
     category: p.category,
     status: p.status,
     priority: p.priority,

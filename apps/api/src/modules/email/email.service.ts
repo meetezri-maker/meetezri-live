@@ -714,6 +714,65 @@ export class EmailService {
     };
   }
 
+  /**
+   * Pre-launch Founding Circle confirmation. No account exists yet, so this
+   * deliberately has no CTA into the app — it only confirms the reserved place.
+   */
+  buildFoundingCircleWelcomeEmail({
+    firstName,
+    discountPercentage,
+  }: {
+    firstName?: string;
+    discountPercentage: number;
+  }): EmailTemplatePayload {
+    const safeFirstName = firstName?.trim() || 'there';
+    return {
+      subject: 'Welcome to the Solace Founding Circle',
+      html: this.renderTemplate({
+        ...SOLACE_EMAIL_BRAND,
+        preheader: 'Your place in the Solace Founding Circle is reserved.',
+        eyebrow: 'Founding Circle',
+        title: 'Welcome to the Founding Circle',
+        greeting: `Hi ${safeFirstName},`,
+        intro:
+          'Thank you for joining Solace from the very beginning. Your place has been reserved. We will keep you updated as we move toward launch, and you will receive your Founding Member benefits when Solace is ready.',
+        audience: 'trial',
+        spotlight:
+          'Every meaningful journey begins with a small group of people who believe in the idea before anyone else.',
+        highlights: [
+          '30-Day Premium Trial',
+          '100 Talk It Out Minutes',
+          `${discountPercentage}% Lifetime Founding Member Discount`,
+          'Early Access to New Features',
+          'Direct influence on what we build next',
+          'Exclusive founder updates from Rosalind',
+        ],
+        supportingText:
+          'There is nothing else you need to do today. We will be in touch as launch gets closer.',
+        footerNote:
+          'You are receiving this because you joined the Solace early-access list. You can unsubscribe at any time.',
+      }),
+      text: [
+        `Hi ${safeFirstName},`,
+        '',
+        'Welcome to the Founding Circle.',
+        '',
+        'Thank you for joining Solace from the very beginning. Your place has been reserved.',
+        'We will keep you updated as we move toward launch, and you will receive your Founding Member benefits when Solace is ready.',
+        '',
+        'What is included:',
+        '- 30-Day Premium Trial',
+        '- 100 Talk It Out Minutes',
+        `- ${discountPercentage}% Lifetime Founding Member Discount`,
+        '- Early Access to New Features',
+        '- Direct influence on what we build next',
+        '- Exclusive founder updates from Rosalind',
+        '',
+        'You are receiving this because you joined the Solace early-access list. You can unsubscribe at any time.',
+      ].join('\n'),
+    };
+  }
+
   getDefaultTemplateRecords(): DefaultTemplateRecord[] {
     return [
       {

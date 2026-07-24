@@ -4,6 +4,7 @@ import {
   computeCommunityPulsePercent,
   sentimentSignalsFromTexts,
 } from '@meetezri/shared';
+import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import { invalidateCommunityCaches } from '../admin/admin.service';
 import { calculateStreak } from '../users/user.service';
 
@@ -544,6 +545,8 @@ export async function createCommunityPost(
 
   clearCommunityLocalCaches();
   invalidateCommunityCaches();
+  // Award any system achievement this post newly unlocks (failure-isolated).
+  await onUserActivity(userId, "community_post_published");
   return created;
 }
 

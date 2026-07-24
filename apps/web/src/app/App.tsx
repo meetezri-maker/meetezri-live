@@ -29,6 +29,7 @@ import { PageLoader } from '@/app/components/PageLoader';
 // ─── Public Pages ────────────────────────────────────────────────────────────
 const Landing              = lazy(() => import('@/app/pages/Landing').then(m => ({ default: m.Landing })));
 const HowItWorks           = lazy(() => import('@/app/pages/HowItWorks').then(m => ({ default: m.HowItWorks })));
+const EarlyAccess          = lazy(() => import('@/app/pages/EarlyAccess').then(m => ({ default: m.EarlyAccess })));
 const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => ({ default: m.Privacy })));
 const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
 const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
@@ -397,6 +398,8 @@ export default function App() {
           <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
             <Route path="/" element={<Landing />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
+            {/* Pre-launch Founding Member campaign landing page (paid ads destination). */}
+            <Route path="/early-access" element={<EarlyAccess />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             {/* <Route path="/accessibility" element={<Accessibility />} /> */}

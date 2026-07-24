@@ -85,29 +85,6 @@ export async function releaseStripeWebhookClaim(eventId: string): Promise<void> 
   await prisma.stripe_webhook_events.delete({ where: { id: eventId } }).catch(() => {});
 }
 
-async function addSubscriptionAllowance(userId: string, minutesToAdd: number) {
-  if (!minutesToAdd || minutesToAdd <= 0) return;
-
-  const profile = await prisma.profiles.findUnique({
-    where: { id: userId },
-    select: { credits: true, credits_seconds: true },
-  });
-
-  const existingMinutes = profile?.credits ?? 0;
-  const existingSeconds =
-    profile?.credits_seconds && profile.credits_seconds > 0
-      ? profile.credits_seconds
-      : existingMinutes * 60;
-
-  const newSeconds = existingSeconds + minutesToAdd * 60;
-  const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
-
-  await prisma.profiles.update({
-    where: { id: userId },
-    data: { credits: newMinutes, credits_seconds: newSeconds },
-  });
-}
-
 export async function stripeWebhookHandler(request: FastifyRequest, reply: FastifyReply) {
   const webhookSecret = getStripeWebhookSecret();
   if (!webhookSecret?.trim()) {
@@ -387,54 +364,58 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
   const previousPlanType =
     (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
-  if (existingByStripeId) {
-    await prisma.subscriptions.update({
-      where: { id: existingByStripeId.id },
-      data: {
-        status: subscription.status,
-        plan_type: planType,
-        start_date: new Date(subscription.current_period_start * 1000),
-        end_date: new Date(subscription.current_period_end * 1000),
-        next_billing_at: new Date(subscription.current_period_end * 1000),
-        ...amountPatch,
-      },
-    });
-  } else if (pendingCandidate) {
-    await prisma.subscriptions.update({
-      where: { id: pendingCandidate.id },
-      data: {
-        stripe_sub_id: subscription.id,
-        status: subscription.status,
-        plan_type: planType,
-        start_date: new Date(subscription.current_period_start * 1000),
-        end_date: new Date(subscription.current_period_end * 1000),
-        next_billing_at: new Date(subscription.current_period_end * 1000),
-        ...amountPatch,
-      },
-    });
-  } else {
-    await prisma.subscriptions.create({
-      data: {
-        user_id: userId,
-        stripe_sub_id: subscription.id,
-        status: subscription.status,
-        plan_type: planType,
-        start_date: new Date(subscription.current_period_start * 1000),
-        end_date: new Date(subscription.current_period_end * 1000),
-        next_billing_at: new Date(subscription.current_period_end * 1000),
-        ...amountPatch,
-      },
-    });
-  }
-
+  // Eligibility is unchanged — only the write boundary is. Stripe reads already completed above.
   const shouldGrant =
     ['active', 'trialing'].includes(subscription.status) &&
     (!existingByStripeId || previousPlanType !== planType);
 
-  if (shouldGrant) {
-    const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
-    await addSubscriptionAllowance(userId, planCredits);
-  }
+  // Row mutation and allowance grant commit together or not at all.
+  await prisma.$transaction(async (tx) => {
+    if (existingByStripeId) {
+      await tx.subscriptions.update({
+        where: { id: existingByStripeId.id },
+        data: {
+          status: subscription.status,
+          plan_type: planType,
+          start_date: new Date(subscription.current_period_start * 1000),
+          end_date: new Date(subscription.current_period_end * 1000),
+          next_billing_at: new Date(subscription.current_period_end * 1000),
+          ...amountPatch,
+        },
+      });
+    } else if (pendingCandidate) {
+      await tx.subscriptions.update({
+        where: { id: pendingCandidate.id },
+        data: {
+          stripe_sub_id: subscription.id,
+          status: subscription.status,
+          plan_type: planType,
+          start_date: new Date(subscription.current_period_start * 1000),
+          end_date: new Date(subscription.current_period_end * 1000),
+          next_billing_at: new Date(subscription.current_period_end * 1000),
+          ...amountPatch,
+        },
+      });
+    } else {
+      await tx.subscriptions.create({
+        data: {
+          user_id: userId,
+          stripe_sub_id: subscription.id,
+          status: subscription.status,
+          plan_type: planType,
+          start_date: new Date(subscription.current_period_start * 1000),
+          end_date: new Date(subscription.current_period_end * 1000),
+          next_billing_at: new Date(subscription.current_period_end * 1000),
+          ...amountPatch,
+        },
+      });
+    }
+
+    if (shouldGrant) {
+      const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
+      await addSubscriptionAllowanceMinutes(userId, planCredits, tx);
+    }
+  });
 }
 
 async function handleSubscriptionUpdated(subscription: any) {
@@ -465,42 +446,32 @@ async function handleSubscriptionUpdated(subscription: any) {
   const previousPlanType = (existingSub.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
   const planChanged = !!newPlanType && previousPlanType !== newPlanType;
 
-  if (planChanged && newPlanType) {
-    const planCredits = PLAN_LIMITS[newPlanType]?.credits ?? 0;
-    if (planCredits > 0) {
-      const profile = await prisma.profiles.findUnique({
-        where: { id: existingSub.user_id },
-        select: { credits: true, credits_seconds: true },
-      });
-
-      const existingMinutes = profile?.credits ?? 0;
-      const existingSeconds =
-        profile?.credits_seconds && profile.credits_seconds > 0
-          ? profile.credits_seconds
-          : existingMinutes * 60;
-
-      await prisma.profiles.update({
-        where: { id: existingSub.user_id },
-        data: {
-          credits: existingMinutes + planCredits,
-          credits_seconds: existingSeconds + planCredits * 60,
-        },
-      });
-    }
-  }
-
   const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
   const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
 
-  await prisma.subscriptions.update({
-    where: { id: existingSub.id },
-    data: {
-      status: subscription.status,
-      ...(planChanged && newPlanType ? { plan_type: newPlanType } : {}),
-      end_date: new Date(subscription.current_period_end * 1000),
-      next_billing_at: new Date(subscription.current_period_end * 1000),
-      ...amountPatch,
-    },
+  // Plan-change grant and the row update are one logical state transition: commit together.
+  // Grant still precedes the row update inside the transaction, so the committed outcome is
+  // identical to the pre-Step-5 ordering.
+  await prisma.$transaction(async (tx) => {
+    if (planChanged && newPlanType) {
+      // The FULL new-plan allowance is stacked, not a delta — including on a downgrade.
+      // Deliberately NOT an early return (unlike the renewal path): a zero-allowance plan must
+      // still fall through to the subscriptions.update below. The shared helper no-ops on <= 0,
+      // so the previous `if (planCredits > 0)` guard is preserved inside the helper.
+      const planCredits = PLAN_LIMITS[newPlanType]?.credits ?? 0;
+      await addSubscriptionAllowanceMinutes(existingSub.user_id, planCredits, tx);
+    }
+
+    await tx.subscriptions.update({
+      where: { id: existingSub.id },
+      data: {
+        status: subscription.status,
+        ...(planChanged && newPlanType ? { plan_type: newPlanType } : {}),
+        end_date: new Date(subscription.current_period_end * 1000),
+        next_billing_at: new Date(subscription.current_period_end * 1000),
+        ...amountPatch,
+      },
+    });
   });
 }
 
@@ -542,42 +513,36 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
     const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
     const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
 
-    await prisma.subscriptions.update({
-      where: { id: existingSub.id },
-      data: {
-        status: subscription.status,
-        end_date: new Date(subscription.current_period_end * 1000),
-        next_billing_at: new Date(subscription.current_period_end * 1000),
-        ...amountPatch,
-      },
-    });
-
     // Never overwrite remaining credits after payments.
     // On renewals, we ADD the new cycle allowance on top of any remaining minutes.
     // This guarantees users never lose unused time (trial -> paid, paid -> upgraded, renewals).
-    if (billingReason === 'subscription_cycle') {
-      const planType = (existingSub.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
-      const planCredits = PLAN_LIMITS[planType]?.credits ?? 0;
-      if (planCredits <= 0) return;
+    const isCycle = billingReason === 'subscription_cycle';
+    const planType = (existingSub.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
+    const planCredits = PLAN_LIMITS[planType]?.credits ?? 0;
+    const shouldGrant = isCycle && planCredits > 0;
 
-      const profile = await prisma.profiles.findUnique({
-        where: { id: existingSub.user_id },
-        select: { credits: true, credits_seconds: true },
-      });
-
-      const existingMinutes = profile?.credits ?? 0;
-      const existingSeconds =
-        profile?.credits_seconds && profile.credits_seconds > 0
-          ? profile.credits_seconds
-          : existingMinutes * 60;
-
-      await prisma.profiles.update({
-        where: { id: existingSub.user_id },
+    // Row update and renewal grant commit together or not at all. The row update itself is
+    // unconditional, exactly as before — only the grant is gated on the cycle reason.
+    await prisma.$transaction(async (tx) => {
+      await tx.subscriptions.update({
+        where: { id: existingSub.id },
         data: {
-          credits: existingMinutes + planCredits,
-          credits_seconds: existingSeconds + planCredits * 60,
+          status: subscription.status,
+          end_date: new Date(subscription.current_period_end * 1000),
+          next_billing_at: new Date(subscription.current_period_end * 1000),
+          ...amountPatch,
         },
       });
+
+      if (shouldGrant) {
+        await addSubscriptionAllowanceMinutes(existingSub.user_id, planCredits, tx);
+      }
+    });
+
+    if (isCycle) {
+      // Retained deliberately: this returns from the whole handler, so a zero-allowance plan
+      // also skips the renewal email below. Guarding inside the helper alone would not.
+      if (planCredits <= 0) return;
 
       await sendRenewalConfirmationEmail({
         userId: existingSub.user_id,

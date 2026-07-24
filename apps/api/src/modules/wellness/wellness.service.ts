@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
+import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import {
   CreateWellnessChallengeInput,
   CreateWellnessToolInput,
@@ -829,6 +830,7 @@ export async function trackWellnessProgress(userId: string, toolId: string, dura
     },
   });
   clearUserWellnessCaches(userId);
+  await onUserActivity(userId, "wellness_exercise_completed");
   return result;
 }
 
@@ -884,6 +886,7 @@ export async function completeWellnessSession(userId: string, progressId: string
     },
   });
   clearUserWellnessCaches(result.user_id);
+  await onUserActivity(result.user_id, "wellness_exercise_completed");
   return result;
 }
 

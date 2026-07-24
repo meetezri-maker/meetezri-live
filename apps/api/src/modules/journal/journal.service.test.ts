@@ -13,6 +13,10 @@ jest.mock("../../lib/prisma", () => ({
   default: mockPrisma,
 }));
 
+jest.mock("../system-achievements/system-achievements.triggers", () => ({
+  onUserActivity: jest.fn().mockResolvedValue(null),
+}));
+
 const ensureStreakRiskReminder = jest.fn();
 
 jest.mock("../notifications/notifications.service", () => ({

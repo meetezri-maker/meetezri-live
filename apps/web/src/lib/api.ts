@@ -660,6 +660,35 @@ export const api = {
     };
   },
 
+  /**
+   * Public pre-launch Founding Circle signup (no account is created).
+   * Idempotent server-side: a known address resolves to `status: 'existing'`.
+   */
+  async joinFoundingCircle(data: {
+    email: string;
+    firstName?: string | null;
+    source?: string | null;
+    campaign?: string | null;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmContent?: string | null;
+    utmTerm?: string | null;
+    referrer?: string | null;
+    landingPage?: string | null;
+    consentSource?: string | null;
+  }): Promise<{ success: true; status: 'created' | 'existing'; message: string }> {
+    const res = await fetch(`${API_URL}/founding-members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(
+      res,
+      'We could not save your place just now. Please try again in a moment.'
+    ) as Promise<{ success: true; status: 'created' | 'existing'; message: string }>;
+  },
+
   async checkUserExists(email: string) {
     const origin =
       typeof window !== 'undefined'

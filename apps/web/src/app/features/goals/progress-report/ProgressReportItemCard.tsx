@@ -9,9 +9,31 @@ import {
   formatReportDate,
   formatSignedPoints,
   humanizeToken,
+  isRewardPending,
+  originLabel,
   pluralize,
+  statusLabel,
 } from "./progress-report.utils";
+import { ProgressReportIcon } from "./ProgressReportIcon";
 import type { ProgressReportItem, ProgressReportItemType } from "./progress-report.types";
+
+/** Subtle origin badge — text-led (never colour alone). */
+function OriginBadge({ origin }: { origin: string | null | undefined }) {
+  const label = originLabel(origin);
+  return (
+    <span
+      data-testid="report-origin-badge"
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+        label === "System"
+          ? "border-sky-300/25 bg-sky-400/[0.08] text-sky-200"
+          : "border-white/[0.1] bg-white/[0.04] text-zinc-400"
+      )}
+    >
+      {label}
+    </span>
+  );
+}
 
 /** Small neutral metadata chip (text carries the meaning, not colour alone). */
 function Meta({ label, value }: { label: string; value: string }) {
@@ -59,12 +81,24 @@ export function ProgressReportItemCard({
       className={cn(achievementsCard, "min-w-0 space-y-4 rounded-2xl p-5")}
     >
       <div className="min-w-0 space-y-2">
-        <h3 className="break-words text-[15px] font-semibold text-white">{item.title}</h3>
-        <div className="flex flex-wrap gap-1.5">
-          {item.category ? <Meta label="Category" value={humanizeToken(item.category) ?? ""} /> : null}
-          <Meta label="Status" value={humanizeToken(item.status) ?? item.status} />
-          {item.priority ? <Meta label="Priority" value={humanizeToken(item.priority) ?? ""} /> : null}
-          <Meta label="Tracking" value={TRACKING_METHOD_LABELS[item.trackingType]} />
+        <div className="flex min-w-0 items-start gap-3">
+          {item.origin === "system" ? (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03]">
+              <ProgressReportIcon name={item.iconName} className="h-4.5 w-4.5 text-sky-200" />
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="min-w-0 break-words text-[15px] font-semibold text-white">{item.title}</h3>
+              <OriginBadge origin={item.origin} />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {item.category ? <Meta label="Category" value={humanizeToken(item.category) ?? ""} /> : null}
+              <Meta label="Status" value={statusLabel(item.status)} />
+              {item.priority ? <Meta label="Priority" value={humanizeToken(item.priority) ?? ""} /> : null}
+              <Meta label="Tracking" value={TRACKING_METHOD_LABELS[item.trackingType]} />
+            </div>
+          </div>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import {
   clearSubscriptionsCache,
 } from '../billing.cache';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
+import { ensureSingleActiveTrial } from './trial.service';
 import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
 
 const userSubscriptionCache = new Map<string, { data: any; timestamp: number }>();
@@ -76,50 +77,29 @@ export async function getSubscription(userId: string) {
 }
 
 export async function createCheckoutSession(userId: string, email: string, data: CreateSubscriptionInput) {
-  // Handle Trial Plan - Create subscription directly without Stripe
+  // Handle Trial Plan - Create subscription directly without Stripe.
+  // Row creation is owned by the canonical helper, which enforces at-most-one-active-trial.
+  //
+  // BEHAVIOUR CHANGE (plan §2.1 W14, disposition "Fixed in-scope"): the lookup was previously
+  // `findFirst({ user_id })` — ANY row, any plan, any status — so this endpoint could flip an
+  // active PAID row to trial and reset that user's balance. It is now scoped to the user's
+  // active TRIAL row, so a paid subscription is never downgraded here.
+  //
+  // The credit RESET below is deliberately left exactly as-is: it is overwrite semantics
+  // (allowance impl A6), not stacking, and routing it through an audited adjustment path is
+  // §4A / Gate 8 work that has not been approved yet.
   if (data.plan_type === 'trial') {
-    const existing = await prisma.subscriptions.findFirst({
-      where: { user_id: userId },
-    });
-
     const trialCredits = PLAN_LIMITS.trial.credits;
 
-    if (existing) {
-      const updated = await prisma.subscriptions.update({
-        where: { id: existing.id },
-        data: {
-          plan_type: 'trial',
-          status: 'active',
-          billing_cycle: data.billing_cycle,
-          amount: 0,
-          end_date: null, // Ongoing until upgraded or limits hit
-        },
-      });
-
-      // Reset/Set credits for trial
-      await prisma.profiles.update({
-        where: { id: userId },
-        data: {
-          credits: trialCredits,
-          credits_seconds: trialCredits * 60,
-        },
-      });
-
-      return { subscription: updated };
-    }
-
-    const subscription = await prisma.subscriptions.create({
-      data: {
-        user_id: userId,
-        plan_type: 'trial',
-        status: 'active',
-        billing_cycle: data.billing_cycle,
-        amount: 0,
-        start_date: new Date(),
-      },
+    const { subscription } = await ensureSingleActiveTrial(userId, {
+      match: 'active_trial',
+      billingCycle: data.billing_cycle,
+      amount: 0,
+      endDate: null, // Ongoing until upgraded or limits hit
+      reshapeExisting: true,
     });
 
-    // Set credits for trial
+    // Reset/Set credits for trial
     await prisma.profiles.update({
       where: { id: userId },
       data: {
@@ -207,21 +187,233 @@ export async function createGuestCheckoutSession(data: CreateSubscriptionInput) 
   return { checkoutUrl: session.url };
 }
 
-export async function linkSubscriptionToUser(userId: string, sessionId: string) {
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-  if (!session.customer) return;
+/**
+ * Outcome classifications for checkout linking — plan §15.3.
+ *
+ * `unique_conflict_recovered` is defined by §15.3 but is NOT emitted here: it describes
+ * recovery from a `P2002` on `subscriptions.stripe_sub_id`, and no unique constraint on that
+ * column exists yet. It becomes reachable only with the approved constraint migration.
+ */
+export type LinkSubscriptionResult =
+  | 'linked'
+  | 'already_linked'
+  | 'ownership_conflict'
+  | 'missing_customer'
+  | 'missing_subscription'
+  | 'plan_unresolved'
+  | 'failed';
 
-  const customerId = session.customer as string;
+/** Fixed vocabulary — plan §15.2. Never carries a raw error message. */
+export type LinkSubscriptionErrorCategory =
+  | 'stripe_error'
+  | 'db_error'
+  | 'db_conflict'
+  | 'validation_error';
 
-  // Update user profile
-  await prisma.profiles.update({
-    where: { id: userId },
-    data: { stripe_customer_id: customerId },
-  });
+export interface LinkSubscriptionOutcome {
+  result: LinkSubscriptionResult;
+  errorCategory?: LinkSubscriptionErrorCategory;
+  stripeSubscriptionId?: string;
+  localSubscriptionId?: string;
+  plan?: 'core' | 'pro';
+  allowanceGranted: boolean;
+  allowanceMinutes?: number;
+}
 
-  // Sync subscriptions
-  await syncSubscriptionWithStripe(userId);
+/** Only paid plans may be resolved from a checkout — never `trial` (plan §5.3). */
+const LINKABLE_PLANS = ['core', 'pro'] as const;
+type LinkablePlan = (typeof LINKABLE_PLANS)[number];
+
+function asLinkablePlan(value: unknown): LinkablePlan | null {
+  return typeof value === 'string' && (LINKABLE_PLANS as readonly string[]).includes(value)
+    ? (value as LinkablePlan)
+    : null;
+}
+
+/**
+ * Normalize `session.subscription`, which Stripe returns as either a bare id or an expanded
+ * Subscription object depending on the caller's `expand`.
+ */
+function readSessionSubscriptionRef(
+  raw: unknown
+): { id: string; expanded: any | null } | null {
+  if (typeof raw === 'string' && raw.length > 0) return { id: raw, expanded: null };
+  if (raw && typeof raw === 'object') {
+    const id = (raw as { id?: unknown }).id;
+    if (typeof id === 'string' && id.length > 0) {
+      return { id, expanded: raw };
+    }
+  }
+  return null;
+}
+
+function readPriceId(subscription: any): string | undefined {
+  const price = subscription?.items?.data?.[0]?.price;
+  if (typeof price === 'string') return price;
+  return typeof price?.id === 'string' ? price.id : undefined;
+}
+
+/**
+ * Resolve the purchased plan from the EXACT subscription this checkout created — plan §3.2 step 5.
+ *
+ * Approved precedence:
+ *   1. Stripe price id on the subscription's first item
+ *   2. `subscription.metadata.planType`
+ *   3. `session.metadata.planType`
+ *   4. otherwise unresolved
+ *
+ * The local row's `plan_type` is deliberately NOT a fallback: it is the state being
+ * synchronized, not an authoritative source.
+ */
+function resolveCheckoutPlan(subscription: any, session: any): LinkablePlan | null {
+  const priceId = readPriceId(subscription);
+  if (priceId === STRIPE_PRICE_IDS.core) return 'core';
+  if (priceId === STRIPE_PRICE_IDS.pro) return 'pro';
+
+  return (
+    asLinkablePlan(subscription?.metadata?.planType) ??
+    asLinkablePlan(session?.metadata?.planType)
+  );
+}
+
+/**
+ * Link the subscription created by a specific Checkout Session to a user.
+ *
+ * Anchored to `session.subscription` — it never consults `stripe.subscriptions.list`, which is
+ * what allowed the wrong subscription (and therefore the wrong plan) to be selected when a
+ * customer had leftovers. Customer-wide reconciliation remains the separate concern of
+ * `syncSubscriptionWithStripe`.
+ *
+ * Idempotency: sequential re-calls for the same session are safe — the row lookup and the
+ * grant share one transaction, so a second call sees the first call's committed row and
+ * returns `already_linked` without granting. This is APPLICATION-LEVEL SEQUENTIAL idempotency
+ * only. Truly concurrent callers can still both miss the lookup and both create a row; that
+ * requires the unique constraint on `subscriptions.stripe_sub_id`, which does not exist yet.
+ */
+export async function linkSubscriptionToUser(
+  userId: string,
+  sessionId: string
+): Promise<LinkSubscriptionOutcome> {
+  // ---- Stripe reads: all of them complete before any transaction opens (plan §5.2) ----
+  let session: any;
+  let stripeSub: any;
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    const customerId =
+      typeof session?.customer === 'string' ? session.customer : session?.customer?.id;
+    if (!customerId) {
+      return { result: 'missing_customer', allowanceGranted: false };
+    }
+
+    // Persist the customer link only after the customer is validated (plan §3.2 step 2).
+    await prisma.profiles.update({
+      where: { id: userId },
+      data: { stripe_customer_id: customerId },
+    });
+
+    const ref = readSessionSubscriptionRef(session?.subscription);
+    if (!ref) {
+      return { result: 'missing_subscription', allowanceGranted: false };
+    }
+
+    // Use the expanded object when Stripe already gave us a usable one; otherwise fetch the
+    // exact subscription by id. Never a customer-wide list.
+    stripeSub =
+      ref.expanded && readPriceId(ref.expanded)
+        ? ref.expanded
+        : await stripe.subscriptions.retrieve(ref.id, { expand: ['items.data.price'] });
+  } catch (error) {
+    const category: LinkSubscriptionErrorCategory =
+      session === undefined || stripeSub === undefined ? 'stripe_error' : 'db_error';
+    return { result: 'failed', errorCategory: category, allowanceGranted: false };
+  }
+
+  const planType = resolveCheckoutPlan(stripeSub, session);
+  if (!planType) {
+    return {
+      result: 'plan_unresolved',
+      stripeSubscriptionId: stripeSub.id,
+      allowanceGranted: false,
+    };
+  }
+
+  const planCredits = PLAN_LIMITS[planType].credits;
+  const mrrUsd = stripeSubscriptionMrrUsd(stripeSub as any);
+  const subData = {
+    stripe_sub_id: stripeSub.id,
+    status: stripeSub.status,
+    plan_type: planType,
+    start_date: new Date(stripeSub.current_period_start * 1000),
+    end_date: new Date(stripeSub.current_period_end * 1000),
+    next_billing_at: new Date(stripeSub.current_period_end * 1000),
+    updated_at: new Date(),
+    ...(mrrUsd != null ? { amount: mrrUsd } : {}),
+  };
+
+  // ---- One transaction: row write + allowance grant commit together or not at all ----
+  let outcome: LinkSubscriptionOutcome;
+  try {
+    outcome = await prisma.$transaction(async (tx) => {
+      const existing = await tx.subscriptions.findFirst({
+        where: { stripe_sub_id: stripeSub.id },
+        select: { id: true, user_id: true },
+      });
+
+      if (existing && existing.user_id !== userId) {
+        // Never silently reassign a subscription between users.
+        return {
+          result: 'ownership_conflict' as const,
+          errorCategory: 'db_conflict' as const,
+          stripeSubscriptionId: stripeSub.id,
+          localSubscriptionId: existing.id,
+          plan: planType,
+          allowanceGranted: false,
+        };
+      }
+
+      if (existing) {
+        // Reconcile mutable fields; the allowance was granted when the row was created.
+        await tx.subscriptions.update({ where: { id: existing.id }, data: subData });
+        return {
+          result: 'already_linked' as const,
+          stripeSubscriptionId: stripeSub.id,
+          localSubscriptionId: existing.id,
+          plan: planType,
+          allowanceGranted: false,
+        };
+      }
+
+      const created = await tx.subscriptions.create({
+        data: { user_id: userId, ...subData, billing_cycle: 'monthly' },
+      });
+      await addSubscriptionAllowanceMinutes(userId, planCredits, tx);
+
+      return {
+        result: 'linked' as const,
+        stripeSubscriptionId: stripeSub.id,
+        localSubscriptionId: created.id,
+        plan: planType,
+        allowanceGranted: true,
+        allowanceMinutes: planCredits,
+      };
+    });
+  } catch (error) {
+    // Rolled back: neither the row nor the grant persisted, and caches stay untouched.
+    return {
+      result: 'failed',
+      errorCategory: 'db_error',
+      stripeSubscriptionId: stripeSub.id,
+      allowanceGranted: false,
+    };
+  }
+
+  // Cache invalidation only after a successful commit (plan §5.2).
+  // NOTE: the profile cache lives in `user.service.ts`; invalidating it from here would create
+  // a billing -> users import cycle (user.service already imports billing.service). The caller
+  // owns that invalidation when the live import is redirected to this implementation.
   clearUserBillingCaches(userId);
+  return outcome;
 }
 
 export async function createPortalSession(userId: string) {
@@ -451,7 +643,6 @@ export async function syncSubscriptionWithStripe(userId: string) {
   const previousPlanType =
     (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
-  let updatedSub: any;
   const mrrUsd = stripeSubscriptionMrrUsd(activeSub as any);
   const subData: any = {
     stripe_sub_id: activeSub.id,
@@ -464,35 +655,43 @@ export async function syncSubscriptionWithStripe(userId: string) {
     ...(mrrUsd != null ? { amount: mrrUsd } : {}),
   };
 
-  if (existingByStripeId) {
-    updatedSub = await prisma.subscriptions.update({
-      where: { id: existingByStripeId.id },
-      data: subData,
-    });
-  } else if (pendingCandidate) {
-    updatedSub = await prisma.subscriptions.update({
-      where: { id: pendingCandidate.id },
-      data: subData,
-    });
-  } else {
-    updatedSub = await prisma.subscriptions.create({
-      data: {
-        user_id: userId,
-        ...subData,
-        billing_cycle: 'monthly',
-      },
-    });
-  }
-
   // Stack plan minutes (same rules as Stripe webhooks / billing.service sync).
+  // Eligibility is unchanged — only the write boundary is.
   const shouldGrant =
     ['active', 'trialing'].includes(activeSub.status) &&
     (!existingByStripeId || previousPlanType !== planType);
 
-  if (shouldGrant) {
-    const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
-    await addSubscriptionAllowanceMinutes(userId, planCredits);
-  }
+  // Row mutation and allowance grant are one logical state transition, so they commit
+  // together. All Stripe reads above already completed outside this transaction (plan §5.2).
+  const updatedSub = await prisma.$transaction(async (tx) => {
+    let row: any;
+    if (existingByStripeId) {
+      row = await tx.subscriptions.update({
+        where: { id: existingByStripeId.id },
+        data: subData,
+      });
+    } else if (pendingCandidate) {
+      row = await tx.subscriptions.update({
+        where: { id: pendingCandidate.id },
+        data: subData,
+      });
+    } else {
+      row = await tx.subscriptions.create({
+        data: {
+          user_id: userId,
+          ...subData,
+          billing_cycle: 'monthly',
+        },
+      });
+    }
+
+    if (shouldGrant) {
+      const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
+      await addSubscriptionAllowanceMinutes(userId, planCredits, tx);
+    }
+
+    return row;
+  });
 
   return updatedSub;
 }

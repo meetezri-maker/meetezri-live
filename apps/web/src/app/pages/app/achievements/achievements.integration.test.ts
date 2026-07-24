@@ -187,7 +187,7 @@ describe('Combined Goals & Achievements list + filters (final structure)', () =>
   it('builds the combined list via combineAndFilter and renders by itemType', () => {
     expect(achievementsSrc).toContain('combineAndFilter(');
     expect(achievementsSrc).toContain("item.itemType === 'goal'");
-    expect(achievementsSrc).toContain('renderGoalCard(item.data)');
+    expect(achievementsSrc).toContain('renderGoalCard(item.data, index)');
     expect(achievementsSrc).toContain('renderAchievementCard(item.data, index)');
   });
 
@@ -463,6 +463,43 @@ describe('Modal focus management (accessibility, this task)', () => {
     expect(achievementsSrc).toContain('createPanelRef');
     expect(achievementsSrc).toMatch(/if \(detailItem\) detailPanelRef\.current\?\.focus\(\)/);
     expect(achievementsSrc).toMatch(/if \(showCreateModal\) createPanelRef\.current\?\.focus\(\)/);
+  });
+});
+
+describe('Goal cards match Achievement cards (this task)', () => {
+  it('renders a goal icon through the SAME shared iconMap helper', () => {
+    expect(achievementsSrc).toMatch(/const renderGoalCard[\s\S]{0,400}getIcon\(display\.icon\)/);
+    expect(achievementsSrc).toContain('const display = goalRowToDisplay(raw)');
+    // One shared map/helper only — no second icon mapping was introduced.
+    expect(achievementsSrc.match(/const iconMap/g) ?? []).toHaveLength(1);
+    expect(achievementsSrc.match(/const getIcon =/g) ?? []).toHaveLength(1);
+  });
+
+  it('uses the same emblem + card style tokens as the achievement card', () => {
+    const goalBlock = achievementsSrc.slice(
+      achievementsSrc.indexOf('const renderGoalCard'),
+      achievementsSrc.indexOf('const renderAchievementCard')
+    );
+    for (const token of [
+      'achievementsBadgeCard',
+      'achievementsBadgeEmblemUnlocked',
+      'achievementsBadgeEmblemLocked',
+      'achievementsBadgeIconUnlocked',
+      'h-[4.5rem] w-[4.5rem]',
+      'flex flex-1 flex-col items-center gap-3 p-5 text-center',
+    ]) {
+      expect(goalBlock).toContain(token);
+    }
+  });
+
+  it('keeps the card clickable via a real button (not a clickable div)', () => {
+    const goalBlock = achievementsSrc.slice(
+      achievementsSrc.indexOf('const renderGoalCard'),
+      achievementsSrc.indexOf('const renderAchievementCard')
+    );
+    expect(goalBlock).toContain('onClick={() => openGoalDetail(raw)}');
+    expect(goalBlock).toContain('data-testid="goal-card"');
+    expect(goalBlock).not.toContain('role="button"');
   });
 });
 
