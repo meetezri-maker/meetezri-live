@@ -11,6 +11,7 @@ import {
 } from '../billing.cache';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
 import { ensureSingleActiveTrial } from './trial.service';
+import { isStripeSubIdUniqueViolation } from './subscription-constraints';
 import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
 
 const userSubscriptionCache = new Map<string, { data: any; timestamp: number }>();
@@ -399,6 +400,45 @@ export async function linkSubscriptionToUser(
       };
     });
   } catch (error) {
+    // Lost the `subscriptions_stripe_sub_id_unique` race to a concurrent writer. The winner's
+    // row and allowance committed atomically, so recovery is: re-read, verify ownership, and
+    // return without creating or granting anything.
+    if (isStripeSubIdUniqueViolation(error)) {
+      const winner = await prisma.subscriptions.findFirst({
+        where: { stripe_sub_id: stripeSub.id },
+        select: { id: true, user_id: true },
+      });
+
+      if (winner && winner.user_id === userId) {
+        clearUserBillingCaches(userId);
+        return {
+          result: 'already_linked',
+          stripeSubscriptionId: stripeSub.id,
+          localSubscriptionId: winner.id,
+          plan: planType,
+          allowanceGranted: false,
+        };
+      }
+
+      if (winner) {
+        // Another user owns this subscription. Never reassign; never grant.
+        console.warn('[billing] stripe subscription ownership conflict', {
+          stripeSubscriptionId: stripeSub.id,
+          requestingUserId: userId,
+          owningRowId: winner.id,
+        });
+        return {
+          result: 'ownership_conflict',
+          errorCategory: 'db_conflict',
+          stripeSubscriptionId: stripeSub.id,
+          localSubscriptionId: winner.id,
+          plan: planType,
+          allowanceGranted: false,
+        };
+      }
+      // Constraint fired but no winner is visible: our model is wrong, so fall through.
+    }
+
     // Rolled back: neither the row nor the grant persisted, and caches stay untouched.
     return {
       result: 'failed',
@@ -663,7 +703,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
 
   // Row mutation and allowance grant are one logical state transition, so they commit
   // together. All Stripe reads above already completed outside this transaction (plan §5.2).
-  const updatedSub = await prisma.$transaction(async (tx) => {
+  const runSync = () => prisma.$transaction(async (tx) => {
     let row: any;
     if (existingByStripeId) {
       row = await tx.subscriptions.update({
@@ -693,6 +733,30 @@ export async function syncSubscriptionWithStripe(userId: string) {
     return row;
   });
 
-  return updatedSub;
+  try {
+    return await runSync();
+  } catch (error) {
+    // A concurrent writer linked this Stripe subscription first. Reconciliation is
+    // opportunistic, so return the committed row rather than failing the caller — and never
+    // create a second row or grant a second allowance.
+    if (!isStripeSubIdUniqueViolation(error)) throw error;
+
+    const winner = await prisma.subscriptions.findFirst({
+      where: { stripe_sub_id: activeSub.id },
+    });
+    if (!winner) throw error;
+
+    if (winner.user_id !== userId) {
+      console.warn('[billing] stripe subscription ownership conflict during sync', {
+        stripeSubscriptionId: activeSub.id,
+        requestingUserId: userId,
+        owningRowId: winner.id,
+      });
+      // Do not touch another user's row; fall back to this user's local state.
+      return getSubscription(userId);
+    }
+
+    return winner;
+  }
 }
 

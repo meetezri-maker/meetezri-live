@@ -481,6 +481,25 @@ function logSignupTypeResolution(
   }
 }
 
+/**
+ * The emergency contact has two storage locations: the canonical `emergency_contacts` table and
+ * the legacy `profiles.emergency_contact_*` columns. `getProfile` merges them before resolving
+ * completion, but `resolveAccountStateByEmail` reads the profile row directly, so completion
+ * must accept either source. Legacy wins when set, so nothing that works today changes.
+ */
+function resolveCanonicalEmergencyRelationship(profile: any): string {
+  const legacy =
+    typeof profile?.emergency_contact_relationship === 'string'
+      ? profile.emergency_contact_relationship.trim()
+      : '';
+  if (legacy) return legacy;
+
+  const contacts = Array.isArray(profile?.emergency_contacts) ? profile.emergency_contacts : [];
+  const canonical =
+    typeof contacts[0]?.relationship === 'string' ? contacts[0].relationship.trim() : '';
+  return canonical;
+}
+
 function resolveOnboardingCompleted(profile: any): boolean {
   const signupType =
     normalizeSignupType(profile?.signup_type) ??
@@ -498,9 +517,7 @@ function resolveOnboardingCompleted(profile: any): boolean {
   const fullNameOk =
     typeof profile?.full_name === 'string' && profile.full_name.trim().length > 1;
 
-  const emergencyRelationshipOk =
-    typeof profile?.emergency_contact_relationship === 'string' &&
-    profile.emergency_contact_relationship.trim().length > 0;
+  const emergencyRelationshipOk = resolveCanonicalEmergencyRelationship(profile).length > 0;
 
   const timezoneOk =
     typeof profile?.timezone === 'string' && profile.timezone.trim().length > 0;
@@ -590,6 +607,13 @@ export async function resolveAccountStateByEmail(email: string) {
         role: true,
         selected_goals: true,
         emergency_contact_relationship: true,
+        // Canonical source for the primary contact. The Profile Page writes here (and mirrors
+        // onto the legacy column); rows written before that mirroring existed have only this.
+        emergency_contacts: {
+          select: { relationship: true },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
         permissions: true,
         notification_preferences: true,
       },
@@ -604,6 +628,11 @@ export async function resolveAccountStateByEmail(email: string) {
         role: true,
         selected_goals: true,
         emergency_contact_relationship: true,
+        emergency_contacts: {
+          select: { relationship: true },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
         permissions: true,
         notification_preferences: true,
       },
@@ -1734,6 +1763,40 @@ function mergeProfileJsonField(
   return { ...base, ...patch };
 }
 
+/** The three fields that make up the one primary emergency contact this endpoint owns. */
+type EmergencyContactSnapshot = {
+  name: string;
+  phone: string;
+  relationship: string;
+};
+
+export const EMERGENCY_CONTACT_INCOMPLETE_MESSAGE =
+  'Emergency contact requires a name, relationship, and phone number';
+
+export const EMERGENCY_CONTACT_CLEAR_MESSAGE =
+  'Emergency contact details cannot be removed here. Update all three fields, or remove the contact from Settings → Emergency Contacts.';
+
+export const EMERGENCY_CONSENT_REQUIRED_MESSAGE =
+  'Emergency contact consent is required to save emergency contact details';
+
+/** Surfaced as a 400 by the app-level error handler (`app.ts`), which honours `statusCode`. */
+function emergencyContactValidationError(message: string) {
+  const error = new Error(message) as Error & { statusCode: number };
+  error.statusCode = 400;
+  return error;
+}
+
+/**
+ * Resolve one stored contact field. Mirrors `getProfile`'s canonical-then-legacy merge
+ * (`primaryContact?.x || profileResult.x`), and returns the value verbatim so an omitted field
+ * is written back exactly as stored rather than normalised.
+ */
+function preferStoredContactValue(canonical?: string | null, legacy?: string | null): string {
+  if (typeof canonical === 'string' && canonical.trim()) return canonical;
+  if (typeof legacy === 'string' && legacy.trim()) return legacy;
+  return '';
+}
+
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const {
     emergency_contact_name,
@@ -1743,6 +1806,18 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
     brain_health_settings,
     ...profileForPrisma
   } = data;
+
+  // `profiles.email` mirrors `auth.users.email` and is written only at signup/init. The route
+  // schema rejects a client-supplied `email`; this is the guard for any internal caller that
+  // builds an input object without going through that schema.
+  delete (profileForPrisma as Record<string, unknown>).email;
+
+  const emergencyConsent = profileForPrisma.emergency_consent;
+  /** The contact is one logical unit: any field present means the group is being written. */
+  const patchTouchesContact =
+    emergency_contact_name !== undefined ||
+    emergency_contact_phone !== undefined ||
+    emergency_contact_relationship !== undefined;
 
   if (
     profileForPrisma.privacy_settings !== undefined ||
@@ -1766,38 +1841,11 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
     }
   }
 
-  console.log("Updating profile for user:", userId);
-  console.log("Emergency Contact Data:", { emergency_contact_name, emergency_contact_phone, emergency_contact_relationship });
-
-  // Handle emergency contact update if any of the fields are present
-  if (emergency_contact_name !== undefined || emergency_contact_phone !== undefined || emergency_contact_relationship !== undefined) {
-    const existingContact = await prisma.emergency_contacts.findFirst({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' }
-    });
-
-    if (existingContact) {
-      await prisma.emergency_contacts.update({
-        where: { id: existingContact.id },
-        data: {
-          name: emergency_contact_name ?? existingContact.name,
-          phone: emergency_contact_phone ?? existingContact.phone,
-          relationship: emergency_contact_relationship ?? existingContact.relationship,
-        }
-      });
-    } else if (emergency_contact_name) {
-      // Create new if name is provided
-      await prisma.emergency_contacts.create({
-        data: {
-          user_id: userId,
-          name: emergency_contact_name,
-          phone: emergency_contact_phone,
-          relationship: emergency_contact_relationship,
-          is_trusted: true
-        }
-      });
-    }
-  }
+  // Deliberately no contact name/phone in the log line: this is safety data.
+  console.log('Updating profile for user:', userId, {
+    emergencyContactFieldsPresent: patchTouchesContact,
+    emergencyConsentPresent: emergencyConsent !== undefined,
+  });
 
   const bioDbValue =
     bio === undefined
@@ -1811,10 +1859,118 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
       ? undefined
       : JSON.stringify(brain_health_settings);
 
+  // One transaction for every write this request performs. The emergency contact used to be
+  // written before (and outside) this block, so a failing profile update left an orphaned
+  // contact change with no rollback.
+  //
   // `bio` is written via raw SQL so profile saves work even when the generated Prisma
   // client is stale (e.g. dev server locks query_engine during `prisma generate`).
-  const updated = await prisma.$transaction(async (tx) => {
-    const row = await tx.profiles.update({
+  const { row, writtenContact } = await prisma.$transaction(async (tx) => {
+    let written: EmergencyContactSnapshot | null = null;
+
+    // The stored state is only needed when the contact group is in play, or when consent is
+    // being explicitly withdrawn (which must not leave a contact behind without consent).
+    if (patchTouchesContact || emergencyConsent === false) {
+      const existingContact = await tx.emergency_contacts.findFirst({
+        where: { user_id: userId },
+        // `created_at` is the primary key of intent; `id` makes the choice deterministic when
+        // two rows share a timestamp.
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      });
+      const legacyProfile = await tx.profiles.findUnique({
+        where: { id: userId },
+        select: {
+          emergency_contact_name: true,
+          emergency_contact_phone: true,
+          emergency_contact_relationship: true,
+        },
+      });
+
+      const storedName = preferStoredContactValue(
+        existingContact?.name,
+        legacyProfile?.emergency_contact_name
+      );
+      const storedPhone = preferStoredContactValue(
+        existingContact?.phone,
+        legacyProfile?.emergency_contact_phone
+      );
+      const storedRelationship = preferStoredContactValue(
+        existingContact?.relationship,
+        legacyProfile?.emergency_contact_relationship
+      );
+      const hasStoredContact = Boolean(storedName || storedPhone || storedRelationship);
+
+      if (!patchTouchesContact) {
+        // Consent-only patch setting consent false. Withdrawing consent while contact data is
+        // still on file would leave the two inconsistent; removal belongs to the settings page.
+        if (hasStoredContact) {
+          throw emergencyContactValidationError(EMERGENCY_CONSENT_REQUIRED_MESSAGE);
+        }
+      } else {
+        // Omitted fields keep their stored value — a partial patch never nulls the rest.
+        const nextContact: EmergencyContactSnapshot = {
+          name:
+            emergency_contact_name !== undefined ? emergency_contact_name.trim() : storedName,
+          phone:
+            emergency_contact_phone !== undefined ? emergency_contact_phone.trim() : storedPhone,
+          relationship:
+            emergency_contact_relationship !== undefined
+              ? emergency_contact_relationship.trim()
+              : storedRelationship,
+        };
+        const filledCount = [nextContact.name, nextContact.phone, nextContact.relationship].filter(
+          (value) => value.trim().length > 0
+        ).length;
+
+        if (filledCount === 0 && !hasStoredContact) {
+          // No-op. An empty payload must never create an empty contact row.
+        } else if (filledCount < 3) {
+          // Either an attempt to clear an existing contact (unsupported here) or an incomplete
+          // new one. Both are rejected before any write, so stored data is left untouched.
+          throw emergencyContactValidationError(
+            hasStoredContact ? EMERGENCY_CONTACT_CLEAR_MESSAGE : EMERGENCY_CONTACT_INCOMPLETE_MESSAGE
+          );
+        } else {
+          if (emergencyConsent === false) {
+            throw emergencyContactValidationError(EMERGENCY_CONSENT_REQUIRED_MESSAGE);
+          }
+
+          if (existingContact) {
+            // `email` and `is_trusted` are deliberately absent: they belong to the multi-contact
+            // settings surface and must survive a profile-page save.
+            await tx.emergency_contacts.update({
+              where: { id: existingContact.id },
+              data: {
+                name: nextContact.name,
+                phone: nextContact.phone,
+                relationship: nextContact.relationship,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            await tx.emergency_contacts.create({
+              data: {
+                user_id: userId,
+                name: nextContact.name,
+                phone: nextContact.phone,
+                relationship: nextContact.relationship,
+                is_trusted: true,
+              },
+            });
+          }
+
+          // Legacy columns are mirrored in the same transaction, so the two storage locations
+          // can never disagree and `resolveAccountStateByEmail` sees the contact.
+          const profileFields = profileForPrisma as Record<string, unknown>;
+          profileFields.emergency_contact_name = nextContact.name;
+          profileFields.emergency_contact_phone = nextContact.phone;
+          profileFields.emergency_contact_relationship = nextContact.relationship;
+          written = nextContact;
+        }
+      }
+    }
+
+    const profileRow = await tx.profiles.update({
       where: { id: userId },
       data: profileForPrisma as any,
     });
@@ -1828,20 +1984,40 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
         Prisma.sql`UPDATE public.profiles SET brain_health_settings = ${brainHealthDbValue}::jsonb WHERE id = ${userId}::uuid`
       );
     }
-    return row;
+    return { row: profileRow, writtenContact: written };
   });
 
+  // Only after a successful commit: a rolled-back transaction must never drop the cache and let
+  // the next read repopulate it from partially-applied state.
   invalidateUserProfileCache(userId);
-  if (bioDbValue !== undefined || brainHealthDbValue !== undefined) {
-    return {
-      ...updated,
-      ...(bioDbValue !== undefined ? { bio: bioDbValue } : {}),
-      ...(brainHealthDbValue !== undefined
-        ? { brain_health_settings: brain_health_settings }
-        : {}),
-    };
+
+  // Re-read through the canonical profile path so PATCH answers with the same merged, computed
+  // shape as GET /users/me — including the canonical emergency contact, which the raw `profiles`
+  // row does not carry. The read runs AFTER invalidation, so it cannot serve the pre-update
+  // cache entry.
+  try {
+    const fresh = await getProfile(userId);
+    if (fresh) return fresh;
+  } catch (error) {
+    console.error('[updateProfile] fresh profile read failed after commit', { userId, error });
   }
-  return updated;
+
+  // The write already committed, so a failed re-read must not fail the request. Fall back to the
+  // updated row merged with the values this request persisted.
+  return {
+    ...row,
+    ...(writtenContact
+      ? {
+          emergency_contact_name: writtenContact.name,
+          emergency_contact_phone: writtenContact.phone,
+          emergency_contact_relationship: writtenContact.relationship,
+        }
+      : {}),
+    ...(bioDbValue !== undefined ? { bio: bioDbValue } : {}),
+    ...(brainHealthDbValue !== undefined
+      ? { brain_health_settings: brain_health_settings }
+      : {}),
+  };
 }
 
 export async function completeOnboarding(userId: string, data: OnboardingInput) {

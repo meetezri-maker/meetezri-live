@@ -11,6 +11,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import * as userService from '../users/user.service';
 import { listStripeInvoicesForAdmin } from '../billing/services/admin-stripe-list.service';
 import { isPaygInvoice } from '../billing/services/admin-billing-shared';
+import { ensureSingleActiveTrial } from '../billing/services/trial.service';
 
 // Simple in-memory cache for dashboard stats (keyed by query options)
 const STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -1144,16 +1145,37 @@ export async function applyUserSubscriptionPlan(userId: string, subscription: Ad
     });
   }
 
-  const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const trialStart = new Date();
+  const trialEnd = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  if (sub) {
+  if (subscription === 'trial') {
+    // Delegate to the canonical helper so this path cannot produce a second active trial row
+    // once `subscriptions_one_active_trial_per_user` exists.
+    //
+    // WAS: took the newest ACTIVE row of ANY plan and flipped it to trial — which could both
+    //      convert a paid row into a trial AND, when no active row existed, create a second
+    //      active trial alongside one the user already had.
+    // NOW: scoped to the user's active TRIAL row. An existing active trial is reused and
+    //      reshaped; otherwise a new one is created. A paid row is never matched, so it is
+    //      never converted.
+    //
+    // Trial duration (7 days), credit behaviour, authorization, audit logging and the
+    // response shape are all unchanged — the credit write below still runs exactly as before.
+    await ensureSingleActiveTrial(userId, {
+      match: 'active_trial',
+      billingCycle: 'monthly',
+      startDate: trialStart,
+      endDate: trialEnd,
+      reshapeExisting: true,
+    });
+  } else if (sub) {
     await prisma.subscriptions.update({
       where: { id: sub.id },
       data: {
         plan_type: subscription,
         status: 'active',
         updated_at: new Date(),
-        ...(subscription === 'trial' ? { end_date: trialEnd } : { end_date: null }),
+        end_date: null,
       },
     });
   } else {
@@ -1164,7 +1186,6 @@ export async function applyUserSubscriptionPlan(userId: string, subscription: Ad
         status: 'active',
         start_date: new Date(),
         billing_cycle: 'monthly',
-        ...(subscription === 'trial' ? { end_date: trialEnd } : {}),
       },
     });
   }

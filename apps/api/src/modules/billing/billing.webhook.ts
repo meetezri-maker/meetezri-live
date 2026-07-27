@@ -5,6 +5,7 @@ import prisma from '../../lib/prisma';
 import { PLAN_LIMITS, STRIPE_PRICE_IDS } from './billing.constants';
 import { stripeSubscriptionMrrUsd } from './stripe-mrr';
 import { addSubscriptionAllowanceMinutes } from './credit-balance.service';
+import { isStripeSubIdUniqueViolation } from './services/subscription-constraints';
 import { emailService } from '../email/email.service';
 
 function getStripeWebhookSecret(): string | undefined {
@@ -370,7 +371,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
     (!existingByStripeId || previousPlanType !== planType);
 
   // Row mutation and allowance grant commit together or not at all.
-  await prisma.$transaction(async (tx) => {
+  const runCheckoutWrite = () => prisma.$transaction(async (tx) => {
     if (existingByStripeId) {
       await tx.subscriptions.update({
         where: { id: existingByStripeId.id },
@@ -416,6 +417,34 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
       await addSubscriptionAllowanceMinutes(userId, planCredits, tx);
     }
   });
+
+  try {
+    await runCheckoutWrite();
+  } catch (error) {
+    // `subscriptions_stripe_sub_id_unique` arbitrated a concurrent delivery or a racing
+    // checkout-return. The winner committed its row and allowance atomically, so this delivery
+    // is already satisfied: do not create a second row and do not grant again.
+    if (!isStripeSubIdUniqueViolation(error)) throw error;
+
+    const winner = await prisma.subscriptions.findFirst({
+      where: { stripe_sub_id: subscription.id },
+      select: { id: true, user_id: true },
+    });
+
+    if (winner && winner.user_id !== userId) {
+      // Never reassign ownership. Log with identifiers only — no Stripe payload.
+      request.log.warn(
+        { stripeSubscriptionId: subscription.id, userId, owningRowId: winner.id },
+        'Stripe subscription already linked to a different user; ignoring webhook link'
+      );
+      return;
+    }
+
+    request.log.info(
+      { stripeSubscriptionId: subscription.id, userId },
+      'Stripe subscription already linked by a concurrent writer; skipping duplicate grant'
+    );
+  }
 }
 
 async function handleSubscriptionUpdated(subscription: any) {

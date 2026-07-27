@@ -1329,6 +1329,13 @@ model sleep_entries {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// NOTE: two PARTIAL unique indexes exist on this table that Prisma cannot express and that
+/// are therefore NOT declared here — they are created by raw SQL in migration
+/// 20260725120000_billing_subscription_cleanup_and_constraints:
+///   - subscriptions_one_active_trial_per_user  UNIQUE (user_id) WHERE plan_type='trial' AND status='active'
+///   - subscriptions_stripe_sub_id_unique       UNIQUE (stripe_sub_id) WHERE stripe_sub_id IS NOT NULL
+/// Application code recognises their violations in billing/services/subscription-constraints.ts.
+/// Do NOT `prisma db pull` these away; they are intentional and unmodellable in the schema.
 model subscriptions {
   id              String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   org_id          String?        @db.Uuid

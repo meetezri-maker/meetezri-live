@@ -5,6 +5,7 @@ import { stripe } from '../../config/stripe';
 import { STRIPE_PRICE_IDS, PLAN_LIMITS } from './billing.constants';
 import { stripeSubscriptionMrrUsd } from './stripe-mrr';
 import { addSubscriptionAllowanceMinutes } from './credit-balance.service';
+import { isStripeSubIdUniqueViolation } from './services/subscription-constraints';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from './billing.schema';
 
 // Simple in-memory cache for billing data
@@ -304,18 +305,37 @@ export async function linkSubscriptionToUser(userId: string, sessionId: string) 
 
   if (existingByStripeId) return;
 
-  await prisma.subscriptions.create({
-    data: {
-      user_id: userId,
-      stripe_sub_id: stripeSub.id,
-      status: stripeSub.status,
-      plan_type: planType,
-      billing_cycle: 'monthly',
-      start_date: new Date(stripeSub.current_period_start * 1000),
-      end_date: new Date(stripeSub.current_period_end * 1000),
-      next_billing_at: new Date(stripeSub.current_period_end * 1000),
-    },
-  });
+  try {
+    await prisma.subscriptions.create({
+      data: {
+        user_id: userId,
+        stripe_sub_id: stripeSub.id,
+        status: stripeSub.status,
+        plan_type: planType,
+        billing_cycle: 'monthly',
+        start_date: new Date(stripeSub.current_period_start * 1000),
+        end_date: new Date(stripeSub.current_period_end * 1000),
+        next_billing_at: new Date(stripeSub.current_period_end * 1000),
+      },
+    });
+  } catch (error) {
+    // `subscriptions_stripe_sub_id_unique` arbitrated a concurrent link. The winner's row and
+    // allowance committed together, so return without creating a row or granting again.
+    if (!isStripeSubIdUniqueViolation(error)) throw error;
+
+    const winner = await prisma.subscriptions.findFirst({
+      where: { stripe_sub_id: stripeSub.id },
+      select: { id: true, user_id: true },
+    });
+    if (winner && winner.user_id !== userId) {
+      console.warn('[billing] stripe subscription ownership conflict (legacy link)', {
+        stripeSubscriptionId: stripeSub.id,
+        requestingUserId: userId,
+        owningRowId: winner.id,
+      });
+    }
+    return;
+  }
 
   await addSubscriptionAllowanceMinutes(userId, PLAN_LIMITS[planType].credits);
 }
@@ -758,24 +778,45 @@ export async function syncSubscriptionWithStripe(userId: string) {
     ...(mrrUsd != null ? { amount: mrrUsd } : {}),
   };
 
-  if (existingByStripeId) {
-    updatedSub = await prisma.subscriptions.update({
-      where: { id: existingByStripeId.id },
-      data: subData,
+  try {
+    if (existingByStripeId) {
+      updatedSub = await prisma.subscriptions.update({
+        where: { id: existingByStripeId.id },
+        data: subData,
+      });
+    } else if (pendingCandidate) {
+      updatedSub = await prisma.subscriptions.update({
+        where: { id: pendingCandidate.id },
+        data: subData,
+      });
+    } else {
+      updatedSub = await prisma.subscriptions.create({
+        data: {
+          user_id: userId,
+          ...subData,
+          billing_cycle: 'monthly',
+        },
+      });
+    }
+  } catch (error) {
+    // Concurrent writer won the Stripe-id race. Self-heal is opportunistic: return the
+    // committed row rather than failing the `/users/me` read that triggered this.
+    if (!isStripeSubIdUniqueViolation(error)) throw error;
+
+    const winner = await prisma.subscriptions.findFirst({
+      where: { stripe_sub_id: activeSub.id },
     });
-  } else if (pendingCandidate) {
-    updatedSub = await prisma.subscriptions.update({
-      where: { id: pendingCandidate.id },
-      data: subData,
-    });
-  } else {
-    updatedSub = await prisma.subscriptions.create({
-      data: {
-        user_id: userId,
-        ...subData,
-        billing_cycle: 'monthly',
-      },
-    });
+    if (!winner) throw error;
+
+    if (winner.user_id !== userId) {
+      console.warn('[billing] stripe subscription ownership conflict (legacy sync)', {
+        stripeSubscriptionId: activeSub.id,
+        requestingUserId: userId,
+        owningRowId: winner.id,
+      });
+      return getSubscription(userId);
+    }
+    return winner;
   }
 
   const shouldGrant =

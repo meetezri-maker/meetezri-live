@@ -1,5 +1,5 @@
-import { Prisma } from '@prisma/client';
 import prisma, { type PrismaClientLike } from '../../../lib/prisma';
+import { isActiveTrialUniqueViolation as isActiveTrialConflict } from './subscription-constraints';
 
 /**
  * Canonical trial-row creation — plan §8A.4.
@@ -65,58 +65,12 @@ export interface EnsureActiveTrialResult {
   raceRecovered?: boolean;
 }
 
-/**
- * Name of the partial unique index that enforces the invariant at the database level.
- * Created by the approved cleanup migration; until then no `P2002` can name it, so the
- * recovery branch below is inert.
- */
-export const ACTIVE_TRIAL_UNIQUE_INDEX = 'subscriptions_one_active_trial_per_user';
-
-/**
- * Narrow test for "we lost the active-trial race", deliberately NOT "any P2002".
- *
- * HOW PRISMA ACTUALLY REPORTS THIS — verified empirically against PostgreSQL 16 with the real
- * partial index in place (Step 8B). Prisma does **not** surface the index name. It surfaces the
- * COLUMN LIST of the violated index:
- *
- *   subscriptions_one_active_trial_per_user  ->  meta = { modelName: 'subscriptions', target: ['user_id'] }
- *   subscriptions_stripe_sub_id_unique       ->  meta = { modelName: 'subscriptions', target: ['stripe_sub_id'] }
- *   subscriptions_pkey                       ->  meta = { modelName: 'subscriptions', target: ['id'] }
- *
- * So the discriminator is `target === ['user_id']` on the `subscriptions` model. That is
- * unambiguous **because `user_id` alone keys no other unique index on this table** — the only
- * other unique indexes are the primary key and the Stripe-id index, which report different
- * columns. If a future migration adds another unique index keyed solely on `user_id`, this
- * predicate must be revisited; the assertion is encoded in the tests.
- *
- * The index-name comparison is retained as a secondary match in case a future Prisma version
- * starts reporting constraint names. Anything else — including a P2002 whose target Prisma
- * could not resolve — is rethrown untouched, because swallowing it would hide real defects.
- */
-export function isActiveTrialUniqueViolation(error: unknown): boolean {
-  const code = (error as { code?: unknown })?.code;
-  if (code !== 'P2002') return false;
-
-  const meta = (error as { meta?: { target?: unknown; modelName?: unknown } })?.meta;
-
-  // When Prisma tells us the model, it must be this one.
-  if (typeof meta?.modelName === 'string' && meta.modelName !== 'subscriptions') return false;
-
-  const target = meta?.target;
-
-  if (Array.isArray(target)) {
-    return (
-      (target.length === 1 && target[0] === 'user_id') ||
-      target.some((t) => typeof t === 'string' && t.includes(ACTIVE_TRIAL_UNIQUE_INDEX))
-    );
-  }
-
-  if (typeof target === 'string') {
-    return target === 'user_id' || target.includes(ACTIVE_TRIAL_UNIQUE_INDEX);
-  }
-
-  return false;
-}
+// Constraint recognition lives in one place so both index predicates share a single parser.
+// Re-exported here because existing callers and tests import them from this module.
+export {
+  ACTIVE_TRIAL_UNIQUE_INDEX,
+  isActiveTrialUniqueViolation,
+} from './subscription-constraints';
 
 /**
  * Ensure the user has exactly one active trial row, creating it only when absent.
@@ -183,7 +137,7 @@ export async function ensureSingleActiveTrial(
     return { subscription: created, created: true, reshaped: false };
   } catch (error) {
     // Anything that is not specifically the active-trial index losing a race propagates.
-    if (!isActiveTrialUniqueViolation(error)) throw error;
+    if (!isActiveTrialConflict(error)) throw error;
 
     // A concurrent caller committed first. Return their row rather than creating a second.
     //

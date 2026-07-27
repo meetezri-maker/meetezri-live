@@ -10,6 +10,14 @@ import {
   profilePill,
 } from "./profile/profileUi";
 import { ProfileSanctuaryLayout } from "./profile/ProfileSanctuaryLayout";
+import { ProfileEditModal } from "./profile/ProfileEditModal";
+import {
+  buildProfileFormDefaults,
+  computeProfileCompletion,
+  formatTimezoneOptionLabel,
+  goalsOptions,
+  triggersOptions,
+} from "./profile/profileFormMapping";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
 import {
@@ -22,23 +30,10 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import {
-  birthIsoToAgeYears,
-  isIsoDobString,
-  MIN_ACCOUNT_AGE_YEARS,
-  minAccountAgeMessage,
-  profileAgeStorageToDisplayYears,
-} from "@/lib/profileAge";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
-import {
-  resetAppMainScrollAfterProfileEdit,
-  scrollElementInAppMain,
-} from "@/lib/scrollAppMain";
+import { scrollElementInAppMain } from "@/lib/scrollAppMain";
 import { Skeleton } from "../../components/ui/skeleton";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,10 +51,6 @@ import {
   modalSecondaryButton,
   modalTitle,
 } from "@/lib/modalTheme";
-import {
-  isValidOptionalAppPhone,
-  OPTIONAL_PHONE_VALIDATION_MESSAGE,
-} from "@meetezri/shared";
 
 const GRAD =
   "linear-gradient(135deg, #7c3aed 0%, #c026d3 48%, #a855f7 100%)";
@@ -112,121 +103,6 @@ const toCropArea = (value: unknown): CropArea | null => {
 };
 const PILL = profilePill;
 
-import { wellnessGoalProfileOptions } from "@/lib/wellnessGoals";
-
-const goalsOptions = wellnessGoalProfileOptions;
-
-const triggersOptions = [
-  { value: "crowds", label: "Crowds" },
-  { value: "procrastination", label: "Procrastination" },
-  { value: "overthinking", label: "Overthinking" },
-  { value: "low-energy-days", label: "Low-energy days" },
-  { value: "focus-issues", label: "Focus issues" },
-  { value: "motivation-dips", label: "Motivation dips" },
-  { value: "sleep-routine", label: "Sleep routine" },
-  { value: "time-management", label: "Time management" },
-  { value: "difficult-conversations", label: "Difficult conversations" },
-  { value: "uncertainty", label: "Uncertainty" },
-  { value: "workload-pressure", label: "Workload pressure" },
-  { value: "decision-making", label: "Decision-making" },
-  { value: "distractions", label: "Distractions" },
-  { value: "confidence-dips", label: "Confidence dips" },
-  { value: "social-situations", label: "Social situations" },
-];
-const pronounsOptions = [
-  "she/her",
-  "he/him",
-  "they/them",
-  "she/they",
-  "he/they",
-  "prefer not to say",
-];
-const fallbackTimezones = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "Europe/London",
-  "Europe/Berlin",
-  "Asia/Karachi",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Australia/Sydney",
-];
-
-const getBrowserTimezone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-};
-
-const formatTimezoneOptionLabel = (timezone: string) => {
-  const place = timezone.replace(/_/g, " ").replace(/\//g, ", ");
-  try {
-    const offsetPart = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      timeZoneName: "shortOffset",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value;
-    return offsetPart ? `${place} (${offsetPart})` : place;
-  } catch {
-    return place;
-  }
-};
-
-const profileSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  phone: z
-    .string()
-    .optional()
-    .or(z.literal(""))
-    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || isValidOptionalAppPhone(v), OPTIONAL_PHONE_VALIDATION_MESSAGE),
-  birthday: z
-    .string()
-    .optional()
-    .refine((v) => {
-      const trimmed = (v ?? "").trim();
-      if (!trimmed) return true;
-      if (isIsoDobString(trimmed)) {
-        const years = birthIsoToAgeYears(trimmed);
-        return years !== undefined && years >= MIN_ACCOUNT_AGE_YEARS;
-      }
-      const asYears = Number.parseInt(trimmed, 10);
-      if (Number.isFinite(asYears)) return asYears >= MIN_ACCOUNT_AGE_YEARS;
-      return true;
-    }, minAccountAgeMessage),
-  pronouns: z.string().optional(),
-  location: z.string().optional(),
-  in_therapy: z.string().optional(),
-  selected_goals: z.array(z.string()).optional(),
-  selected_triggers: z.array(z.string()).optional(),
-  emergency_contact_name: z.string().min(2).optional().or(z.literal("")),
-  emergency_contact_phone: z
-    .string()
-    .optional()
-    .or(z.literal(""))
-    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || isValidOptionalAppPhone(v), OPTIONAL_PHONE_VALIDATION_MESSAGE),
-  emergency_contact_relationship: z.string().optional(),
-});
-type ProfileFormValues = z.infer<typeof profileSchema>;
-
-const toProfileGoals = (value: unknown): string[] => {
-  if (Array.isArray(value)) return value as string[];
-  if (typeof value === "string")
-    return value.split(",").map((s) => s.trim()).filter(Boolean);
-  return [];
-};
-
 /* ─── small reusable field wrapper ─── */
 function FieldRow({
   icon,
@@ -257,10 +133,11 @@ export function UserProfile() {
   const location = useLocation();
   const { signOut, user, refreshProfile } = useAuth();
   const { consent } = useSafetyConsent();
-  const [isEditing, setIsEditing] = useState(false);
+  /** The one edit surface on this page. */
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editFocusField, setEditFocusField] = useState<string | null>(null);
   const [showVerifiedAlert, setShowVerifiedAlert] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -275,17 +152,7 @@ export function UserProfile() {
   const [avatarCroppedAreaPercentages, setAvatarCroppedAreaPercentages] = useState<CropArea | null>(null);
   const [avatarCroppedAreaPixels, setAvatarCroppedAreaPixels] = useState<Area | null>(null);
   const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
-  const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
-  const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
-  const availableTimezones = useMemo<string[]>(() => {
-    try {
-      const list = ((Intl as any).supportedValuesOf?.("timeZone") || []) as string[];
-      return list.length ? list : fallbackTimezones;
-    } catch {
-      return fallbackTimezones;
-    }
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -295,16 +162,6 @@ export function UserProfile() {
       navigate(location.pathname, { replace: true });
     }
   }, [location, navigate, refreshProfile]);
-
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema as any),
-    defaultValues: {
-      name: "", email: "", phone: "", birthday: "", location: "",
-      pronouns: "", emergency_contact_name: "", emergency_contact_phone: "",
-      emergency_contact_relationship: "", in_therapy: "",
-      selected_goals: [], selected_triggers: [],
-    },
-  });
 
   const [userStats, setUserStats] = useState({ sessions: 0, checkins: 0, daysActive: 0 });
   const [preferencesData, setPreferencesData] = useState({
@@ -321,30 +178,6 @@ export function UserProfile() {
     try {
       const profile = await api.getMe();
       setRawProfile(profile);
-      form.reset({
-        name: profile.full_name || "",
-        email: profile.email || user?.email || "",
-        phone: profile.phone || "",
-        birthday: isIsoDobString(profile.age ?? "")
-          ? profile.age!.trim()
-          : profileAgeStorageToDisplayYears(profile.age),
-        location: profile.timezone || getBrowserTimezone(),
-        pronouns: profile.pronouns || "",
-        emergency_contact_name: profile.emergency_contact_name || "",
-        emergency_contact_phone: profile.emergency_contact_phone || "",
-        emergency_contact_relationship: profile.emergency_contact_relationship || "",
-        in_therapy: profile.in_therapy || "Not specified",
-        selected_goals: Array.isArray(profile.selected_goals)
-          ? profile.selected_goals
-          : typeof profile.selected_goals === "string"
-          ? profile.selected_goals.split(",").map((s: string) => s.trim())
-          : [],
-        selected_triggers: Array.isArray(profile.selected_triggers)
-          ? profile.selected_triggers
-          : typeof profile.selected_triggers === "string"
-          ? profile.selected_triggers.split(",").map((s: string) => s.trim())
-          : [],
-      });
       setPreferencesData({
         selected_avatar: profile.selected_avatar || "Default Avatar",
         selected_voice: profile.selected_voice || "Default Voice",
@@ -365,39 +198,17 @@ export function UserProfile() {
     }
   };
 
-  const watchedValues = form.watch();
+  /**
+   * One mapping feeds the read-only sidebar, the modal's defaults, and the completion metric,
+   * so the three can never disagree. Completion now settles on save rather than per keystroke,
+   * which is the expected behaviour once editing lives in a modal.
+   */
+  const profileView = useMemo(
+    () => buildProfileFormDefaults(rawProfile, user?.email),
+    [rawProfile, user?.email]
+  );
 
-  const profileCompletion = useMemo(() => {
-    const values = watchedValues as ProfileFormValues;
-    const fields: { key: keyof ProfileFormValues; label: string; type?: "string" | "array"; treatNotSpecifiedAsEmpty?: boolean }[] = [
-      { key: "name", label: "Name", type: "string" },
-      { key: "phone", label: "Phone", type: "string" },
-      { key: "birthday", label: "Birthday", type: "string" },
-      { key: "location", label: "Location", type: "string" },
-      { key: "pronouns", label: "Pronouns", type: "string" },
-      { key: "in_therapy", label: "In therapy", type: "string", treatNotSpecifiedAsEmpty: true },
-      { key: "emergency_contact_name", label: "Emergency contact name", type: "string" },
-      { key: "emergency_contact_phone", label: "Emergency contact phone", type: "string" },
-      { key: "emergency_contact_relationship", label: "Emergency contact relationship", type: "string" },
-      { key: "selected_goals", label: "Wellness goals", type: "array" },
-      { key: "selected_triggers", label: "Content triggers", type: "array" },
-    ];
-    let completed = 0;
-    const missingFields: { label: string; key: string }[] = [];
-    fields.forEach((f) => {
-      const value = values[f.key] as any;
-      let filled = false;
-      if (f.type === "array") filled = Array.isArray(value) && value.length > 0;
-      else {
-        const str = (value ?? "").toString().trim();
-        filled = f.treatNotSpecifiedAsEmpty && str.toLowerCase() === "not specified" ? false : str.length > 0;
-      }
-      if (filled) completed++;
-      else missingFields.push({ label: f.label, key: f.key as string });
-    });
-    const percent = Math.round((completed / fields.length) * 100);
-    return { percent, missingFields, isComplete: percent === 100 };
-  }, [watchedValues]);
+  const profileCompletion = useMemo(() => computeProfileCompletion(profileView), [profileView]);
 
   const milestones = useMemo(() => {
     const { sessions, checkins, daysActive: streak } = userStats;
@@ -559,91 +370,28 @@ export function UserProfile() {
     }
   };
 
-  useEffect(() => {
-    if (!isEditing || !rawProfile) return;
-    // Ensure emergency contact fields are hydrated immediately when entering edit mode.
-    form.setValue("emergency_contact_name", rawProfile.emergency_contact_name || "", { shouldDirty: false });
-    form.setValue("emergency_contact_relationship", rawProfile.emergency_contact_relationship || "", { shouldDirty: false });
-    form.setValue("emergency_contact_phone", rawProfile.emergency_contact_phone || "", { shouldDirty: false });
-    const hasExistingEmergencyContact = Boolean(
-      rawProfile.emergency_contact_name || rawProfile.emergency_contact_phone || rawProfile.emergency_contact_relationship
-    );
-    setEmergencyConsentChecked(hasExistingEmergencyContact);
-  }, [isEditing, rawProfile, form]);
+  const handleOpenEditModal = useCallback((focusField?: string) => {
+    setEditFocusField(focusField ?? null);
+    setIsEditOpen(true);
+  }, []);
 
-  const onSubmit = async (data: ProfileFormValues) => {
-    setIsSaving(true);
-    try {
-      const hasEmergencyContactInput = Boolean(
-        data.emergency_contact_name?.trim() ||
-        data.emergency_contact_phone?.trim() ||
-        data.emergency_contact_relationship?.trim()
-      );
-      if (hasEmergencyContactInput && !emergencyConsentChecked) {
-        toast.error("Please confirm emergency contact consent before saving");
-        scrollToProfileField("emergency_contact_name");
-        setIsSaving(false);
-        return;
+  /**
+   * Runs while the modal is still mounted, so the sidebar behind the overlay is already
+   * up to date the moment the modal closes.
+   */
+  const handleProfileSaved = useCallback(
+    async (updatedProfile: any) => {
+      if (updatedProfile && typeof updatedProfile === "object") {
+        // Merge rather than replace: PATCH returns the canonical profile, but merging keeps any
+        // page-only key that a future response shape might omit.
+        setRawProfile((prev: any) => (prev ? { ...prev, ...updatedProfile } : updatedProfile));
+        setProfileImage(updatedProfile.avatar_url ?? null);
       }
-      const dirty = form.formState.dirtyFields;
-      const patch: Record<string, unknown> = {};
-      const nextPronouns = (data.pronouns || "").trim();
-      const currentPronouns = (rawProfile?.pronouns || "").trim();
-      if (dirty.name) patch.full_name = data.name;
-      if (dirty.email) patch.email = data.email;
-      if (dirty.phone) patch.phone = data.phone;
-      if (dirty.birthday) {
-        patch.age = (data.birthday ?? "").trim();
-      }
-      // Pronouns can be changed via dropdown/custom input; compare values directly
-      // so updates do not depend on dirty field tracking quirks.
-      if (nextPronouns !== currentPronouns) patch.pronouns = nextPronouns;
-      if (dirty.location) patch.timezone = data.location;
-      if (dirty.in_therapy) patch.in_therapy = data.in_therapy;
-      if (dirty.selected_goals) patch.selected_goals = data.selected_goals || [];
-      if (dirty.selected_triggers) patch.selected_triggers = data.selected_triggers || [];
-      if (profileImage !== rawProfile?.avatar_url) patch.avatar_url = profileImage;
-      if (dirty.emergency_contact_name || dirty.emergency_contact_phone || dirty.emergency_contact_relationship) {
-        patch.emergency_contact_name = data.emergency_contact_name || rawProfile?.emergency_contact_name || "";
-        patch.emergency_contact_phone = data.emergency_contact_phone || rawProfile?.emergency_contact_phone || "";
-        patch.emergency_contact_relationship = data.emergency_contact_relationship || rawProfile?.emergency_contact_relationship || "";
-      }
-      if (!Object.keys(patch).length) { toast.success("No changes to save"); setIsEditing(false); return; }
-      const updated = await api.updateProfile(patch);
-      setRawProfile(updated);
-      form.reset({
-        name: updated.full_name || "", email: updated.email || "", phone: updated.phone || "",
-        birthday: isIsoDobString(updated.age ?? "")
-          ? updated.age!.trim()
-          : profileAgeStorageToDisplayYears(updated.age),
-        pronouns: updated.pronouns || "",
-        location: updated.timezone || "", in_therapy: updated.in_therapy || "Not specified",
-        selected_goals: toProfileGoals(updated.selected_goals),
-        selected_triggers: toProfileGoals(updated.selected_triggers),
-        emergency_contact_name: updated.emergency_contact_name || "",
-        emergency_contact_phone: updated.emergency_contact_phone || "",
-        emergency_contact_relationship: updated.emergency_contact_relationship || "",
-      });
-      toast.success("Profile updated!");
-      setIsEditing(false);
-      requestAnimationFrame(() => {
-        resetAppMainScrollAfterProfileEdit();
-      });
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to update profile";
-      const isAgeError =
-        /must be at least\s*18/i.test(message) ||
-        /18\+/i.test(message) ||
-        /18\s*years/i.test(message);
-      if (isAgeError) {
-        form.setError("birthday", { type: "manual", message });
-        scrollToProfileField("birthday");
-      } else {
-        toast.error(message || "Failed to update profile");
-      }
-    } finally { setIsSaving(false); }
-  };
+      // Clears the client /users/me cache and repopulates AuthContext for nav, greetings, etc.
+      await refreshProfile().catch(() => {});
+    },
+    [refreshProfile]
+  );
 
   const handleResendVerification = async () => {
     if (!user?.email) return;
@@ -729,7 +477,7 @@ export function UserProfile() {
   return (
     <>
       <ProfileSanctuaryLayout
-        form={form}
+        profileView={profileView}
         effectiveNeedsVerification={effectiveNeedsVerification}
         showTrialIncompleteBanner={showTrialIncompleteBanner}
         paidOnboardingChecklist={paidOnboardingChecklist}
@@ -737,8 +485,7 @@ export function UserProfile() {
         profileCompletion={profileCompletion}
         resending={resending}
         handleResendVerification={handleResendVerification}
-        scrollToProfileField={scrollToProfileField}
-        setIsEditing={setIsEditing}
+        onEditProfile={handleOpenEditModal}
         profileImage={profileImage}
         isUploading={isUploading}
         handleImageUpload={handleImageUpload}
@@ -753,21 +500,11 @@ export function UserProfile() {
         milestones={milestones}
         isLoggingOut={isLoggingOut}
         handleLogout={handleLogout}
-        isEditing={isEditing}
-        isSaving={isSaving}
-        onSubmit={onSubmit}
-        loadProfile={loadProfile}
-        pronounsOptions={pronounsOptions}
-        timezoneOpen={timezoneOpen}
-        setTimezoneOpen={setTimezoneOpen}
-        availableTimezones={availableTimezones}
         formatTimezoneOptionLabel={formatTimezoneOptionLabel}
         goalsOptions={goalsOptions}
         triggersOptions={triggersOptions}
         emergencyInfoOpen={emergencyInfoOpen}
         setEmergencyInfoOpen={setEmergencyInfoOpen}
-        emergencyConsentChecked={emergencyConsentChecked}
-        setEmergencyConsentChecked={setEmergencyConsentChecked}
         avatarEditorOpen={avatarEditorOpen}
         setAvatarEditorOpen={setAvatarEditorOpen}
         avatarEditorImageUrl={avatarEditorImageUrl}
@@ -788,6 +525,18 @@ export function UserProfile() {
         PILL={PILL}
         profileAgeStorage={rawProfile?.age ?? null}
       />
+
+      {/* Mounted only while open, so every opening builds a fresh form from current data. */}
+      {isEditOpen && (
+        <ProfileEditModal
+          open={isEditOpen}
+          profile={rawProfile}
+          authEmail={user?.email}
+          initialFocusField={editFocusField}
+          onOpenChange={setIsEditOpen}
+          onSaved={handleProfileSaved}
+        />
+      )}
 
       <AlertDialog
         open={showLogoutModal}
@@ -847,7 +596,7 @@ export function UserProfile() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction
-              onClick={() => { setShowVerifiedAlert(false); setIsEditing(true); }}
+              onClick={() => { setShowVerifiedAlert(false); handleOpenEditModal(); }}
               className="rounded-2xl"
               style={{ background: GRAD }}
             >

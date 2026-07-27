@@ -917,7 +917,8 @@ export async function updateProfileHandler(
   }
 
   const updatedProfile = await userService.updateProfile(user.sub, result.data);
-  request.log.info({ updatedProfile }, 'Profile updated successfully');
+  // The response is now the full canonical profile; log the subject only, not the payload.
+  request.log.info({ userId: user.sub }, 'Profile updated successfully');
   return sanitizeSelfProfileResponse(updatedProfile as any);
 }
 

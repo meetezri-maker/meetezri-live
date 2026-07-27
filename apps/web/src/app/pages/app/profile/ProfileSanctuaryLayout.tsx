@@ -1,7 +1,7 @@
 import { getWellnessGoalLabel } from "@/lib/wellnessGoals";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import type { UseFormReturn } from "react-hook-form";
+import { joinFullName, type ProfileFormDefaults } from "./profileFormMapping";
 import {
   User,
   Mail,
@@ -26,38 +26,17 @@ import {
   Users,
   Loader2,
   Trophy,
-  Check,
   CheckCircle2,
-  ChevronsUpDown,
   Circle,
   Star,
   MessageCircle,
   FileText,
 } from "lucide-react";
-import { SolaceDateOfBirthPicker, SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
+import { SolaceHeroEnvironment } from "@/app/solace";
 import { profileAgeDisplayLabel } from "@/lib/profileAge";
-import { resetAppMainScrollAfterProfileEdit } from "@/lib/scrollAppMain";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/app/components/ui/switch";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/app/components/ui/form";
-import { PhoneInput } from "@/app/components/ui/phone-input";
-import { PHONE_INPUT_HELPER_TEXT } from "@meetezri/shared";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/app/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import {
   Dialog,
@@ -82,8 +61,6 @@ import {
   profileCardHeader,
   profileCardSubtitle,
   profileCardTitle,
-  profileChipSelected,
-  profileChipUnselected,
   profileDialogContent,
   profileDialogDescription,
   profileDialogTitle,
@@ -91,16 +68,10 @@ import {
   profileEmergencyCard,
   profileEmergencyWarmthAmber,
   profileEmergencyWarmthViolet,
-  profileEmergencyInput,
   profileEmergencyLabel,
-  profileEmergencyPhoneButton,
-  profileEmergencyPhoneInput,
-  profileFieldLabel,
   profileFieldValue,
   profileFieldValueEmpty,
   profileFormLabel,
-  profileInlineButton,
-  profileInlineInput,
   profileHeroBio,
   profileHeroMeta,
   profileHeroMetaStrong,
@@ -111,27 +82,16 @@ import {
   profileHeroStatStrip,
   profileHeroStatValue,
   profileHeroToggleLabel,
-  profileInput,
-  profilePhoneButton,
-  profilePhoneInput,
-  profileDropdownCommand,
-  profileDropdownCommandEmpty,
-  profileDropdownCommandInput,
-  profileDropdownCommandItem,
-  profileDropdownCommandList,
   profileDropdownPopover,
   profileAchievementsLink,
   profileBannerBtnAmber,
   profileBannerBtnViolet,
   profileBtnDanger,
-  profileBtnRoseGhost,
   profileIconCircle,
   profileIconAmberMd,
   profileIconEmeraldMd,
   profileIconRoseSm,
   profileIconVioletMd,
-  profileIconVioletSm,
-  profileMemberTag,
   profileMilestoneChip,
   profileMilestoneUnlockedIcon,
   profilePageAtmosphere,
@@ -167,7 +127,8 @@ interface MilestoneItem {
 }
 
 interface ProfileSanctuaryLayoutProps {
-  form: UseFormReturn<any>;
+  /** Read-only display values, mapped once by the container. */
+  profileView: ProfileFormDefaults;
   effectiveNeedsVerification: boolean;
   showTrialIncompleteBanner: boolean;
   paidOnboardingChecklist: PaidOnboardingChecklistResult | null;
@@ -175,8 +136,8 @@ interface ProfileSanctuaryLayoutProps {
   profileCompletion: { percent: number; missingFields: { label: string; key: string }[]; isComplete: boolean };
   resending: boolean;
   handleResendVerification: () => void;
-  scrollToProfileField: (key: string) => void;
-  setIsEditing: (v: boolean) => void;
+  /** The single edit entry point for the whole page. */
+  onEditProfile: (focusField?: string) => void;
   profileImage: string | null;
   isUploading: boolean;
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -191,21 +152,11 @@ interface ProfileSanctuaryLayoutProps {
   milestones: MilestoneItem[];
   isLoggingOut: boolean;
   handleLogout: () => void;
-  isEditing: boolean;
-  isSaving: boolean;
-  onSubmit: (data: any) => void;
-  loadProfile: () => void;
-  pronounsOptions: string[];
-  timezoneOpen: boolean;
-  setTimezoneOpen: (v: boolean) => void;
-  availableTimezones: string[];
   formatTimezoneOptionLabel: (tz: string) => string;
   goalsOptions: { value: string; label: string; emoji: string }[];
   triggersOptions: { value: string; label: string }[];
   emergencyInfoOpen: boolean;
   setEmergencyInfoOpen: (v: boolean) => void;
-  emergencyConsentChecked: boolean;
-  setEmergencyConsentChecked: (v: boolean) => void;
   avatarEditorOpen: boolean;
   setAvatarEditorOpen: (v: boolean) => void;
   avatarEditorImageUrl: string | null;
@@ -235,7 +186,7 @@ interface ProfileSanctuaryLayoutProps {
 
 export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
   const {
-    form,
+    profileView,
     effectiveNeedsVerification,
     showTrialIncompleteBanner,
     paidOnboardingChecklist,
@@ -243,8 +194,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
     profileCompletion,
     resending,
     handleResendVerification,
-    scrollToProfileField,
-    setIsEditing,
+    onEditProfile,
     profileImage,
     isUploading,
     handleImageUpload,
@@ -259,21 +209,11 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
     milestones,
     isLoggingOut,
     handleLogout,
-    isEditing,
-    isSaving,
-    onSubmit,
-    loadProfile,
-    pronounsOptions,
-    timezoneOpen,
-    setTimezoneOpen,
-    availableTimezones,
     formatTimezoneOptionLabel,
     goalsOptions,
     triggersOptions,
     emergencyInfoOpen,
     setEmergencyInfoOpen,
-    emergencyConsentChecked,
-    setEmergencyConsentChecked,
     avatarEditorOpen,
     setAvatarEditorOpen,
     avatarEditorImageUrl,
@@ -295,9 +235,18 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
     profileAgeStorage,
   } = props;
 
-  const displayName = form.watch("name") || "Your name";
+  const composedName = joinFullName(profileView.firstName, profileView.lastName || "");
+  const displayName = composedName || "Your name";
   const profileInitial = (displayName.trim()[0] || "?").toUpperCase();
   const planPill = formatSubscriptionPlanLabel(planLabel);
+
+  /** Read-only row value with the shared "Not set" sentinel. */
+  const readOnlyValue = (value?: string | null) =>
+    value && String(value).trim() ? (
+      String(value)
+    ) : (
+      <span className={profileFieldValueEmpty}>Not set</span>
+    );
 
   return (
     <motion.div
@@ -370,10 +319,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
             </div>
             <button
               type="button"
-              onClick={() => {
-                setIsEditing(true);
-                scrollToProfileField(profileCompletion.missingFields[0]?.key || "name");
-              }}
+              onClick={() => onEditProfile(profileCompletion.missingFields[0]?.key || "name")}
               className={profileBannerBtnViolet}
             >
               Complete now
@@ -441,6 +387,17 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       {personalBio?.trim() ? (
                         <p className={profileHeroBio}>{personalBio.trim()}</p>
                       ) : null}
+                      {/* The one and only edit entry point on this page. */}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          id="profile-edit-trigger"
+                          onClick={() => onEditProfile()}
+                          className={profileBtnPrimary}
+                        >
+                          <Edit className="h-4 w-4" /> Edit Profile
+                        </button>
+                      </div>
                       <div className="flex flex-wrap items-center gap-3 pt-1">
                         <span className={`text-[11px] ${profileBodyMuted}`}>Photo in community</span>
                         <Switch
@@ -627,549 +584,211 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
             </motion.div>
           </div>
 
-          {/* ── Right rail ~30% ── */}
+          {/* ── Right rail ~30% — read-only. All editing lives in ProfileEditModal. ── */}
           <motion.div className={`${profileRightRailGlow} min-w-0 space-y-5 xl:basis-[32%] xl:max-w-[420px]`}>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="relative z-10 space-y-5 overflow-visible">
-                {/* Personal information */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    profileCard,
-                    "overflow-visible",
-                    isEditing &&
-                      "ring-1 ring-violet-400/30 [html[data-ezri-theme=light]_&]:ring-violet-300/50 [html[data-theme=light]_&]:ring-violet-300/50"
-                  )}
-                >
-                  <div className={profileCardHeader}>
-                    <div>
-                      <h2 className={profileCardTitle}>Personal information</h2>
-                      <p className={profileCardSubtitle}>Your details and preferences</p>
-                    </div>
-                    {isEditing && (
-                      <span className={profileMemberTag}>
-                        Editing
-                      </span>
-                    )}
+            <div className="relative z-10 space-y-5 overflow-visible">
+              {/* Personal information */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(profileCard, "overflow-visible")}
+              >
+                <div className={profileCardHeader}>
+                  <div>
+                    <h2 className={profileCardTitle}>Personal information</h2>
+                    <p className={profileCardSubtitle}>Your details and preferences</p>
                   </div>
-                  <div className="space-y-2.5 p-4 sm:p-5">
-                    {[
-                      { name: "name" as const, label: "Full name", icon: <User className="h-3.5 w-3.5" />, placeholder: "Your name" },
-                      { name: "email" as const, label: "Email", icon: <Mail className="h-3.5 w-3.5" />, placeholder: "you@email.com" },
-                      { name: "birthday" as const, label: "Age", icon: <Calendar className="h-3.5 w-3.5" />, placeholder: "Select date of birth", isBirthday: true },
-                      { name: "pronouns" as const, label: "Pronouns", icon: <User className="h-3.5 w-3.5" />, placeholder: "they/them" },
-                      { name: "location" as const, label: "Location / Timezone", icon: <MapPin className="h-3.5 w-3.5" />, placeholder: "Timezone" },
-                    ].map((f) => (
-                      <FormField
-                        key={f.name}
-                        control={form.control}
-                        name={f.name}
-                        render={({ field, fieldState }) => (
-                          <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
-                            <FieldRow icon={f.icon} label={f.label} editing={isEditing}>
-                              {isEditing ? (
-                                f.name === "pronouns" ? (
-                                  <motion.div className="space-y-2">
-                                    <SolaceSelect
-                                      value={
-                                        pronounsOptions.includes((field.value || "").toLowerCase())
-                                          ? (field.value || "").toLowerCase()
-                                          : "__custom__"
-                                      }
-                                      onValueChange={(v) => {
-                                        if (v === "__custom__") {
-                                          field.onChange("");
-                                          return;
-                                        }
-                                        field.onChange(v);
-                                      }}
-                                      disabled={isSaving}
-                                      ariaLabel="Pronouns"
-                                      placeholder="Select pronouns"
-                                      variant="default"
-                                      triggerClassName={cn(
-                                        profileInlineInput,
-                                        "h-auto border-0 px-0 py-0 shadow-none"
-                                      )}
-                                      options={[
-                                        ...pronounsOptions.map((option) => ({
-                                          value: option,
-                                          label: option,
-                                        })),
-                                        { value: "__custom__", label: "Other (custom)" },
-                                      ]}
-                                    />
-                                    {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
-                                      <input
-                                        value={field.value || ""}
-                                        disabled={isSaving}
-                                        placeholder="Type custom pronouns"
-                                        onChange={(e) => field.onChange(e.target.value)}
-                                        className={profileInlineInput}
-                                      />
-                                    )}
-                                  </motion.div>
-                                ) : f.name === "birthday" ? (
-                                  <SolaceDateOfBirthPicker
-                                    value={field.value ?? ""}
-                                    onChange={field.onChange}
-                                    disabled={isSaving}
-                                    minAgeYears={18}
-                                    externalError={fieldState.error?.message}
-                                    showLabelIcon={false}
-                                    showAgeHint
-                                    placeholder="MM/DD/YYYY"
-                                    triggerClassName={cn(
-                                      profileInput,
-                                      "pr-10 text-sm"
-                                    )}
-                                    className="w-full"
-                                  />
-                                ) : f.name === "location" ? (
-                                  <Popover open={timezoneOpen} onOpenChange={setTimezoneOpen}>
-                                    <PopoverTrigger asChild>
-                                      <button
-                                        type="button"
-                                        disabled={isSaving}
-                                        className={profileInlineButton}
-                                      >
-                                        <span className="truncate text-left">
-                                          {field.value ? formatTimezoneOptionLabel(field.value) : "Select timezone"}
-                                        </span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
-                                      </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                      className={cn(
-                                        profileDropdownPopover,
-                                        "w-[--radix-popover-trigger-width]"
-                                      )}
-                                      side="bottom"
-                                      align="start"
-                                      sideOffset={8}
-                                      avoidCollisions
-                                      collisionPadding={16}
-                                    >
-                                      <Command className={profileDropdownCommand}>
-                                        <CommandInput
-                                          placeholder="Search timezone…"
-                                          className={profileDropdownCommandInput}
-                                        />
-                                        <CommandList className={profileDropdownCommandList}>
-                                          <CommandEmpty className={profileDropdownCommandEmpty}>
-                                            No timezone found.
-                                          </CommandEmpty>
-                                          <CommandGroup>
-                                            {availableTimezones.map((timezone) => (
-                                              <CommandItem
-                                                key={timezone}
-                                                className={profileDropdownCommandItem}
-                                                value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
-                                                onSelect={() => {
-                                                  field.onChange(timezone);
-                                                  setTimezoneOpen(false);
-                                                }}
-                                              >
-                                                <Check className={`h-4 w-4 ${field.value === timezone ? "opacity-100" : "opacity-0"}`} />
-                                                <span className="truncate">{formatTimezoneOptionLabel(timezone)}</span>
-                                              </CommandItem>
-                                            ))}
-                                          </CommandGroup>
-                                        </CommandList>
-                                      </Command>
-                                    </PopoverContent>
-                                  </Popover>
-                                ) : (
-                                  <input
-                                    {...field}
-                                    disabled={isSaving}
-                                    placeholder={f.placeholder}
-                                    className={profileInlineInput}
-                                  />
-                                )
-                              ) : (
-                                <p className={cn("truncate", profileFieldValue)}>
-                                  {f.name === "birthday" ? (
-                                    profileAgeDisplayLabel(profileAgeStorage ?? field.value) || (
-                                      <span className={profileFieldValueEmpty}>Not set</span>
-                                    )
-                                  ) : f.name === "location" && field.value ? (
-                                    formatTimezoneOptionLabel(String(field.value))
-                                  ) : field.value ? (
-                                    String(field.value)
-                                  ) : (
-                                    <span className={profileFieldValueEmpty}>Not set</span>
-                                  )}
-                                </p>
-                              )}
-                            </FieldRow>
-                            <FormMessage className="mt-0.5 px-1 text-xs" />
-                          </FormItem>
+                </div>
+                <div className="space-y-2.5 p-4 sm:p-5">
+                  <div id="profile-field-name">
+                    <FieldRow icon={<User className="h-3.5 w-3.5" />} label="Full name" editing={false}>
+                      <p className={cn("truncate", profileFieldValue)}>{readOnlyValue(composedName)}</p>
+                    </FieldRow>
+                  </div>
+
+                  <div id="profile-field-email">
+                    <FieldRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" editing={false}>
+                      <p className={cn("truncate", profileFieldValue)}>
+                        {readOnlyValue(profileView.emailDisplay)}
+                      </p>
+                    </FieldRow>
+                  </div>
+
+                  <div id="profile-field-birthday">
+                    <FieldRow icon={<Calendar className="h-3.5 w-3.5" />} label="Age" editing={false}>
+                      <p className={cn("truncate", profileFieldValue)}>
+                        {profileAgeDisplayLabel(profileAgeStorage ?? profileView.birthday) || (
+                          <span className={profileFieldValueEmpty}>Not set</span>
                         )}
-                      />
-                    ))}
-
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-phone" className="scroll-mt-24">
-                          {isEditing ? (
-                            <div className="space-y-2 rounded-2xl border border-violet-400/25 bg-violet-500/[0.08] px-3.5 py-3">
-                              <p className={`flex items-center gap-2 ${profileFieldLabel}`}>
-                                <Phone className={profileIconVioletSm} />
-                                Phone <span className="text-violet-300/50 font-normal">(optional)</span>
-                              </p>
-                              <p className="text-xs text-violet-300/45">{PHONE_INPUT_HELPER_TEXT}</p>
-                              <PhoneInput
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                disabled={isSaving}
-                                placeholder="Phone number"
-                                className="w-full min-w-0"
-                                buttonClassName={profilePhoneButton}
-                                inputClassName={profilePhoneInput}
-                                popoverClassName={profileDropdownPopover}
-                                commandClassName={profileDropdownCommand}
-                                commandInputClassName={profileDropdownCommandInput}
-                                commandListClassName={profileDropdownCommandList}
-                                commandItemClassName={profileDropdownCommandItem}
-                                commandEmptyClassName={profileDropdownCommandEmpty}
-                              />
-                            </div>
-                          ) : (
-                            <FieldRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" editing={false}>
-                              <p className={profileFieldValue}>
-                                {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
-                              </p>
-                            </FieldRow>
-                          )}
-                          <FormMessage className="mt-0.5 px-1 text-xs" />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="pt-2">
-                      {isEditing ? (
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button type="submit" disabled={isSaving} className={`${profileBtnPrimary} flex-1`}>
-                            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Save changes
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsEditing(false);
-                              loadProfile();
-                              requestAnimationFrame(() => {
-                                resetAppMainScrollAfterProfileEdit();
-                              });
-                            }}
-                            disabled={isSaving}
-                            className={`${profileBtnGhost} flex-1`}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button type="button" onClick={() => setIsEditing(true)} className={`${profileBtnPrimary} w-full`}>
-                          <Edit className="h-4 w-4" /> Edit profile
-                        </button>
-                      )}
-                    </div>
+                      </p>
+                    </FieldRow>
                   </div>
-                </motion.div>
 
-                {/* Wellness snapshot */}
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className={profileCard}>
-                  <div className={profileCardHeader}>
-                    <div>
-                      <h2 className={profileCardTitle}>Wellness snapshot</h2>
-                      <p className={profileCardSubtitle}>Your current wellness overview</p>
-                    </div>
-                    {isSaving && <Loader2 className={cn("h-4 w-4 animate-spin", profileIconVioletMd)} />}
+                  <div id="profile-field-pronouns">
+                    <FieldRow icon={<User className="h-3.5 w-3.5" />} label="Pronouns" editing={false}>
+                      <p className={cn("truncate", profileFieldValue)}>
+                        {readOnlyValue(profileView.pronouns)}
+                      </p>
+                    </FieldRow>
                   </div>
-                  <div className="space-y-5 p-4 sm:p-5">
-                    <FormField
-                      control={form.control}
-                      name="in_therapy"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-in_therapy" className="scroll-mt-24">
-                          <div className="mb-2 flex items-center gap-2">
-                            <Users className={profileIconVioletMd} />
-                            <FormLabel className={profileFormLabel}>Therapist</FormLabel>
-                          </div>
-                          <FormControl>
-                            {isEditing ? (
-                              <SolaceSelect
-                                value={field.value || "__unset__"}
-                                onValueChange={(v) => field.onChange(v === "__unset__" ? "" : v)}
-                                disabled={isSaving}
-                                ariaLabel="Therapist"
-                                placeholder="Select…"
-                                variant="form"
-                                options={[
-                                  { value: "Yes", label: "Yes" },
-                                  { value: "No", label: "No" },
-                                  { value: "Prefer not to say", label: "Prefer not to say" },
-                                ]}
-                              />
-                            ) : (
-                              <span className={profilePillViolet}>
-                                {field.value || "Not specified"}
-                              </span>
-                            )}
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
 
-                    <FormField
-                      control={form.control}
-                      name="selected_goals"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-selected_goals" className="scroll-mt-24">
-                          <motion.div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
-                            <Target className={profileIconEmeraldMd} />
-                            <FormLabel className={profileFormLabel}>Wellness goals</FormLabel>
-                          </motion.div>
-                          <FormControl>
-                            {isEditing ? (
-                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                {goalsOptions.map((g) => {
-                                  const selected = (field.value || []).includes(g.value);
-                                  return (
-                                    <button
-                                      key={g.value}
-                                      type="button"
-                                      disabled={isSaving}
-                                      onClick={() =>
-                                        field.onChange(selected ? field.value!.filter((v: string) => v !== g.value) : [...(field.value || []), g.value])
-                                      }
-                                      className={cn(
-                                        "flex items-center gap-2 text-left transition-all",
-                                        selected ? profileChipSelected("emerald") : profileChipUnselected
-                                      )}
-                                    >
-                                      <FluentEmoji emoji={g.emoji} size={16} className="shrink-0" /> {g.label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {field.value?.length ? (
-                                  field.value.map((v: string, i: number) => {
-                                    const opt = goalsOptions.find((o) => o.value === v);
-                                    return (
-                                      <span key={i} className={profilePillEmerald}>
-                                        {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={16} /> : null} {opt?.label || getWellnessGoalLabel(v)}
-                                      </span>
-                                    );
-                                  })
-                                ) : (
-                                  <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
-                                )}
-                              </div>
-                            )}
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="selected_triggers"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
-                          <div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
-                            <Zap className={profileIconAmberMd} />
-                            <FormLabel className={profileFormLabel}>Challenges</FormLabel>
-                          </div>
-                          <FormControl>
-                            {isEditing ? (
-                              <motion.div className="grid grid-cols-2 gap-2">
-                                {triggersOptions.map((t) => {
-                                  const selected = (field.value || []).includes(t.value);
-                                  return (
-                                    <button
-                                      key={t.value}
-                                      type="button"
-                                      disabled={isSaving}
-                                      onClick={() =>
-                                        field.onChange(selected ? field.value!.filter((v: string) => v !== t.value) : [...(field.value || []), t.value])
-                                      }
-                                      className={cn(
-                                        "px-2.5 py-2 text-left transition-all",
-                                        selected ? profileChipSelected("amber") : profileChipUnselected
-                                      )}
-                                    >
-                                      {t.label}
-                                    </button>
-                                  );
-                                })}
-                              </motion.div>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {field.value?.length ? (
-                                  field.value.map((v: string, i: number) => {
-                                    const opt = triggersOptions.find((o) => o.value === v);
-                                    return (
-                                      <span key={i} className={profilePillAmber}>
-                                        {opt?.label || v}
-                                      </span>
-                                    );
-                                  })
-                                ) : (
-                                  <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
-                                )}
-                              </div>
-                            )}
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-
-                {/* Emergency contact */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 }}
-                  className={profileEmergencyCard}
-                >
-                  <img src={PROFILE_EMERGENCY_BG} alt="" className={profileEmergencyBg} aria-hidden />
-                  <div className={profileEmergencyWarmthAmber} aria-hidden />
-                  <div className={profileEmergencyWarmthViolet} aria-hidden />
-                  <div className="relative">
-                    <div className={profileCardHeader}>
-                      <div>
-                        <h2 className={profileCardTitle}>Emergency contact</h2>
-                        <p className={profileCardSubtitle}>Trusted person we can reach if needed</p>
-                      </div>
-                      <Popover open={emergencyInfoOpen} onOpenChange={setEmergencyInfoOpen}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            onMouseEnter={() => setEmergencyInfoOpen(true)}
-                            onMouseLeave={() => setEmergencyInfoOpen(false)}
-                            onFocus={() => setEmergencyInfoOpen(true)}
-                            onBlur={() => setEmergencyInfoOpen(false)}
-                            className={profileWhyWeAskBtn}
-                            aria-label="Learn why emergency contact is needed"
-                          >
-                            <Info className="h-3.5 w-3.5" /> Why we ask
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="end"
-                          className={cn(
-                            "max-w-xs text-xs",
-                            profileDropdownPopover,
-                            "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)]",
-                            "[html[data-theme=light]_&]:text-[var(--text-secondary)]"
-                          )}
-                        >
-                          We only use this contact during serious safety concerns, such as when we cannot reach you in a
-                          high-risk wellbeing event. It is never used for marketing or regular app notifications.
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="space-y-3 p-4 sm:p-5">
-                      {[
-                        { name: "emergency_contact_name" as const, label: "Name", placeholder: "Contact name" },
-                        { name: "emergency_contact_relationship" as const, label: "Relationship", placeholder: "e.g. Parent" },
-                      ].map((f) => (
-                        <FormField
-                          key={f.name}
-                          control={form.control}
-                          name={f.name}
-                          render={({ field }) => (
-                            <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
-                              <p className={profileEmergencyLabel}>{f.label}</p>
-                              {isEditing ? (
-                                <input
-                                  {...field}
-                                  disabled={isSaving}
-                                  placeholder={f.placeholder}
-                                  className={profileEmergencyInput}
-                                />
-                              ) : (
-                                <p className={profileFieldValue}>
-                                  {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
-                                </p>
-                              )}
-                              <FormMessage className="mt-0.5 text-xs" />
-                            </FormItem>
-                          )}
-                        />
-                      ))}
-                      <FormField
-                        control={form.control}
-                        name="emergency_contact_phone"
-                        render={({ field }) => (
-                          <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
-                            <p className={profileEmergencyLabel}>Phone</p>
-                            {isEditing ? (
-                              <>
-                                <p className="mb-2 text-xs text-rose-200/45">{PHONE_INPUT_HELPER_TEXT}</p>
-                                <PhoneInput
-                                  value={field.value ?? ""}
-                                  onChange={field.onChange}
-                                  disabled={isSaving}
-                                  placeholder="Contact phone"
-                                  className="w-full min-w-0"
-                                  buttonClassName={profileEmergencyPhoneButton}
-                                  inputClassName={profileEmergencyPhoneInput}
-                                  popoverClassName={profileDropdownPopover}
-                                  commandClassName={profileDropdownCommand}
-                                  commandInputClassName={profileDropdownCommandInput}
-                                  commandListClassName={profileDropdownCommandList}
-                                  commandItemClassName={profileDropdownCommandItem}
-                                  commandEmptyClassName={profileDropdownCommandEmpty}
-                                />
-                              </>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <Phone className={profileIconRoseSm} />
-                                <p className={profileFieldValue}>
-                                  {field.value || <span className={profileFieldValueEmpty}>Not set</span>}
-                                </p>
-                              </div>
-                            )}
-                            <FormMessage className="mt-0.5 text-xs" />
-                          </FormItem>
+                  <div id="profile-field-timezone">
+                    <FieldRow icon={<MapPin className="h-3.5 w-3.5" />} label="Timezone" editing={false}>
+                      <p className={cn("truncate", profileFieldValue)}>
+                        {profileView.timezone ? (
+                          formatTimezoneOptionLabel(String(profileView.timezone))
+                        ) : (
+                          <span className={profileFieldValueEmpty}>Not set</span>
                         )}
-                      />
-                      {isEditing && (
-                        <div className="rounded-xl border border-rose-400/20 bg-rose-500/[0.08] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                          <label className={cn("flex cursor-pointer items-start gap-2 text-xs", profileHeroBio)}>
-                            <input
-                              type="checkbox"
-                              checked={emergencyConsentChecked}
-                              onChange={(e) => setEmergencyConsentChecked(e.target.checked)}
-                              className="mt-0.5 h-4 w-4 rounded border-zinc-600 text-rose-500 focus:ring-rose-400"
-                            />
-                            <span>
-                              I confirm this person knows they may be contacted only during urgent wellbeing or safety situations.
+                      </p>
+                    </FieldRow>
+                  </div>
+
+                  <div id="profile-field-phone">
+                    <FieldRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" editing={false}>
+                      <p className={profileFieldValue}>{readOnlyValue(profileView.phone)}</p>
+                    </FieldRow>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Wellness snapshot */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+                className={profileCard}
+              >
+                <div className={profileCardHeader}>
+                  <div>
+                    <h2 className={profileCardTitle}>Wellness snapshot</h2>
+                    <p className={profileCardSubtitle}>Your current wellness overview</p>
+                  </div>
+                </div>
+                <div className="space-y-5 p-4 sm:p-5">
+                  <div id="profile-field-in_therapy">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Users className={profileIconVioletMd} />
+                      <p className={profileFormLabel}>Therapist</p>
+                    </div>
+                    <span className={profilePillViolet}>{profileView.in_therapy || "Not specified"}</span>
+                  </div>
+
+                  <div id="profile-field-selected_goals">
+                    <div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
+                      <Target className={profileIconEmeraldMd} />
+                      <p className={profileFormLabel}>Wellness goals</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {profileView.selected_goals?.length ? (
+                        profileView.selected_goals.map((v: string, i: number) => {
+                          const opt = goalsOptions.find((o) => o.value === v);
+                          return (
+                            <span key={i} className={profilePillEmerald}>
+                              {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={16} /> : null}{" "}
+                              {opt?.label || getWellnessGoalLabel(v)}
                             </span>
-                          </label>
-                        </div>
+                          );
+                        })
+                      ) : (
+                        <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setIsEditing(true)}
-                        className={profileBtnRoseGhost}
-                      >
-                        Update contact
-                      </button>
                     </div>
                   </div>
-                </motion.div>
-              </form>
-            </Form>
+
+                  <div id="profile-field-selected_triggers">
+                    <div className={cn("mb-2 flex items-center gap-2", profileSectionDivider)}>
+                      <Zap className={profileIconAmberMd} />
+                      <p className={profileFormLabel}>Challenges</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {profileView.selected_triggers?.length ? (
+                        profileView.selected_triggers.map((v: string, i: number) => {
+                          const opt = triggersOptions.find((o) => o.value === v);
+                          return (
+                            <span key={i} className={profilePillAmber}>
+                              {opt?.label || v}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <p className={cn("text-sm italic", profileRowValue)}>Not specified</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Emergency contact */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08 }}
+                className={profileEmergencyCard}
+              >
+                <img src={PROFILE_EMERGENCY_BG} alt="" className={profileEmergencyBg} aria-hidden />
+                <div className={profileEmergencyWarmthAmber} aria-hidden />
+                <div className={profileEmergencyWarmthViolet} aria-hidden />
+                <div className="relative">
+                  <div className={profileCardHeader}>
+                    <div>
+                      <h2 className={profileCardTitle}>Emergency contact</h2>
+                      <p className={profileCardSubtitle}>Trusted person we can reach if needed</p>
+                    </div>
+                    <Popover open={emergencyInfoOpen} onOpenChange={setEmergencyInfoOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setEmergencyInfoOpen(true)}
+                          onMouseLeave={() => setEmergencyInfoOpen(false)}
+                          onFocus={() => setEmergencyInfoOpen(true)}
+                          onBlur={() => setEmergencyInfoOpen(false)}
+                          className={profileWhyWeAskBtn}
+                          aria-label="Learn why emergency contact is needed"
+                        >
+                          <Info className="h-3.5 w-3.5" /> Why we ask
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        className={cn(
+                          "max-w-xs text-xs",
+                          profileDropdownPopover,
+                          "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)]",
+                          "[html[data-theme=light]_&]:text-[var(--text-secondary)]"
+                        )}
+                      >
+                        We only use this contact during serious safety concerns, such as when we cannot reach you in a
+                        high-risk wellbeing event. It is never used for marketing or regular app notifications.
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-3 p-4 sm:p-5">
+                    <div id="profile-field-emergency_contact_name">
+                      <p className={profileEmergencyLabel}>Name</p>
+                      <p className={profileFieldValue}>
+                        {readOnlyValue(profileView.emergency_contact_name)}
+                      </p>
+                    </div>
+                    <div id="profile-field-emergency_contact_relationship">
+                      <p className={profileEmergencyLabel}>Relationship</p>
+                      <p className={profileFieldValue}>
+                        {readOnlyValue(profileView.emergency_contact_relationship)}
+                      </p>
+                    </div>
+                    <div id="profile-field-emergency_contact_phone">
+                      <p className={profileEmergencyLabel}>Phone</p>
+                      <div className="flex items-center gap-2">
+                        <Phone className={profileIconRoseSm} />
+                        <p className={profileFieldValue}>
+                          {readOnlyValue(profileView.emergency_contact_phone)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </motion.div>
         </div>
       </div>

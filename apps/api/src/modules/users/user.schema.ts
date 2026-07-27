@@ -118,9 +118,23 @@ export const onboardingSchema = z.object({
   }
 });
 
+/**
+ * Email is display-only on the profile surface. `auth.users.email` is the credential and
+ * `profiles.email` mirrors it, written server-side at signup/init (`user.service.createProfile`).
+ * Accepting it here let a client desynchronise the two with no verification step, so the key is
+ * REJECTED rather than silently stripped: a regressing caller should fail loudly.
+ *
+ * The object is deliberately NOT `.strict()`. Existing callers legitimately send keys this
+ * schema does not model — `first_name`/`last_name` from `onboarding/ProfileSetup.tsx` and
+ * `permissions` from `onboarding/Permissions.tsx` — and strict mode would 400 those flows.
+ */
+const rejectedProfileEmailSchema = z.undefined({
+  invalid_type_error: 'Email cannot be updated from this endpoint',
+});
+
 export const updateProfileSchema = z.object({
   full_name: z.string().min(2).max(100).optional(),
-  email: z.string().email().optional(),
+  email: rejectedProfileEmailSchema,
   phone: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? undefined : val),
     optionalPhoneSchema.optional()
