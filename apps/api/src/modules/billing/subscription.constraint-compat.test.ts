@@ -65,7 +65,7 @@ async function loadCanonical() {
 }
 async function loadLegacy() {
   jest.resetModules();
-  return import('./billing.service');
+  return import('./index');
 }
 async function loadWebhook() {
   jest.resetModules();
@@ -197,7 +197,14 @@ describe('canonical syncSubscriptionWithStripe — stripe_sub_id conflict', () =
 });
 
 // ---------------------------------------------------------------------------
-describe('legacy live writers — stripe_sub_id conflict', () => {
+/**
+ * STEP 10 NOTE: `billing.service` is now a thin wrapper (`export * from './index'`), so the
+ * "legacy" link/sync imported here ARE the canonical implementations. These tests therefore
+ * exercise the canonical writers via the wrapper import path that `user.controller.ts` and
+ * `user.service.ts` still use, confirming the redirect is safe. One assertion changed — see the
+ * "unrelated P2002" case, where canonical link classifies rather than rethrows.
+ */
+describe('legacy (now wrapper → canonical) live writers — stripe_sub_id conflict', () => {
   beforeEach(() => {
     baseMocks();
     mockStripe.checkout.sessions.retrieve.mockResolvedValue({
@@ -232,11 +239,21 @@ describe('legacy live writers — stripe_sub_id conflict', () => {
     expect(creditWrites()).toHaveLength(0);
   });
 
-  it('legacy link: rethrows an unrelated P2002', async () => {
+  /**
+   * WAS (Step 9): the standalone legacy link RETHREW an unrelated P2002.
+   * NOW (Step 10): the wrapper routes to canonical link, whose broad catch CLASSIFIES an
+   * unrelated failure as `failed`/`db_error` (it never swallows it into `already_linked` and
+   * never grants). This matches the canonical-block assertion above; the wrapper behaves
+   * identically to a direct canonical call, which is the point of the redirect.
+   */
+  it('legacy(→canonical) link: an unrelated P2002 is classified failed, not already_linked, no grant', async () => {
     const legacy = await loadLegacy();
     mockPrisma.subscriptions.create.mockRejectedValue(pkConflict());
 
-    await expect(legacy.linkSubscriptionToUser(USER_ID, 'cs_1')).rejects.toMatchObject({ code: 'P2002' });
+    const outcome = await legacy.linkSubscriptionToUser(USER_ID, 'cs_1');
+
+    expect(outcome).toMatchObject({ result: 'failed', errorCategory: 'db_error' });
+    expect(creditWrites()).toHaveLength(0);
   });
 
   it('legacy self-heal sync: conflict returns the committed row without granting', async () => {

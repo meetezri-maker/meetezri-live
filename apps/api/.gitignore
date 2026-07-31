@@ -1,5 +1,8 @@
 node_modules
 # Keep environment variables out of version control
 .env
+# Integration-test connection strings. Copy .env.test.example -> .env.test locally.
+.env.test
+!.env.test.example
 
 /src/generated/prisma

@@ -29,6 +29,24 @@ function clearUserBillingCaches(userId: string) {
   userBillingHistoryInFlight.delete(userId);
 }
 
+/**
+ * Drop this user's cached subscription state so the next read hits the database.
+ *
+ * The narrowest public surface over `clearUserBillingCaches`: it takes a user id, returns
+ * nothing, and exposes no cache object, TTL, or other billing internal.
+ *
+ * Exists because membership is now an authorization input. Every mutation *inside* this module
+ * already self-invalidates; the one writer that cannot is `admin.service.applyUserSubscriptionPlan`,
+ * which rewrites the `subscriptions` row directly. Without this, an admin membership change stayed
+ * invisible to `getSubscription` — and therefore to the entitlement engine — for up to
+ * `USER_SUBSCRIPTION_CACHE_TTL` (30s).
+ *
+ * This adds no cache. It only lets an out-of-module writer invalidate the existing one.
+ */
+export function invalidateUserSubscriptionCache(userId: string) {
+  clearUserBillingCaches(userId);
+}
+
 export async function getSubscription(userId: string) {
   const cached = userSubscriptionCache.get(userId);
   if (cached && Date.now() - cached.timestamp < USER_SUBSCRIPTION_CACHE_TTL) {
@@ -450,8 +468,8 @@ export async function linkSubscriptionToUser(
 
   // Cache invalidation only after a successful commit (plan §5.2).
   // NOTE: the profile cache lives in `user.service.ts`; invalidating it from here would create
-  // a billing -> users import cycle (user.service already imports billing.service). The caller
-  // owns that invalidation when the live import is redirected to this implementation.
+  // a billing -> users import cycle (user.service imports the billing barrel). The caller owns
+  // profile-cache invalidation; this function clears the billing caches it owns.
   clearUserBillingCaches(userId);
   return outcome;
 }

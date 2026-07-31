@@ -1,0 +1,55 @@
+# Isolated PostgreSQL for integration tests.
+#
+# SEPARATE FILE ON PURPOSE. `docker-compose.dev.yml` is left untouched — this stack contains
+# nothing but a throwaway database, so starting it can never affect the dev services and can
+# never be confused with them.
+#
+# Everything here is disposable:
+#   - no named volume, so `docker compose down` destroys the data outright
+#   - dedicated credentials that exist nowhere else
+#   - a database name (`meetezri_test`) that the safety guard REQUIRES before any test may run
+#   - port 5433, so it cannot collide with a local Postgres already on 5432
+#
+# Version 15 matches the Supabase-managed major version the application runs against, so
+# behaviour under test (advisory locks, transaction semantics, `hashtext`) is the behaviour
+# production gets.
+#
+# Usage:
+#   pnpm --filter @meetezri/api test:integration:up
+#   pnpm --filter @meetezri/api test:integration
+#   pnpm --filter @meetezri/api test:integration:down
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: meetezri-postgres-test
+    environment:
+      POSTGRES_USER: meetezri_test
+      POSTGRES_PASSWORD: meetezri_test
+      POSTGRES_DB: meetezri_test
+      # Deterministic collation so index/ordering behaviour matches between machines.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '5433:5432'
+    # tmpfs: the whole data directory lives in RAM and evaporates with the container. Fast, and
+    # it makes accidental persistence impossible.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U meetezri_test -d meetezri_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
+    command:
+      # Room for the concurrency tests to hold several simultaneous transactions.
+      - postgres
+      - '-c'
+      - 'max_connections=100'
+      # Durability is irrelevant for disposable test data and fsync dominates the runtime.
+      - '-c'
+      - 'fsync=off'
+      - '-c'
+      - 'synchronous_commit=off'
+      - '-c'
+      - 'full_page_writes=off'

@@ -5,7 +5,7 @@ import {
   formatTranscriptForSummary,
 } from '@meetezri/shared';
 import { onUserActivity } from '../system-achievements/system-achievements.triggers';
-import { resolveProfileRemainingSeconds } from '../billing/credit-balance.service';
+import { getMembershipEntitlements } from '../entitlements';
 import { emailService } from '../email/email.service';
 import {
   CreateSessionInput,
@@ -39,47 +39,49 @@ function badRequest(message: string): never {
 }
 
 /**
- * Trial, profile, and credit checks shared by new instant sessions and starting a scheduled session.
+ * Membership, profile, and credit checks shared by new instant sessions and starting a scheduled
+ * session.
+ *
+ * PHASE 1B MIGRATION — the membership decision moved to the canonical entitlement engine.
+ *
+ *   WAS: this function queried `subscriptions` directly and inlined the trial-expiry policy
+ *        ("no active non-trial row" + "now > end_date"), making it a second, independent reader
+ *        of membership alongside `billing.getSubscription()`.
+ *   NOW: `getMembershipEntitlements()` answers the membership question. This function keeps only
+ *        what is genuinely session-specific: profile existence and the DURATION-sized balance
+ *        check, which is accounting, not authorization.
+ *
+ * Behaviour is unchanged — see `sessions.entitlement-parity.test.ts`, which was made green
+ * against the previous implementation and passes unaltered against this one.
+ *
+ * Why `status === 'EXPIRED'` reproduces the old rule exactly: live-row expiry is DISCOVER-scoped
+ * in the resolver (a paid membership only expires via cancellation), which is the same carve-out
+ * the old `hasActivePaidSubscription` short-circuit provided.
+ *
+ * `canUseAI` is deliberately NOT used as the gate. It folds in "balance > 0", which would
+ * collapse the zero-balance case into the expiry case and lose the user-facing distinction
+ * between "your trial ended" and "you are out of minutes" — two different remediations.
  */
 async function assertSessionStartAllowed(userId: string, durationMinutes: number) {
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
-    select: {
-      id: true,
-      credits: true,
-      purchased_credits: true,
-      credits_seconds: true,
-      purchased_credits_seconds: true,
-    },
+    select: { id: true },
   });
 
   if (!profile) {
     badRequest('User profile not found. Please complete onboarding first.');
   }
 
-  const activeSubscriptions = await prisma.subscriptions.findMany({
-    where: { user_id: userId, status: 'active' },
-    orderBy: { created_at: 'desc' },
-    select: {
-      plan_type: true,
-      end_date: true,
-    },
-  });
+  const entitlements = await getMembershipEntitlements(userId);
 
-  const hasActivePaidSubscription = activeSubscriptions.some((sub) => sub.plan_type !== 'trial');
-
-  if (!hasActivePaidSubscription) {
-    const latestTrialSubscription = activeSubscriptions.find((sub) => sub.plan_type === 'trial');
-    if (
-      latestTrialSubscription?.end_date &&
-      new Date() > latestTrialSubscription.end_date
-    ) {
-      badRequest('Your trial has expired. Please upgrade to continue.');
-    }
+  if (entitlements.status === 'EXPIRED') {
+    badRequest('Your trial has expired. Please upgrade to continue.');
   }
 
   const requiredCredits = durationMinutes || 5;
-  const totalSeconds = resolveProfileRemainingSeconds(profile);
+  // Same figure the old code computed via `resolveProfileRemainingSeconds(profile)` — the engine
+  // derives it from the same columns through the same helper.
+  const totalSeconds = entitlements.remainingSeconds;
   const requiredSeconds = requiredCredits * 60;
   const haveFullMinutes = Math.floor(totalSeconds / 60);
 

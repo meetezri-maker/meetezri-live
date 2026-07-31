@@ -8,6 +8,7 @@ import {
   createWellnessChallengeSchema,
   updateWellnessChallengeSchema,
 } from './wellness.schema';
+import { ActiveChallengeLimitError } from './challenge-limit.error';
 
 export async function createWellnessToolHandler(
   request: FastifyRequest<{ Body: CreateWellnessToolInput }>,
@@ -230,6 +231,11 @@ export async function joinWellnessChallengeHandler(
   } catch (error: any) {
     if (error.message === 'Challenge not found') {
       return reply.code(404).send({ message: 'Challenge not found' });
+    }
+    // Membership limit reached. Sent explicitly rather than rethrown so the response keeps the
+    // machine-readable code and the count fields the global handler would drop.
+    if (error instanceof ActiveChallengeLimitError) {
+      return reply.code(error.statusCode).send(error.toResponse());
     }
     throw error;
   }

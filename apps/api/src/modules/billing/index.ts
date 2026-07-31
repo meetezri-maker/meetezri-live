@@ -1,5 +1,6 @@
 export {
   getSubscription,
+  invalidateUserSubscriptionCache,
   createCheckoutSession,
   createGuestCheckoutSession,
   linkSubscriptionToUser,

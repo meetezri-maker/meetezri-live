@@ -3,7 +3,7 @@ import prisma from '../../lib/prisma';
 import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
-import * as billingService from '../billing/billing.service';
+import * as billingService from '../billing';
 import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
 import { ensureSingleActiveTrial } from '../billing/services/trial.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';

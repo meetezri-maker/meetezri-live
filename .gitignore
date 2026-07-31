@@ -38,6 +38,9 @@ Thumbs.db
 *.env
 *.env.*
 !.env.example
+# Integration-test environment. `.env.test` holds a real (local) connection string and stays
+# ignored by the rules above; only the documented placeholder template is committed.
+!.env.test.example
 *.pem
 .temp
 .tmp
@@ -70,6 +73,11 @@ pids
 
 # User requested ignores
 *.md
+
+# Billing Consolidation — narrow, approved exceptions to the *.md ignore above.
+# These are operational/audit records (no secrets, no connection strings, no backup dumps).
+!BILLING_CONSOLIDATION_IMPLEMENTATION_PLAN.md
+!apps/api/scripts/STEP9-CLEANUP-EXECUTION-REPORT.md
 
 # Python/Pip
 pip-wheel-metadata/

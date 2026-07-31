@@ -35,7 +35,7 @@ jest.mock('../../lib/prisma', () => ({
   default: mockPrisma,
 }));
 
-jest.mock('../billing/billing.service', () => ({
+jest.mock('../billing', () => ({
   syncSubscriptionWithStripe: mockSyncSubscriptionWithStripe,
   linkSubscriptionToUser: jest.fn(),
   getSubscription: jest.fn(),
@@ -470,17 +470,15 @@ describe('BASELINE — /users/me self-heal: cache-hit path (W5, user.service.ts:
   });
 
   /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * Both self-heal call sites go through `import * as billingService from
-   * '../billing/billing.service'` (`user.service.ts:6,1016,1113`), i.e. the LEGACY
-   * `syncSubscriptionWithStripe` (writer W4b, `billing.service.ts:716-820`) — not the
-   * canonical one. Plan §11.1 converts the legacy file to a thin wrapper during a later step;
-   * this asserts the pre-migration wiring.
+   * Self-heal calls `import * as billingService from '../billing'`
+   * (`user.service.ts:6`). STEP 10: `billing.service` is now a thin wrapper
+   * (`export * from './index'`), so this call resolves to the CANONICAL
+   * `syncSubscriptionWithStripe`. The import path is unchanged (the wrapper preserves it),
+   * which is why this mock still intercepts; only the implementation behind it is now canonical.
    */
-  it('reconciliation is routed through the legacy billing.service module', async () => {
+  it('reconciliation is routed through billing.service (now the canonical wrapper)', async () => {
     const { getProfile } = await loadUserService();
-    const billingService = await import('../billing/billing.service');
+    const billingService = await import('../billing');
 
     mockPrisma.profiles.findUnique.mockResolvedValue(
       profileFixture({ stripeCustomerId: 'cus_1', subscriptions: [activeSubscriptionRow('trial')] })

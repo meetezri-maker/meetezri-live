@@ -68,7 +68,7 @@ const SESSION_ID = 'cs_test_baseline_1';
  */
 async function loadServices() {
   jest.resetModules();
-  const legacy = await import('./billing.service');
+  const legacy = await import('./index');
   const canonical = await import('./services/subscription.service');
   return { legacy, canonical };
 }
@@ -96,60 +96,53 @@ function stripeSubscriptionFixture(overrides: Record<string, any> = {}) {
   };
 }
 
-describe('BASELINE — guest checkout linking (legacy billing.service.linkSubscriptionToUser)', () => {
+
+/**
+ * ---------------------------------------------------------------------------------------
+ * STEP 10 — legacy `billing.service` is now a THIN WRAPPER over the canonical barrel.
+ *
+ * This block replaces the Step 2 "BASELINE — guest checkout linking (legacy…)" tests, which
+ * documented the legacy implementation's defects (returns `undefined`, non-atomic grant,
+ * `stripe_sub_id`-only lookup, silent no-ops). That separate legacy implementation no longer
+ * exists: `billing.service.ts` is now `export * from './index'`, so
+ * `legacy.linkSubscriptionToUser` IS `canonical.linkSubscriptionToUser`. Every former legacy
+ * defect is gone by construction. Canonical behaviour is covered exhaustively by the STEP 5
+ * block below and by `subscription.checkout-linking.test.ts`; here we only prove the wrapper
+ * delegates.
+ * ---------------------------------------------------------------------------------------
+ */
+describe('STEP 10 — legacy billing.service.linkSubscriptionToUser delegates to canonical', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPrisma.profiles.update.mockResolvedValue({});
     mockPrisma.profiles.findUnique.mockResolvedValue({ credits: 0, credits_seconds: 0 });
     mockPrisma.subscriptions.create.mockResolvedValue({ id: 'row-1' });
     mockPrisma.subscriptions.update.mockResolvedValue({ id: 'row-1' });
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
   });
 
   /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * `user.controller.ts:347` calls `billingService.linkSubscriptionToUser` where
-   * `billingService` is `import * as billingService from '../billing/billing.service'`.
-   * `billing.service.ts:1` is `export * from './index'` (which re-exports the CANONICAL
-   * implementation), but the file then declares its own `linkSubscriptionToUser` at :306.
-   * A local export shadows a star re-export, so the checkout-return path reaches the
-   * LEGACY implementation, not the canonical one.
-   *
-   * This resolution fact is load-bearing for the whole migration and is asserted here so
-   * a change to it cannot pass unnoticed.
+   * WAS (Step 2): asserted `legacy.linkSubscriptionToUser !== canonical.linkSubscriptionToUser`
+   * — the legacy file shadowed the canonical star re-export with its own implementation.
+   * NOW (Step 10): the shadow is gone; the wrapper re-exports canonical, so they are the SAME
+   * function reference. This is the load-bearing proof that no second implementation remains.
    */
-  it('the checkout-return path resolves to the legacy implementation, not the canonical one', async () => {
+  it('resolves to the SAME function as canonical (wrapper, not a second implementation)', async () => {
     const { legacy, canonical } = await loadServices();
-
     expect(typeof legacy.linkSubscriptionToUser).toBe('function');
-    expect(typeof canonical.linkSubscriptionToUser).toBe('function');
-    expect(legacy.linkSubscriptionToUser).not.toBe(canonical.linkSubscriptionToUser);
+    expect(legacy.linkSubscriptionToUser).toBe(canonical.linkSubscriptionToUser);
   });
 
-  /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * The legacy path is the one that is CORRECT on this dimension per the plan (§2 W2,
-   * Preflight Blocker 2): it reads `session.subscription` and retrieves that exact
-   * subscription. It never calls `stripe.subscriptions.list`.
-   *
-   * §3 of the plan rebuilds the canonical function to work this way, so this behaviour is
-   * expected to be PRESERVED (moved, not changed) during Step 3.
-   */
-  it('retrieves the exact session.subscription and never calls stripe.subscriptions.list', async () => {
+  it('the checkout-return path (via the legacy import) is session-anchored and never lists', async () => {
     const { legacy } = await loadServices();
-
     mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-      subscription: 'sub_baseline_core',
+      id: SESSION_ID, customer: 'cus_baseline_1', subscription: 'sub_baseline_core',
     });
     mockStripe.subscriptions.retrieve.mockResolvedValue(stripeSubscriptionFixture());
-    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
 
     await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
 
-    expect(mockStripe.checkout.sessions.retrieve).toHaveBeenCalledWith(SESSION_ID);
     expect(mockStripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_baseline_core', {
       expand: ['items.data.price'],
     });
@@ -157,192 +150,37 @@ describe('BASELINE — guest checkout linking (legacy billing.service.linkSubscr
   });
 
   /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * Subscription lookup path: `subscriptions.findFirst({ where: { stripe_sub_id } })`.
-   * Note it is scoped by `stripe_sub_id` ONLY — never by `user_id`. On a first link the
-   * lookup misses, a row is created, and the allowance is granted via the private
-   * `addSubscriptionAllowance` copy at `billing.service.ts:26` (allowance impl A2, §4.1).
-   *
-   * The row write and the credit write are two separate statements with NO transaction.
-   * §5 of the plan makes them atomic.
+   * WAS: legacy returned `undefined` on every path (no classification).
+   * NOW: the canonical classified result flows through the wrapper unchanged.
    */
-  it('first link: looks up by stripe_sub_id only, creates the row, then grants the allowance non-atomically', async () => {
+  it('returns a classified result through the wrapper (no longer undefined)', async () => {
     const { legacy } = await loadServices();
-
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-      subscription: 'sub_baseline_core',
-    });
-    mockStripe.subscriptions.retrieve.mockResolvedValue(stripeSubscriptionFixture());
-    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
-    mockPrisma.profiles.findUnique.mockResolvedValue({ credits: 30, credits_seconds: 1800 });
-
-    await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
-
-    expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
-      where: { id: USER_ID },
-      data: { stripe_customer_id: 'cus_baseline_1' },
-    });
-
-    expect(mockPrisma.subscriptions.findFirst).toHaveBeenCalledWith({
-      where: { stripe_sub_id: 'sub_baseline_core' },
-      select: { id: true },
-    });
-
-    expect(mockPrisma.subscriptions.create).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.subscriptions.create.mock.calls[0][0].data).toMatchObject({
-      user_id: USER_ID,
-      stripe_sub_id: 'sub_baseline_core',
-      plan_type: 'core',
-      status: 'active',
-      billing_cycle: 'monthly',
-    });
-
-    // Allowance stacks 200 core minutes onto the existing 30 trial minutes.
-    expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
-      where: { id: USER_ID },
-      data: { credits: 230, credits_seconds: 13800 },
-    });
-
-    // No transaction wraps the row + grant today.
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    mockStripe.checkout.sessions.retrieve.mockResolvedValue({ id: SESSION_ID }); // no customer
+    const outcome = await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
+    expect(outcome).toEqual({ result: 'missing_customer', allowanceGranted: false });
   });
 
   /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * Result classification: there is NONE. The function returns `undefined` on every path —
-   * success, already-linked, missing customer, missing subscription, and unresolved plan are
-   * indistinguishable to the caller. `user.controller.ts:344-351` therefore cannot tell a
-   * successful link from a silent no-op.
-   *
-   * §15 of the plan introduces result classifications during Step 3.
+   * WAS: legacy created the row and granted the allowance as two separate, non-atomic
+   * statements. NOW: the wrapper runs the canonical single-transaction path and grants once.
    */
-  it('[DOCUMENTS DEFECT] returns undefined on every path — no result classification exists today', async () => {
+  it('grants the allowance inside the canonical transaction (atomic)', async () => {
     const { legacy } = await loadServices();
-
-    // Path 1: successful first link.
     mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-      subscription: 'sub_baseline_core',
-    });
-    mockStripe.subscriptions.retrieve.mockResolvedValue(stripeSubscriptionFixture());
-    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
-    await expect(legacy.linkSubscriptionToUser(USER_ID, SESSION_ID)).resolves.toBeUndefined();
-
-    // Path 2: already linked.
-    mockPrisma.subscriptions.findFirst.mockResolvedValue({ id: 'row-existing' });
-    await expect(legacy.linkSubscriptionToUser(USER_ID, SESSION_ID)).resolves.toBeUndefined();
-
-    // Path 3: no customer on the session.
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({ id: SESSION_ID });
-    await expect(legacy.linkSubscriptionToUser(USER_ID, SESSION_ID)).resolves.toBeUndefined();
-  });
-
-  /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   * Missing customer or missing subscription: returns before any write.
-   */
-  it('writes nothing when the session carries no customer', async () => {
-    const { legacy } = await loadServices();
-
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      subscription: 'sub_baseline_core',
-    });
-
-    await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
-
-    expect(mockPrisma.profiles.update).not.toHaveBeenCalled();
-    expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
-    expect(mockStripe.subscriptions.retrieve).not.toHaveBeenCalled();
-  });
-
-  it('writes nothing when the session carries no subscription', async () => {
-    const { legacy } = await loadServices();
-
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-    });
-
-    await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
-
-    // NOTE: the profile is NOT updated either — the customer id write happens after the
-    // combined `!customerId || !subscriptionId` guard at billing.service.ts:310.
-    expect(mockPrisma.profiles.update).not.toHaveBeenCalled();
-    expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
-  });
-
-  /**
-   * Current behaviour. This test intentionally documents existing behaviour.
-   *
-   * The legacy implementation resolves the plan ONLY from the price id. Unlike
-   * `syncSubscriptionWithStripe`, it does NOT consult `subscription.metadata.planType`.
-   * An unrecognised price falls through to `planType = 'trial'` and returns at :327 —
-   * so the profile's `stripe_customer_id` has already been written but no subscription row
-   * exists and no allowance is granted. A paying customer silently gets nothing.
-   *
-   * §3 step 5 / §5 introduce an explicit `plan_unresolved` classification in Step 3.
-   */
-  it('[DOCUMENTS DEFECT] an unrecognised price id silently no-ops after writing stripe_customer_id', async () => {
-    const { legacy } = await loadServices();
-
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-      subscription: 'sub_unknown_price',
-    });
-    mockStripe.subscriptions.retrieve.mockResolvedValue(
-      stripeSubscriptionFixture({
-        id: 'sub_unknown_price',
-        metadata: { planType: 'pro' }, // deliberately present, and deliberately ignored
-        items: {
-          data: [{ price: { id: 'price_not_a_known_plan', unit_amount: 4900, recurring: { interval: 'month' } } }],
-        },
-      })
-    );
-
-    await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
-
-    // The customer id write already happened.
-    expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
-      where: { id: USER_ID },
-      data: { stripe_customer_id: 'cus_baseline_1' },
-    });
-    // ...but nothing else. metadata.planType is not consulted on this path.
-    expect(mockPrisma.subscriptions.findFirst).not.toHaveBeenCalled();
-    expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
-    expect(mockPrisma.profiles.update).toHaveBeenCalledTimes(1);
-  });
-
-  it('resolves the pro plan from the pro price id and grants 400 minutes', async () => {
-    const { legacy } = await loadServices();
-
-    mockStripe.checkout.sessions.retrieve.mockResolvedValue({
-      id: SESSION_ID,
-      customer: 'cus_baseline_1',
-      subscription: 'sub_baseline_pro',
+      id: SESSION_ID, customer: 'cus_baseline_1', subscription: 'sub_baseline_pro',
     });
     mockStripe.subscriptions.retrieve.mockResolvedValue(
       stripeSubscriptionFixture({
         id: 'sub_baseline_pro',
-        items: {
-          data: [{ price: { id: PRO_PRICE_ID, unit_amount: 4900, recurring: { interval: 'month' } } }],
-        },
+        items: { data: [{ price: { id: PRO_PRICE_ID, unit_amount: 4900, recurring: { interval: 'month' } } }] },
       })
     );
-    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
     mockPrisma.profiles.findUnique.mockResolvedValue({ credits: 0, credits_seconds: 0 });
 
-    await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
+    const outcome = await legacy.linkSubscriptionToUser(USER_ID, SESSION_ID);
 
-    expect(mockPrisma.subscriptions.create.mock.calls[0][0].data).toMatchObject({
-      plan_type: 'pro',
-    });
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+    expect(outcome).toMatchObject({ result: 'linked', plan: 'pro', allowanceMinutes: 400 });
     expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: { credits: 400, credits_seconds: 24000 },

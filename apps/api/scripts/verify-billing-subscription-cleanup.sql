@@ -61,3 +61,30 @@ SELECT COALESCE(SUM(credits),0)                   AS credits_checksum,
        COALESCE(SUM(purchased_credits),0)         AS purchased_credits_checksum,
        COALESCE(SUM(purchased_credits_seconds),0) AS purchased_credits_seconds_checksum
 FROM profiles;
+
+-- 8. PAID-ROW REGRESSION ASSERTIONS (Step 9 closeout) --------------------------
+-- The authoritative paid invariant is NOT "paid row COUNT unchanged" — the Stripe dedup
+-- removes duplicate PAID rows on purpose. What must hold is that no UNIQUE paid subscription
+-- and no paid entitlement is lost. Every value below MUST be zero.
+--
+--   (a) every deleted PAID row has a same-user survivor carrying the same stripe_sub_id
+--   (b) no Stripe subscription id that had a row removed is now missing from live rows
+--       (i.e. distinct paid Stripe subscriptions remain unchanged)
+SELECT
+  -- (a)
+  (SELECT COUNT(*)
+     FROM subscription_cleanup_archive a
+     LEFT JOIN subscriptions s ON s.id = a.survivor_subscription_id
+    WHERE a.cleanup_category = 'duplicate_stripe_sub_id'
+      AND a.plan_type <> 'trial'
+      AND (s.id IS NULL OR s.user_id <> a.user_id OR s.stripe_sub_id IS DISTINCT FROM a.stripe_sub_id)
+  ) AS deleted_paid_rows_without_valid_same_user_survivor,
+  -- (b)
+  (SELECT COUNT(DISTINCT a.stripe_sub_id)
+     FROM subscription_cleanup_archive a
+    WHERE a.cleanup_category IN ('duplicate_stripe_sub_id','stale_checkout_intent_link_cleared')
+      AND a.stripe_sub_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM subscriptions s
+         WHERE s.stripe_sub_id = a.stripe_sub_id)
+  ) AS stripe_subscriptions_fully_lost;

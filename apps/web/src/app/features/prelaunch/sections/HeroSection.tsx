@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { ChevronDown, Play } from "lucide-react";
+import { Check, ChevronDown, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HERO, PRIMARY_CTA_LABEL, SECTION_IDS } from "../prelaunch.content";
 import { PRELAUNCH_HERO_BG } from "../prelaunch.imagery";
@@ -12,14 +12,23 @@ import { trackPrelaunchEvent } from "../prelaunch.analytics";
 /**
  * Section 1 — Hero.
  *
+ * Copy is Appendix A, Page 1, with the two approved production-safety
+ * exceptions documented on `HERO` in prelaunch.content.ts.
+ *
+ * Blueprint 4.2 — Information Hierarchy is preserved in DOM order: headline,
+ * supporting message, primary CTA, secondary CTA, microcopy, trust indicators,
+ * scroll invitation. Blueprint 4.5 — all motion is dropped under
+ * `prefers-reduced-motion`; nothing autoplays.
+ *
  * Full-screen cinematic landscape, no product screenshots. The background sits
- * behind a layered scrim so the locked headline keeps AA contrast, and its slow
- * drift is disabled entirely under `prefers-reduced-motion`.
+ * behind a layered scrim so the headline keeps AA contrast, and its slow drift
+ * is disabled entirely under reduced motion.
  */
 export function HeroSection() {
   const { openSignup } = useFoundingMemberSignup();
   const [videoOpen, setVideoOpen] = useState(false);
   const reduceMotion = useReducedMotion();
+  const videoTriggerRef = useRef<HTMLButtonElement>(null);
 
   const fade = (delay: number) =>
     reduceMotion
@@ -63,25 +72,25 @@ export function HeroSection() {
           <SectionBadge>{HERO.badge}</SectionBadge>
         </motion.div>
 
+        {/* PRIMARY HOOK. Split only so the accent can be styled; the rendered
+            text is exactly HERO.headline. */}
         <motion.h1
           id="prelaunch-hero-heading"
           {...fade(0.2)}
-          className="landing-serif mx-auto max-w-[18ch] text-[34px] font-semibold leading-[1.08] tracking-[-0.02em] text-white sm:text-5xl md:text-6xl lg:text-[68px]"
+          className="landing-serif prelaunch-hero-headline mx-auto max-w-[20ch] text-white"
         >
-          Every conversation{" "}
+          {HERO.headlineLead}{" "}
           <span className="bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
-            brings you closer to yourself.
+            {HERO.headlineAccent}
           </span>
         </motion.h1>
 
-        <motion.div
+        <motion.p
           {...fade(0.35)}
-          className="mx-auto flex max-w-2xl flex-col gap-2.5 text-[15px] leading-[1.75] text-white/85 sm:text-lg"
+          className="prelaunch-hero-supporting mx-auto max-w-2xl text-white/85"
         >
-          {HERO.supportingCopy.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </motion.div>
+          {HERO.supportingLine}
+        </motion.p>
 
         <motion.div
           {...fade(0.5)}
@@ -96,6 +105,7 @@ export function HeroSection() {
           </button>
 
           <button
+            ref={videoTriggerRef}
             type="button"
             onClick={() => {
               trackPrelaunchEvent("founder_video_opened", { origin: "hero" });
@@ -113,9 +123,29 @@ export function HeroSection() {
           </button>
         </motion.div>
 
+        {/* MICROCOPY. */}
         <motion.p {...fade(0.6)} className="max-w-md text-sm text-white/60">
-          {HERO.trustLine}
+          {HERO.microcopy}
         </motion.p>
+
+        {/* TRUST INDICATORS, beneath the calls to action (Blueprint 4.2). */}
+        <motion.ul
+          {...fade(0.7)}
+          className="flex max-w-2xl flex-wrap items-center justify-center gap-2"
+        >
+          {HERO.trustIndicators.map((indicator) => (
+            <li
+              key={indicator}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/75 backdrop-blur-sm sm:text-xs"
+            >
+              <Check
+                className="landing-check-glow h-3.5 w-3.5 shrink-0 text-emerald-400/90"
+                aria-hidden
+              />
+              {indicator}
+            </li>
+          ))}
+        </motion.ul>
       </div>
 
       <motion.div
@@ -127,7 +157,15 @@ export function HeroSection() {
         <ChevronDown className="h-6 w-6" />
       </motion.div>
 
-      <FounderVideoModal open={videoOpen} onOpenChange={setVideoOpen} />
+      <FounderVideoModal
+        open={videoOpen}
+        onOpenChange={(open) => {
+          setVideoOpen(open);
+          // The shared dialog primitive does not reliably restore focus, which
+          // would strand keyboard users at the top of the document (WCAG 2.4.3).
+          if (!open) videoTriggerRef.current?.focus();
+        }}
+      />
     </section>
   );
 }

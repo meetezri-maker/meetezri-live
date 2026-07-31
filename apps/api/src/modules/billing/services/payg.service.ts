@@ -5,6 +5,7 @@ import { CreateCreditPurchaseInput } from '../billing.schema';
 import { CLIENT_URL } from '../billing.config';
 import { getSubscription } from './subscription.service';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
+import { getMembershipEntitlements } from '../../entitlements';
 
 export async function createCreditPurchaseSession(
   userId: string,
@@ -13,16 +14,33 @@ export async function createCreditPurchaseSession(
 ) {
   const customerId = await getOrCreateStripeCustomer(userId, email);
 
+  // ---- Authorization: the entitlement engine decides IF the member may buy ----
+  //
+  // PHASE 1B MIGRATION. Eligibility used to be inferred from the shape of a pricing constant
+  // (`PLAN_LIMITS[plan].payAsYouGoRate === null`), which quietly made a rate table into an
+  // authorization table. It is now an explicit entitlement.
+  //
+  // Behaviour is unchanged — see `payg.entitlement-parity.test.ts`, made green against the
+  // previous implementation and passing unaltered against this one.
+  const entitlements = await getMembershipEntitlements(userId);
+
+  if (!entitlements.canPurchaseMinutes) {
+    throw new Error('Pay-As-You-Go is only available for Core and Pro plans.');
+  }
+
+  // ---- Pricing: billing still decides HOW MUCH, and stays the only owner of money ----
+  //
+  // `PLAN_LIMITS` deliberately remains the rate source. Moving rates into the entitlement
+  // resolver would make it a financial authority, which is precisely the coupling this split
+  // exists to prevent.
   const subscription = await getSubscription(userId);
   const planType = (subscription?.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
-
-  // Get rate for plan, fallback to core if trial (or block if trial doesn't allow PAYG)
-  // Currently trial plan has payAsYouGoRate: null, so we should probably block or use a standard rate
-  // Let's use Core rate as standard for non-subscribers if we want to allow them to buy credits
-  let rate = PLAN_LIMITS[planType]?.payAsYouGoRate;
+  const rate = PLAN_LIMITS[planType]?.payAsYouGoRate;
 
   if (rate === null || rate === undefined) {
-    // Trial plan does not include Pay-As-You-Go
+    // Defensive only: an entitled member always maps to a plan carrying a rate. Reaching this
+    // means the rate table and the tier matrix have drifted apart, so fail closed rather than
+    // charge an improvised amount.
     throw new Error('Pay-As-You-Go is only available for Core and Pro plans.');
   }
 

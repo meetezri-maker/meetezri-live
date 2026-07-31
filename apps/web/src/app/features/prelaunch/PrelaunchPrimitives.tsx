@@ -167,7 +167,7 @@ export function SectionHeader({
 /** Supporting text rendered beneath a primary CTA. */
 export function CtaSupportingText({ children }: { children: ReactNode }) {
   return (
-    <p className="mx-auto mt-4 max-w-md text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
+    <p className="mx-auto mt-4 text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
       {children}
     </p>
   );

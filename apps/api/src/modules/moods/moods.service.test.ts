@@ -15,7 +15,10 @@ jest.mock("../system-achievements/system-achievements.triggers", () => ({
   onUserActivity: jest.fn().mockResolvedValue(null),
 }));
 
-const ensureStreakRiskReminder = jest.fn();
+// Must resolve, not return undefined: `getMoodsByUserId` fires this best-effort and chains
+// `.catch()` on the result (`moods.service.ts`), and the real method is `async`. A bare
+// `jest.fn()` returns undefined, so `.catch` is not a function and the read throws.
+const ensureStreakRiskReminder = jest.fn().mockResolvedValue(undefined);
 
 jest.mock("../notifications/notifications.service", () => ({
   notificationsService: {

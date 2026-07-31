@@ -58,6 +58,37 @@ export async function sharedSetJson(
   }
 }
 
+/**
+ * Close the shared Redis connection and reset the singleton.
+ *
+ * WHY THIS EXISTS: `getRedis()` lazily creates a process-wide ioredis client on the first cache
+ * operation. In production that long-lived connection is exactly what we want and nothing calls
+ * this. Under Jest it is what kept the event loop alive after the tests finished — any suite
+ * touching a cache-invalidating path (e.g. `invalidateUserProfileCache` -> `sharedDel`) opened a
+ * socket with reconnect timers that nothing ever tore down, so `jest` reported "did not exit one
+ * second after the test run has completed" and workers had to be force-exited.
+ *
+ * Called from `src/test-setup.ts` after each suite. Also safe to call from a graceful-shutdown
+ * handler if one is ever added.
+ *
+ * Never throws: a cache client that cannot be closed cleanly is disconnected instead, because
+ * failing teardown would be worse than the leak it fixes.
+ */
+export async function closeSharedCache(): Promise<void> {
+  const client = redis;
+  redis = null;
+  if (!client) return;
+  try {
+    await client.quit();
+  } catch {
+    try {
+      client.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function sharedDel(key: string): Promise<void> {
   const r = getRedis();
   if (!r) return;

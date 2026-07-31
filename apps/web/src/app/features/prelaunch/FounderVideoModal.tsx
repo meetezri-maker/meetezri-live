@@ -31,15 +31,31 @@ export function FounderVideoModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  /** The control that had focus when the dialog opened. */
+  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (open) return;
+    if (open) {
+      openerRef.current = document.activeElement as HTMLElement | null;
+      return;
+    }
     videoRef.current?.pause();
   }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="solace-landing max-h-[90vh] max-w-3xl overflow-y-auto border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl">
+      <DialogContent
+        className="solace-landing max-h-[90vh] max-w-3xl overflow-y-auto border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl"
+        /*
+         * The shared dialog primitive does not reliably restore focus on close,
+         * which strands keyboard users at the top of the document (WCAG 2.4.3).
+         * Video behaviour is unchanged; only focus handling is corrected.
+         */
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          openerRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="landing-serif text-xl text-white sm:text-2xl">
             {FOUNDER.videoTitle}

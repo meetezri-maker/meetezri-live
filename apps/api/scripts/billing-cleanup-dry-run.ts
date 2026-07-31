@@ -476,14 +476,55 @@ async function main() {
     clearedRows.every((r) => INTENT_STATUSES.has(r.status ?? '')),
     `${clearedRows.length} row(s); statuses=${[...new Set(clearedRows.map((r) => r.status))].join('|') || 'none'}`);
 
+  // ---- PAID-ROW invariant (corrected in the Step 9 closeout) --------------------
+  // The authoritative rule is NOT "paid row COUNT is unchanged" — the Stripe dedup removes
+  // duplicate PAID rows on purpose, so the raw paid row count legitimately DECREASES. What
+  // must hold is: no UNIQUE paid subscription and no paid entitlement is lost. That is proven
+  // by (a) distinct paid Stripe subscriptions unchanged, and (b) every deleted paid row having
+  // a same-user survivor that still carries the same stripe_sub_id.
+  const removedStripeRowDetail = stripeRows.filter((r) => removalSet.has(r.id));
+  const removedPaidRows = removedStripeRowDetail.filter((r) => r.plan_type !== 'trial');
+
+  // (a) distinct paid Stripe subscriptions must be preserved. Every paid stripe id that has a
+  //     row being removed must still be carried by at least one row that survives (is neither
+  //     removed nor link-cleared). Within a duplicate group the survivor always keeps the id,
+  //     so this holds by construction; the assertion guards against a regression.
+  const paidStripeIdsBefore = new Set(
+    stripeRows.filter((r) => r.plan_type !== 'trial' && isStripeLinked(r)).map((r) => r.stripe_sub_id!)
+  );
+  const idsCarriedBySurvivor = new Set(
+    stripeRows
+      .filter((r) => isStripeLinked(r) && !removalSet.has(r.id) && !clearSetAll.has(r.id))
+      .map((r) => r.stripe_sub_id!)
+  );
+  const droppedPaidIds = [...paidStripeIdsBefore].filter((id) => !idsCarriedBySurvivor.has(id));
+  assert('distinct_paid_stripe_subscriptions_unchanged',
+    droppedPaidIds.length === 0,
+    `${paidStripeIdsBefore.size} distinct paid stripe subscription(s); ${droppedPaidIds.length} would lose their last carrier`);
+
+  // (b) every removed paid row has a same-user survivor carrying the same stripe_sub_id.
+  const paidRemovalsWithBadSurvivor = removedPaidRows.filter((r) => {
+    const group = stripeGroups.find((g) => g.non_survivors.includes(r.id));
+    if (!group || !group.survivor_id) return true;
+    const survivor = stripeRows.find((s) => s.id === group.survivor_id);
+    return !survivor || survivor.user_id !== r.user_id || survivor.stripe_sub_id !== r.stripe_sub_id;
+  });
+  assert('every_removed_paid_row_has_same_user_survivor_same_stripe_id',
+    paidRemovalsWithBadSurvivor.length === 0,
+    `${removedPaidRows.length} paid row(s) removed; ${paidRemovalsWithBadSurvivor.length} without a valid same-user/same-id survivor`);
+
   // ---- Simulated after ----------------------------------------------------------
   const removedTrialCount = trialRemovals.length;
   const after = {
     total_rows: n(before.total_rows) - allRemovals.length,
     trial_rows: n(before.trial_rows) - removedTrialCount,
     active_trial_rows: n(before.active_trial_rows) - removedTrialCount,
-    paid_rows: n(before.paid_rows), // invariant: unchanged
-    distinct_stripe_ids: n(before.distinct_stripe_ids), // invariant: unchanged
+    // Paid row COUNT legitimately DECREASES by the number of removed duplicate paid rows.
+    paid_rows: n(before.paid_rows) - removedPaidRows.length,
+    paid_rows_removed_duplicates: removedPaidRows.length,
+    // The authoritative paid invariant: distinct paid subscriptions are preserved.
+    distinct_paid_stripe_subscriptions_before: paidStripeIdsBefore.size,
+    distinct_stripe_ids: n(before.distinct_stripe_ids), // preserved: a survivor always keeps the id
     rows_with_stripe_id: n(before.rows_with_stripe_id) - stripeRemovals.length,
     max_active_trials_per_user: 1,
     // Groups deliberately left alone still hold their duplicates after cleanup.
@@ -542,7 +583,9 @@ async function main() {
     `, clear stale link on ${stripeLinkClears.length}`);
   console.error(`total rows to archive+remove  : ${allRemovals.length}`);
   console.error(`projected after               : ${after.total_rows} rows · ${after.trial_rows} trial · ` +
-    `${after.paid_rows} paid (unchanged) · ${after.distinct_stripe_ids} distinct stripe ids (unchanged)`);
+    `${after.paid_rows} paid (−${after.paid_rows_removed_duplicates} duplicate paid rows removed) · ` +
+    `${after.distinct_stripe_ids} distinct stripe ids (unchanged)`);
+  console.error(`distinct paid subscriptions   : ${after.distinct_paid_stripe_subscriptions_before} (unchanged — no unique paid subscription lost)`);
   console.error(`coexistence users preserved   : ${coexistenceBefore}`);
   console.error(`stale-active rows (out of scope, untouched): ${n(before.stale_active_rows)}`);
   console.error(`manual-review groups          : ${manualReviewGroups.length}`);

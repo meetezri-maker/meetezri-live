@@ -1,5 +1,5 @@
 
-import { getAllSubscriptions } from '../src/modules/billing/billing.service';
+import { getAllSubscriptions } from '../src/modules/billing';
 
 async function main() {
   try {

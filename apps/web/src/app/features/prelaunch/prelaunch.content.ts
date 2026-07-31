@@ -23,16 +23,21 @@ export const CONTACT_HREF = "mailto:support@solace.com";
 /** Anchors used by the navigation and by every CTA that scrolls rather than opens. */
 export const SECTION_IDS = {
   hero: "home",
-  recognition: "recognition",
-  meetSolace: "how-it-works",
-  everydayMoments: "everyday-moments",
-  experience: "experience",
-  purpose: "about",
+  /** Consolidates the former "recognition" and "everyday-moments" anchors. */
+  humanMoments: "human-moments",
+  /** Consolidates the former "how-it-works" and "experience" anchors. */
+  talkItOut: "talk-it-out",
+  yourJourney: "your-journey",
+  /**
+   * The standalone "Why We Built Solace" section and its `about` anchor were
+   * retired: Appendix A has no Purpose page, and the founder story now carries
+   * the page's "about" intent. Navigation points "About" at the founder.
+   */
   founder: "founder",
   foundingCircle: "membership",
   trust: "trust",
+  /** The final invitation is folded into the end of this section. */
   faq: "faq",
-  finalInvitation: "begin",
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -41,9 +46,9 @@ export const SECTION_IDS = {
 
 export const NAV_ITEMS = [
   { label: "Home", targetId: SECTION_IDS.hero },
-  { label: "How It Works", targetId: SECTION_IDS.meetSolace },
+  { label: "How It Works", targetId: SECTION_IDS.talkItOut },
+  { label: "About", targetId: SECTION_IDS.founder },
   { label: "Membership", targetId: SECTION_IDS.foundingCircle },
-  { label: "About", targetId: SECTION_IDS.purpose },
   { label: "FAQ", targetId: SECTION_IDS.faq },
 ] as const;
 
@@ -51,452 +56,310 @@ export const NAV_ITEMS = [
 /* Section 1 — Hero                                                    */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Section 1 — Hero. Copy from "Appendix A — Final Landing Page Copy", Page 1.
+ *
+ * Two approved production-safety exceptions apply on this page:
+ *
+ *  - The primary CTA keeps `PRIMARY_CTA_LABEL` ("Become a Founding Member")
+ *    instead of Appendix A's "Start Talking Free". This flow captures a
+ *    waitlist email; it creates no account and grants no immediate access, so
+ *    Appendix A's label would not be truthful here.
+ *  - The secondary CTA reads "Meet the Founder" and opens the existing founder
+ *    video, because the 90-120 second product video Appendix A refers to does
+ *    not exist yet. The implementation swaps to it by changing the asset only.
+ *
+ * The badge is retained from the existing page: Appendix A supplies none, and
+ * it carries pre-launch context the approved copy assumes.
+ */
 export const HERO = {
   badge: "EARLY ACCESS NOW OPEN",
-  headline: BRAND_PROMISE,
-  supportingCopy: [
-    "Some thoughts stay with us longer than we’d like.",
-    "The conversations we replay.",
-    "The emotions we struggle to put into words.",
-    "Solace gives you a calm, private space to talk through what you’re carrying, reflect on your experiences, and build healthier habits—one conversation at a time.",
+
+  /** PRIMARY HOOK — the page-level H1. */
+  headline: "Some conversations change everything.",
+  /**
+   * The headline renders in two parts so the accent gradient can be applied
+   * without altering the approved wording. `headlineLead + " " + headlineAccent`
+   * must equal `headline`; a test asserts it.
+   */
+  headlineLead: "Some Conversations",
+  headlineAccent: "Change Everything",
+
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "Talk through what's on your mind, celebrate life's wins, reflect on your day, and build healthier habits with an AI companion designed for everyday life.",
+
+  /** TRUST INDICATORS. The check mark renders as a decorative icon. */
+  trustIndicators: [
+    "Private Conversations",
+    "Built for Everyday Life",
+    "Reflect • Grow • Feel Better",
   ],
-  secondaryCta: "Watch Our Story",
-  trustLine: "Join our early community and help shape the future of Solace.",
+
+  /**
+   * MICROCOPY — approved production-truthfulness exception to Appendix A,
+   * consistent with the CTA-label exception above.
+   *
+   * Appendix A reads "No appointment required. Start your first conversation in
+   * minutes." This page only captures Founding Circle registrations; it grants
+   * no immediate access, and that line would sit directly above a "Become a
+   * Founding Member" button and contradict the form's own promise to notify
+   * visitors when Solace is ready. The retained line is the truthful
+   * pre-launch equivalent.
+   */
+  microcopy: "Join our early community and help shape the future of Solace.",
+
+  /** SECONDARY CTA — see the exception note above. */
+  secondaryCta: "Meet the Founder",
 } as const;
 
 /* ------------------------------------------------------------------ */
-/* Section 2 — You're Not the Only One                                 */
+/* Section 2 — Human Moments                                           */
 /* ------------------------------------------------------------------ */
 
-export const RECOGNITION = {
-  badge: "YOU’RE NOT ALONE",
-  heading: "Some conversations never leave our minds.",
-  supportingCopy: [
-    "We all carry moments that stay with us.",
-    "Conversations we wish had gone differently.",
-    "Feelings we struggle to explain.",
-    "Questions we quietly ask ourselves when no one else is around.",
-    "Whatever you’re carrying, you’re not alone—and you don’t have to figure it all out by yourself.",
-  ],
-  cards: [
-    {
-      emoji: "🌙",
-      title: "Late Nights",
-      description: "Sometimes the world gets quieter... but your thoughts don’t.",
-      glow: "purple",
-    },
-    {
-      emoji: "💭",
-      title: "Overthinking",
-      description:
-        "You replay conversations, wondering what you could have said differently.",
-      glow: "pink",
-    },
-    {
-      emoji: "🎭",
-      title: "Carrying More Than People See",
-      description:
-        "You smile, show up, and keep going—even when you’re carrying more than anyone realizes.",
-      glow: "blue",
-    },
-    {
-      emoji: "🤝",
-      title: "Wanting Someone to Listen",
-      description:
-        "Sometimes you don’t need advice. You simply need a space to say things out loud.",
-      glow: "cyan",
-    },
-    {
-      emoji: "🌱",
-      title: "Trying to Grow",
-      description:
-        "You’re not looking for perfection. You’re simply trying to become a healthier, stronger version of yourself.",
-      glow: "green",
-    },
-    {
-      emoji: "❤️",
-      title: "Understanding Yourself",
-      description:
-        "You’ve wondered why you feel the way you do and wished you understood yourself a little better.",
-      glow: "amber",
-    },
-  ],
-  transition: [
-    "Every one of these moments has something in common.",
-    "They begin with a conversation.",
-  ],
-} as const;
-
-/* ------------------------------------------------------------------ */
-/* Section 3 — Meet Solace                                             */
-/* ------------------------------------------------------------------ */
-
-export const MEET_SOLACE = {
-  badge: "MEET SOLACE",
-  heading:
-    "A space where every conversation helps you understand yourself a little more.",
-  supportingCopy: [
-    "Life doesn’t come with a pause button.",
-    "Thoughts build up.",
-    "Emotions change.",
-    "Some days feel lighter than others.",
-    "Solace is your private space to slow down, reflect, and work through what’s on your mind—without judgment, pressure, or expectations.",
-    "Whether you’re celebrating a win, navigating a challenge, building healthier habits, or simply checking in with yourself, Solace is there to help you understand your journey, one conversation at a time.",
-  ],
-  introductions: [
-    {
-      title: "Talk It Out",
-      copy: [
-        "Sometimes the hardest part is simply knowing where to begin.",
-        "Talk It Out gives you a calm, supportive space to express what’s on your mind, helping you process thoughts and emotions through meaningful conversation.",
-      ],
-    },
-    {
-      title: "Reflect & Grow",
-      copy: [
-        "Every conversation becomes an opportunity to notice patterns, celebrate progress, and better understand yourself over time.",
-      ],
-    },
-    {
-      title: "Build Healthier Habits",
-      copy: [
-        "Track your mood, journal your thoughts, build positive routines, improve your sleep, and create habits that support your wellbeing—one small step at a time.",
-      ],
-    },
-  ],
-  benefits: [
-    {
-      emoji: "🗣",
-      title: "Talk freely",
-      description: "Speak openly whenever you need a moment to reflect.",
-      glow: "purple",
-      previewId: "talk-it-out",
-    },
-    {
-      emoji: "📖",
-      title: "Capture your journey",
-      description: "Journal your thoughts and experiences as life unfolds.",
-      glow: "pink",
-      previewId: "journal",
-    },
-    {
-      emoji: "🌱",
-      title: "Build healthy habits",
-      description: "Small daily actions can lead to meaningful change.",
-      glow: "green",
-      previewId: "habits",
-    },
-    {
-      emoji: "📈",
-      title: "See your progress",
-      description: "Recognize patterns, milestones, and personal growth over time.",
-      glow: "cyan",
-      previewId: "progress",
-    },
-    {
-      emoji: "😴",
-      title: "Support your wellbeing",
-      description: "Track your mood, sleep, and routines to better understand yourself.",
-      glow: "blue",
-      previewId: "sleep",
-    },
-    {
-      emoji: "🛡",
-      title: "Private by design",
-      description:
-        "Your conversations remain personal, protected, and always under your control.",
-      glow: "amber",
-      previewId: "dashboard",
-    },
-  ],
-  ctaSupportingText:
-    "Be among the first to experience Solace and help shape what comes next.",
-} as const;
-
-/* ------------------------------------------------------------------ */
-/* Section 4 — Everyday Moments                                        */
-/* ------------------------------------------------------------------ */
-
-export const EVERYDAY_MOMENTS = {
+/**
+ * Section 2 — Human Moments. Copy from Appendix A, Page 2.
+ *
+ * Consolidates the previous "You're Not the Only One" (Recognition) and
+ * "Everyday Moments" sections into the single approved chapter.
+ *
+ * Retained from the existing page, because Appendix A supplies neither and both
+ * are truthful for a pre-launch registration page:
+ *  - the section badge
+ *  - the supporting line beneath the call to action
+ *
+ * The call to action keeps `PRIMARY_CTA_LABEL` and the existing
+ * `everyday_moments` analytics origin, per the approved CTA-label exception.
+ */
+export const HUMAN_MOMENTS = {
   badge: "EVERYDAY MOMENTS",
-  heading: "Life gives us moments worth talking through.",
-  supportingCopy: [
-    "Some moments change us.",
-    "Others simply ask us to slow down, take a breath, and understand what we’re feeling.",
-    "Solace is designed to meet you in those everyday moments—not just when life feels difficult, but whenever you want to reflect, grow, or simply check in with yourself.",
-  ],
-  stories: [
+
+  /** SECTION HOOK. */
+  heading: "Because life isn't just about getting through hard days.",
+
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "Some conversations help you process. Others help you celebrate, reflect, dream, and grow.",
+
+  /**
+   * MOMENT 1-4, verbatim and in Appendix A order.
+   *
+   * Appendix A gives each moment a title and a single narrative line, and that
+   * is all that renders — no reflection, takeaway, or tag copy is invented.
+   */
+  moments: [
     {
-      emoji: "🌙",
-      label: "When the day is finally quiet...",
-      title: "Some nights, your thoughts are louder than the room around you.",
-      copy: [
-        "The world has gone quiet, but your mind hasn’t.",
-        "You replay conversations.",
-        "Wonder if you said the right thing.",
-        "Think about tomorrow before today has even ended.",
-        "Instead of carrying those thoughts into the night, Solace gives you a space to talk through them, reflect, and find a little more clarity before tomorrow begins.",
-      ],
-      perfectFor: ["Talk It Out", "Journal", "Mood Check-In"],
-      /** Approved direction: a calm bedroom with soft lighting, rain outside the window. */
-      imageAlt:
-        "A calm bedroom at night with soft lamplight and rain against the window",
+      id: "quiet-day",
+      title: "When the day is finally quiet...",
+      narrative: "Some nights, your thoughts are louder than the silence.",
       glow: "purple",
     },
     {
-      emoji: "🌱",
-      label: "After a small win",
-      title: "Growth deserves to be noticed, too.",
-      copy: [
-        "Not every conversation starts with something difficult.",
-        "Sometimes you finally kept a promise to yourself.",
-        "Reached a goal.",
-        "Felt a little stronger than you did yesterday.",
-        "Solace helps you celebrate those moments, recognize your progress, and remember how far you’ve come.",
-      ],
-      perfectFor: ["Goals", "Achievements", "Progress", "Habits"],
-      /** Approved direction: someone walking through a park at sunrise with a quiet smile. */
-      imageAlt: "A peaceful landscape at sunrise, warm light across an open path",
-      glow: "green",
-    },
-    {
-      emoji: "❤️",
-      label: "When life feels overwhelming",
-      title: "You don’t always need answers. Sometimes you just need somewhere to begin.",
-      copy: [
-        "There are days when everything feels heavier than usual.",
-        "You don’t have all the words.",
-        "You don’t even know where to start.",
-        "Solace isn’t there to judge or rush you.",
-        "It’s there to listen, help you organize your thoughts, and support you as you work through them at your own pace.",
-      ],
-      perfectFor: ["Talk It Out", "Journal", "Mood", "Reflection"],
-      /** Approved direction: a person by a window with a cup of tea, looking out as rain falls. */
-      imageAlt: "A quiet forest under soft rain, still and unhurried",
-      glow: "pink",
-    },
-    {
-      emoji: "🌅",
-      label: "Looking back",
-      title: "The conversations you have today become the story you’ll understand tomorrow.",
-      copy: [
-        "Growth rarely happens all at once.",
-        "It happens one conversation.",
-        "One journal entry.",
-        "One small habit.",
-        "One reflection at a time.",
-        "Looking back reminds us that even the smallest steps can lead somewhere meaningful.",
-      ],
-      perfectFor: ["Progress", "Insights", "Journal Timeline", "Personal Growth"],
-      /** Approved direction: a peaceful lake at sunrise with a journal resting nearby. */
-      imageAlt: "A peaceful lake at sunrise with light spreading across still water",
+      id: "small-win",
+      title: "After a small win...",
+      narrative: "Growth deserves to be noticed.",
       glow: "amber",
     },
+    {
+      id: "big-decision",
+      title: "Before a big decision...",
+      narrative: "Sometimes clarity begins with a conversation.",
+      glow: "cyan",
+    },
+    {
+      id: "everyday-life",
+      title: "During everyday life...",
+      narrative: "Not every conversation starts with something difficult.",
+      glow: "green",
+    },
   ],
-  closingStatement: "Whatever life brings, you don’t have to carry it alone.",
-  closingSupportingCopy:
-    "Solace is there for the difficult days, the hopeful days, and all the ordinary moments in between.",
+
+  /** SECTION TRANSITION. */
+  transition:
+    "Whatever is on your mind, there's always a place to start the conversation.",
+
+  /**
+   * CTA — navigational only. Appendix A: "(Scrolls to the Talk It Out
+   * section.)" It never opens the signup flow; the Founding Member button
+   * beside it remains the only conversion control.
+   */
+  secondaryCta: "See How a Conversation Begins",
+
+  /** Retained supporting line beneath the CTA. */
   ctaSupportingText:
     "Start your journey with Solace and help shape the future of a space built for reflection, growth, and meaningful conversations.",
 } as const;
 
 /* ------------------------------------------------------------------ */
-/* Section 5 — More Than a Conversation                                */
+/* Section 3 — Talk It Out                                             */
 /* ------------------------------------------------------------------ */
 
-export const EXPERIENCE = {
-  badge: "THE SOLACE EXPERIENCE",
-  heading:
-    "One conversation can change your day. Consistent reflection can change your life.",
-  supportingCopy: [
-    "Growth doesn’t happen because of one conversation.",
-    "It happens when you begin to notice patterns, celebrate progress, and make space to check in with yourself again and again.",
-    "Solace brings those moments together into one place, helping every conversation become part of a bigger journey.",
-  ],
-  featured: {
-    emoji: "🗣",
-    name: "Talk It Out",
-    title: "Every journey begins with a conversation.",
-    copy: [
-      "Some conversations help us find answers.",
-      "Others simply help us understand ourselves a little better.",
-      "Talk It Out is your calm, private space to speak freely, organize your thoughts, and explore what’s on your mind without judgment or pressure.",
-    ],
-    previewId: "talk-it-out",
-  },
-  cards: [
-    {
-      emoji: "📖",
-      name: "Journal",
-      title: "Capture today before it becomes a memory.",
-      description:
-        "Write about your experiences, your gratitude, your challenges, and everything in between.",
-      glow: "pink",
-      previewId: "journal",
-    },
-    {
-      emoji: "😊",
-      name: "Mood",
-      title: "Notice how you’re really feeling.",
-      description:
-        "Track emotional patterns over time and understand what influences your wellbeing.",
-      glow: "amber",
-      previewId: "mood",
-    },
-    {
-      emoji: "🌱",
-      name: "Habits",
-      title: "Small routines become lasting change.",
-      description: "Build meaningful daily habits one step at a time.",
-      glow: "green",
-      previewId: "habits",
-    },
-    {
-      emoji: "😴",
-      name: "Sleep",
-      title: "Rest is part of growth.",
-      description:
-        "Better sleep helps create better days. Track your sleep and understand its impact on your wellbeing.",
-      glow: "blue",
-      previewId: "sleep",
-    },
-    {
-      emoji: "🎯",
-      name: "Goals & Achievements",
-      title: "Celebrate every step forward.",
-      description: "Because meaningful progress deserves to be seen.",
-      glow: "purple",
-      previewId: "goals",
-    },
-    {
-      emoji: "📈",
-      name: "Progress & Insights",
-      title: "Growth becomes clearer when you can look back.",
-      description:
-        "Visualize your journey and discover patterns that help you understand yourself.",
-      glow: "cyan",
-      previewId: "progress",
-    },
-    {
-      emoji: "🤝",
-      name: "Community",
-      title: "Grow alongside people who understand the journey.",
-      description:
-        "Share encouragement, celebrate milestones, and remember that you’re never alone.",
-      glow: "pink",
-      previewId: "community",
-    },
-    {
-      emoji: "🛟",
-      name: "Safety & Support",
-      title: "Because your wellbeing always comes first.",
-      description:
-        "Access trusted guidance and support resources whenever you need them.",
-      glow: "blue",
-      previewId: "dashboard",
-    },
-  ],
-  closingStatement: "No matter where you are today, Solace grows with you.",
-  closingSupportingCopy: [
-    "Some days you’ll need someone to listen.",
-    "Some days you’ll celebrate progress.",
-    "Some days you’ll simply check in with yourself.",
-    "Every one of those moments matters.",
-  ],
-  ctaSupportingText:
-    "Join our early community and experience everything Solace has to offer before launch.",
-} as const;
+/**
+ * Section 3 — Talk It Out. Copy from Appendix A, Page 3.
+ *
+ * Consolidates the previous "Meet Solace" and "More Than a Conversation"
+ * sections. The old product-screenshot carousel is gone: Appendix A makes the
+ * video the product demonstration, and most of those screenshots did not exist.
+ *
+ * Appendix A's primary and secondary CTAs ("Start Your First Conversation" and
+ * "Create Your Free Account") collapse into a single `PRIMARY_CTA_LABEL` button
+ * under the approved CTA-label exception — this page registers Founding Members
+ * and grants no immediate access.
+ *
+ * ANALYTICS: this section has exactly one conversion control, carrying the
+ * `meet_solace` origin. The `experience` origin is INTENTIONALLY RETIRED as
+ * part of the Meet Solace + More Than a Conversation consolidation: that
+ * placement no longer exists, so keeping it alive would have required a
+ * duplicate button and would have reported an inaccurate placement. It is not
+ * reassigned to any other control or section.
+ *
+ * Badge and the CTA supporting line are retained from the sections replaced.
+ */
+export const TALK_IT_OUT = {
+  badge: "MEET SOLACE",
 
-/* ------------------------------------------------------------------ */
-/* Section 6 — Why We Built Solace                                     */
-/* ------------------------------------------------------------------ */
+  /** SECTION HOOK. */
+  heading: "Sometimes the best place to begin... is simply talking.",
 
-export const PURPOSE = {
-  badge: "OUR PURPOSE",
-  heading: "Because everyone deserves a space to simply be human.",
-  story: [
-    "We live in a world that constantly asks us to move faster.",
-    "To respond quicker.",
-    "To do more.",
-    "To hold everything together.",
-    "Somewhere along the way, many of us stopped giving ourselves permission to pause.",
-    "To sit with our thoughts.",
-    "To celebrate the good days.",
-    "To work through the difficult ones.",
-    "To understand ourselves with kindness instead of criticism.",
-    "We didn’t build Solace to give people all the answers.",
-    "We built it to create a space where better questions could be asked, honest conversations could happen, and personal growth could unfold naturally.",
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "Meet your AI companion and discover how a simple conversation can help you reflect, understand yourself, and move forward.",
+
+  /** VIDEO TITLE. */
+  videoTitle: "See Solace in Action",
+
+  /** VIDEO INTRO. */
+  videoIntro:
+    "Watch how a conversation naturally unfolds—from everyday thoughts to meaningful reflection.",
+
+  /** KEY HIGHLIGHTS. The check mark renders as a decorative icon. */
+  highlights: [
+    "Talk about anything that's on your mind.",
+    "Celebrate your wins, no matter how small.",
+    "Reflect on your day without judgment.",
+    "Explore ideas, goals, and personal growth.",
+    "Build healthier habits one conversation at a time.",
+    "Private, supportive, and available whenever you need it.",
   ],
-  missionStatement:
-    "Every conversation is an opportunity to better understand yourself.",
-  beliefs: [
-    {
-      emoji: "🌱",
-      title: "Growth takes time.",
-      copy: [
-        "There is no finish line for becoming a healthier version of yourself.",
-        "Every small step matters.",
-      ],
-    },
-    {
-      emoji: "❤️",
-      title: "Compassion comes before judgment.",
-      copy: [
-        "Real growth begins when we stop criticizing ourselves and start listening with kindness.",
-      ],
-    },
-    {
-      emoji: "🤝",
-      title: "Everyone deserves to feel heard.",
-      copy: [
-        "Whether you’re celebrating a win or working through a difficult day, your experiences matter.",
-      ],
-    },
-    {
-      emoji: "🔒",
-      title: "Trust is earned.",
-      copy: [
-        "Privacy, transparency, and respect aren’t features—they’re the foundation of every conversation inside Solace.",
-      ],
-    },
-  ],
-  closingReflection: [
-    "Maybe what we’ve all needed wasn’t another app.",
-    "Maybe we simply needed a place that reminded us to slow down, reflect, and reconnect with ourselves.",
-  ],
+
+  /** TRANSITION. */
   transition:
-    "And every meaningful journey begins with someone who believes in that mission.",
+    "One conversation can become the beginning of a healthier relationship with yourself.",
+
+  /** Retained supporting line beneath the section's single call to action. */
+  ctaSupportingText:
+    "Be among the first to experience Solace and help shape what comes next.",
 } as const;
+
+/* ------------------------------------------------------------------ */
+/* Section 4 — Your Journey                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Section 4 — Your Journey. Copy from Appendix A, Page 4.
+ *
+ * A new chapter: it replaces no existing section, so no production behaviour
+ * moves here. Appendix A specifies a primary CTA ("Start Your Journey"), which
+ * renders as `PRIMARY_CTA_LABEL` under the approved CTA-label exception and
+ * opens the existing Founding Circle flow.
+ *
+ * Because nothing is being re-homed, the CTA needs its own analytics origin.
+ * `your_journey` is added deliberately rather than reusing an existing origin,
+ * which would corrupt the conversion data of the section that owns it.
+ *
+ * "STEP 1/2/3" are Appendix A's structural labels, not visible copy — the same
+ * convention as "MOMENT 1-4" on Page 2. The order is conveyed by an ordered
+ * list and a visual connector rather than printed numerals, which also keeps
+ * Blueprint 7.2's "organic rather than measured" progression.
+ */
+export const YOUR_JOURNEY = {
+  badge: "YOUR JOURNEY",
+
+  /** SECTION HOOK. */
+  heading: "Small conversations. Meaningful change.",
+
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "Every conversation becomes another step toward understanding yourself, building healthier habits, and growing over time.",
+
+  /** STEP 1-3, verbatim and in Appendix A order. */
+  steps: [
+    {
+      id: "talk-it-out",
+      title: "Talk It Out",
+      description: "Speak honestly about whatever is on your mind.",
+    },
+    {
+      id: "reflect",
+      title: "Reflect",
+      description:
+        "Discover patterns, thoughts, and emotions you may not have noticed before.",
+    },
+    {
+      id: "grow",
+      title: "Grow",
+      description:
+        "Turn small moments into healthier habits and lasting personal growth.",
+    },
+  ],
+
+  /** SECTION TRANSITION. */
+  transition:
+    "Growth doesn't happen all at once. It happens one conversation at a time.",
+
+  /*
+   * No supporting line beneath the call to action. Appendix A supplies none for
+   * this page, and unlike the converted sections there is no existing line to
+   * retain, so nothing is written to fill the slot.
+   */
+} as const;
+
+/*
+ * The standalone "Why We Built Solace" section was retired. Appendix A has no
+ * Purpose page, and its intent — why Solace exists — is carried by the founder
+ * story, which navigation now treats as this page's "About".
+ */
 
 /* ------------------------------------------------------------------ */
 /* Section 7 — Meet the Founder                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Section 5 — Founder. The visible frame comes from Appendix A, Page 5:
+ * heading, supporting line, video title, transition, and CTA placement.
+ *
+ * Everything identifying the founder is retained from the existing page and
+ * must not be rewritten: name, role, story, quote, and the video transcript.
+ * No biography, achievement, or testimonial is invented.
+ *
+ * `videoLength` deliberately keeps the existing "60–90 seconds" rather than
+ * Appendix A's "15–30 Seconds": the retained transcript plainly runs longer
+ * than thirty seconds, so Appendix A's figure would misdescribe the very
+ * content this section ships.
+ */
 export const FOUNDER = {
   badge: "MEET THE FOUNDER",
-  heading: "The heart behind Solace.",
-  introduction: [
-    "Before Solace became a platform, it began with a simple belief.",
-    "That every person deserves a space where they can pause, reflect, and better understand themselves.",
-    "I’m grateful you’re here, and I’d love to share why this journey means so much to me.",
-  ],
+
+  /** SECTION HOOK. */
+  heading: "Solace was created for the conversations we often keep to ourselves.",
+
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "A short message from our founder about why Solace exists and the vision behind creating a space where every conversation matters.",
+
+  /** TRANSITION. */
+  transition: "Every meaningful journey begins with a single conversation.",
+
   name: "Rosalind Mitchell",
   role: "Founder, Solace",
   story: [
-    "Throughout my work, I’ve had the privilege of listening to people’s stories.",
-    "Different lives.",
-    "Different experiences.",
-    "Different challenges.",
-    "Yet one thing remained remarkably similar.",
-    "People weren’t always looking for someone to solve every problem.",
-    "They were looking for somewhere they could slow down, think clearly, and feel heard.",
-    "That realization stayed with me.",
-    "I began wondering what it would look like if people had access to a space like that every day—not only during life’s biggest moments, but also in the quiet moments in between.",
-    "That question eventually became Solace.",
+    "Throughout my work, I’ve had the privilege of listening to people’s stories. Different lives.",
+    "Different experiences. Different challenges. Yet one thing remained remarkably similar. People weren’t always looking for someone to solve every problem. They were looking for somewhere they could slow down, think clearly, and feel heard. That realization stayed with me. I began wondering what it would look like if people had access to a space like that every day—not only during life’s biggest moments, but also in the quiet moments in between.That question eventually became Solace.",
   ],
   quote:
     "Sometimes the most important conversation isn’t the one you have with someone else. It’s the one that helps you better understand yourself.",
-  videoTitle: "Why I Built Solace",
+  /** VIDEO TITLE, per Appendix A. Replaces the former "Why I Built Solace". */
+  videoTitle: "Meet the Founder",
   videoLength: "60–90 seconds",
   ctaSupportingText:
     "Join us from the very beginning and help shape the future of Solace.",
@@ -572,9 +435,7 @@ export const FOUNDING_CIRCLE = {
   heading: "Help shape the future of Solace.",
   supportingCopy: [
     "Every meaningful journey begins with a small group of people who believe in the idea before anyone else.",
-    "As one of our Founding Members, you’ll experience Solace before its public launch, receive exclusive early-member benefits, and help us shape the future through your feedback.",
-    "You’re not simply signing up for early access.",
-    "You’re helping build a place that could support thousands of people for years to come.",
+    "As one of our Founding Members, you’ll experience Solace before its public launch, receive exclusive early-member benefits, and help us shape the future through your feedback. You’re not simply signing up for early access. You’re helping build a place that could support thousands of people for years to come.",
   ],
   cardTitle: "What’s Included",
   benefits: [
@@ -611,10 +472,7 @@ export const FOUNDING_CIRCLE = {
   ],
   invitationHeading: "Why We’re Inviting Founding Members",
   invitation: [
-    "We’re not looking for thousands of people today.",
-    "We’re looking for the right people.",
-    "People who believe that reflection, growth, and meaningful conversations deserve a better home.",
-    "If that sounds like you, we’d love to welcome you.",
+    "We’re not looking for thousands of people today. We’re looking for the right people. People who believe that reflection, growth, and meaningful conversations deserve a better home. If that sounds like you, we’d love to welcome you.",
   ],
   ctaSupportingText: [
     "No payment required today.",
@@ -654,90 +512,68 @@ export const FOUNDING_FORM = {
 /* Section 9 — Privacy, Safety & Trust                                 */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Section 7 — Trust, Privacy & Safety. Copy from Appendix A, Page 6.
+ *
+ * ANALYTICS: this section previously had no conversion control. Appendix A adds
+ * one, so it carries a new documented origin, `trust`. No other section's origin
+ * is reused or reassigned.
+ *
+ * Claims retired in this reframe, none of which are supported by approved
+ * product documentation:
+ *  - a crisis-response capability ("if a conversation suggests you may need
+ *    immediate professional help… provides guidance toward trusted crisis
+ *    resources"), which implied risk detection and a crisis-resource service;
+ *  - decorative lock and shield symbols implying security certification.
+ *
+ * The former "What Solace Isn't" disclaimers are not lost: Appendix A places
+ * that statement in the FAQ ("Is SOLACE therapy? No. SOLACE is not a
+ * replacement for therapy or professional mental health care").
+ *
+ * No encryption, certification, compliance, clinical, or security guarantee is
+ * stated anywhere here, and the badge is retained from the existing page.
+ */
 export const TRUST = {
   badge: "PRIVACY • SAFETY • TRUST",
-  heading: "A place where your conversations stay yours.",
-  supportingCopy: [
-    "Meaningful conversations require trust.",
-    "That’s why privacy, transparency, and emotional safety aren’t optional features—they’re the foundation of everything we build.",
-    "Whether you’re reflecting on a great day or working through something difficult, you should always know how your information is handled and what Solace is designed to do.",
-  ],
-  cards: [
+
+  /** SECTION HOOK. */
+  heading: "A space where you can simply be yourself.",
+
+  /** SUPPORTING LINE. */
+  supportingLine:
+    "Your conversations are private, your wellbeing comes first, and you're always in control of your journey.",
+
+  /** TRUST, PRIVACY, and SAFETY pillars — verbatim and in Appendix A order. */
+  pillars: [
     {
-      emoji: "🔒",
+      id: "private-by-design",
       title: "Private by Design",
-      copy: [
-        "Your conversations are personal.",
-        "They’re not shared publicly, and they’re handled with privacy in mind.",
-      ],
+      description: "Your conversations stay personal and protected.",
       glow: "purple",
     },
     {
-      emoji: "🛡",
-      title: "Built for Wellbeing",
-      copy: [
-        "Solace is designed to support reflection, emotional wellbeing, and personal growth.",
-        "It is not a replacement for licensed therapy, medical care, or emergency services.",
-      ],
+      id: "in-control",
+      title: "You're Always in Control",
+      description: "Choose when to talk, what to share, and how you use SOLACE.",
       glow: "blue",
     },
     {
-      emoji: "🌍",
-      title: "Available Whenever You Need It",
-      copy: [
-        "Whether it’s early morning or late at night, Solace is there whenever you want a space to pause and reflect.",
-      ],
-      glow: "cyan",
-    },
-    {
-      emoji: "❤️",
-      title: "Support When It Matters",
-      copy: [
-        "If a conversation suggests you may need immediate professional help, Solace encourages you to seek appropriate support and provides guidance toward trusted crisis resources where available.",
-      ],
-      glow: "pink",
-    },
-    {
-      emoji: "👁",
-      title: "Transparent Experience",
-      copy: [
-        "We’ll always be clear about what Solace can do—and what it can’t.",
-        "No exaggerated promises.",
-        "No pretending to replace human care.",
-      ],
-      glow: "amber",
-    },
-    {
-      emoji: "🤝",
-      title: "Built With Respect",
-      copy: [
-        "You stay in control of your journey.",
-        "Our goal is to support reflection, not make decisions for you.",
-      ],
+      id: "support",
+      title: "Support When It Matters Most",
+      description:
+        "SOLACE encourages healthier conversations while helping guide you toward additional support when needed.",
       glow: "green",
     },
   ],
-  isHeading: "What Solace Is",
-  is: [
-    "A place to reflect",
-    "A companion for meaningful conversations",
-    "A tool for building healthier habits",
-    "A space for personal growth",
-    "A place to celebrate progress",
-  ],
-  isntHeading: "What Solace Isn’t",
-  isnt: [
-    "A licensed therapist",
-    "A crisis intervention service",
-    "A medical diagnosis platform",
-    "A replacement for professional care",
-    "A platform that claims to have every answer",
-  ],
-  finalReassurance:
-    "Trust isn’t something we ask for. It’s something we earn through every interaction.",
-  finalReassuranceSupporting: [
-    "Our commitment is simple:",
-    "Create a space that feels calm, respectful, private, and worthy of your trust—every single time you return.",
+
+  /** SECTION TRANSITION. */
+  transition: "Because meaningful conversations begin with trust.",
+
+  /** Legal destinations, retained exactly as they were. */
+  links: [
+    { label: "Privacy Policy", to: "/privacy" },
+    { label: "Terms of Service", to: "/terms" },
+    { label: "Safety Information", to: "/privacy#safety" },
   ],
 } as const;
 
@@ -753,122 +589,113 @@ export type FaqItem = {
   link?: { label: string; to: string };
 };
 
+/**
+ * Section 8 — Frequently Asked Questions. Copy from Appendix A, Page 7.
+ *
+ * The former standalone "Your Journey Starts Here" section is folded in at the
+ * end of this one, so the page closes on a single invitation. That CTA keeps
+ * the existing `final_invitation` analytics origin; no FAQ-specific origin is
+ * introduced because Appendix A describes one closing placement, not two.
+ *
+ * Two deliberate departures from Appendix A's six questions:
+ *
+ *  - "How do I get started?" keeps Appendix A's question but retains the
+ *    existing truthful answer. Appendix A answers "Create your free account,
+ *    begin your first conversation…", which is not possible on a pre-launch
+ *    registration page — the same production-truthfulness exception already
+ *    approved for the CTA labels and the Hero microcopy.
+ *  - "What if I need immediate help?" is RETAINED as a seventh item. Appendix A
+ *    omits it, but it is a safety disclaimer that directs people to emergency
+ *    services, and safety disclaimers must not be weakened. It claims no
+ *    capability: it states plainly that Solace is not the right place for
+ *    urgent assistance.
+ *
+ * Nothing here states a clinical, diagnostic, crisis-monitoring, emergency
+ * response, encryption, compliance, pricing, or availability capability.
+ */
 export const FAQ = {
   badge: "QUESTIONS & ANSWERS",
-  heading: "Everything you might be wondering.",
-  supportingCopy: [
-    "Choosing a new wellbeing companion is a personal decision.",
-    "Here are answers to some of the questions we hear most often.",
-  ],
+
+  /** SECTION HOOK. */
+  heading: "Questions? We've answered the ones people ask most.",
+
   items: [
     {
+      id: "what-is-solace",
+      question: "What is SOLACE?",
+      answer: [
+        "SOLACE is an AI companion designed to help you talk through everyday thoughts, reflect on your experiences, celebrate personal wins, and build healthier habits through meaningful conversations.",
+      ],
+    },
+    {
       id: "is-solace-therapy",
-      question: "Is Solace therapy?",
+      question: "Is SOLACE therapy?",
       answer: [
-        "No.",
-        "Solace is a wellbeing companion designed to support reflection, personal growth, and healthier daily habits.",
-        "It is not a replacement for licensed therapy, medical advice, or emergency services.",
+        "No. SOLACE is not a replacement for therapy or professional mental health care. It is a supportive AI companion created to encourage reflection, personal growth, and healthier daily conversations.",
       ],
     },
     {
-      id: "who-is-solace-for",
-      question: "Who is Solace for?",
+      id: "what-can-i-talk-about",
+      question: "What can I talk about?",
       answer: [
-        "Solace is for anyone who wants a private space to pause, reflect, understand themselves better, and build healthier wellbeing habits.",
-        "You don’t need to be going through a difficult time to benefit from using Solace.",
-        "Many people use it simply to check in with themselves, celebrate progress, or create more intentional daily routines.",
+        "Anything that's on your mind—from stressful days and difficult moments to exciting ideas, personal goals, relationships, achievements, or simply reflecting on your day.",
       ],
     },
     {
-      id: "is-what-i-share-private",
-      question: "Is what I share private?",
+      id: "are-my-conversations-private",
+      question: "Are my conversations private?",
       answer: [
-        "Your privacy is important to us.",
-        "We designed Solace with privacy and respect at its core. We encourage you to review our Privacy Policy to understand how your information is handled and protected.",
+        "Privacy is a core part of SOLACE. Your conversations are designed to remain personal, giving you a space where you can speak openly and honestly.",
       ],
       link: { label: "Read the Privacy Policy", to: "/privacy" },
     },
     {
-      id: "do-i-need-to-use-solace-every-day",
-      question: "Do I need to use Solace every day?",
+      id: "do-i-need-to-be-struggling",
+      question: "Do I need to be struggling to use SOLACE?",
       answer: [
-        "Not at all.",
-        "Some people may choose to check in daily.",
-        "Others may only return when they need a moment to reflect.",
-        "Solace is designed to meet you wherever you are in your journey.",
+        "Not at all. SOLACE is built for everyday life. Many conversations are about personal growth, decision-making, gratitude, celebrating wins, and understanding yourself better.",
       ],
     },
     {
-      id: "what-happens-after-i-become-a-founding-member",
-      question: "What happens after I become a Founding Member?",
+      id: "how-do-i-get-started",
+      question: "How do I get started?",
       answer: [
-        "You’ll reserve your place in our Founding Circle and receive updates as we prepare for launch.",
-        "When your invitation is ready, you’ll be among the first to experience Solace and enjoy the exclusive Founding Member benefits.",
-      ],
-    },
-    {
-      id: "will-solace-continue-to-grow",
-      question: "Will Solace continue to grow?",
-      answer: [
-        "Absolutely.",
-        "We’re just getting started.",
-        "New experiences, improvements, and features will continue to evolve based on thoughtful research, user feedback, and the needs of our community.",
-      ],
-    },
-    {
-      id: "can-i-share-feedback",
-      question: "Can I share feedback?",
-      answer: [
-        "Yes—and we’d love you to.",
-        "One of the biggest advantages of joining early is having the opportunity to help shape the future of Solace.",
-        "Many of our future improvements will be inspired by the people who use it every day.",
+        "You'll reserve your place in our Founding Circle and receive updates as we prepare for launch.",
+        "When your invitation is ready, you'll be among the first to experience Solace and enjoy the exclusive Founding Member benefits.",
       ],
     },
     {
       id: "what-if-i-need-immediate-help",
       question: "What if I need immediate help?",
       answer: [
-        "If you’re experiencing a crisis or believe you may be in immediate danger, Solace is not the right place to get urgent assistance.",
+        "If you're experiencing a crisis or believe you may be in immediate danger, Solace is not the right place to get urgent assistance.",
         "Please contact your local emergency services or a trusted crisis support resource immediately.",
       ],
       link: { label: "Safety & crisis resources", to: "/privacy#safety" },
     },
   ] satisfies FaqItem[],
+
   closingStatement: "Still have a question?",
   closingSupportingCopy: [
-    "We’re always happy to help.",
-    "Reach out to us anytime and we’ll do our best to point you in the right direction.",
+    "We're always happy to help.",
+    "Reach out to us anytime and we'll do our best to point you in the right direction.",
   ],
   secondaryCta: "Contact Us",
-} as const;
 
-/* ------------------------------------------------------------------ */
-/* Section 11 — Your Journey Starts Here                               */
-/* ------------------------------------------------------------------ */
+  /* ---------------------------------------------------------------- */
+  /* Folded-in final invitation                                        */
+  /* ---------------------------------------------------------------- */
 
-export const FINAL_INVITATION = {
-  badge: "BEGIN YOUR JOURNEY",
-  heading: BRAND_PROMISE,
-  supportingCopy: [
-    "Every journey begins with a single step.",
-    "Sometimes that step is simply giving yourself permission to pause.",
-    "To reflect.",
-    "To understand what you’re carrying.",
-    "To celebrate how far you’ve already come.",
-    "Wherever life has brought you today, we hope Solace becomes a place you can return to again and again—one conversation, one reflection, and one moment of growth at a time.",
-  ],
-  closingInvitation: "We’d be honored to welcome you.",
-  ctaSupportingText:
+  /** The locked brand promise, now the page's closing statement. */
+  finalHeading: BRAND_PROMISE,
+  finalClosingInvitation: "We'd be honored to welcome you.",
+  finalCtaSupportingText:
     "Join our Founding Circle and help shape the future of Solace from the very beginning.",
-  secondaryLinks: [
-    { label: "Learn More", targetId: SECTION_IDS.meetSolace, href: null },
-    { label: "Contact Us", targetId: null, href: CONTACT_HREF },
-    { label: "Privacy & Safety", targetId: null, href: "/privacy" },
-  ],
-  closingLine: [
-    "Thank you for taking the time to learn about Solace.",
-    "We look forward to beginning this journey together.",
-  ],
+  /**
+   * Retained from the former section. Its "Contact Us" and "Privacy & Safety"
+   * links were dropped as duplicates: this section already links to both.
+   */
+  finalSecondaryLink: { label: "Learn More", targetId: SECTION_IDS.talkItOut },
 } as const;
 
 /* ------------------------------------------------------------------ */

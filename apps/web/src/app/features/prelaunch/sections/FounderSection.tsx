@@ -48,6 +48,11 @@ export function FounderSection() {
               {FOUNDER.heading}
             </h2>
           </Reveal>
+          <Reveal delay={0.1}>
+            <p className="mt-5 text-[15px] text-[var(--solace-ds-text-muted)] sm:text-[17px]">
+              {FOUNDER.supportingLine}
+            </p>
+          </Reveal>
         </div>
 
         <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-[55fr_45fr] lg:gap-12">
@@ -61,14 +66,6 @@ export function FounderSection() {
           </Reveal>
 
           <div className="order-2 flex flex-col gap-6">
-            <Reveal delay={0.06}>
-              <div className="space-y-2.5 text-[15px] leading-[1.75] text-[var(--solace-ds-text-muted)]">
-                {FOUNDER.introduction.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            </Reveal>
-
             <Reveal delay={0.1}>
               <div>
                 <p className="text-lg font-semibold text-white">{FOUNDER.name}</p>
@@ -100,14 +97,22 @@ export function FounderSection() {
           </LandingGlowCard>
         </Reveal>
 
-        <Reveal delay={0.16} className="mt-12">
-          <div className="flex flex-col items-center">
-            <FoundingMemberCta onClick={() => openSignup("founder")} />
-            <CtaSupportingText>{FOUNDER.ctaSupportingText}</CtaSupportingText>
+        {/* TRANSITION, then the invitation (Appendix A places it last). */}
+        <Reveal delay={0.16} className="mt-14">
+          <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+            <p className="landing-serif text-xl text-white sm:text-2xl md:text-[28px]">
+              {FOUNDER.transition}
+            </p>
+
+            <div className="mt-8 flex w-full flex-col items-center">
+              <FoundingMemberCta onClick={() => openSignup("founder")} />
+              <CtaSupportingText>{FOUNDER.ctaSupportingText}</CtaSupportingText>
+            </div>
           </div>
         </Reveal>
       </div>
 
+      {/* The modal owns focus restoration for every caller. */}
       <FounderVideoModal open={videoOpen} onOpenChange={setVideoOpen} />
     </section>
   );

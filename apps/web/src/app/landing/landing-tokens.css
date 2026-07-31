@@ -268,6 +268,163 @@
   flex-shrink: 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* Pre-launch hero typography (/early-access)                          */
+/*                                                                     */
+/* Additive only — nothing above is modified, so the other pages that   */
+/* consume these tokens are unaffected.                                 */
+/*                                                                     */
+/* Declared here rather than with Tailwind text utilities so the sizes  */
+/* are deterministic at every breakpoint.                               */
+/*                                                                      */
+/* Deliberately sets NO line-height. `theme.css` gives the user a       */
+/* line-height preference (a11y-lh-tight / normal / loose) that applies  */
+/* `line-height: var(--text-line-height) !important` to every heading   */
+/* and paragraph. That setting must win, so specifying a line-height    */
+/* here would be dead code at best and an accessibility regression at   */
+/* worst. This is also why the previous `leading-[1.08]` on this        */
+/* headline never took effect.                                          */
+/* ------------------------------------------------------------------ */
+
+.prelaunch-hero-headline {
+  font-weight: 600;
+  font-size: 2.125rem; /* 34px */
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .prelaunch-hero-headline {
+    font-size: 3rem; /* 48px */
+  }
+}
+
+@media (min-width: 768px) {
+  .prelaunch-hero-headline {
+    font-size: 3.75rem; /* 60px */
+  }
+}
+
+@media (min-width: 1024px) {
+  .prelaunch-hero-headline {
+    font-size: 4.25rem; /* 68px */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Pre-launch — Your Journey connected path (Blueprint 7.2 / 7.3 / 7.5) */
+/*                                                                     */
+/* 7.2 asks for "a calm path rather than a dashboard" and progress that */
+/* feels "organic rather than measured"; 7.5 asks for subtle connectors */
+/* showing every step belongs to one journey, and excludes progress     */
+/* bars, streaks, and badges. The connector is drawn in the grid gap so */
+/* it never crosses text, and it is decorative only — the ordered list  */
+/* carries the real sequence.                                           */
+/* ------------------------------------------------------------------ */
+
+.prelaunch-journey {
+  display: grid;
+  gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .prelaunch-journey {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem;
+  }
+}
+
+.prelaunch-journey-step {
+  position: relative;
+}
+
+/* Mobile: a short vertical trail sitting in the gap below each step. */
+.prelaunch-journey-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  left: 50%;
+  bottom: -2.5rem;
+  height: 2.5rem;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    rgba(168, 85, 247, 0.4) 0%,
+    rgba(168, 85, 247, 0) 100%
+  );
+}
+
+/* Desktop: the trail runs horizontally through the marker centres. */
+@media (min-width: 768px) {
+  .prelaunch-journey-step:not(:last-child)::after {
+    top: 1.75rem; /* centre of the 3.5rem marker */
+    bottom: auto;
+    left: calc(50% + 2.25rem);
+    right: calc(-50% + 2.25rem);
+    width: auto;
+    height: 1px;
+    transform: none;
+    background: linear-gradient(
+      90deg,
+      rgba(168, 85, 247, 0.4) 0%,
+      rgba(168, 85, 247, 0.12) 100%
+    );
+  }
+}
+
+/* Stepping-stone marker holding each step's icon. */
+.prelaunch-journey-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: rgba(168, 85, 247, 0.1);
+  box-shadow: 0 0 28px -10px rgba(168, 85, 247, 0.6);
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced-motion guard                                                */
+/*                                                                     */
+/* Opt-in per page via `.landing-reduced-motion` on the page root, so   */
+/* pages that have not been reviewed keep their current behaviour.      */
+/*                                                                     */
+/* `.landing-cta-glow` and `.landing-float` are infinite decorative     */
+/* loops. Component motion is already gated in JavaScript through       */
+/* `useReducedMotion`; these CSS animations were not, so a visitor who  */
+/* asks for reduced motion still saw every call to action pulsing.      */
+/* Normal-motion visitors are unaffected — the rules only apply inside  */
+/* the media query.                                                     */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reduced-motion .landing-cta-glow,
+  .landing-reduced-motion .landing-float {
+    animation: none;
+  }
+
+  .landing-reduced-motion .landing-glass {
+    transition: none;
+  }
+
+  .landing-reduced-motion .landing-glass:hover {
+    transform: none;
+  }
+}
+
+.prelaunch-hero-supporting {
+  font-size: 0.9375rem; /* 15px */
+}
+
+@media (min-width: 640px) {
+  .prelaunch-hero-supporting {
+    font-size: 1.125rem; /* 18px */
+  }
+}
+
 /* Step icon boxes — scenic background fills the full panel */
 .landing-step-visual-image.landing-glass {
   background-color: transparent;

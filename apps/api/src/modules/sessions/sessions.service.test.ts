@@ -44,6 +44,10 @@ import { createSession, endSession, heartbeatSession, beginScheduledSession } fr
 describe('sessions.service createSession', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // `clearMocks` clears calls but not implementations, and the session gate now resolves
+    // membership via `getSubscription` -> `subscriptions.findFirst`. Without this reset, one
+    // test's subscription row would persist into every later test in the file.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
   });
 
   it('rejects when user profile is missing', async () => {
@@ -58,22 +62,26 @@ describe('sessions.service createSession', () => {
   });
 
   it('rejects when trial subscription is expired', async () => {
+    // Distinct user id: the session gate now resolves membership through
+    // `billing.getSubscription()`, which memoizes per user for 30s. Reusing 'user-1' would leak
+    // this expired trial into the later 'user-1' cases in this file.
+    const userId = 'user-expired-trial';
     mockPrisma.profiles.findUnique.mockResolvedValue({
-      id: 'user-1',
+      id: userId,
       credits: 20,
       purchased_credits: 0,
       credits_seconds: 1200,
       purchased_credits_seconds: 0,
     });
-    mockPrisma.subscriptions.findMany.mockResolvedValue([
-      {
-        plan_type: 'trial',
-        end_date: new Date(Date.now() - 60_000),
-      },
-    ]);
+    // `getSubscription` reads the newest non-incomplete row via findFirst.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue({
+      plan_type: 'trial',
+      status: 'active',
+      end_date: new Date(Date.now() - 60_000),
+    });
 
     await expect(
-      createSession('user-1', { type: 'instant', duration_minutes: 5 })
+      createSession(userId, { type: 'instant', duration_minutes: 5 })
     ).rejects.toMatchObject({
       message: 'Your trial has expired. Please upgrade to continue.',
       statusCode: 400,
@@ -161,6 +169,10 @@ describe('sessions.service createSession', () => {
 describe('sessions.service beginScheduledSession', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // `clearMocks` clears calls but not implementations, and the session gate now resolves
+    // membership via `getSubscription` -> `subscriptions.findFirst`. Without this reset, one
+    // test's subscription row would persist into every later test in the file.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
   });
 
   it('activates scheduled row and stamps started_at', async () => {
@@ -216,6 +228,10 @@ describe('sessions.service beginScheduledSession', () => {
 describe('sessions.service endSession', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // `clearMocks` clears calls but not implementations, and the session gate now resolves
+    // membership via `getSubscription` -> `subscriptions.findFirst`. Without this reset, one
+    // test's subscription row would persist into every later test in the file.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
   });
 
   it('throws when session is not found', async () => {
@@ -289,6 +305,10 @@ describe('sessions.service endSession', () => {
 describe('sessions.service heartbeatSession', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // `clearMocks` clears calls but not implementations, and the session gate now resolves
+    // membership via `getSubscription` -> `subscriptions.findFirst`. Without this reset, one
+    // test's subscription row would persist into every later test in the file.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
   });
 
   it('returns zero delta for negative elapsed', async () => {

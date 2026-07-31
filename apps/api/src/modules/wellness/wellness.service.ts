@@ -8,6 +8,21 @@ import {
   UpdateWellnessChallengeInput,
   UpdateWellnessToolInput,
 } from './wellness.schema';
+// Membership authorization comes from the entitlement engine only — never from `plan_type`,
+// `PLAN_LIMITS`, or a limit restated in this module.
+import {
+  assertEnforceable,
+  getApprovedMaxActiveChallenges,
+  getMembershipEntitlements,
+} from '../entitlements';
+import {
+  getActiveChallengeCount,
+  lockUserChallengeParticipation,
+} from './challenge-participation.repository';
+import {
+  ActiveChallengeLimitError,
+  nextMembershipWithHigherChallengeLimit,
+} from './challenge-limit.error';
 
 const PROGRESS_CACHE_TTL = 30 * 1000; // 30 seconds
 const progressCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -265,15 +280,82 @@ async function getChallengeStatsById(challengeId: string): Promise<{
   return { participants, completionRate };
 }
 
+/**
+ * Join a challenge, enforcing the member's approved active-challenge limit.
+ *
+ * PHASE 2A — the single count-increasing mutation path for `user_challenge_participation`.
+ * (The other upsert in this file, in `getWellnessChallengesForUserDashboard`, only ever writes
+ * `is_completed: true`, so it cannot raise the active count and is deliberately not gated.)
+ *
+ * The limit comes from the entitlement matrix and nowhere else — this module never compares
+ * `plan_type`, reads `PLAN_LIMITS`, or restates the 1 / 3 / unlimited values.
+ *
+ * ORDER OF OPERATIONS, and why:
+ *   1. Challenge existence — preserves the existing 404 ahead of any membership work.
+ *   2. Resolve entitlements — OUTSIDE the transaction, so no network/cache work happens while
+ *      holding a lock.
+ *   3. `assertEnforceable` — refuses to run if `maxActiveChallenges` is ever moved back to
+ *      PROVISIONAL, rather than silently enforcing an unapproved policy.
+ *   4. Unlimited (`null`) short-circuits before the transaction: Thrive pays nothing for a limit
+ *      it does not have.
+ *   5. Transaction: advisory lock -> idempotency check -> count -> compare -> write.
+ */
 export async function joinWellnessChallenge(userId: string, challengeId: string) {
   const challenge = await prisma.wellness_challenges.findUnique({ where: { id: challengeId } });
   if (!challenge) throw new Error('Challenge not found');
 
-  const result = await prisma.user_challenge_participation.upsert({
-    where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
-    create: { user_id: userId, challenge_id: challengeId, progress: 0, is_completed: false },
-    update: {},
-  });
+  const entitlements = await getMembershipEntitlements(userId);
+  assertEnforceable('maxActiveChallenges');
+  // The APPROVED per-tier limit. Not `entitlements.maxActiveChallenges`, which additionally
+  // applies the expired-membership collapse — that part of the expired baseline is still
+  // PROVISIONAL, so enforcing it here would restrict expired members on an unapproved rule.
+  const limit = getApprovedMaxActiveChallenges(entitlements.membership);
+
+  const result =
+    limit === null
+      ? // Unlimited: no count, no lock, no transaction.
+        await prisma.user_challenge_participation.upsert({
+          where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+          create: { user_id: userId, challenge_id: challengeId, progress: 0, is_completed: false },
+          update: {},
+        })
+      : await prisma.$transaction(async (tx) => {
+          // Serialize this member's joins so two concurrent requests cannot both observe a count
+          // below the limit and both insert. Released automatically on commit or rollback.
+          await lockUserChallengeParticipation(userId, tx);
+
+          // Re-joining a challenge the member is already in is a no-op and must stay allowed:
+          // the row already counts toward the limit, so re-checking would reject an idempotent
+          // call. This preserves the pre-existing upsert semantics exactly.
+          const existing = await tx.user_challenge_participation.findUnique({
+            where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+          });
+
+          if (!existing) {
+            const activeCount = await getActiveChallengeCount(userId, tx);
+            if (activeCount >= limit) {
+              // Throws inside the transaction, so nothing is written — no partial record.
+              throw new ActiveChallengeLimitError({
+                membership: entitlements.membership,
+                limit,
+                activeCount,
+                upgradeMembership: nextMembershipWithHigherChallengeLimit(entitlements.membership),
+              });
+            }
+          }
+
+          return tx.user_challenge_participation.upsert({
+            where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+            create: {
+              user_id: userId,
+              challenge_id: challengeId,
+              progress: 0,
+              is_completed: false,
+            },
+            update: {},
+          });
+        });
+
   clearUserWellnessCaches(userId);
   wellnessChallengesWithStatsCacheValue = null;
   return result;

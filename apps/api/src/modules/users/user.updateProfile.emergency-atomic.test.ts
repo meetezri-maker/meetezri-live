@@ -33,7 +33,7 @@ jest.mock('../../lib/prisma', () => ({
   default: mockPrisma,
 }));
 
-jest.mock('../billing/billing.service', () => ({
+jest.mock('../billing', () => ({
   syncSubscriptionWithStripe: jest.fn(),
   linkSubscriptionToUser: jest.fn(),
   getSubscription: jest.fn(),

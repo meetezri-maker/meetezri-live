@@ -1,6 +1,6 @@
 import { Check, Sparkles } from "lucide-react";
 import { LandingGlowCard } from "@/app/landing/LandingGlowCard";
-import { FOUNDING_CIRCLE, SECTION_IDS } from "../prelaunch.content";
+import { FOUNDING_CIRCLE, FOUNDING_FORM, SECTION_IDS } from "../prelaunch.content";
 import { PRELAUNCH_FOUNDING_CIRCLE_BG } from "../prelaunch.imagery";
 import { Reveal, SectionBackdrop, SectionHeader } from "../PrelaunchPrimitives";
 import { FoundingMemberForm } from "../FoundingMemberForm";
@@ -12,6 +12,8 @@ import { FoundingMemberForm } from "../FoundingMemberForm";
  * This is an invitation, not a pricing page: no countdown, no scarcity, and no
  * community counter — a real number is not available, and one is never invented.
  */
+const FORM_HEADING_ID = "prelaunch-founding-form-heading";
+
 export function FoundingCircleSection() {
   return (
     <section
@@ -64,7 +66,7 @@ export function FoundingCircleSection() {
           </LandingGlowCard>
         </Reveal>
 
-        <Reveal delay={0.14} className="mt-14">
+        <Reveal delay={0.14} className="mt-14 md:mt-16">
           <div className="mx-auto max-w-2xl text-center">
             <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/55">
               {FOUNDING_CIRCLE.invitationHeading}
@@ -77,12 +79,28 @@ export function FoundingCircleSection() {
           </div>
         </Reveal>
 
-        <Reveal delay={0.18} className="mt-12">
-          <LandingGlowCard glow="purple" className="mx-auto max-w-md p-7 sm:p-8">
-            <FoundingMemberForm origin="founding_circle_section" />
+        {/*
+          The one inline form on the page. It is deliberately not a modal here:
+          `openSignup("founding_circle_section")` scrolls to this section rather
+          than opening the dialog, so the benefits stay visible while the
+          visitor completes it. Behaviour, contract, and analytics are unchanged.
+        */}
+        <Reveal delay={0.18} className="mt-14 md:mt-16">
+          <LandingGlowCard glow="purple" className="mx-auto max-w-lg p-7 sm:p-9">
+            <h3
+              id={FORM_HEADING_ID}
+              className="landing-serif text-center text-xl font-semibold text-white sm:text-2xl"
+            >
+              {FOUNDING_FORM.heading}
+            </h3>
+
+            {/* Names the form region so assistive technology announces it. */}
+            <div aria-labelledby={FORM_HEADING_ID} className="mt-6">
+              <FoundingMemberForm origin="founding_circle_section" />
+            </div>
           </LandingGlowCard>
 
-          <div className="mx-auto mt-5 max-w-md space-y-1 text-center text-sm text-[var(--solace-ds-text-muted)]">
+          <div className="mx-auto mt-5 max-w-lg space-y-1 text-center text-sm text-[var(--solace-ds-text-muted)]">
             {FOUNDING_CIRCLE.ctaSupportingText.map((line) => (
               <p key={line}>{line}</p>
             ))}

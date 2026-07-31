@@ -10,119 +10,59 @@
 /** Section 1 — hero. Night lake, same plate the main site hero uses. */
 export const PRELAUNCH_HERO_BG = "/community/hero-lake.jpg";
 
-/** Section 2 — recognition. Forest at dusk. */
-export const PRELAUNCH_RECOGNITION_BG = "/community/scene-forest.jpg";
+/*
+ * The former recognition backdrop (`/community/scene-forest.jpg`) was retired
+ * with that section. Despite the filename it is a desert highway, which the
+ * Blueprint's environmental guardrails exclude.
+ */
 
-/** Section 6 — purpose. Mountains, no people, no technology. */
-export const PRELAUNCH_PURPOSE_BG = "/solace/health-background-calm-mountains.jpg";
+/*
+ * Two backdrops were retired with their sections: the purpose mountains
+ * (`/solace/health-background-calm-mountains.jpg`) with "Why We Built Solace",
+ * and the final-invitation plate (`/solace/emergency-contact-twilight-lake.jpg`)
+ * when that section was folded into the FAQ. Both files remain in `public/`;
+ * they are shared assets, not landing-owned.
+ */
 
-/** Section 8 — founding circle. Warmest plate on the page. */
+/** Founding circle. Warmest plate on the page. */
 export const PRELAUNCH_FOUNDING_CIRCLE_BG = "/solace/onboarding-complete-twilight-lake.jpg";
 
-/** Section 11 — final invitation. Brightest plate on the page. */
-export const PRELAUNCH_FINAL_BG = "/solace/emergency-contact-twilight-lake.jpg";
-
-/** Section 7 — founder. Warm, minimal backdrop behind the video card. */
-export const PRELAUNCH_FOUNDER_BG = "/solace/profile-setup-twilight-valley.jpg";
+/**
+ * Section 5 — founder. Twilight lake with blossom, mountains, and a mirrored
+ * reflection.
+ *
+ * Replaces `/solace/profile-setup-twilight-valley.jpg`, which despite its name
+ * is a screenshot of the onboarding form complete with placeholder test data.
+ * It was invisible under this section's heavy scrim, but a product UI screen is
+ * not scenery and should never have been the backdrop.
+ */
+export const PRELAUNCH_FOUNDER_BG = "/solace/emotional-focus-twilight-sanctuary.jpg";
 
 /**
- * Section 4 story imagery, mapped to the approved direction for each card.
- * These are approved Solace cinematic plates, not stock photography.
+ * Section 2 — Human Moments. One approved plate per moment, keyed by moment id.
+ *
+ * Every plate was opened and visually confirmed; filenames in this repository
+ * are not reliable. Each is matched to the emotional beat of its moment:
+ * a quiet lamplit night, a shooting star over still peaks, sunrise above a sea
+ * of cloud, and calm water at dusk.
+ *
+ * The images carry no information the copy does not already state, so they are
+ * marked decorative with empty alt text and the moment title and narrative
+ * remain available as text.
  */
-export const PRELAUNCH_STORY_IMAGES = [
-  "/community/scene-bedroom.jpg",
-  "/solace/companion-selection-calm-mountain.jpg",
-  "/community/scene-water.jpg",
-  "/community/scene-stars.jpg",
-] as const;
+export const PRELAUNCH_MOMENT_IMAGES: Record<string, string> = {
+  "quiet-day": "/community/scene-bedroom.jpg",
+  "small-win": "/community/scene-stars.jpg",
+  "big-decision": "/solace/companion-selection-calm-mountain.jpg",
+  "everyday-life": "/community/scene-water.jpg",
+};
 
-export type ProductScreenId =
-  | "dashboard"
-  | "talk-it-out"
-  | "journal"
-  | "mood"
-  | "habits"
-  | "sleep"
-  | "goals"
-  | "community"
-  | "progress";
-
-export interface ProductScreen {
-  id: ProductScreenId;
-  /** Short caption explaining how the screen supports the overall journey. */
-  label: string;
-  caption: string;
-  /** `null` when no approved screenshot exists yet — renders a labelled placeholder. */
-  src: string | null;
-}
-
-/**
- * Approved screenshot sequence for Section 5, reused by the Section 3 preview.
- * Order matches the document: Dashboard → Talk It Out → Journal → Mood → Habits
- * → Sleep → Goals → Community → Progress.
+/*
+ * The product-screenshot carousel was removed with the Meet Solace and
+ * More Than a Conversation sections. Appendix A makes the introduction video
+ * the product demonstration, and seven of the nine screens had no approved
+ * asset, so the screen catalogue went with it.
  */
-export const PRODUCT_SCREENS: ProductScreen[] = [
-  {
-    id: "dashboard",
-    label: "Home Dashboard",
-    caption: "Everything you're working on, gathered in one calm place.",
-    src: "/dashboard-images/dashboard.png",
-  },
-  {
-    id: "talk-it-out",
-    label: "Talk It Out",
-    caption: "A private space to speak freely and organize your thoughts.",
-    src: null,
-  },
-  {
-    id: "journal",
-    label: "Journal",
-    caption: "Capture today before it becomes a memory.",
-    src: null,
-  },
-  {
-    id: "mood",
-    label: "Mood",
-    caption: "Notice emotional patterns and what influences your wellbeing.",
-    src: null,
-  },
-  {
-    id: "habits",
-    label: "Habits",
-    caption: "Small routines, built one step at a time.",
-    src: null,
-  },
-  {
-    id: "sleep",
-    label: "Sleep",
-    caption: "Understand how rest shapes the rest of your day.",
-    src: "/sleep-tracker/ChatGPT Image May 14, 2026, 02_15_01 PM.png",
-  },
-  {
-    id: "goals",
-    label: "Goals & Achievements",
-    caption: "Every step forward deserves to be seen.",
-    src: null,
-  },
-  {
-    id: "community",
-    label: "Community",
-    caption: "Encouragement from people who understand the journey.",
-    src: null,
-  },
-  {
-    id: "progress",
-    label: "Progress & Insights",
-    caption: "Growth becomes clearer when you can look back.",
-    src: "/progress/progress ref.png",
-  },
-];
-
-/** Screens still awaiting an approved screenshot. Surfaced in the delivery report. */
-export const PENDING_PRODUCT_SCREENS = PRODUCT_SCREENS.filter(
-  (screen) => screen.src === null
-).map((screen) => screen.label);
-
 /**
  * Founder assets. Both are still to be supplied; the components render an
  * accessible placeholder rather than substituting an unrelated image or a

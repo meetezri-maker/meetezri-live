@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput, SignupInput, signupSchema, ResendVerificationPublicInput } from './user.schema';
 import * as userService from './user.service';
-import * as billingService from '../billing/billing.service';
+import * as billingService from '../billing';
 import { supabaseAdmin } from '../../config/supabase';
 import { emailService } from '../email/email.service';
 import prisma from '../../lib/prisma';

@@ -1,21 +1,18 @@
 import { useEffect } from "react";
-import { PublicFooter } from "../components/PublicFooter";
+import { EarlyAccessFooter } from "../components/EarlyAccessFooter";
 import { FoundingMemberSignupProvider } from "../features/prelaunch/FoundingMemberSignupContext";
 import { PrelaunchNav } from "../features/prelaunch/PrelaunchNav";
 import { usePrelaunchMeta } from "../features/prelaunch/usePrelaunchMeta";
 import { resolvePrelaunchAttribution } from "../features/prelaunch/prelaunch.attribution";
 import { trackPrelaunchEvent } from "../features/prelaunch/prelaunch.analytics";
 import { HeroSection } from "../features/prelaunch/sections/HeroSection";
-import { RecognitionSection } from "../features/prelaunch/sections/RecognitionSection";
-import { MeetSolaceSection } from "../features/prelaunch/sections/MeetSolaceSection";
-import { EverydayMomentsSection } from "../features/prelaunch/sections/EverydayMomentsSection";
-import { SolaceExperienceSection } from "../features/prelaunch/sections/SolaceExperienceSection";
-import { PurposeSection } from "../features/prelaunch/sections/PurposeSection";
+import { HumanMomentsSection } from "../features/prelaunch/sections/HumanMomentsSection";
+import { TalkItOutSection } from "../features/prelaunch/sections/TalkItOutSection";
+import { YourJourneySection } from "../features/prelaunch/sections/YourJourneySection";
 import { FounderSection } from "../features/prelaunch/sections/FounderSection";
 import { FoundingCircleSection } from "../features/prelaunch/sections/FoundingCircleSection";
 import { TrustSection } from "../features/prelaunch/sections/TrustSection";
 import { FaqSection } from "../features/prelaunch/sections/FaqSection";
-import { FinalInvitationSection } from "../features/prelaunch/sections/FinalInvitationSection";
 
 /**
  * Solace Pre-Launch Founding Member landing page (`/early-access`).
@@ -24,8 +21,8 @@ import { FinalInvitationSection } from "../features/prelaunch/sections/FinalInvi
  * Founding Circle — it does not create an application account, and it never
  * routes the visitor into the app.
  *
- * The eleven sections below are ordered exactly as the approved content
- * document specifies; the order is asserted in `prelaunch.structure.test.tsx`.
+ * Sections are ordered exactly as the approved documents specify; the order is
+ * asserted in `prelaunch.structure.test.tsx`.
  */
 export function EarlyAccess() {
   usePrelaunchMeta();
@@ -42,25 +39,24 @@ export function EarlyAccess() {
   }, []);
 
   return (
-    <div className="solace-landing relative min-h-screen overflow-x-hidden bg-[#050816]">
+    <div className="solace-landing landing-reduced-motion relative min-h-screen overflow-x-hidden bg-[#050816]">
       <FoundingMemberSignupProvider>
         <PrelaunchNav />
 
         <main>
           <HeroSection />
-          <RecognitionSection />
-          <MeetSolaceSection />
-          <EverydayMomentsSection />
-          <SolaceExperienceSection />
-          <PurposeSection />
+          <HumanMomentsSection />
+          <TalkItOutSection />
+          <YourJourneySection />
+          {/* The founder story carries the page's "about" intent. */}
           <FounderSection />
           <FoundingCircleSection />
           <TrustSection />
+          {/* The final invitation is folded into the end of the FAQ. */}
           <FaqSection />
-          <FinalInvitationSection />
         </main>
 
-        <PublicFooter />
+        <EarlyAccessFooter />
       </FoundingMemberSignupProvider>
     </div>
   );
