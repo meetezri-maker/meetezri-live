@@ -35,7 +35,7 @@ export const PRELAUNCH_FOUNDING_CIRCLE_BG = "/community/early-access-bg2.png";
  * It was invisible under this section's heavy scrim, but a product UI screen is
  * not scenery and should never have been the backdrop.
  */
-export const PRELAUNCH_FOUNDER_BG = "/community/early-access-bg3.png";
+export const PRELAUNCH_FOUNDER_BG = "/community/early-access-bg2.png";
 
 /**
  * Section 2 — Human Moments. One approved plate per moment, keyed by moment id.
