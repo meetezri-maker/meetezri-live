@@ -32,7 +32,7 @@ export function FounderSection() {
     >
       <SectionBackdrop
         src={PRELAUNCH_FOUNDER_BG}
-        overlayClassName="bg-[linear-gradient(180deg,rgba(5,8,22,0.92)_0%,rgba(5,8,22,0.94)_50%,rgba(5,8,22,0.96)_100%)]"
+        overlayClassName="bg-[linear-gradient(180deg,rgba(10,7,18,0.86)_0%,rgba(8,7,20,0.9)_50%,rgba(5,8,22,0.94)_100%)]"
       />
 
       <div className="landing-section relative z-10">

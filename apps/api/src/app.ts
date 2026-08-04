@@ -35,6 +35,7 @@ import { safetyResourceInteractionsRoutes } from './modules/safety-resource-inte
 import { geoRoutes } from './modules/geo/geo.routes';
 import { crisisHotlinesRoutes } from './modules/crisis-hotlines/crisis-hotlines.routes';
 import { foundingMembersRoutes } from './modules/founding-members/founding-members.routes';
+import { expertReviewRoutes } from './modules/expert-review/expert-review.routes';
 import { getClientIp } from './lib/client-ip';
 import jwkToPem from 'jwk-to-pem';
 import prisma from './lib/prisma';
@@ -298,6 +299,7 @@ app.register(safetyResourceInteractionsRoutes, { prefix: '/api/safety-resource-i
 app.register(geoRoutes, { prefix: '/api/geo' });
 app.register(crisisHotlinesRoutes, { prefix: '/api/crisis-hotlines' });
 app.register(foundingMembersRoutes, { prefix: '/api/founding-members' });
+app.register(expertReviewRoutes, { prefix: '/api/admin/expert-reviews' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.
