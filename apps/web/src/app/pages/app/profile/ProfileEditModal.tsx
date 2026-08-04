@@ -531,7 +531,7 @@ export function ProfileEditModal({
                       <FormItem id="profile-edit-field-in_therapy">
                         <div className="mb-2 flex items-center gap-2">
                           <Users className={profileIconVioletMd} />
-                          <FormLabel className={profileFormLabel}>Therapist</FormLabel>
+                          <FormLabel className={profileFormLabel}>Are you currently working with a therapist?</FormLabel>
                         </div>
                         <FormControl>
                           <SolaceSelect
