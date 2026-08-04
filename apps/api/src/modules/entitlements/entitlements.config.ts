@@ -116,9 +116,22 @@ export const ENTITLEMENT_POLICY_STATUS: Readonly<Record<string, PolicyStatus>> =
    */
   expiredMembershipChallengeLimit: 'APPROVED',
 
+  /**
+   * APPROVED (Phase 7 — Option A). Discover does NOT include journalling, mood history,
+   * the wellness tool library, or talking history; they are Grow/Thrive capabilities.
+   *
+   * These were PROVISIONAL through Phase 6 while the shipped frontend already gated them, which
+   * is the contradiction Phase 5 and 6 refused to resolve without a product decision. The
+   * decision is now made and the matrix matches the product.
+   *
+   * `canUseMoodTracking` gates mood HISTORY, not mood CHECK-INS — Discover keeps daily check-ins.
+   */
+  canCreateJournal: 'APPROVED',
+  canUseMoodTracking: 'APPROVED',
+  canUseWellnessTools: 'APPROVED',
+  canViewSessionHistory: 'APPROVED',
+
   // --- Inferred. Unenforced. Do not gate on these. ---
-  canCreateJournal: 'PROVISIONAL',
-  canUseMoodTracking: 'PROVISIONAL',
   canUseSleepTracking: 'PROVISIONAL',
   canUseBrainHealth: 'PROVISIONAL',
   canUseCommunity: 'PROVISIONAL',
@@ -202,10 +215,16 @@ export const MEMBERSHIP_TIER_MATRIX: Readonly<Record<MembershipTier, TierDefinit
       canUseAI: true,
       // `PLAN_LIMITS.trial.payAsYouGoRate === null`; `payg.service.ts` already throws for trial.
       canPurchaseMinutes: false,
-      // Capture-style features stay open on Discover: they are how a member experiences the
-      // product before paying, and none of them are gated in the codebase today.
-      canCreateJournal: true,
-      canUseMoodTracking: true,
+      // APPROVED (Phase 7, Option A): journalling and mood HISTORY are Grow/Thrive capabilities.
+      // These read `true` until Phase 7 while the shipped frontend blocked them — the matrix now
+      // matches the product instead of contradicting it.
+      canCreateJournal: false,
+      canUseMoodTracking: false,
+      // APPROVED (Phase 7, Option A): both were frontend-gated with no capability behind them.
+      canUseWellnessTools: false,
+      canViewSessionHistory: false,
+      // Still open on Discover: mood CHECK-INS (distinct from mood history) and community are how
+      // a member experiences the product before paying.
       canUseSleepTracking: true,
       canUseCommunity: true,
       // PROVISIONAL: analysis depth is assumed to be the Grow/Thrive value proposition.
@@ -234,8 +253,10 @@ export const MEMBERSHIP_TIER_MATRIX: Readonly<Record<MembershipTier, TierDefinit
     capabilities: {
       canUseAI: true, // 'Full FaceTime'
       canPurchaseMinutes: true, // `PLAN_LIMITS.core.payAsYouGoRate === 0.20`
-      canCreateJournal: true, // 'Unlimited journals'
-      canUseMoodTracking: true, // 'Daily mood check-in & history'
+      canCreateJournal: true, // APPROVED (Phase 7) — 'Unlimited journals'
+      canUseMoodTracking: true, // APPROVED (Phase 7) — 'Daily mood check-in & history'
+      canUseWellnessTools: true, // APPROVED (Phase 7)
+      canViewSessionHistory: true, // APPROVED (Phase 7)
       canUseSleepTracking: true,
       canUseCommunity: true,
       canUseBrainHealth: true,
@@ -258,8 +279,10 @@ export const MEMBERSHIP_TIER_MATRIX: Readonly<Record<MembershipTier, TierDefinit
     capabilities: {
       canUseAI: true,
       canPurchaseMinutes: true, // `PLAN_LIMITS.pro.payAsYouGoRate === 0.20`
-      canCreateJournal: true,
-      canUseMoodTracking: true,
+      canCreateJournal: true, // APPROVED (Phase 7)
+      canUseMoodTracking: true, // APPROVED (Phase 7)
+      canUseWellnessTools: true, // APPROVED (Phase 7)
+      canViewSessionHistory: true, // APPROVED (Phase 7)
       canUseSleepTracking: true,
       canUseCommunity: true,
       canUseBrainHealth: true,
@@ -306,6 +329,8 @@ export const EXPIRED_CAPABILITIES: CapabilityMap = {
   canPurchaseMinutes: false,
   canCreateJournal: false,
   canUseMoodTracking: false,
+  canUseWellnessTools: false,
+  canViewSessionHistory: false,
   canUseSleepTracking: false,
   canUseBrainHealth: false,
   canUseCommunity: true,

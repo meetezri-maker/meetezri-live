@@ -61,6 +61,10 @@ export const ENTITLEMENT_CAPABILITIES = [
   'canUseCommunity',
   'canViewInsights',
   'canExportReports',
+  // Added Phase 7 when Option A was approved. Both were previously enforced in the frontend with
+  // no capability behind them, so the policy model had nothing to say about either.
+  'canUseWellnessTools',
+  'canViewSessionHistory',
 ] as const;
 export type EntitlementCapability = (typeof ENTITLEMENT_CAPABILITIES)[number];
 

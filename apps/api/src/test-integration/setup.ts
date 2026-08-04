@@ -25,8 +25,10 @@ afterAll(async () => {
   const { closeSharedCache } = await import('../lib/sharedCache');
   await closeSharedCache();
 
-  const client = (globalThis as { prisma?: { $disconnect?: () => Promise<void> } }).prisma;
-  if (client && typeof client.$disconnect === 'function') {
-    await client.$disconnect();
-  }
+  // Imported directly rather than reached through `globalThis`. The unit project cannot do that
+  // (importing `lib/prisma` there would construct a client in suites that mock it), but every
+  // integration suite uses the real database, so a direct import is both safe and deterministic —
+  // it disconnects the exact client the tests used, with no dependency on how it was registered.
+  const { default: prisma } = await import('../lib/prisma');
+  await prisma.$disconnect();
 });

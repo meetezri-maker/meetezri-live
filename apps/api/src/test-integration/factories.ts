@@ -73,6 +73,17 @@ export async function createMember(
       purchased_credits: 0,
       purchased_credits_seconds: 0,
     },
+    // `select` is required, not stylistic. By default Prisma RETURNs every field the model
+    // declares, and `schema.prisma` declares `profiles.signup_source` — a column that exists in
+    // production but that NO migration creates (see the migration-history drift documented in
+    // the Phase 2C continuation report). On a database built purely from migrations that column
+    // is absent, so an unscoped create fails on the RETURNING clause even though the INSERT
+    // itself is fine.
+    //
+    // Narrowing the projection keeps this suite runnable against a migrations-only database
+    // without hiding the drift: the drift is reported separately as its own blocker, and none of
+    // the missing objects sit on the challenge-join path under test.
+    select: { id: true },
   });
 
   await prisma.subscriptions.create({

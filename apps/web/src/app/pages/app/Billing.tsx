@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useId, useRef, type MouseEvent } from "re
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { api } from "@/lib/api";
+import { api, isApiError } from "@/lib/api";
 import { toast } from "sonner";
 import {
   CreditCard,
@@ -32,6 +32,8 @@ import {
 } from "../../components/ui/dialog";
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
+import { PAYG_RESTRICTION } from "../../utils/membershipCopy";
+import { MembershipBadge, membershipStatusFromProfile } from "../../components/MembershipBadge";
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
 import { SolacePrivacyFooter } from "@/app/solace/SolacePrivacyFooter";
@@ -410,8 +412,8 @@ export function Billing() {
   const heroRenewalLead = useMemo(() => {
     if (isCancelled) {
       return normalizedDaysUntilRenewal === 0
-        ? "Your plan access ends today."
-        : `Your plan access ends in ${normalizedDaysUntilRenewal ?? 0} days.`;
+        ? "Your membership access ends today."
+        : `Your membership access ends in ${normalizedDaysUntilRenewal ?? 0} days.`;
     }
     if (userSubscription.planId === "trial") {
       return normalizedDaysUntilRenewal === 0
@@ -419,8 +421,8 @@ export function Billing() {
         : `Your trial continues · ${normalizedDaysUntilRenewal ?? 0} days remaining.`;
     }
     return normalizedDaysUntilRenewal === 0
-      ? "Your plan renews today."
-      : `Your plan renews in ${normalizedDaysUntilRenewal ?? 0} days.`;
+      ? "Your membership renews today."
+      : `Your membership renews in ${normalizedDaysUntilRenewal ?? 0} days.`;
   }, [isCancelled, userSubscription.planId, normalizedDaysUntilRenewal]);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
@@ -522,6 +524,17 @@ export function Billing() {
       }
     } catch (error) {
       console.error("Failed to start credit purchase:", error);
+
+      // A membership refusal is not a transient failure — telling a Discover member to "wait a
+      // moment and try again" would send them into a loop that can never succeed. The API now
+      // returns PAYG_REQUIRES_PAID_MEMBERSHIP, so branch on the code and show the shared copy
+      // rather than the backend's legacy message (which still says "Core and Pro plans").
+      if (isApiError(error) && error.code === "PAYG_REQUIRES_PAID_MEMBERSHIP") {
+        toast.error(PAYG_RESTRICTION.title, { description: PAYG_RESTRICTION.body });
+        setProcessingAction(null);
+        return;
+      }
+
       toast.error("Could not start checkout", {
         description: "Please wait a moment and try again.",
       });
@@ -703,7 +716,7 @@ export function Billing() {
                 </span>
               </h1>
               <p className={billingPageSubtitle}>
-                Manage your plan, view usage, and purchase additional minutes.
+                Manage your membership, view usage, and add minutes.
               </p>
             </div>
             <button
@@ -719,7 +732,7 @@ export function Billing() {
           <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-10">
             {/* ——— Main column ——— */}
             <div className="min-w-0 flex-1 space-y-10">
-              {/* 2 Current plan hero */}
+              {/* 2 Current membership hero */}
               <section aria-labelledby="current-plan-title" className={billingHeroSection}>
                 <img
                   src={HERO_SCENERY_SRC}
@@ -740,10 +753,20 @@ export function Billing() {
                   )}
                 >
                   <div className="max-w-xl space-y-5">
-                    <p className={billingHeroEyebrow}>Current plan</p>
+                    <p className={billingHeroEyebrow}>Current Membership</p>
                     <h2 id="current-plan-title" className={billingHeroTitle}>
                       {currentPlan.displayName}
                     </h2>
+                    {/* Shared badge so the membership name and any lifecycle state (ended,
+                        cancelling, payment due) render identically wherever they appear. */}
+                    <MembershipBadge
+                      plan={currentPlan.id}
+                      status={membershipStatusFromProfile({
+                        planType: currentPlan.id,
+                        subscriptionStatus: userSubscription?.status,
+                        endDate: userSubscription?.billingCycle?.endDate ?? null,
+                      })}
+                    />
                     <p className={billingHeroLead}>{heroRenewalLead}</p>
                     {billingEndIsValid ? (
                       <p className="text-sm font-medium text-zinc-100 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)]">
@@ -796,7 +819,7 @@ export function Billing() {
               {/* Mobile: minutes usage below hero (full rail stays on desktop) */}
               <div className="lg:hidden">{minutesRailBlock}</div>
 
-              {/* 3 Manage your plan */}
+              {/* 3 Manage your membership */}
               <section aria-labelledby="manage-plan-heading" className="space-y-5">
                 <h2 id="manage-plan-heading" className={billingSectionHeading}>
                   Manage your plan
@@ -815,7 +838,7 @@ export function Billing() {
                       >
                         {isCurrent && (
                           <span className={billingCurrentBadge}>
-                            Current plan
+                            Current Membership
                           </span>
                         )}
                         <div className={billingPlanIconChipClass(planId)}>
@@ -839,7 +862,7 @@ export function Billing() {
                           {planId === "trial" ? (
                             isCurrent ? (
                               <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-white/[0.08] text-zinc-400">
-                                Current plan
+                                Current Membership
                               </Button>
                             ) : (
                               <Button disabled variant="outline" className="h-11 min-h-[44px] w-full rounded-full border-white/10">
@@ -864,16 +887,14 @@ export function Billing() {
                                 isLoading={processingAction === "subscribe_core"}
                                 disabled={isActionLocked}
                                 className="h-11 min-h-[44px] w-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white"
-                              >
-                                Choose Core
-                                <ArrowRight className="size-4" aria-hidden />
+                              >Choose Grow<ArrowRight className="size-4" aria-hidden />
                               </Button>
                             )
                           ) : (
                             /* pro */
                             isCurrent ? (
                               <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-white/[0.08] text-zinc-400">
-                                Current plan
+                                Current Membership
                               </Button>
                             ) : (
                               <Button
@@ -883,7 +904,7 @@ export function Billing() {
                                 disabled={isActionLocked}
                                 className="h-11 min-h-[44px] w-full rounded-full bg-gradient-to-r from-fuchsia-600 to-pink-500 text-white"
                               >
-                                Upgrade to Pro
+                                Upgrade to Thrive
                                 <ArrowRight className="size-4" aria-hidden />
                               </Button>
                             )
@@ -942,7 +963,40 @@ export function Billing() {
                     })}
                   </div>
                 </section>
-              ) : null}
+              ) : (
+                /*
+                  Discover has no PAYG rate, so the purchase section above is not rendered. This
+                  slot was previously `null` — a silent absence that left members with no idea why
+                  buying minutes was unavailable. Copy comes from the shared module; no new flow,
+                  no behaviour change, and the existing upgrade CTA is reused.
+                */
+                <section aria-labelledby="more-minutes-heading" className={cn("p-6 sm:p-8", panel)}>
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className={cn("solace-icon-chip solace-icon-chip--amber", "!size-11 !rounded-2xl")}>
+                        <Zap className="size-6" aria-hidden />
+                      </div>
+                      <div>
+                        <h2 id="more-minutes-heading" className="font-serif text-xl font-light text-zinc-50">
+                          {PAYG_RESTRICTION.title}
+                        </h2>
+                        <p className="mt-1 text-sm text-zinc-500">{PAYG_RESTRICTION.body}</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById("manage-plan-heading")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                      className="h-11 min-h-[44px] shrink-0 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 text-white lg:self-center"
+                    >
+                      {PAYG_RESTRICTION.cta}
+                    </Button>
+                  </div>
+                </section>
+              )}
 
               {/* 5 Billing history & invoices */}
               <section ref={historyTableRef} id="billing-history" className="scroll-mt-24 space-y-4">

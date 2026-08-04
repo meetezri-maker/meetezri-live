@@ -201,8 +201,8 @@ export function BulkAddUsersModal({
                       disabled={isSubmitting}
                     >
                       <option value="trial">Trial</option>
-                      <option value="core">Core</option>
-                      <option value="pro">Pro</option>
+                      <option value="core">Grow</option>
+                      <option value="pro">Thrive</option>
                     </select>
                   </div>
                 </div>

@@ -456,7 +456,7 @@ export function Billing() {
       planCounts[key] = (planCounts[key] || 0) + 1;
     });
     return Object.entries(planCounts).map(([key, value]) => ({
-      name: key === "pro" ? "Pro" : key === "core" ? "Core" : key === "trial" ? "Trial" : key,
+      name: key === "pro" ? "Thrive" : key === "core" ? "Grow" : key === "trial" ? "Discover" : key,
       value,
       color: key === "pro" ? "#3b82f6" : key === "core" ? "#10b981" : key === "trial" ? "#f59e0b" : "#8b5cf6"
     }));

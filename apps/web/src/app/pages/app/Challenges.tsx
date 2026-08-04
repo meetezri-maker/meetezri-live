@@ -18,9 +18,13 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { Link, useNavigate } from "react-router-dom";
+import { api, isApiError } from "@/lib/api";
 import { toast } from "sonner";
+import {
+  challengeLimitRestriction,
+  membershipKeyForApiValue,
+} from "@/app/utils/membershipCopy";
 import {
   mapWellnessChallengeDashboardToRows,
   type WellnessChallengeDashboardPayload,
@@ -95,6 +99,7 @@ export function Challenges() {
   });
   const [challenges, setChallenges] = useState<WellnessChallengeRow[]>([]);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const loadChallenges = useCallback(async () => {
     try {
@@ -139,6 +144,32 @@ export function Challenges() {
         toast.success(`You joined "${challenge.title}"`);
       }
     } catch (e) {
+      // The membership limit is a real, actionable state — not a generic failure. The API
+      // returns the membership, the cap, the current count and the upgrade target, so surface
+      // those rather than a bare message, and offer the upgrade directly.
+      if (isApiError(e) && e.code === "ACTIVE_CHALLENGE_LIMIT_REACHED") {
+        const limit = Number(e.body.maxActiveChallenges ?? 0);
+        const upgradeTo = membershipKeyForApiValue(e.body.upgradeMembership);
+        const restriction = challengeLimitRestriction({
+          membership: membershipKeyForApiValue(e.body.membership) ?? "discover",
+          limit,
+          upgradeTo,
+        });
+
+        toast.error(restriction.title, {
+          description: restriction.body,
+          ...(upgradeTo
+            ? {
+                action: {
+                  label: restriction.cta,
+                  onClick: () => navigate("/app/billing"),
+                },
+              }
+            : {}),
+        });
+        return;
+      }
+
       toast.error(
         e instanceof Error
           ? e.message
@@ -147,7 +178,7 @@ export function Challenges() {
     } finally {
       setJoiningId(null);
     }
-  }, [joiningId]);
+  }, [joiningId, navigate]);
 
   const filteredChallenges = useMemo(() => {
     return challenges.filter((challenge) => {

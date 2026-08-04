@@ -2,38 +2,31 @@ import { motion } from "motion/react";
 import { Clock, TrendingUp, Zap, Check, Star, ArrowRight, Home, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { EXPIRED_DISCOVER_COPY, MEMBERSHIP_COPY } from "../../utils/membershipCopy";
 
 export function TrialExpired() {
   const [selectedPlan, setSelectedPlan] = useState<"core" | "pro">("pro");
 
+  // Feature lines are taken from the shared membership copy so this page cannot drift from the
+  // pricing page. Removed here: "Priority support" (no such capability exists) and "Advanced
+  // mood analytics" (there is no tiered analytics product). `id` stays as the internal plan value
+  // because checkout is keyed on it.
   const plans = [
     {
       id: "core" as const,
-      name: "Core Habit Plan",
+      name: MEMBERSHIP_COPY.grow.fullName,
       price: "$25",
       period: "month",
-      features: [
-        "200 minutes of AI sessions per month",
-        "Mood tracking & journaling",
-        "Wellness tools",
-        "Email support",
-        "Pay-As-You-Go enabled"
-      ],
+      features: MEMBERSHIP_COPY.grow.includes.slice(0, 5),
       gradient: "from-blue-500 to-cyan-500",
       popular: false
     },
     {
       id: "pro" as const,
-      name: "Pro / Clarity",
+      name: MEMBERSHIP_COPY.thrive.fullName,
       price: "$49",
       period: "month",
-      features: [
-        "400 minutes of AI sessions per month",
-        "Advanced mood analytics",
-        "Full wellness tool library",
-        "Priority support",
-        "Emergency resources 24/7"
-      ],
+      features: MEMBERSHIP_COPY.thrive.includes.slice(0, 5),
       gradient: "from-purple-500 to-pink-500",
       popular: true
     }
@@ -68,14 +61,39 @@ export function TrialExpired() {
           </motion.div>
 
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Your Trial Has Ended
+            {EXPIRED_DISCOVER_COPY.title}
           </h1>
           <p className="text-xl text-gray-600 mb-2">
-            Continue your mental wellness journey with Ezri
+            {EXPIRED_DISCOVER_COPY.body}
           </p>
           <p className="text-sm text-gray-500">
-            Choose a plan that works best for you
+            Choose the membership that fits you
           </p>
+        </motion.div>
+
+        {/* What stays — the approved policy is that NOTHING is deleted, and saying so plainly is
+            the most important thing on this page. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 mb-8 max-w-3xl mx-auto"
+        >
+          <div className="flex items-start gap-3">
+            <Shield className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+            <div>
+              <h2 className="font-semibold text-emerald-900 mb-2">Your account is safe</h2>
+              <ul className="space-y-1.5 mb-3">
+                {EXPIRED_DISCOVER_COPY.retained.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-emerald-800">
+                    <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm text-emerald-700">{EXPIRED_DISCOVER_COPY.reassurance}</p>
+            </div>
+          </div>
         </motion.div>
 
         {/* Trial Summary */}

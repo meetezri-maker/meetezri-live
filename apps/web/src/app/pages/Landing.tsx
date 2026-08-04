@@ -1414,7 +1414,7 @@ export function Landing() {
                         </div>
                         <p className="text-xl font-bold text-white">{plan.credits} minutes</p>
                         <p className="mt-0.5 text-[11px] text-violet-200/60">
-                          {planId === "trial" ? "One-time trial credits" : "Refreshes monthly"}
+                          {planId === "trial" ? "One-time Discover minutes" : "Refreshes monthly"}
                         </p>
                       </div>
 
@@ -1431,7 +1431,7 @@ export function Landing() {
                           </p>
                           {planId === "pro" ? (
                             <p className="mt-0.5 text-[10px] text-emerald-300/65">
-                              40% savings vs Core
+                              40% savings vs Grow
                             </p>
                           ) : null}
                         </div>

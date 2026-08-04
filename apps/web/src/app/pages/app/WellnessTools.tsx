@@ -453,13 +453,11 @@ export function WellnessTools() {
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Wellness Tools are a Core Feature</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Wellness tools are part of Grow</h2>
             <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-8">
-              Upgrade to Core or Pro to unlock the full library of wellness exercises and tools.
+              Upgrade to Grow or Thrive to unlock the full library of wellness exercises and tools.
             </p>
-            <Button onClick={() => navigate('/app/billing')}>
-              View Plans
-            </Button>
+            <Button onClick={() => navigate('/app/billing')}>Upgrade membership</Button>
           </div>
         </div>
     );

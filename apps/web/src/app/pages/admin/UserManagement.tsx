@@ -813,8 +813,8 @@ export function UserManagement() {
                       >
                         <option value="all">All Subscriptions</option>
                         <option value="trial">Trial</option>
-                        <option value="core">Core</option>
-                        <option value="pro">Pro</option>
+                        <option value="core">Grow</option>
+                        <option value="pro">Thrive</option>
                       </select>
                     </div>
 
@@ -891,8 +891,8 @@ export function UserManagement() {
                         aria-label="Bulk plan change"
                       >
                         <option value="trial">Trial</option>
-                        <option value="core">Core</option>
-                        <option value="pro">Pro</option>
+                        <option value="core">Grow</option>
+                        <option value="pro">Thrive</option>
                       </select>
                       <Button
                         type="button"
@@ -1140,13 +1140,9 @@ export function UserManagement() {
                                 Set Trial
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handlePlanChange(user.id, "core")}>
-                                <CreditCard className="w-4 h-4 mr-2" />
-                                Set Core
-                              </DropdownMenuItem>
+                                <CreditCard className="w-4 h-4 mr-2" />Set Grow</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handlePlanChange(user.id, "pro")}>
-                                <CreditCard className="w-4 h-4 mr-2" />
-                                Set Pro
-                              </DropdownMenuItem>
+                                <CreditCard className="w-4 h-4 mr-2" />Set Thrive</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {(user.status === 'suspended' || user.status === 'inactive') && (
                                 <DropdownMenuItem onClick={() => handleAction(user.id, 'activate')} className="text-green-600">
@@ -1348,9 +1344,9 @@ export function UserManagement() {
                         value={newUser.subscription}
                         onChange={(e) => setNewUser({ ...newUser, subscription: e.target.value as "trial" | "core" | "pro" })}
                       >
-                        <option value="trial">Trial Plan</option>
-                        <option value="core">Core Habit Plan</option>
-                        <option value="pro">Pro / Clarity</option>
+                        <option value="trial">Discover</option>
+                        <option value="core">Grow</option>
+                        <option value="pro">Thrive</option>
                       </select>
                     </div>
                   </div>

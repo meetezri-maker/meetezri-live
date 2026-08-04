@@ -2,6 +2,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { Clock, AlertTriangle, Zap, CreditCard, X, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  MEMBERSHIP_COPY,
+  membershipKeyForPlan,
+  nextMembership,
+  noMinutesRestriction,
+} from "../../utils/membershipCopy";
 
 interface LowMinutesWarningProps {
   isOpen: boolean;
@@ -10,13 +17,32 @@ interface LowMinutesWarningProps {
   onUpgrade?: () => void;
 }
 
-export function LowMinutesWarning({ 
-  isOpen, 
-  onClose, 
+export function LowMinutesWarning({
+  isOpen,
+  onClose,
   minutesRemaining,
-  onUpgrade 
+  onUpgrade
 }: LowMinutesWarningProps) {
   const [timeLeft, setTimeLeft] = useState(minutesRemaining);
+
+  // Membership is read here rather than passed in, so none of the six existing call sites has to
+  // change. Purely presentational — it selects wording, never access.
+  const { profile } = useAuth();
+  const membership = membershipKeyForPlan(
+    (profile as { subscription_plan?: string } | null)?.subscription_plan
+  );
+  const upgradeTo = nextMembership(membership);
+  const restriction = noMinutesRestriction(membership);
+
+  const lowMinutesLead =
+    membership === "discover"
+      ? "You're running low on your included Discover minutes."
+      : "You're running low on minutes. You can add more at any time.";
+
+  // Truthful benefits, taken from the shared copy for the membership above this one.
+  const upgradeBenefits = upgradeTo
+    ? MEMBERSHIP_COPY[upgradeTo].includes.slice(0, 3)
+    : ["Add minutes whenever you need them"];
 
   useEffect(() => {
     setTimeLeft(minutesRemaining);
@@ -119,10 +145,10 @@ export function LowMinutesWarning({
                 </motion.div>
 
                 <h2 className={`text-2xl font-bold ${config.text} mb-2 relative z-10`}>
-                  {urgency === "critical" ? "Almost Out of Minutes!" : "Low Minutes Warning"}
+                  {urgency === "critical" ? restriction.title : "Running low on minutes"}
                 </h2>
                 <p className={`text-sm ${config.subtext} relative z-10`}>
-                  You're running low on session time
+                  Keep an eye on your remaining time
                 </p>
               </div>
 
@@ -171,9 +197,7 @@ export function LowMinutesWarning({
                   className="mb-6"
                 >
                   <p className="text-sm text-gray-700 text-center mb-4">
-                    {urgency === "critical" 
-                      ? "Your session will end in less than a minute. Upgrade now to continue your conversation with Ezri." 
-                      : "You're running low on minutes. Consider upgrading to ensure uninterrupted sessions."}
+                    {urgency === "critical" ? restriction.body : lowMinutesLead}
                   </p>
 
                   {/* Quick Stats */}
@@ -202,21 +226,21 @@ export function LowMinutesWarning({
                 >
                   <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-blue-600" />
-                    Upgrade for More Time
+                    {upgradeTo ? `What ${MEMBERSHIP_COPY[upgradeTo].name} adds` : "Add more minutes"}
                   </h3>
+                  {/*
+                    Benefits are read from the shared membership copy rather than hardcoded.
+                    The previous list promised "Unlimited session time with Ezri" and "Priority
+                    support and features" — neither exists (Thrive explicitly excludes unlimited
+                    usage, and support priority is user-selected, not membership-derived).
+                  */}
                   <div className="space-y-2 text-sm text-blue-700">
-                    <div className="flex items-start gap-2">
-                      <span className="text-blue-500">✓</span>
-                      <p>Unlimited session time with Ezri</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-blue-500">✓</span>
-                      <p>Access to advanced wellness tools</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-blue-500">✓</span>
-                      <p>Priority support and features</p>
-                    </div>
+                    {upgradeBenefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-2">
+                        <span className="text-blue-500">✓</span>
+                        <p>{benefit}</p>
+                      </div>
+                    ))}
                   </div>
                 </motion.div>
 
@@ -227,15 +251,13 @@ export function LowMinutesWarning({
                   transition={{ delay: 0.4 }}
                   className="space-y-3"
                 >
-                  <Link to="/app/settings/account?tab=plan" onClick={onClose}>
+                  <Link to="/app/billing" onClick={onClose}>
                     <motion.button
                       whileHover={{ scale: 1.02, y: -2 }}
                       whileTap={{ scale: 0.98 }}
                       className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-gradient-to-r ${config.gradient} text-white font-bold shadow-lg hover:shadow-xl transition-all`}
                     >
-                      <TrendingUp className="w-5 h-5" />
-                      Upgrade Now
-                    </motion.button>
+                      <TrendingUp className="w-5 h-5" />{restriction.cta}</motion.button>
                   </Link>
 
                   <motion.button

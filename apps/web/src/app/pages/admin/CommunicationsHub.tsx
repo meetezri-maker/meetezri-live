@@ -593,8 +593,8 @@ function PushTab() {
                 <Label>Target</Label>
                 <select className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" value={target} onChange={e => setTarget(e.target.value as PushCampaign["target"])}>
                   <option value="all">All Users</option>
-                  <option value="core">Core Users</option>
-                  <option value="pro">Pro Users</option>
+                  <option value="core">Grow members</option>
+                  <option value="pro">Thrive members</option>
                   <option value="trial">Trial Users</option>
                   {segments.length > 0 && <option value="segment">Custom Segment</option>}
                 </select>

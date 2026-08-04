@@ -195,9 +195,62 @@ async function verifySchema(url: string): Promise<void> {
     );
     if (lockFn.rowCount === 0) throw new Error('pg_advisory_xact_lock is unavailable');
 
-    log('7/7 schema verified', `${VERIFY_TABLES.length} tables + advisory lock support`);
+    await verifyGeneratedColumns(client);
+
+    log('7/7 schema verified', `${VERIFY_TABLES.length} tables + generated columns + advisory locks`);
   } finally {
     await client.end();
+  }
+}
+
+/**
+ * Assert both corrected columns landed as STORED generated columns with the exact expressions
+ * production reports.
+ *
+ * The expected strings are PostgreSQL's own normalised forms (taken from `pg_get_expr` against
+ * production), not the migration's source text — so this proves the migrated database is
+ * EQUIVALENT to production, rather than merely that the file contains the right words.
+ */
+const EXPECTED_GENERATED_COLUMNS: Array<{ table: string; column: string; expression: string }> = [
+  { table: 'identities', column: 'email', expression: "lower((identity_data ->> 'email'::text))" },
+  {
+    table: 'users',
+    column: 'confirmed_at',
+    expression: 'LEAST(email_confirmed_at, phone_confirmed_at)',
+  },
+];
+
+async function verifyGeneratedColumns(client: Client): Promise<void> {
+  for (const expected of EXPECTED_GENERATED_COLUMNS) {
+    const result = await client.query<{ generated: string; expression: string | null }>(
+      `SELECT a.attgenerated::text AS generated,
+              pg_get_expr(d.adbin, d.adrelid) AS expression
+         FROM pg_attribute a
+         JOIN pg_class c     ON c.oid = a.attrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+        WHERE n.nspname = 'auth' AND c.relname = $1 AND a.attname = $2
+          AND a.attnum > 0 AND NOT a.attisdropped`,
+      [expected.table, expected.column]
+    );
+
+    const row = result.rows[0];
+    const where = `auth.${expected.table}.${expected.column}`;
+
+    if (!row) throw new Error(`${where} is missing from the migrated database`);
+    if (row.generated !== 's') {
+      throw new Error(
+        `${where} is not a STORED generated column (attgenerated='${row.generated}'). ` +
+          'The baseline migration has regressed to a plain column or a DEFAULT.'
+      );
+    }
+    if (row.expression !== expected.expression) {
+      throw new Error(
+        `${where} generation expression does not match production.\n` +
+          `  expected: ${expected.expression}\n` +
+          `  actual:   ${row.expression}`
+      );
+    }
   }
 }
 

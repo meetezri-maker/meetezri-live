@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { PaygNotAvailableError } from './services/payg.service';
 import {
   createSubscription,
   cancelSubscription,
@@ -75,8 +76,18 @@ export async function createCreditPurchaseHandler(
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
-  const result = await createCreditPurchaseSession(user.sub, user.email || '', request.body);
-  return reply.code(200).send(result);
+  try {
+    const result = await createCreditPurchaseSession(user.sub, user.email || '', request.body);
+    return reply.code(200).send(result);
+  } catch (error) {
+    // Sent explicitly rather than rethrown so the response keeps its machine-readable `code` and
+    // membership fields — the global handler renders only { statusCode, error, message }.
+    // Mirrors how `wellness.controller` returns ActiveChallengeLimitError.
+    if (error instanceof PaygNotAvailableError) {
+      return reply.code(error.statusCode).send(error.toResponse());
+    }
+    throw error;
+  }
 }
 
 export async function syncPaygHandler(

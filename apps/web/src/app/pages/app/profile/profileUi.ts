@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
 import {
+  MEMBERSHIP_COPY,
+  MEMBERSHIP_LABELS,
+  membershipKeyForPlan,
+} from "@/app/utils/membershipCopy";
+import {
   solaceCard,
   solacePageAtmosphere,
   solacePageFogMid,
@@ -570,13 +575,26 @@ export const profileDialogDescription = cn(
   `${lightAlt}:text-[var(--text-secondary)]`
 );
 
+/**
+ * Customer-facing membership label for an internal plan value.
+ *
+ * PHASE 4: this used to hold its own trial/core/pro -> "Trial plan"/"Core plan"/"Pro plan" table,
+ * which is why "Core plan" and "Pro plan" survived the Phase 3 terminology sweep — the sweep
+ * looked for phrasings like "Choose Core" and never matched this one. It now delegates to the
+ * shared copy module, so there is a single mapping in the frontend.
+ *
+ * Signature is unchanged so `AccountSettings` and `ProfileSanctuaryLayout` need no edits.
+ */
 export function formatSubscriptionPlanLabel(plan: string | undefined | null): string {
   const raw = String(plan || "").trim().toLowerCase();
-  if (!raw) return "Member plan";
-  if (raw === "trial") return "Trial plan";
-  if (raw === "core") return "Core plan";
-  if (raw === "pro") return "Pro plan";
-  if (raw === "basic") return "Basic plan";
-  if (raw.includes("premium")) return "Premium plan";
+  if (!raw) return MEMBERSHIP_LABELS.membership;
+
+  // Known internal plan values map through the shared copy.
+  if (raw === "trial" || raw === "core" || raw === "pro") {
+    return MEMBERSHIP_COPY[membershipKeyForPlan(raw)].fullName;
+  }
+
+  // Legacy/unknown values are shown as-is rather than guessed at, so a stray value stays visible
+  // instead of silently masquerading as a real membership.
   return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");
 }

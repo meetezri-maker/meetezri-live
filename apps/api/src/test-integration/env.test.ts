@@ -196,7 +196,21 @@ describe('successful load', () => {
 
     applyIntegrationDatabaseEnv(loadIntegrationEnv());
 
-    expect(process.env.REDIS_URL).toBeUndefined();
+    // `sharedCache` treats any falsy value as "no cache configured" and never builds a client.
+    expect(process.env.REDIS_URL).toBeFalsy();
+  });
+
+  it('EMPTIES rather than deletes REDIS_URL, so a later dotenv.config() cannot restore it', () => {
+    process.env.REDIS_URL = 'redis://someone-elses-redis:6379';
+
+    applyIntegrationDatabaseEnv(loadIntegrationEnv());
+
+    // This distinction is load-bearing, not cosmetic. `config/supabase.ts` calls bare
+    // `dotenv.config()` at import time, which loads apps/api/.env — and dotenv populates keys
+    // that are ABSENT while leaving existing keys alone. Deleting the variable therefore invited
+    // the real Redis URL straight back mid-run, leaving a live socket that stopped Jest exiting.
+    expect(Object.prototype.hasOwnProperty.call(process.env, 'REDIS_URL')).toBe(true);
+    expect(process.env.REDIS_URL).toBe('');
   });
 });
 

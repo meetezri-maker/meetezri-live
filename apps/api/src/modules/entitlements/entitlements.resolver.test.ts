@@ -164,10 +164,14 @@ describe('resolveEntitlements — DISCOVER', () => {
     expect(result.status).toBe('ACTIVE');
   });
 
-  it('grants AI and capture features but not paid-tier analysis', () => {
+  it('grants AI and check-ins but not the Grow feature set', () => {
     expect(result.canUseAI).toBe(true);
-    expect(result.canCreateJournal).toBe(true);
-    expect(result.canUseMoodTracking).toBe(true);
+    // APPROVED Phase 7 (Option A): journalling, mood history, the wellness library and talking
+    // history are Grow/Thrive. Discover keeps AI, daily check-ins and community.
+    expect(result.canCreateJournal).toBe(false);
+    expect(result.canUseMoodTracking).toBe(false);
+    expect(result.canUseWellnessTools).toBe(false);
+    expect(result.canViewSessionHistory).toBe(false);
     expect(result.canUseSleepTracking).toBe(true);
     expect(result.canUseCommunity).toBe(true);
     expect(result.canUseBrainHealth).toBe(false);
@@ -191,8 +195,14 @@ describe('resolveEntitlements — DISCOVER', () => {
     const byCapability = Object.fromEntries(
       result.upgradeReasons.map((r) => [r.capability, r.requiredMembership])
     );
+    // The four Phase 7 promotions become upsells for Discover, computed from the matrix rather
+    // than hardcoded — Grow is the cheapest membership granting each of them.
     expect(byCapability).toEqual({
       canPurchaseMinutes: 'GROW',
+      canCreateJournal: 'GROW',
+      canUseMoodTracking: 'GROW',
+      canUseWellnessTools: 'GROW',
+      canViewSessionHistory: 'GROW',
       canUseBrainHealth: 'GROW',
       canViewInsights: 'GROW',
       canExportReports: 'THRIVE',
@@ -280,6 +290,8 @@ describe('resolveEntitlements — expired Discover', () => {
     expect(result.canUseAI).toBe(false);
     expect(result.canCreateJournal).toBe(false);
     expect(result.canUseMoodTracking).toBe(false);
+    expect(result.canUseWellnessTools).toBe(false);
+    expect(result.canViewSessionHistory).toBe(false);
     expect(result.canUseSleepTracking).toBe(false);
     expect(result.canPurchaseMinutes).toBe(false);
     expect(result.challengeAccessLevel).toBe('NONE');
@@ -365,7 +377,9 @@ describe('resolveEntitlements — missing and unknown subscriptions', () => {
     expect(result.status).toBe('NONE');
     // NONE must not degrade: this is the ordinary state of a fresh member.
     expect(result.canUseAI).toBe(true);
-    expect(result.canCreateJournal).toBe(true);
+    expect(result.canUseCommunity).toBe(true);
+    // Not a degradation — this is simply the Discover baseline under Option A.
+    expect(result.canCreateJournal).toBe(false);
     expect(codes(result)).not.toContain('MEMBERSHIP_EXPIRED');
   });
 
@@ -599,8 +613,6 @@ describe('policy status ledger', () => {
 
   it('blocks enforcement of every inferred dimension', () => {
     for (const dimension of [
-      'canCreateJournal',
-      'canUseMoodTracking',
       'canUseSleepTracking',
       'canUseBrainHealth',
       'canUseCommunity',

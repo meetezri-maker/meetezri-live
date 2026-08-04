@@ -1,4 +1,11 @@
-// Subscription Plan Types and Configuration
+// Membership configuration — pricing, allowances, and the internal plan identifiers.
+//
+// CUSTOMER-FACING WORDING LIVES IN `membershipCopy.ts`, not here. This file keeps the money and
+// the identifiers; that file keeps the language. `name`/`displayName` below are retained only so
+// existing callers keep compiling, and they now carry the customer-facing membership names.
+//
+// `PlanTier` values (`trial`/`core`/`pro`) are the DATABASE and STRIPE contract. They are never
+// renamed and never rendered directly — map through `membershipKeyForPlan()`.
 
 export type PlanTier = 'trial' | 'core' | 'pro';
 
@@ -22,8 +29,8 @@ export interface SubscriptionPlan {
 export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
   trial: {
     id: 'trial',
-    name: 'Trial',
-    displayName: 'Trial',
+    name: 'Discover',
+    displayName: 'Discover',
     price: 0,
     credits: 30, // 30 minutes trial
     payAsYouGoRate: null, // No PAYG on trial
@@ -31,74 +38,74 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     hardCap: true,
     color: 'gray',
     gradient: 'from-gray-500 to-gray-600',
-    allowanceDescription: '30 minutes total hard cap',
+    allowanceDescription: '30 Talk It Out minutes, included',
+    // Verified against shipped behaviour. Removed: "Landing + How Solace Works" and
+    // "Signup / Login / Verification", which described the website rather than a membership.
     features: [
-      'Landing + How Solace Works',
-      'Signup / Login / Verification',
-      'FaceTime Basic',
-      'Talking Start/End Protocol',
-      'Minutes Deduction Tracking',
-      'Emergency Detection & De-escalation',
-      'Emergency Resources Surfaced'
+      '30 Talk It Out minutes',
+      'Daily mood check-ins',
+      'Community access',
+      'One active challenge',
+      'Safety detection and crisis resources',
     ],
+    // Accurate as shipped: Journal, Mood History, Wellness Tools, Progress and Session History
+    // are gated to paid memberships on the frontend today.
     notIncluded: [
-      'Mood history or trends',
-      'Journaling',
-      'Wellness tools',
-      'Usage history',
-      'Pay-As-You-Go',
-      'Plan management',
-      'Analytics / exports'
+      'Monthly minutes',
+      'Additional minute top-ups',
+      'Journalling',
+      'Mood history and trends',
+      'Wellness tool library',
+      'Progress and session history',
     ]
   },
   core: {
     id: 'core',
-    name: 'Core',
-    displayName: 'Core (Habit Plan)',
+    name: 'Grow',
+    displayName: 'Grow',
     price: 25,
     credits: 200, // 200 minutes per month
     payAsYouGoRate: 0.20, // $5 per 25 mins = $0.20/min
     color: 'blue',
     gradient: 'from-blue-500 to-blue-600',
-    allowanceDescription: '200 minutes reset monthly',
+    allowanceDescription: '200 Talk It Out minutes each month',
     features: [
-      'Full FaceTime with Solace',
-      'Daily mood check-in & history',
-      '7-day & 30-day visual trends',
-      'Unlimited journals & Rich editor',
-      'Curated wellness tools',
-      'Avatar customization',
-      'Usage dashboard',
-      'Real-time emergency detection'
+      '200 Talk It Out minutes each month',
+      'Top up minutes anytime',
+      'Unlimited journalling, with PDF and JSON export',
+      'Mood history and trends',
+      'Wellness tool library',
+      'Progress and session history',
+      'Up to 3 active challenges',
+      'Avatar customisation',
     ],
+    // "Journal export" removed — export ships to Grow as well (see JournalExportModal).
+    // "Priority system handling" and "Advanced usage analytics" removed — neither exists.
     notIncluded: [
-      '90-day mood trends',
-      'Journal export',
-      'Advanced usage analytics',
-      'Priority system handling'
+      'Unlimited active challenges',
     ]
   },
   pro: {
     id: 'pro',
-    name: 'Pro',
-    displayName: 'Pro / Clarity',
+    name: 'Thrive',
+    displayName: 'Thrive',
     price: 49,
     credits: 400, // 400 minutes per month
     payAsYouGoRate: 0.20, // $5 per 25 mins = $0.20/min
     popular: true,
     color: 'purple',
     gradient: 'from-purple-500 to-pink-500',
-    allowanceDescription: '400 minutes reset monthly',
+    allowanceDescription: '400 Talk It Out minutes each month',
+    // "Priority system handling" and "Export-ready journaling" removed: the first does not
+    // exist, and the second is not exclusive to this membership.
     features: [
-      'Everything in Core',
+      '400 Talk It Out minutes each month',
+      'Top up minutes anytime',
+      'Everything in Grow',
+      'Unlimited active challenges',
       'Longer uninterrupted sessions',
-      'Priority system handling',
-      '90-day mood trends',
-      'Export-ready journaling',
-      'Full wellness tool library',
-      'Detailed session logs',
-      'Usage transparency dashboard'
     ],
+    // Retained deliberately — these are safety boundaries, not feature gaps.
     notIncluded: [
       'Unlimited usage',
       'Human intervention',

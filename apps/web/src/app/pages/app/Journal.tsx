@@ -704,15 +704,16 @@ export function Journal() {
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/15 to-fuchsia-500/10">
             <Lock className="h-9 w-9 text-violet-300" />
           </div>
-          <h2 className="mb-3 text-2xl font-semibold tracking-tight text-slate-100">Journaling is a Core Feature</h2>
+          <h2 className="mb-3 text-2xl font-semibold tracking-tight text-slate-100">Journalling is part of Grow</h2>
           <p className="mb-8 text-sm leading-relaxed text-slate-400">
-            Upgrade to Core or Pro to unlock unlimited journaling, mood tracking, and more.
+            Upgrade to Grow or Thrive for unlimited journalling, with PDF and JSON export.
+            Everything you have already saved stays exactly where it is.
           </p>
           <Button
             onClick={() => navigate('/app/billing')}
             className="min-h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 text-white shadow-[0_0_24px_rgba(139,92,246,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
           >
-            View plans
+            Upgrade membership
           </Button>
         </div>
       </div>

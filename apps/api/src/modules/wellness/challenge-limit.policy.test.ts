@@ -130,12 +130,11 @@ describe('policy ledger', () => {
     expect(() => assertEnforceable('expiredMembershipChallengeLimit')).not.toThrow();
   });
 
-  it('keeps the broader expired baseline PROVISIONAL', () => {
-    // Only AI-session and PAYG expiry restrictions are approved.
+  it('keeps the still-undecided dimensions PROVISIONAL', () => {
     expect(getPolicyStatus('expiredMembership')).toBe('ENFORCED');
+    // Phase 7 promoted journal / mood history / wellness tools / talking history under Option A.
+    // Everything below remains undecided and must stay ungateable.
     for (const provisional of [
-      'canCreateJournal',
-      'canUseMoodTracking',
       'canUseSleepTracking',
       'canUseBrainHealth',
       'canUseCommunity',
@@ -147,6 +146,18 @@ describe('policy ledger', () => {
     ]) {
       expect(getPolicyStatus(provisional)).toBe('PROVISIONAL');
       expect(() => assertEnforceable(provisional)).toThrow(/PROVISIONAL/);
+    }
+  });
+
+  it('records the Phase 7 Option A promotions as APPROVED', () => {
+    for (const approved of [
+      'canCreateJournal',
+      'canUseMoodTracking',
+      'canUseWellnessTools',
+      'canViewSessionHistory',
+    ]) {
+      expect(getPolicyStatus(approved)).toBe('APPROVED');
+      expect(() => assertEnforceable(approved)).not.toThrow();
     }
   });
 

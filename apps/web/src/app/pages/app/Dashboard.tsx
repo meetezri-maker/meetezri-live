@@ -19,6 +19,7 @@ import {
 import { queryKeys } from "@/lib/queries";
 import { resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
+import { MEMBERSHIP_COPY, membershipKeyForPlan } from "@/app/utils/membershipCopy";
 import {
   SolaceDashboardView,
   type SolaceJourneyCard,
@@ -228,7 +229,10 @@ export function Dashboard() {
   const creditsRemaining =
     profile?.credits_remaining != null ? profile.credits_remaining : 0;
   const creditsTotal = profile?.credits_total != null ? profile.credits_total : 200;
-  const userPlan = profile?.subscription_plan || "Basic Plan";
+  // Previously rendered the RAW internal value ("trial"/"core"/"pro") straight into the dashboard,
+  // with a "Basic Plan" fallback naming a membership that does not exist. Mapped through the
+  // shared copy so the dashboard shows Discover / Grow / Thrive like everywhere else.
+  const userPlan = MEMBERSHIP_COPY[membershipKeyForPlan(profile?.subscription_plan)].name;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

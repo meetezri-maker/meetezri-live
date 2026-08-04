@@ -125,9 +125,9 @@ export function MoodHistory() {
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-violet-500/20">
               <Lock className="h-8 w-8 text-violet-400" />
             </div>
-            <h2 className="mb-3 text-2xl font-bold text-zinc-50">Mood History is a Core Feature</h2>
-            <p className="mx-auto mb-8 max-w-md text-zinc-400">Upgrade to Core or Pro to unlock detailed mood history, trends, and analytics.</p>
-            <Button onClick={() => navigate("/app/billing")} className="rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-3 text-white">View Plans</Button>
+            <h2 className="mb-3 text-2xl font-bold text-zinc-50">Mood history is part of Grow</h2>
+            <p className="mx-auto mb-8 max-w-md text-zinc-400">Upgrade to Grow or Thrive for detailed mood history and trends. Your check-ins are already being saved.</p>
+            <Button onClick={() => navigate("/app/billing")} className="rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-3 text-white">Upgrade membership</Button>
           </SolacePanel>
         </div>
       </div>

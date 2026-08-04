@@ -60,7 +60,7 @@ export function OnboardingSubscription() {
         // ignore storage errors
       }
 
-      toast.success("Plan selected. Continuing onboarding...");
+      toast.success("Membership selected. Continuing onboarding...");
       navigate("/onboarding/wellness-baseline");
     } catch (error) {
       console.error("Subscription error:", error);
@@ -157,8 +157,8 @@ export function OnboardingSubscription() {
     <OnboardingLayout
       currentStep={2}
       totalSteps={8}
-      title="Choose Your Plan"
-      subtitle="Select the plan that best fits your wellness journey"
+      title="Choose Your Membership"
+      subtitle="Select the membership that best fits your wellness journey"
       showBack={true}
       onBack={() => navigate("/onboarding/profile-setup")}
     >
@@ -180,14 +180,14 @@ export function OnboardingSubscription() {
                       
                       <div className="space-y-2 rounded-2xl border border-white/[0.08] bg-black/28 p-4">
                         <div className="mb-2 flex items-center justify-between">
-                          <p className="text-sm font-medium text-zinc-100">Want to switch plans?</p>
+                          <p className="text-sm font-medium text-zinc-100">Want to switch memberships?</p>
                         </div>
                         <Select
                           value={selectedPlan}
                           onValueChange={(val) => form.setValue("selectedPlan", val as PlanTier)}
                         >
                           <SelectTrigger className="w-full border-white/12 bg-white/[0.045] text-zinc-100">
-                            <SelectValue placeholder="Select a plan" />
+                            <SelectValue placeholder="Select a membership" />
                           </SelectTrigger>
                           <SelectContent>
                             {plans.map((tier) => (

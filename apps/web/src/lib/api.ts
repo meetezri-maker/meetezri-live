@@ -85,6 +85,35 @@ type HandleResponseOptions = {
   skipSignOutOn401?: boolean;
 };
 
+/**
+ * An API error that keeps the structured body the server sent.
+ *
+ * The API returns rich, machine-readable failures — the membership entitlement errors carry
+ * `code`, `membership`, `maxActiveChallenges`, `activeChallengeCount` and `upgradeMembership` —
+ * but `handleResponse` used to collapse all of that into `new Error(message)`, so the UI could
+ * only ever show a generic string.
+ *
+ * Extends `Error` deliberately: every existing `e instanceof Error ? e.message : ...` call site
+ * keeps working unchanged, and callers that want the detail can narrow with `isApiError`.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly body: Record<string, unknown>;
+
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+    this.code = typeof body.code === 'string' ? body.code : undefined;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
 async function handleResponse(
   res: Response,
   defaultErrorMessage: string,
@@ -108,7 +137,7 @@ async function handleResponse(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
-    throw new Error(formatApiErrorBody(errorData, defaultErrorMessage));
+    throw new ApiError(formatApiErrorBody(errorData, defaultErrorMessage), res.status, errorData);
   }
 
   return res.json();

@@ -574,17 +574,15 @@ export function Progress() {
               <Lock className="w-8 h-8 text-purple-400" />
             </div>
             <h2 className="progress-gate-title text-2xl font-bold text-white mb-3">
-              Progress Tracking is a Core Feature
+              Progress tracking is part of Grow
             </h2>
             <p className="progress-gate-lead text-slate-400 mb-8">
-              Upgrade to Core or Pro to unlock your wellness journey insights, analytics, and exports.
+              Upgrade to Grow or Thrive to see your wellness journey over time. Everything you have done so far is already saved.
             </p>
             <Button
               onClick={() => navigate("/app/billing")}
               className="progress-btn-primary bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full px-8"
-            >
-              View Plans
-            </Button>
+            >Upgrade membership</Button>
           </div>
         </motion.div>
       </div>

@@ -232,11 +232,11 @@ function formatSegmentRuleLabel(c: SegmentRuleRow): string {
   }
   if (c.type === "subscription" && c.operator === "equals") {
     if (c.value === "none") return "No active or trialing subscription";
-    const m: Record<string, string> = { trial: "Trial", core: "Core", pro: "Pro" };
+    const m: Record<string, string> = { trial: "Discover", core: "Grow", pro: "Thrive" };
     return `Plan: ${m[c.value] ?? c.value}`;
   }
   if (c.type === "subscription" && c.operator === "in") {
-    const m: Record<string, string> = { trial: "Trial", core: "Core", pro: "Pro" };
+    const m: Record<string, string> = { trial: "Discover", core: "Grow", pro: "Thrive" };
     return `Plan: ${c.value.split(",").map((x) => m[x.trim()] ?? x.trim()).join(", ")}`;
   }
   if (c.type === "signup_type" && c.operator === "equals") {
@@ -662,7 +662,7 @@ export function UserSegmentation() {
   const validateFilters = (filters: CreateFilters): string | null => {
     if (filters.planMode === "specific") {
       const anyPlan = filters.plans.trial || filters.plans.core || filters.plans.pro;
-      if (!anyPlan) return "Select at least one plan (Trial, Core, or Pro).";
+      if (!anyPlan) return "Select at least one membership (Discover, Grow, or Thrive).";
     }
     if (filters.agePreset === "custom") {
       const lo = parseInt(filters.ageCustomMin, 10);
@@ -854,7 +854,7 @@ export function UserSegmentation() {
               { icon: Users, gradient: "from-blue-500 to-indigo-600", label: "Total profiles", value: stats.totalEndUsers.toLocaleString(), sub: 'Matches main admin "Total Users"' },
               { icon: Target, gradient: "from-purple-500 to-pink-600", label: "Segments", value: String(stats.totalSegments), sub: null },
               { icon: Activity, gradient: "from-green-500 to-emerald-600", label: "Avg Engagement", value: `${stats.avgEngagement}%`, sub: null },
-              { icon: DollarSign, gradient: "from-blue-500 to-indigo-600", label: "Premium users", value: stats.premiumUsers.toLocaleString(), sub: "Core / Pro, active or trialing", highlight: true },
+              { icon: DollarSign, gradient: "from-blue-500 to-indigo-600", label: "Premium users", value: stats.premiumUsers.toLocaleString(), sub: "Grow / Thrive, active or trialing", highlight: true },
             ].map(({ icon: Icon, gradient, label, value, sub, highlight }, i) => (
               <motion.div
                 key={label}
@@ -1279,7 +1279,7 @@ export function UserSegmentation() {
                           <td className="px-4 py-2.5 text-gray-700">{u.age ?? "—"}</td>
                           <td className="px-4 py-2.5 text-gray-700">
                             {u.plan_type
-                              ? { pro: "Pro", core: "Core", trial: "Trial" }[u.plan_type] ?? u.plan_type
+                              ? { pro: "Thrive", core: "Grow", trial: "Discover" }[u.plan_type] ?? u.plan_type
                               : "—"}
                           </td>
                         </tr>

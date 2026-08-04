@@ -490,8 +490,8 @@ export function PayAsYouGoManager() {
               >
                 <option value="all">All Plans</option>
                 <option value="trial">Trial</option>
-                <option value="core">Core Habit Plan</option>
-                <option value="pro">Pro / Clarity</option>
+                <option value="core">Grow</option>
+                <option value="pro">Thrive</option>
               </select>
             </div>
           </div>

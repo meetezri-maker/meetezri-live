@@ -110,6 +110,12 @@ export function loadIntegrationEnv(): IntegrationEnv {
 export function applyIntegrationDatabaseEnv(env: IntegrationEnv): void {
   process.env.DATABASE_URL = env.databaseUrl;
   process.env.DIRECT_URL = env.directUrl;
-  // Integration tests must never reach a cache server; `sharedCache` no-ops without this.
-  delete process.env.REDIS_URL;
+
+  // Integration tests must never reach a cache server. Set to EMPTY rather than deleted:
+  // `config/supabase.ts` (and others) call bare `dotenv.config()` at import time, which loads
+  // `apps/api/.env` — and dotenv populates any key that is ABSENT while leaving an existing key
+  // alone, even an empty one. Deleting REDIS_URL therefore invited the real value straight back,
+  // which left a live ioredis socket holding the event loop open after every integration run.
+  // `sharedCache` treats the empty string as "no cache configured" and never constructs a client.
+  process.env.REDIS_URL = '';
 }

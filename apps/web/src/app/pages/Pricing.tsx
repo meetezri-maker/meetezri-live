@@ -105,7 +105,7 @@ const UNDERSTANDING_PLANS = [
   {
     question: "What happens after the free trial?",
     answer:
-      "Once your free minutes are used, you can decide whether you'd like to continue with a Core or Pro subscription. There is no obligation to subscribe.",
+      "Once your free minutes are used, you can decide whether you'd like to continue with a paid membership. There is no obligation to subscribe.",
   },
   {
     question: "Can I use Solace without subscribing?",
@@ -113,9 +113,9 @@ const UNDERSTANDING_PLANS = [
       "Yes. Trying Solace does not require a subscription or a credit card. You can experience the platform first and decide later.",
   },
   {
-    question: "What's the difference between Core and Pro?",
+    question: "What's the difference between Grow and Thrive?",
     answer:
-      "Core is designed for regular use and ongoing access. Pro is designed for people who want deeper continuity and more frequent conversations throughout the month.",
+      "Grow is designed for regular use and ongoing access. Thrive is designed for people who want deeper continuity and more frequent conversations throughout the month.",
   },
 ] as const;
 
@@ -158,16 +158,16 @@ const FAQ_ITEMS = [
   },
   {
     question: "Can I upgrade later?",
-    answer: "Yes. You can move between plans as your needs change.",
+    answer: "Yes. You can change membership whenever your needs change.",
   },
   {
     question: "What happens if I run out of minutes?",
-    answer: "Core and Pro users can purchase additional minutes through pay-as-you-go top-ups.",
+    answer: "Grow and Thrive members can purchase additional minutes through pay-as-you-go top-ups.",
   },
   {
-    question: "Which plan should I choose?",
+    question: "Which membership should I choose?",
     answer:
-      "Most people begin with Core. People who expect to use Solace more frequently often choose Pro.",
+      "Most people begin with Grow. People who expect to use Solace more frequently often choose Thrive.",
   },
 ] as const;
 
@@ -345,7 +345,7 @@ function PaidPlanCard({
           size="lg"
           isLoading={loadingPlan === planId}
         >
-          {planId === "core" ? "Choose Core" : "Choose Pro"}
+          {planId === "core" ? "Choose Grow" : "Choose Thrive"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </LandingGlowCard>
@@ -678,8 +678,8 @@ export function Pricing() {
               className="text-center text-sm leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-base"
             >
               When people discover the value of having somewhere to talk things through, many
-              choose to continue so they can return whenever they need it. That&apos;s where Core
-              and Pro come in.
+              choose to continue so they can return whenever they need it. That&apos;s where Grow
+              and Thrive come in.
             </motion.p>
           </div>
         </section>
@@ -721,12 +721,12 @@ export function Pricing() {
           </div>
         </section>
 
-        {/* Core & Pro Plans */}
+        {/* Grow & Thrive memberships */}
         <section id="plans" className="landing-section py-12 md:py-16">
           <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2 md:gap-8">
             <PaidPlanCard
               planId="core"
-              description="For people who want a place they can return to whenever something is weighing on their mind. Whether it's a difficult week, a challenging decision, or everyday mental noise, Core provides ongoing access to the conversations that help people process what they're carrying."
+              description="For people who want a place they can return to whenever something is weighing on their mind. Whether it's a difficult week, a challenging decision, or everyday mental noise, Grow provides ongoing access to the conversations that help people process what they're carrying."
               bestFor="People who want regular access to Solace as part of their personal reflection routine."
               includes={CORE_INCLUDES}
               includesLabel="Includes"
@@ -739,7 +739,7 @@ export function Pricing() {
               description="For people who want Solace to be a consistent part of their ongoing reflection and wellness routine. Designed for users who value deeper continuity, more frequent conversations, and expanded access to the full Solace experience."
               bestFor="People who expect to use Solace regularly and want greater flexibility and continuity throughout the month."
               includes={PRO_INCLUDES}
-              includesLabel="Includes Everything In Core Plus"
+              includesLabel="Includes Everything In Grow Plus"
               loadingPlan={loadingPlan}
               onSelect={handlePaidPlan}
               index={1}
@@ -749,7 +749,7 @@ export function Pricing() {
 
         {/* Understanding Solace Plans */}
         <section className="landing-section py-12 md:py-16">
-          <SectionHeading title="Understanding Solace Plans" />
+          <SectionHeading title="Understanding Solace Memberships" />
 
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
             {UNDERSTANDING_PLANS.map((item, index) => (
@@ -760,7 +760,7 @@ export function Pricing() {
 
         {/* Compare Plans */}
         <section className="landing-section py-12 md:py-16">
-          <SectionHeading title="Compare Plans" />
+          <SectionHeading title="Compare Memberships" />
 
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -774,8 +774,8 @@ export function Pricing() {
                   <tr className="border-b border-white/10">
                     <th className="pb-3 pr-4 font-semibold text-white">Feature</th>
                     <th className="pb-3 px-3 text-center font-semibold text-white">Trial</th>
-                    <th className="pb-3 px-3 text-center font-semibold text-white">Core</th>
-                    <th className="pb-3 pl-3 text-center font-semibold text-white">Pro</th>
+                    <th className="pb-3 px-3 text-center font-semibold text-white">Grow</th>
+                    <th className="pb-3 pl-3 text-center font-semibold text-white">Thrive</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -407,8 +407,8 @@ export function UserDetailsEnhanced() {
                     aria-label="Change subscription plan"
                   >
                     <option value="trial">Trial</option>
-                    <option value="core">Core</option>
-                    <option value="pro">Pro</option>
+                    <option value="core">Grow</option>
+                    <option value="pro">Thrive</option>
                   </select>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
                     userData.riskLevel === "low" ? "bg-green-100 text-green-700" :

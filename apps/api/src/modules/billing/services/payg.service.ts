@@ -5,7 +5,53 @@ import { CreateCreditPurchaseInput } from '../billing.schema';
 import { CLIENT_URL } from '../billing.config';
 import { getSubscription } from './subscription.service';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
-import { getMembershipEntitlements } from '../../entitlements';
+import { getMembershipEntitlements, type MembershipTier } from '../../entitlements';
+
+/** Exact wording retained from the original throw — clients and tests match on it. */
+export const PAYG_NOT_AVAILABLE_MESSAGE =
+  'Pay-As-You-Go is only available for Core and Pro plans.';
+
+export const PAYG_NOT_AVAILABLE_CODE = 'PAYG_REQUIRES_PAID_MEMBERSHIP';
+
+/**
+ * A membership is not permitted to buy additional minutes.
+ *
+ * PHASE 5. This used to be a bare `throw new Error(...)`. Without a `statusCode`, the global
+ * error handler classified it as a 500 and — because it treats 5xx as server faults — REPLACED
+ * the message with "Something went wrong on Server side." The real reason never reached the
+ * client, so the UI could only tell members to "wait a moment and try again", which would never
+ * work: the block is a membership rule, not a transient failure.
+ *
+ * Modelled on `ActiveChallengeLimitError` so both membership refusals answer the same shape.
+ * The message text is unchanged, so existing callers and the PAYG parity suite are unaffected;
+ * only the status (500 -> 403) and the added `code`/`membership` fields are new.
+ */
+export class PaygNotAvailableError extends Error {
+  readonly statusCode = 403;
+  readonly code = PAYG_NOT_AVAILABLE_CODE;
+  readonly membership: MembershipTier;
+  readonly upgradeMembership: MembershipTier | null;
+
+  constructor(membership: MembershipTier) {
+    super(PAYG_NOT_AVAILABLE_MESSAGE);
+    this.name = 'PaygNotAvailableError';
+    this.membership = membership;
+    // Only DISCOVER lacks PAYG, so the upgrade target is the next membership up.
+    this.upgradeMembership = membership === 'DISCOVER' ? 'GROW' : null;
+  }
+
+  /** Response body for this refusal. Mirrors the challenge-limit contract. */
+  toResponse() {
+    return {
+      statusCode: this.statusCode,
+      error: 'Forbidden',
+      code: this.code,
+      message: this.message,
+      membership: this.membership,
+      ...(this.upgradeMembership ? { upgradeMembership: this.upgradeMembership } : {}),
+    };
+  }
+}
 
 export async function createCreditPurchaseSession(
   userId: string,
@@ -25,7 +71,7 @@ export async function createCreditPurchaseSession(
   const entitlements = await getMembershipEntitlements(userId);
 
   if (!entitlements.canPurchaseMinutes) {
-    throw new Error('Pay-As-You-Go is only available for Core and Pro plans.');
+    throw new PaygNotAvailableError(entitlements.membership);
   }
 
   // ---- Pricing: billing still decides HOW MUCH, and stays the only owner of money ----
@@ -41,7 +87,11 @@ export async function createCreditPurchaseSession(
     // Defensive only: an entitled member always maps to a plan carrying a rate. Reaching this
     // means the rate table and the tier matrix have drifted apart, so fail closed rather than
     // charge an improvised amount.
-    throw new Error('Pay-As-You-Go is only available for Core and Pro plans.');
+    //
+    // Deliberately a PLAIN Error, unlike the membership refusal above: this is a server-side
+    // configuration fault, not a decision about the member, and it should surface as a 500 so it
+    // is investigated rather than shown to someone as an upgrade prompt.
+    throw new Error(PAYG_NOT_AVAILABLE_MESSAGE);
   }
 
   const amountInCents = Math.round(data.credits * rate * 100);

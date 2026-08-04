@@ -76,12 +76,20 @@ describe('provisional capability rejection', () => {
     // Fails at route registration, not per request — an unapproved policy can never reach a member.
     expect(() => requireEntitlementRoute('canExportReports')).toThrow(/PROVISIONAL/);
     expect(() => requireEntitlementRoute('canViewInsights')).toThrow(/PROVISIONAL/);
-    expect(() => requireEntitlementRoute('canCreateJournal')).toThrow(/PROVISIONAL/);
+    expect(() => requireEntitlementRoute('canUseBrainHealth')).toThrow(/PROVISIONAL/);
   });
 
   it('builds a guard for an ENFORCED capability', () => {
     expect(() => requireEntitlementRoute('canUseAI')).not.toThrow();
     expect(() => requireEntitlementRoute('canPurchaseMinutes')).not.toThrow();
+  });
+
+  it('builds a guard for the Phase 7 APPROVED capabilities', () => {
+    // Option A promoted these four, which is what makes them gateable at all.
+    expect(() => requireEntitlementRoute('canCreateJournal')).not.toThrow();
+    expect(() => requireEntitlementRoute('canUseMoodTracking')).not.toThrow();
+    expect(() => requireEntitlementRoute('canUseWellnessTools')).not.toThrow();
+    expect(() => requireEntitlementRoute('canViewSessionHistory')).not.toThrow();
   });
 
   it('names the dimension and the remedy in the failure', () => {
@@ -353,14 +361,34 @@ describe('composition with authorize()', () => {
 // Not wired to production routes yet
 // ---------------------------------------------------------------------------
 
-describe('Phase 2A scope', () => {
-  it('is not applied to any production route', () => {
-    // Phase 2A ships the infrastructure only; wiring it is Phase 2B.
+describe('production wiring', () => {
+  /**
+   * Phase 2A shipped this guard deliberately unwired, and this test asserted that. Phase 7
+   * wired it for the first time, so the assertion is inverted rather than deleted: it now pins
+   * that the guard reaches production only on routes whose capability is APPROVED.
+   *
+   * That inversion is the point. A guard on a PROVISIONAL capability cannot be constructed at
+   * all (`assertEnforceable` throws), so this list can only ever contain approved policy.
+   */
+  it('is applied only to routes gating an APPROVED capability', () => {
     const { execSync } = require('child_process');
-    const hits = execSync(
+    const files = execSync(
       "grep -rl 'requireEntitlementRoute' src --include=*.routes.ts || true",
       { encoding: 'utf8' }
-    ).trim();
-    expect(hits).toBe('');
+    )
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+
+    // Journal is the one feature whose endpoints map cleanly onto a single gated capability.
+    expect(files).toEqual(['src/modules/journal/journal.routes.ts']);
+  });
+
+  it('gates every member journal route and no admin route', () => {
+    const source = require('fs').readFileSync('src/modules/journal/journal.routes.ts', 'utf8');
+
+    // Admin journal routes keep role authorization only — staff membership is irrelevant there.
+    expect(source.match(/preHandler: \[app\.authenticate, requireJournal\]/g)).toHaveLength(6);
+    expect(source.match(/app\.authorize\(\[/g)).toHaveLength(2);
   });
 });

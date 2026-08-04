@@ -371,7 +371,7 @@ export function PackageManager() {
               <h4 className="font-semibold text-blue-900 mb-2">Package Configuration Tips</h4>
               <ul className="text-sm text-blue-700 space-y-1">
                 <li>• Higher-tier plans should have better PAYG rates to incentivize upgrades</li>
-                <li>• Consider setting Pro plan PAYG rate 30-40% lower than Core</li>
+                <li>• Consider setting the Thrive PAYG rate 30-40% lower than Grow</li>
                 <li>• Trial users cannot purchase PAYG minutes - this encourages paid conversions</li>
                 <li>• Changes take effect immediately but don't affect existing subscriptions mid-cycle</li>
               </ul>

@@ -633,9 +633,9 @@ export function BillingSubscriptions() {
                       onChange={(e) => setFilterPlan(e.target.value)}
                     >
                       <option value="all">All Plans</option>
-                      <option value="trial">Trial Plan</option>
-                      <option value="core">Core Habit</option>
-                      <option value="pro">Pro Clarity</option>
+                      <option value="trial">Discover</option>
+                      <option value="core">Grow</option>
+                      <option value="pro">Thrive</option>
                     </select>
                     <select
                       className="px-3 py-2 border rounded-lg"
@@ -995,9 +995,9 @@ export function BillingSubscriptions() {
                   value={editPlan}
                   onChange={(e) => setEditPlan(e.target.value as "trial" | "core" | "pro")}
                 >
-                  <option value="trial">Trial Plan</option>
-                  <option value="core">Core Habit</option>
-                  <option value="pro">Pro Clarity</option>
+                  <option value="trial">Discover</option>
+                  <option value="core">Grow</option>
+                  <option value="pro">Thrive</option>
                 </select>
               </div>
 
