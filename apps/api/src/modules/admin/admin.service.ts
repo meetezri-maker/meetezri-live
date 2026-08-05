@@ -9,13 +9,14 @@ import { endSession } from '../sessions/sessions.service';
 import { emailService } from '../email/email.service';
 import { supabaseAdmin } from '../../config/supabase';
 import * as userService from '../users/user.service';
-import { listStripeInvoicesForAdmin } from '../billing/services/admin-stripe-list.service';
+import { listStripeInvoicesForAdmin, type AdminStripeInvoice } from '../billing/services/admin-stripe-list.service';
 import { isPaygInvoice } from '../billing/services/admin-billing-shared';
 import { ensureSingleActiveTrial } from '../billing/services/trial.service';
 import { invalidateUserSubscriptionCache } from '../billing/services/subscription.service';
 
 // Simple in-memory cache for dashboard stats (keyed by query options)
 const STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const emptyStripeInvoices: AdminStripeInvoice[] = [];
 const statsCache = new Map<string, { data: DashboardStats; timestamp: number }>();
 
 export type DashboardStatsQuery = {
@@ -407,7 +408,7 @@ export async function getDashboardStats(
     // 11. Stripe invoices — runs in parallel with DB queries, 5s timeout
     Promise.race([
       listStripeInvoicesForAdmin(),
-      new Promise<[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+      new Promise((resolve: (invoices: AdminStripeInvoice[]) => void) => setTimeout(() => resolve(emptyStripeInvoices), 5000)),
     ]),
   ]);
 

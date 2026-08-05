@@ -1,5 +1,6 @@
 import type Stripe from 'stripe';
 import { stripe } from '../../../config/stripe';
+export type AdminStripeInvoice = Stripe.Invoice;
 
 /** Short TTL: admin UIs need fresh numbers without duplicate Stripe round-trips. */
 const ADMIN_STRIPE_INVOICE_LIST_TTL_MS = 45 * 1000;
