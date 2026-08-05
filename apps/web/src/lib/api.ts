@@ -252,6 +252,38 @@ async function getJsonCached<T>(
 
 export type ApiRequestOptions = HandleResponseOptions;
 
+export interface ExpertReviewConversation {
+  id: string;
+  userid: string;
+  session_id: string | null;
+  user_query: string;
+  brain_output: string;
+  created_at: string | null;
+  expert_analysis: string | null;
+  expert_rephrased: string | null;
+  is_reviewed: boolean | null;
+}
+
+export interface ExpertReviewConversationListResponse {
+  items: ExpertReviewConversation[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface ExpertReviewConversationListParams {
+  page?: number;
+  limit?: number;
+  reviewed?: boolean;
+  from?: string;
+  to?: string;
+}
+
+export interface ExpertReviewSaveBody {
+  expert_analysis: string;
+  expert_rephrased: string;
+}
+
 export const api = {
   clearMeCache() {
     shortGetCache.delete('GET:/users/me');
@@ -2518,6 +2550,48 @@ export const api = {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}/transcript`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch session transcript');
+    },
+
+    async getExpertReviewConversations(
+      params?: ExpertReviewConversationListParams
+    ): Promise<ExpertReviewConversationListResponse> {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.page != null) search.set('page', String(params.page));
+      if (params?.limit != null) search.set('limit', String(params.limit));
+      if (params?.reviewed != null) search.set('reviewed', String(params.reviewed));
+      if (params?.from) search.set('from', params.from);
+      if (params?.to) search.set('to', params.to);
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/expert-reviews/conversations${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch expert review conversations');
+    },
+
+    async getExpertReviewConversation(id: string): Promise<ExpertReviewConversation> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/expert-reviews/conversations/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch expert review conversation');
+    },
+
+    async saveExpertReviewConversation(
+      id: string,
+      body: ExpertReviewSaveBody
+    ): Promise<ExpertReviewConversation> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/expert-reviews/conversations/${encodeURIComponent(id)}/review`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to save expert review');
     },
     async getErrorLogs(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();

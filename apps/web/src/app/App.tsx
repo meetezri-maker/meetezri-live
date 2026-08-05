@@ -129,6 +129,7 @@ const TeamRoleManagement        = lazy(() => import('@/app/pages/admin/TeamRoleM
 const CompanionManagement       = lazy(() => import('@/app/pages/admin/CompanionManagement').then(m => ({ default: m.CompanionManagement })));
 const AIAvatarManager           = lazy(() => import('@/app/pages/admin/AIAvatarManager').then(m => ({ default: m.AIAvatarManager })));
 const ConversationTranscripts   = lazy(() => import('@/app/pages/admin/ConversationTranscripts').then(m => ({ default: m.ConversationTranscripts })));
+const ExpertReviewConsole      = lazy(() => import('@/app/pages/admin/ExpertReviewConsole').then(m => ({ default: m.ExpertReviewConsole })));
 const CrisisDashboard           = lazy(() => import('@/app/pages/admin/CrisisDashboard').then(m => ({ default: m.CrisisDashboard })));
 const CrisisMonitoring          = lazy(() => import('@/app/pages/admin/CrisisMonitoring').then(m => ({ default: m.CrisisMonitoring })));
 const CrisisEventDetails        = lazy(() => import('@/app/pages/admin/CrisisEventDetails').then(m => ({ default: m.CrisisEventDetails })));
@@ -568,6 +569,14 @@ export default function App() {
             {/* AI Avatar System */}
             <Route path="/admin/ai-avatar-manager" element={<AIAvatarManager />} />
             <Route path="/admin/conversation-transcripts" element={<ConversationTranscripts />} />
+            <Route
+              path="/admin/expert-reviews"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ExpertReviewConsole />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Crisis Management */}
             <Route path="/admin/crisis-dashboard" element={<CrisisDashboard />} />
