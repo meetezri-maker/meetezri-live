@@ -36,6 +36,8 @@ import { geoRoutes } from './modules/geo/geo.routes';
 import { crisisHotlinesRoutes } from './modules/crisis-hotlines/crisis-hotlines.routes';
 import { foundingMembersRoutes } from './modules/founding-members/founding-members.routes';
 import { expertReviewRoutes } from './modules/expert-review/expert-review.routes';
+import { contentHubAdminRoutes } from './modules/content-hub/content-hub.routes';
+import { contentHubPublicRoutes } from './modules/content-hub/content-hub.public.routes';
 import { getClientIp } from './lib/client-ip';
 import jwkToPem from 'jwk-to-pem';
 import prisma from './lib/prisma';
@@ -300,6 +302,10 @@ app.register(geoRoutes, { prefix: '/api/geo' });
 app.register(crisisHotlinesRoutes, { prefix: '/api/crisis-hotlines' });
 app.register(foundingMembersRoutes, { prefix: '/api/founding-members' });
 app.register(expertReviewRoutes, { prefix: '/api/admin/expert-reviews' });
+// Content Hub — two registrations on purpose: the `/api/admin` prefix makes plugins/auth.ts
+// bypass its role cache, and the public plugin must carry no authenticate preHandler at all.
+app.register(contentHubAdminRoutes, { prefix: '/api/admin/content' });
+app.register(contentHubPublicRoutes, { prefix: '/api/content' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.

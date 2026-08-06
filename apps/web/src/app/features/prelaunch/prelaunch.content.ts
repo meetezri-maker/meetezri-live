@@ -12,13 +12,13 @@ export const PRIMARY_CTA_LABEL = "Become a Founding Member";
 /** The locked brand promise. Appears in Section 1 and repeats in Section 11. */
 export const BRAND_PROMISE = "Every conversation brings you closer to yourself.";
 
-export const PRELAUNCH_ROUTE = "/early-access";
+export const PRELAUNCH_ROUTE = "/";
 
 /**
  * There is no public contact route in this app; the public Terms page publishes
  * this address, so "Contact Us" resolves to it rather than a dead link.
  */
-export const CONTACT_HREF = "mailto:support@solace.com";
+export const CONTACT_HREF = "mailto:support@talktosolace2.ai";
 
 /** Anchors used by the navigation and by every CTA that scrolls rather than opens. */
 export const SECTION_IDS = {
@@ -47,8 +47,8 @@ export const SECTION_IDS = {
 export const NAV_ITEMS = [
   { label: "Home", targetId: SECTION_IDS.hero },
   { label: "How It Works", targetId: SECTION_IDS.talkItOut },
-  { label: "About", targetId: SECTION_IDS.founder },
   { label: "Membership", targetId: SECTION_IDS.foundingCircle },
+  { label: "About", targetId: SECTION_IDS.founder },
   { label: "FAQ", targetId: SECTION_IDS.faq },
 ] as const;
 
@@ -82,8 +82,8 @@ export const HERO = {
    * without altering the approved wording. `headlineLead + " " + headlineAccent`
    * must equal `headline`; a test asserts it.
    */
-  headlineLead: "Some Conversations",
-  headlineAccent: "Change Everything",
+  headlineLead: "Some conversations",
+  headlineAccent: "change everything.",
 
   /** SUPPORTING LINE. */
   supportingLine:
@@ -488,9 +488,14 @@ export const FOUNDING_FORM = {
   heading: "Reserve your place",
   emailLabel: "Email address",
   emailPlaceholder: "you@example.com",
-  firstNameLabel: "First name",
+  /**
+   * The field now collects a full name. The key, the wire field, and the
+   * `first_name` column are deliberately unchanged — this is a label change,
+   * not a schema migration.
+   */
+  firstNameLabel: "Full Name",
   firstNameOptional: "optional",
-  firstNamePlaceholder: "Alex",
+  firstNamePlaceholder: "Alex Morgan",
   submitLabel: PRIMARY_CTA_LABEL,
   submittingLabel: "Reserving your place…",
   consent:
@@ -571,9 +576,7 @@ export const TRUST = {
 
   /** Legal destinations, retained exactly as they were. */
   links: [
-    { label: "Privacy Policy", to: "/privacy" },
-    { label: "Terms of Service", to: "/terms" },
-    { label: "Safety Information", to: "/privacy#safety" },
+    
   ],
 } as const;
 
@@ -675,12 +678,11 @@ export const FAQ = {
     },
   ] satisfies FaqItem[],
 
-  closingStatement: "Still have a question?",
+  closingStatement: "",
   closingSupportingCopy: [
-    "We're always happy to help.",
-    "Reach out to us anytime and we'll do our best to point you in the right direction.",
+    
   ],
-  secondaryCta: "Contact Us",
+  secondaryCta: "",
 
   /* ---------------------------------------------------------------- */
   /* Folded-in final invitation                                        */

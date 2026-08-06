@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { FOUNDER, FOUNDER_VIDEO_TRANSCRIPT } from "./prelaunch.content";
+import { FOUNDER } from "./prelaunch.content";
 import {
   FOUNDER_VIDEO_CAPTIONS_SRC,
   FOUNDER_VIDEO_POSTER,
@@ -45,7 +45,17 @@ export function FounderVideoModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="solace-landing max-h-[90vh] max-w-3xl overflow-y-auto border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl"
+        /*
+         * Sizing note: the shared dialog primitive ships `sm:max-w-lg`, which is
+         * inside a media query and therefore beat the previous `max-w-3xl` on
+         * every screen at or above 640px — the modal actually rendered at 512px,
+         * not 768px. The `sm:` override below is what makes the desktop width
+         * take effect at all.
+         */
+        className={cn(
+          "solace-landing overflow-y-auto border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl",
+          "w-[90vw] max-w-[1200px] sm:max-w-[1200px] max-h-[90vh]",
+        )}
         /*
          * The shared dialog primitive does not reliably restore focus on close,
          * which strands keyboard users at the top of the document (WCAG 2.4.3).
@@ -65,7 +75,18 @@ export function FounderVideoModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+        {/*
+          The frame's width is additionally capped by the height left over after
+          the dialog chrome, so a 16:9 box can never grow taller than the modal.
+          Short and ultrawide viewports shrink the width instead of clipping the
+          video or forcing a scroll; the ratio is never distorted.
+        */}
+        <div
+          className={cn(
+            "mx-auto mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-black/40",
+            "max-w-[min(100%,calc((90vh-10rem)*16/9))]",
+          )}
+        >
           {/* Fixed ratio in both states keeps the modal from jumping. */}
           <div className="relative aspect-video w-full">
             {open && FOUNDER_VIDEO_SRC ? (
@@ -95,28 +116,10 @@ export function FounderVideoModal({
                   Founder video coming soon
                 </p>
                 <p className="max-w-sm text-xs leading-relaxed text-white/45">
-                  The full transcript is below while the recording is being finalised.
+                  The recording is being finalised. We&rsquo;ll share it here soon.
                 </p>
               </div>
             )}
-          </div>
-        </div>
-
-        <div className="mt-5">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/70">
-            Transcript
-          </h3>
-          <div className="mt-3 space-y-4">
-            {FOUNDER_VIDEO_TRANSCRIPT.map((block) => (
-              <div key={block.heading}>
-                <h4 className="text-sm font-semibold text-white/85">{block.heading}</h4>
-                <div className="mt-1.5 space-y-1 text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
-                  {block.lines.map((line) => (
-                    <p key={line}>{line}</p>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </DialogContent>

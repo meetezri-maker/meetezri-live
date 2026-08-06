@@ -149,6 +149,36 @@ function getEmailLogoUrls() {
   };
 }
 
+/**
+ * Founding Circle palette, mirroring the pre-launch landing page rather than the
+ * light `trial` theme the account-lifecycle emails use.
+ *
+ * Every value is a solid hex on purpose: Outlook renders through Word, which
+ * drops `rgba()` and gradients entirely. The "glass" look is therefore built
+ * from flat panel fills plus a one-pixel border, so it survives everywhere.
+ */
+const FOUNDING_CIRCLE_THEME = {
+  canvas: '#050816',
+  panel: '#0b1023',
+  panelBorder: '#1d2344',
+  card: '#111633',
+  cardBorder: '#2b3057',
+  heading: '#ffffff',
+  body: '#c9cce4',
+  muted: '#8b90b0',
+  accent: '#c084fc',
+  accentPanel: '#1a1136',
+  accentBorder: '#4c2a80',
+} as const;
+
+/**
+ * Sanctuary plate for the Founding Circle hero — the same twilight lake the
+ * landing page uses behind its Founding Circle section, so the email and the
+ * page a member just left read as one piece. Scenery only: no product UI, no
+ * avatar render, no stock photography.
+ */
+const FOUNDING_CIRCLE_HERO_IMAGE = '/solace/onboarding-complete-twilight-lake.jpg';
+
 export class EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -715,60 +745,302 @@ export class EmailService {
   }
 
   /**
-   * Pre-launch Founding Circle confirmation. No account exists yet, so this
-   * deliberately has no CTA into the app — it only confirms the reserved place.
+   * Dedicated dark layout for the Founding Circle welcome.
+   *
+   * This deliberately does not go through `renderTemplate`. That renderer backs
+   * seven live account-lifecycle emails, and reshaping it into a dark,
+   * hero-image layout would silently restyle all of them.
+   *
+   * Client constraints this is built around:
+   *  - tables for every layout decision (no flex, no grid, no float)
+   *  - inline styles on every element that matters (Gmail strips <head><style>)
+   *  - solid hex fills only (Word/Outlook drops rgba and gradients)
+   *  - one 600px single column, so no client has to reflow anything
+   *  - the media query is a progressive enhancement, never load-bearing
+   */
+  private renderFoundingCircleTemplate({
+    preheader,
+    greeting,
+    bodyParagraphs,
+    cardTitle,
+    cardItems,
+    postCardParagraphs,
+    closingParagraphs,
+    signOff,
+    signature,
+    footerNote,
+    footerLinks,
+  }: {
+    preheader: string;
+    greeting: string;
+    bodyParagraphs: string[];
+    cardTitle: string;
+    /** One approved benefit sentence per entry; the sparkle is the list marker. */
+    cardItems: string[];
+    postCardParagraphs: string[];
+    closingParagraphs: string[];
+    signOff: string;
+    signature: string;
+    footerNote: string;
+    footerLinks: Array<{ label: string; url: string }>;
+  }) {
+    const t = FOUNDING_CIRCLE_THEME;
+    const base = getEmailAssetBaseUrl();
+    // `onLight` is the white wordmark — the one that belongs on a dark canvas.
+    const logoUrl = getEmailLogoUrls().onLight;
+    const heroUrl = `${base}${FOUNDING_CIRCLE_HERO_IMAGE}`;
+    const fontStack =
+      "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+    const paragraph = (copy: string, marginBottom = 18) =>
+      `<p style="margin:0 0 ${marginBottom}px;font-family:${fontStack};font-size:16px;line-height:26px;color:${t.body};">${escapeHtml(
+        copy
+      )}</p>`;
+
+    const bodyHtml = bodyParagraphs.map((copy) => paragraph(copy)).join('');
+    const postCardHtml = postCardParagraphs.map((copy) => paragraph(copy)).join('');
+    const closingHtml = closingParagraphs.map((copy) => paragraph(copy)).join('');
+
+    // Bullets are table rows, not <ul>: Outlook adds its own indentation and
+    // marker spacing to lists that no amount of CSS reliably removes.
+    const cardItemsHtml = cardItems
+      .map((item, index) => {
+        const gap = index === cardItems.length - 1 ? 0 : 16;
+        return `
+          <tr>
+            <td width="26" valign="top" style="padding:0 0 ${gap}px;font-family:${fontStack};font-size:15px;line-height:24px;">&#10024;</td>
+            <td valign="top" style="padding:0 0 ${gap}px;font-family:${fontStack};font-size:15px;line-height:24px;color:${t.body};">${escapeHtml(
+              item
+            )}</td>
+          </tr>`;
+      })
+      .join('');
+
+    const footerLinksHtml = footerLinks
+      .map(
+        ({ label, url }) =>
+          `<a href="${escapeAttribute(
+            url
+          )}" target="_blank" rel="noopener noreferrer" style="font-family:${fontStack};font-size:12px;line-height:20px;color:${t.accent};text-decoration:underline;">${escapeHtml(
+            label
+          )}</a>`
+      )
+      .join(
+        `<span style="font-family:${fontStack};font-size:12px;line-height:20px;color:${t.muted};"> &nbsp;·&nbsp; </span>`
+      );
+
+    return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Welcome to the SOLACE Founding Circle</title>
+    <style>
+      body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+      a { text-decoration: underline; }
+      @media only screen and (max-width: 620px) {
+        .fc-shell { padding: 16px 12px !important; }
+        .fc-pad { padding-left: 24px !important; padding-right: 24px !important; }
+        .fc-title { font-size: 26px !important; line-height: 34px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;width:100%;background-color:${t.canvas};font-family:${fontStack};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(
+      preheader
+    )}</div>
+    <!-- Some clients ignore body background; the outer table carries it too. -->
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${t.canvas};">
+      <tr>
+        <td align="center" class="fc-shell" style="padding:32px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
+
+            <tr>
+              <td align="center" style="padding:0 0 24px;">
+                <img src="${escapeAttribute(
+                  logoUrl
+                )}" alt="SOLACE" width="150" height="45" style="display:block;width:150px;max-width:150px;height:auto;border:0;" />
+              </td>
+            </tr>
+
+            <tr>
+              <td style="background-color:${t.panel};border:1px solid ${t.panelBorder};border-radius:20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+
+                  <tr>
+                    <td style="padding:0;font-size:0;line-height:0;">
+                      <img src="${escapeAttribute(
+                        heroUrl
+                      )}" alt="" role="presentation" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;border-radius:20px 20px 0 0;" />
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td class="fc-pad" style="padding:36px 40px 8px;">
+                      <div style="font-family:${fontStack};font-size:12px;line-height:18px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${t.accent};">Founding Circle</div>
+                      <h1 class="fc-title" style="margin:14px 0 24px;font-family:${fontStack};font-size:30px;line-height:40px;font-weight:700;color:${t.heading};">Welcome to the SOLACE Founding Circle</h1>
+                      ${paragraph(greeting, 18)}
+                      ${bodyHtml}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td class="fc-pad" style="padding:10px 40px 0;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${t.card};border:1px solid ${t.cardBorder};border-radius:16px;">
+                        <tr>
+                          <td style="padding:26px 26px 18px;">
+                            <div style="font-family:${fontStack};font-size:16px;line-height:24px;font-weight:700;color:${t.heading};padding-bottom:16px;">${escapeHtml(
+                              cardTitle
+                            )}</div>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                              ${cardItemsHtml}
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td class="fc-pad" style="padding:28px 40px 0;">
+                      ${postCardHtml}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td class="fc-pad" style="padding:14px 40px 36px;">
+                      ${closingHtml}
+                      <p style="margin:24px 0 0;font-family:${fontStack};font-size:16px;line-height:26px;color:${t.body};">${escapeHtml(
+                        signOff
+                      )}</p>
+                      <p style="margin:4px 0 0;font-family:${fontStack};font-size:16px;line-height:26px;font-weight:700;color:${t.heading};">${escapeHtml(
+                        signature
+                      )}</p>
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding:24px 24px 8px;">
+                <p style="margin:0;font-family:${fontStack};font-size:12px;line-height:20px;color:${t.muted};">${escapeHtml(
+                  footerNote
+                )}</p>
+                <p style="margin:10px 0 0;font-family:${fontStack};font-size:12px;line-height:20px;">${footerLinksHtml}</p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  /**
+   * Pre-launch Founding Circle welcome.
+   *
+   * No account exists at this point, so there is deliberately no CTA into the
+   * app and nothing here promises access before launch — the page that captures
+   * this address only reserves a place.
    */
   buildFoundingCircleWelcomeEmail({
     firstName,
-    discountPercentage,
   }: {
+    /**
+     * The full name submitted through the Founding Circle form. The parameter
+     * keeps the `firstName` name for compatibility with the stored
+     * `first_name` column and the API field, but the value is a full name and
+     * is used whole in the greeting — never reduced to its first word.
+     */
     firstName?: string;
-    discountPercentage: number;
   }): EmailTemplatePayload {
-    const safeFirstName = firstName?.trim() || 'there';
+    const greeting = firstName?.trim() ? `Hi ${firstName.trim()},` : 'Hi there,';
+    const base = getEmailAssetBaseUrl();
+
+    const preheader =
+      'Thank you for joining the SOLACE Founding Circle from the very beginning.';
+    const bodyParagraphs = [
+      'Welcome to the SOLACE Founding Circle, and thank you for joining us from the very beginning.',
+      'We’re truly grateful to have you with us.',
+      'SOLACE was created to be a place where people can pause, reflect, celebrate life’s wins, work through challenges, and better understand themselves through meaningful conversations. As one of our Founding Members, you’ll help shape the future of SOLACE while being among the first to experience everything we’re building.',
+    ];
+    const cardTitle = 'As a Founding Member, you’ll receive:';
+    /*
+     * The five approved Founding Circle benefits for this email, verbatim.
+     *
+     * NOTE — these deliberately differ from the landing page and from the
+     * `discount_percentage` stored on the lead. The page advertises a 20%
+     * *lifetime* discount and every row is written with `discount_percentage:
+     * 20`; this email offers 25% off the *first* membership. That divergence is
+     * an approved, knowingly unreconciled business-policy decision for this
+     * change, not an oversight. Do not "fix" one side to match the other
+     * without a policy decision covering billing and entitlements too.
+     */
+    const cardItems = [
+      '25% off your first SOLACE membership when you’re ready to upgrade.',
+      '6 months of complimentary access to all SOLACE wellness features (excluding Talk It Out), including Mood Check-Ins, Journaling, Habit Tracker, Sleep Tracker, Wellness Tools, Progress Insights, and more.',
+      'Early access before our public launch.',
+      'Exclusive updates as we continue building and improving SOLACE.',
+      'The opportunity to help shape the future of SOLACE through your feedback and ideas.',
+    ];
+    const postCardParagraphs = [
+      'Over the coming weeks, we’ll share behind-the-scenes updates, important milestones, and everything you need to know before launch.',
+    ];
+    const closingParagraphs = [
+      'Thank you for believing in our vision and becoming part of the SOLACE story from the very beginning.',
+      'We can’t wait to welcome you.',
+    ];
+    const signOff = 'Warm regards,';
+    const signature = 'The SOLACE Team';
+    const footerNote =
+      'You received this email because you joined the SOLACE Founding Circle.';
+    const footerLinks = [
+      { label: 'Privacy Policy', url: `${base}/privacy` },
+      { label: 'Terms of Service', url: `${base}/terms` },
+    ];
+
     return {
-      subject: 'Welcome to the Solace Founding Circle',
-      html: this.renderTemplate({
-        ...SOLACE_EMAIL_BRAND,
-        preheader: 'Your place in the Solace Founding Circle is reserved.',
-        eyebrow: 'Founding Circle',
-        title: 'Welcome to the Founding Circle',
-        greeting: `Hi ${safeFirstName},`,
-        intro:
-          'Thank you for joining Solace from the very beginning. Your place has been reserved. We will keep you updated as we move toward launch, and you will receive your Founding Member benefits when Solace is ready.',
-        audience: 'trial',
-        spotlight:
-          'Every meaningful journey begins with a small group of people who believe in the idea before anyone else.',
-        highlights: [
-          '30-Day Premium Trial',
-          '100 Talk It Out Minutes',
-          `${discountPercentage}% Lifetime Founding Member Discount`,
-          'Early Access to New Features',
-          'Direct influence on what we build next',
-          'Exclusive founder updates from Rosalind',
-        ],
-        supportingText:
-          'There is nothing else you need to do today. We will be in touch as launch gets closer.',
-        footerNote:
-          'You are receiving this because you joined the Solace early-access list. You can unsubscribe at any time.',
+      subject: 'Welcome to the SOLACE Founding Circle 💜',
+      html: this.renderFoundingCircleTemplate({
+        preheader,
+        greeting,
+        bodyParagraphs,
+        cardTitle,
+        cardItems,
+        postCardParagraphs,
+        closingParagraphs,
+        signOff,
+        signature,
+        footerNote,
+        footerLinks,
       }),
       text: [
-        `Hi ${safeFirstName},`,
+        greeting,
         '',
-        'Welcome to the Founding Circle.',
+        ...bodyParagraphs,
         '',
-        'Thank you for joining Solace from the very beginning. Your place has been reserved.',
-        'We will keep you updated as we move toward launch, and you will receive your Founding Member benefits when Solace is ready.',
+        cardTitle,
+        // The same five benefits, in the same order, as the HTML version.
+        ...cardItems.map((item) => `✨ ${item}`),
         '',
-        'What is included:',
-        '- 30-Day Premium Trial',
-        '- 100 Talk It Out Minutes',
-        `- ${discountPercentage}% Lifetime Founding Member Discount`,
-        '- Early Access to New Features',
-        '- Direct influence on what we build next',
-        '- Exclusive founder updates from Rosalind',
+        ...postCardParagraphs,
         '',
-        'You are receiving this because you joined the Solace early-access list. You can unsubscribe at any time.',
+        ...closingParagraphs,
+        '',
+        signOff,
+        signature,
+        '',
+        footerNote,
+        ...footerLinks.map(({ label, url }) => `${label}: ${url}`),
       ].join('\n'),
     };
   }

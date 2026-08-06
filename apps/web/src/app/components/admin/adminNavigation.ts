@@ -9,9 +9,11 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   Brain,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   Crown,
   Database,
   DollarSign,
@@ -25,6 +27,7 @@ import {
   MessageSquare,
   Moon,
   Package,
+  PenSquare,
   Server,
   Settings,
   Shield,
@@ -204,4 +207,16 @@ export const NAVIGATION: NavSection[] = [
       { name: "Backup & Recovery", href: "/admin/backup-recovery", icon: Database, roles: ["super_admin"] },
     ],
   },
-];
+  {
+    // Content Hub — its own section rather than an entry under "Content", which is wellness-scoped.
+    // Appended so the diff stays contiguous and cannot conflict with edits to existing sections.
+    name: "Content Hub",
+    icon: BookOpen,
+    roles: ["super_admin", "org_admin"],
+    pages: [
+      { name: "All Content", href: "/admin/content-hub", icon: BookOpen, roles: ["super_admin", "org_admin"] },
+      { name: "Create Content", href: "/admin/content-hub/new", icon: PenSquare, roles: ["super_admin", "org_admin"] },
+      { name: "Review Queue", href: "/admin/content-hub/review", icon: ClipboardCheck, roles: ["super_admin", "org_admin"] },
+    ],
+  },
+];

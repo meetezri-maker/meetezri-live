@@ -183,6 +183,13 @@ const LegalDocumentation        = lazy(() => import('@/app/pages/admin/LegalDocu
 const DataExport                = lazy(() => import('@/app/pages/admin/DataExport').then(m => ({ default: m.DataExport })));
 const BackupRecovery            = lazy(() => import('@/app/pages/admin/BackupRecovery').then(m => ({ default: m.BackupRecovery })));
 
+// ─── Content Hub (admin) — Phase 3 ───────────────────────────────────────────
+const ContentHubList            = lazy(() => import('@/app/pages/admin/content-hub/ContentHubList').then(m => ({ default: m.ContentHubList })));
+const ContentHubCreate          = lazy(() => import('@/app/pages/admin/content-hub/ContentHubCreate').then(m => ({ default: m.ContentHubCreate })));
+const ContentHubReview          = lazy(() => import('@/app/pages/admin/content-hub/ContentHubReview').then(m => ({ default: m.ContentHubReview })));
+/** TEMPORARY read-only shell — replaced by the full editor in Phase 4. */
+const ContentHubDraftShell      = lazy(() => import('@/app/pages/admin/content-hub/ContentHubDraftShell').then(m => ({ default: m.ContentHubDraftShell })));
+
 // ─── Error Pages ─────────────────────────────────────────────────────────────
 const Error404        = lazy(() => import('@/app/pages/errors/Error404').then(m => ({ default: m.Error404 })));
 const Error500        = lazy(() => import('@/app/pages/errors/Error500').then(m => ({ default: m.Error500 })));
@@ -397,7 +404,9 @@ export default function App() {
         <Routes>
           {/* ── Boundary 1: Public Routes ─────────────────────────────────── */}
           <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<EarlyAccess />} />
+            <Route path="/home" element={<Landing />} />
+            {/*<Route path="/" element={<Landing />} />*/}
             <Route path="/how-it-works" element={<HowItWorks />} />
             {/* Pre-launch Founding Member campaign landing page (paid ads destination). */}
             <Route path="/early-access" element={<EarlyAccess />} />
@@ -704,6 +713,41 @@ export default function App() {
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/admin/system-logs" element={<SystemLogs />} />
             <Route path="/admin/legal-documentation" element={<LegalDocumentation />} />
+
+            {/* Content Hub — super_admin + org_admin only (team_admin has no access) */}
+            <Route
+              path="/admin/content-hub"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ContentHubList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/content-hub/new"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ContentHubCreate />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/content-hub/review"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ContentHubReview />
+                </ProtectedRoute>
+              }
+            />
+            {/* TEMPORARY: read-only landing spot after create/review. Phase 4 replaces it with the editor. */}
+            <Route
+              path="/admin/content-hub/:id"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ContentHubDraftShell />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Data */}
             <Route path="/admin/data-export" element={<DataExport />} />

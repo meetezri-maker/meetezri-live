@@ -96,3 +96,12 @@ export {
 } from './crisisHotlines';
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+/**
+ * Content Hub domain foundation.
+ *
+ * The `contentHub/` subtree is deliberately zod-free (see its index for why), so re-exporting it
+ * here adds types, constants, pure helpers and fixtures without adding a schema instance that
+ * both apps would share.
+ */
+export * from './contentHub';

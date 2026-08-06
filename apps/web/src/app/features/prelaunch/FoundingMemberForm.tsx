@@ -158,7 +158,7 @@ export function FoundingMemberForm({ origin, className, compact = false }: Found
         <input
           id={firstNameId}
           type="text"
-          autoComplete="given-name"
+          autoComplete="name"
           placeholder={FOUNDING_FORM.firstNamePlaceholder}
           aria-invalid={errors.firstName ? "true" : undefined}
           aria-describedby={errors.firstName ? firstNameErrorId : undefined}

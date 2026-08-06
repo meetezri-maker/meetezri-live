@@ -403,7 +403,7 @@ describe("pre-launch landing page structure", () => {
     }
   });
 
-  it("keeps the founder video transcript available while the asset is missing", async () => {
+  it("shows only the approved video-first content in the founder dialog", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -413,14 +413,26 @@ describe("pre-launch landing page structure", () => {
     await user.click(trigger);
     const dialog = await screen.findByRole("dialog");
 
-    // No asset yet: the transcript is the accessible fallback, not a stand-in video.
-    expect(document.querySelector("video")).toBeNull();
+    // Approved contents: header, attribution line, media area, close control.
+    expect(within(dialog).getByText(FOUNDER.videoTitle)).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("heading", { name: /^transcript$/i }),
+      within(dialog).getByText(
+        new RegExp(`${FOUNDER.name}.*${FOUNDER.videoLength}`),
+      ),
     ).toBeInTheDocument();
+    expect(dialog.querySelector(".aspect-video")).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: /close/i })).toBeInTheDocument();
+
+    // The transcript was deliberately removed from the modal, so neither the
+    // heading nor any of its copy may reappear — and nothing may claim it is
+    // still present.
+    expect(
+      within(dialog).queryByRole("heading", { name: /^transcript$/i }),
+    ).not.toBeInTheDocument();
     for (const block of FOUNDER_VIDEO_TRANSCRIPT) {
-      expect(within(dialog).getByText(block.heading)).toBeInTheDocument();
+      expect(within(dialog).queryByText(block.heading)).not.toBeInTheDocument();
     }
+    expect(dialog.textContent).not.toMatch(/transcript is below/i);
   });
 
   it("returns focus to the founder video trigger when the dialog closes", async () => {

@@ -76,7 +76,9 @@ export async function foundingMembersRoutes(app: FastifyInstance) {
       const body = request.body as z.infer<typeof foundingMemberSignupBodySchema>;
 
       try {
-        return await registerFoundingMember(body);
+        // `request.log` is Fastify's per-request pino child logger, so a failed
+        // welcome email is traceable back to the request that triggered it.
+        return await registerFoundingMember(body, request.log);
       } catch (error) {
         // Never surface driver/constraint detail to a public caller.
         request.log.error({ err: error }, 'Founding member signup failed');

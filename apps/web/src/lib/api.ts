@@ -284,6 +284,138 @@ export interface ExpertReviewSaveBody {
   expert_rephrased: string;
 }
 
+// ─── Content Hub API shapes ──────────────────────────────────────────────────
+// These describe the ADMIN API's wire format, which is camelCase and carries derived fields the
+// domain types in `@meetezri/shared` do not have (`publicLabel`, `schedule`, `approvals`). The
+// shared package stays the source of truth for the enums themselves.
+
+export type ContentHubContentType = 'aeo_answer' | 'geo_article' | 'seo_blog';
+export type ContentHubStatus =
+  | 'draft'
+  | 'in_review'
+  | 'changes_requested'
+  | 'approved'
+  | 'published'
+  | 'unpublished'
+  | 'archived';
+export type ContentHubApprovalState = 'pending' | 'approved' | 'changes_requested';
+export type ContentHubTransitionAction =
+  | 'submit'
+  | 'withdraw'
+  | 'publish'
+  | 'unpublish'
+  | 'archive'
+  | 'restore';
+
+export interface ContentHubPerson {
+  id: string;
+  fullName: string | null;
+  email: string | null;
+}
+
+/** Derived server-side from `status === 'approved'` + `scheduled_for`. Never a lifecycle status. */
+export interface ContentHubScheduleState {
+  scheduled: boolean;
+  overdue: boolean;
+}
+
+export interface ContentHubListItem {
+  id: string;
+  editorialRef: string | null;
+  contentType: ContentHubContentType;
+  /** "Answer" | "Insight" | "Article" — the only form that may reach a user. */
+  publicLabel: string;
+  slug: string;
+  title: string;
+  status: ContentHubStatus;
+  /** Keyed by gate name so the UI can iterate rather than assume three gates. */
+  approvals: Record<string, ContentHubApprovalState>;
+  schedule: ContentHubScheduleState;
+  scheduledFor: string | null;
+  tags: string[];
+  pillar: string | null;
+  week: number | null;
+  author: ContentHubPerson | null;
+  readingTimeMinutes: number | null;
+  wordCount: number | null;
+  publishedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface ContentHubApprovalActor {
+  gate: string;
+  state: ContentHubApprovalState;
+  actorId: string | null;
+  actorName: string | null;
+  at: string | null;
+}
+
+export interface ContentHubDetail extends ContentHubListItem {
+  metaDescription: string | null;
+  featuredImageUrl: string | null;
+  featuredImageAlt: string | null;
+  body: unknown;
+  typeFields: Record<string, unknown>;
+  editorial: Record<string, unknown>;
+  canonicalUrlOverride: string | null;
+  robotsDirective: string;
+  reviewer: ContentHubPerson | null;
+  reviewedAt: string | null;
+  firstPublishedAt: string | null;
+  currentRevisionNumber: number;
+  createdBy: string | null;
+  updatedBy: string | null;
+  links: unknown[];
+  approvalActors: ContentHubApprovalActor[];
+}
+
+export interface ContentHubListResponse {
+  items: ContentHubListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ContentHubListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  contentType?: ContentHubContentType;
+  status?: ContentHubStatus;
+  pillar?: string;
+  week?: number;
+  tags?: string[];
+  awaitingApproval?: boolean;
+  dueToPublish?: boolean;
+  sort?: 'updated_at' | 'created_at' | 'title' | 'published_at';
+  order?: 'asc' | 'desc';
+}
+
+export interface ContentHubCreateBody {
+  contentType: ContentHubContentType;
+  title: string;
+  slug?: string;
+  pillar?: string;
+  week?: number;
+  tags?: string[];
+  editorialRef?: string;
+  authorId?: string;
+}
+
+export interface ContentHubChecklistItem {
+  code: string;
+  label: string;
+  passed: boolean;
+  blocking: boolean;
+  details?: string;
+}
+
+export interface ContentHubChecklist {
+  passed: boolean;
+  items: ContentHubChecklistItem[];
+}
+
 export const api = {
   clearMeCache() {
     shortGetCache.delete('GET:/users/me');
@@ -3321,6 +3453,97 @@ export const api = {
         body: JSON.stringify({ countryCode }),
       });
       return handleResponse(res, 'Failed to save crisis country');
+    },
+  },
+
+  // ─── Content Hub (admin) ───────────────────────────────────────────────────
+  // Phase 3 surface only: list, create, detail, checklist, approvals, transitions, tags.
+  // The editor, links, revisions, scheduling and cluster endpoints land with Phase 4.
+  //
+  // Backend contract: CONTENT_HUB_PHASE_2_REPORT.md. Errors carry stable `code` values
+  // (SLUG_TAKEN, SLUG_RESERVED, …) which `handleResponse` preserves on the thrown ApiError —
+  // callers narrow with `isApiError(e)` rather than matching on message text.
+  content: {
+    async list(params?: ContentHubListParams): Promise<ContentHubListResponse> {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.page != null) search.set('page', String(params.page));
+      if (params?.pageSize != null) search.set('pageSize', String(params.pageSize));
+      if (params?.search) search.set('search', params.search);
+      if (params?.contentType) search.set('contentType', params.contentType);
+      if (params?.status) search.set('status', params.status);
+      if (params?.pillar) search.set('pillar', params.pillar);
+      if (params?.week != null) search.set('week', String(params.week));
+      // Repeated `?tags=a&tags=b`, matching the API's array coercion.
+      for (const tag of params?.tags ?? []) search.append('tags', tag);
+      if (params?.awaitingApproval) search.set('awaitingApproval', 'true');
+      if (params?.dueToPublish) search.set('dueToPublish', 'true');
+      if (params?.sort) search.set('sort', params.sort);
+      if (params?.order) search.set('order', params.order);
+
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/content${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load content');
+    },
+
+    async create(body: ContentHubCreateBody): Promise<ContentHubListItem> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create content');
+    },
+
+    async getById(id: string): Promise<ContentHubDetail> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load content');
+    },
+
+    async getChecklist(id: string): Promise<ContentHubChecklist> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/checklist`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load the publish checklist');
+    },
+
+    async setApproval(
+      id: string,
+      gate: string,
+      body: { state: ContentHubApprovalState; note?: string }
+    ): Promise<{ gates: Record<string, ContentHubApprovalState>; status: string }> {
+      const headers = await getHeaders();
+      const res = await fetch(
+        `${API_URL}/admin/content/${encodeURIComponent(id)}/approvals/${encodeURIComponent(gate)}`,
+        { method: 'PUT', headers, body: JSON.stringify(body) }
+      );
+      return handleResponse(res, 'Failed to update the approval');
+    },
+
+    async transition(
+      id: string,
+      body: { action: ContentHubTransitionAction; reason?: string }
+    ): Promise<{ status: string; revisionNumber: number }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/transition`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to update the content status');
     },
   },
 };

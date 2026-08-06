@@ -52,10 +52,12 @@ describe("FoundingMemberForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("marks the optional first name field with the given-name autocomplete", () => {
+  it("labels the optional name field as Full name with the name autocomplete", () => {
     renderForm();
-    const firstName = screen.getByLabelText(/First name/i);
-    expect(firstName).toHaveAttribute("autocomplete", "given-name");
+    // Driven by the content module so the label and the test cannot drift apart.
+    const fullName = screen.getByLabelText(new RegExp(FOUNDING_FORM.firstNameLabel, "i"));
+    expect(FOUNDING_FORM.firstNameLabel).toBe("Full Name");
+    expect(fullName).toHaveAttribute("autocomplete", "name");
   });
 
   it("shows a validation message for an invalid email and does not call the API", async () => {
@@ -84,7 +86,10 @@ describe("FoundingMemberForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(FOUNDING_FORM.emailLabel), "person@example.com");
-    await user.type(screen.getByLabelText(/First name/i), "Alex");
+    await user.type(
+      screen.getByLabelText(new RegExp(FOUNDING_FORM.firstNameLabel, "i")),
+      "Alex",
+    );
     await user.click(screen.getByRole("button", { name: FOUNDING_FORM.submitLabel }));
 
     expect(await screen.findByText(FOUNDING_FORM.successHeading)).toBeInTheDocument();

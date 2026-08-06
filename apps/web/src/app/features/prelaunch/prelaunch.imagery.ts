@@ -67,7 +67,7 @@ export const PRELAUNCH_MOMENT_IMAGES: Record<string, string> = {
  * accessible placeholder rather than substituting an unrelated image or a
  * fabricated portrait.
  */
-export const FOUNDER_VIDEO_SRC: string | null = null;
-export const FOUNDER_VIDEO_POSTER: string | null = null;
+export const FOUNDER_VIDEO_SRC: string | null = "/community/founder_video.mp4";
+export const FOUNDER_VIDEO_POSTER: string | null = "/community/founder_video.mp4";
 export const FOUNDER_VIDEO_CAPTIONS_SRC: string | null = null;
 export const FOUNDER_PORTRAIT_SRC: string | null = null;

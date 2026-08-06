@@ -1191,6 +1191,11 @@ model profiles {
   user_wellness_progress         user_wellness_progress[]
   wellness_tools                 wellness_tools[]
   favorite_wellness_tools        favorite_wellness_tools[]
+  content_items_author           content_items[]                @relation("content_items_author")
+  content_items_reviewer         content_items[]                @relation("content_items_reviewer")
+  content_items_created_by       content_items[]                @relation("content_items_created_by")
+  content_items_updated_by       content_items[]                @relation("content_items_updated_by")
+  content_revisions              content_revisions[]
 
   @@index([created_at(sort: Desc)])
   @@index([role])
@@ -1715,5 +1720,136 @@ enum ticket_status {
   resolved
   closed
 
+  @@schema("public")
+}
+
+// ─── Content Hub (AEO / GEO / SEO CMS) ───────────────────────────────────────
+// Phase 1 foundation. Three tables only — FAQs live inside `body`, approvals live on the row,
+// and there is no taxonomy, media or KPI table by design.
+//
+// Domain values (`content_type`, `status`, approval states, `target_kind`, `relation`) are plain
+// TEXT validated by Zod at the API boundary, matching `wellness_tools.status` and 29 of the 30
+// existing migrations. See CONTENT_HUB_IMPLEMENTATION_PLAN.md §1.6.
+
+/// One row per Answer (aeo_answer), Insight (geo_article) or Article (seo_blog).
+/// Nullability encodes "a draft may be incomplete"; publish-time requirements are enforced by
+/// validation, not by NOT NULL, which would make creating a draft impossible.
+model content_items {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Editorial workbook code, e.g. `W1-A001`. Unique among live rows when present.
+  editorial_ref           String?
+  /// `aeo_answer` | `geo_article` | `seo_blog`. Immutable after creation (enforced in the service).
+  content_type            String
+  /// Public URL segment under /resources/. Globally unique across all content types.
+  slug                    String
+  title                   String
+  /// Required to publish, nullable so a draft can be saved without one.
+  meta_description        String?
+  featured_image_url      String?
+  featured_image_alt      String?
+  /// Structured block document. Never HTML.
+  body                    Json      @default("{\"version\": 1, \"blocks\": []}")
+  /// Type-specific structured data; schema selected by `content_type`.
+  type_fields             Json      @default("{}")
+  canonical_url_override  String?
+  robots_directive        String    @default("index,follow")
+  /// INTERNAL ONLY — never selected by the public query. Structural privacy boundary.
+  editorial               Json      @default("{}")
+  pillar                  String?
+  week                    Int?
+  /// Free-form labels. Native array per repo convention; deliberately unindexed in v1.
+  tags                    String[]  @default([])
+  status                  String    @default("draft")
+  founder_approval        String    @default("pending")
+  marketing_approval      String    @default("pending")
+  seo_approval            String    @default("pending")
+  /// Meaningful only while `status = 'approved'`; cleared automatically otherwise.
+  scheduled_for           DateTime? @db.Timestamptz(6)
+  author_id               String?   @db.Uuid
+  /// Public "Reviewed by" trust signal — separate from the internal approval gates.
+  reviewer_id             String?   @db.Uuid
+  reviewed_at             DateTime? @db.Timestamptz(6)
+  created_by              String?   @db.Uuid
+  updated_by              String?   @db.Uuid
+  /// Set once; never moved on republish, so the page keeps its age signal.
+  first_published_at      DateTime? @db.Timestamptz(6)
+  /// Timestamp of the current publication; drives dateModified.
+  published_at            DateTime? @db.Timestamptz(6)
+  /// Derived on write so the public list never parses bodies.
+  reading_time_minutes    Int?
+  word_count              Int?
+  /// High-water mark; lets the publish transaction increment atomically instead of MAX()+1.
+  current_revision_number Int       @default(0)
+  created_at              DateTime  @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  /// Maintained by application code — this repo has no updated_at triggers.
+  updated_at              DateTime  @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  /// Soft delete. Distinct from `archived` status: archive is editorial, delete releases the slug.
+  deleted_at              DateTime? @db.Timestamptz(6)
+
+  profiles_author         profiles? @relation("content_items_author", fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profiles_reviewer       profiles? @relation("content_items_reviewer", fields: [reviewer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profiles_created_by     profiles? @relation("content_items_created_by", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profiles_updated_by     profiles? @relation("content_items_updated_by", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  content_revisions       content_revisions[]
+  outbound_links          content_links[]     @relation("content_links_source")
+  inbound_links           content_links[]     @relation("content_links_target")
+
+  @@index([status, published_at(sort: Desc)])
+  @@index([content_type, status])
+  @@index([pillar])
+  @@index([created_at(sort: Desc)])
+  @@index([author_id])
+  @@index([deleted_at])
+  @@schema("public")
+}
+
+/// Append-only snapshot of the authored fields. Never updated, never deleted.
+/// The revision captured at publish is the provable "version that was approved".
+model content_revisions {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content_id        String        @db.Uuid
+  revision_number   Int
+  /// Authored fields only — no identity, no derived counters, so restore is a pure field-set apply.
+  snapshot          Json
+  /// `manual_save` | `transition` | `restore`. Autosave deliberately creates no revision.
+  trigger           String
+  status_at_capture String
+  change_summary    String?
+  created_by        String?       @db.Uuid
+  created_at        DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+
+  content_items     content_items @relation(fields: [content_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles          profiles?     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([content_id, revision_number])
+  @@index([content_id, created_at(sort: Desc)])
+  @@index([content_id, status_at_capture])
+  @@schema("public")
+}
+
+/// Outbound editorial links. A table rather than JSONB because three things need it:
+/// reverse lookup ("what links here?"), publish-time referential integrity, and the pillar
+/// cluster view. Exactly one of `target_content_id` / `target_route` is set.
+model content_links {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_id         String         @db.Uuid
+  /// `content` | `route`
+  target_kind       String
+  target_content_id String?        @db.Uuid
+  /// Route-registry KEY (e.g. `product.talk_it_out`), not a URL — so a route change is a
+  /// one-line registry edit rather than a data migration.
+  target_route      String?
+  /// Nullable: the Week 1 blog's links carry no anchor text.
+  anchor_text       String?
+  relation          String         @default("related_content")
+  sort_order        Int            @default(0)
+  created_at        DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+
+  source            content_items  @relation("content_links_source", fields: [source_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  target            content_items? @relation("content_links_target", fields: [target_content_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([source_id, sort_order])
+  @@index([target_content_id])
   @@schema("public")
 }
