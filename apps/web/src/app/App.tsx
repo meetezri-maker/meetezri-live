@@ -10,6 +10,7 @@ import { SafetyProvider } from '@/app/contexts/SafetyContext';
 import { OnboardingProvider } from '@/app/contexts/OnboardingContext';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { ProtectedRoute } from '@/app/components/ProtectedRoute';
+import { AnalyticsRouteTracker } from '@/app/analytics';
 
 // Components (shell / layout — keep eager so they render before any lazy page loads)
 import { Toaster } from '@/app/components/ui/sonner';
@@ -187,8 +188,12 @@ const BackupRecovery            = lazy(() => import('@/app/pages/admin/BackupRec
 const ContentHubList            = lazy(() => import('@/app/pages/admin/content-hub/ContentHubList').then(m => ({ default: m.ContentHubList })));
 const ContentHubCreate          = lazy(() => import('@/app/pages/admin/content-hub/ContentHubCreate').then(m => ({ default: m.ContentHubCreate })));
 const ContentHubReview          = lazy(() => import('@/app/pages/admin/content-hub/ContentHubReview').then(m => ({ default: m.ContentHubReview })));
-/** TEMPORARY read-only shell — replaced by the full editor in Phase 4. */
-const ContentHubDraftShell      = lazy(() => import('@/app/pages/admin/content-hub/ContentHubDraftShell').then(m => ({ default: m.ContentHubDraftShell })));
+const ContentHubEditor          = lazy(() => import('@/app/pages/admin/content-hub/ContentHubEditor').then(m => ({ default: m.ContentHubEditor })));
+const ContentHubPreview         = lazy(() => import('@/app/pages/admin/content-hub/ContentHubPreview').then(m => ({ default: m.ContentHubPreview })));
+
+// Public Content Hub — anonymous routes, lazy so the marketing entry bundle stays small.
+const ResourcesIndex            = lazy(() => import('@/app/pages/public/resources/ResourcesIndex').then(m => ({ default: m.ResourcesIndex })));
+const ResourceDetail            = lazy(() => import('@/app/pages/public/resources/ResourceDetail').then(m => ({ default: m.ResourceDetail })));
 
 // ─── Error Pages ─────────────────────────────────────────────────────────────
 const Error404        = lazy(() => import('@/app/pages/errors/Error404').then(m => ({ default: m.Error404 })));
@@ -396,6 +401,7 @@ export default function App() {
       <NotificationsProvider>
       <SafetyProvider>
         <BrowserRouter>
+        <AnalyticsRouteTracker />
         <ThemeManager />
         <NetworkWatcher />
         <IdleTimeoutEnforcer />
@@ -414,6 +420,17 @@ export default function App() {
             <Route path="/terms" element={<Terms />} />
             {/* <Route path="/accessibility" element={<Accessibility />} /> */}
             <Route path="/pricing" element={<Pricing />} />
+
+            {/*
+              Public Content Hub. Anonymous — deliberately NOT inside ProtectedRoute.
+
+              In production these paths are served by the runtime renderer (see
+              apps/web/vercel.json), so a visitor or a crawler gets complete HTML before any
+              JavaScript runs. These SPA routes are the client-side counterpart: they keep the
+              pages working in local dev, after hydration, and on client-side navigation.
+            */}
+            <Route path="/resources" element={<ResourcesIndex />} />
+            <Route path="/resources/:slug" element={<ResourceDetail />} />
 
             {/* Error pages share the public boundary */}
             <Route path="/error/404" element={<Error404 />} />
@@ -739,12 +756,19 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            {/* TEMPORARY: read-only landing spot after create/review. Phase 4 replaces it with the editor. */}
             <Route
               path="/admin/content-hub/:id"
               element={
                 <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
-                  <ContentHubDraftShell />
+                  <ContentHubEditor />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/content-hub/:id/preview"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ContentHubPreview />
                 </ProtectedRoute>
               }
             />

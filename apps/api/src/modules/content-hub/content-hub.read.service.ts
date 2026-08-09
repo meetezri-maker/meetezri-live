@@ -320,6 +320,38 @@ export async function resolvePublishedRelated(slug: string, limit: number): Prom
   return loaded ? resolveRelated(loaded.id, loaded.pillar, limit) : null;
 }
 
+/** A sitemap row: a public card plus the stored robots directive that decides inclusion. */
+export interface SitemapRow extends PublicCard {
+  robots: string;
+}
+
+/**
+ * Every publicly-listable resource, for `/sitemap.xml`.
+ *
+ * Unpaginated by design — a sitemap is the whole set — but capped, because an unbounded query in
+ * a serverless function is how a sitemap route becomes an outage. 5,000 URLs is well inside the
+ * 50,000-entry sitemap limit and far beyond the foreseeable content volume; if it is ever
+ * reached, the answer is a sitemap index, not a bigger number here.
+ *
+ * `noindex` items are filtered HERE rather than by the caller, so the exclusion travels with the
+ * read seam and cannot be forgotten by a second consumer.
+ */
+export async function resolveSitemapEntries(): Promise<SitemapRow[]> {
+  const rows = await prisma.content_items.findMany({
+    where: PUBLIC_WHERE,
+    select: { ...CARD_SELECT, robots_directive: true },
+    orderBy: [{ published_at: 'desc' }, { title: 'asc' }],
+    take: 5000,
+  });
+
+  return rows
+    .filter((row) => !String(row.robots_directive ?? 'index,follow').toLowerCase().includes('noindex'))
+    .map((row) => ({
+      ...serializeCard(row as CardSource),
+      robots: String(row.robots_directive ?? 'index,follow'),
+    }));
+}
+
 /**
  * Admin preview.
  *

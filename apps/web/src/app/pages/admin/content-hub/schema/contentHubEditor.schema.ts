@@ -1,0 +1,215 @@
+/**
+ * Content Hub — WEB Zod v4 editor schema, and the second half of the web parity work.
+ *
+ * DOES NOT IMPORT THE API'S ZOD v3 SCHEMAS. Document rules come from the shared plain validator
+ * (`validateContentBody`), which the API also calls, so the editor cannot permit something the
+ * server will reject.
+ *
+ * DRAFT VS PUBLISH is the central distinction: a draft must stay saveable while publish-only
+ * fields are incomplete, so publish rules live behind `forPublish` rather than in the field
+ * schema.
+ */
+
+import { z } from 'zod';
+import {
+  CONTENT_LIMITS,
+  ROBOTS_DIRECTIVES,
+  isAbsoluteHttpUrl,
+  normaliseSlug,
+  normaliseTags,
+  validateContentBody,
+  validateSlug,
+  type ContentBody,
+  type ContentType,
+  type ValidationIssue,
+} from '@meetezri/shared';
+
+/** Which tab an issue belongs to, so the UI can show per-tab error counts. */
+export type EditorTab = 'overview' | 'brief' | 'content' | 'seo' | 'links' | 'review';
+
+export interface EditorIssue extends ValidationIssue {
+  tab: EditorTab;
+  severity: 'error' | 'warning';
+}
+
+/**
+ * Fields that are always required, even for a draft.
+ *
+ * Deliberately minimal: only what makes a record coherent at all. Everything else is a publish
+ * concern.
+ */
+export const editorDraftSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required.').max(200, 'Title must be 200 characters or fewer.'),
+
+  slug: z
+    .string()
+    .trim()
+    .min(1, 'Slug is required.')
+    .refine((value) => normaliseSlug(value).length > 0, 'This slug contains no usable characters.')
+    .refine((value) => validateSlug(normaliseSlug(value)).reason !== 'reserved', 'That slug is reserved.'),
+
+  metaDescription: z
+    .string()
+    .trim()
+    .max(500, 'Meta description is too long.')
+    .optional()
+    .or(z.literal('')),
+
+  featuredImageUrl: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(''))
+    .refine((value) => !value || isAbsoluteHttpUrl(value), 'Image URL must be an absolute http(s) URL.'),
+
+  featuredImageAlt: z.string().trim().max(500).optional().or(z.literal('')),
+
+  pillar: z.string().trim().max(200).optional().or(z.literal('')),
+
+  week: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === '') return undefined;
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : Number.NaN;
+    })
+    .refine((v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 520), 'Week must be 1–520.'),
+
+  tagsInput: z
+    .string()
+    .optional()
+    .refine(
+      (value) => normaliseTags((value ?? '').split(/[,\n]/)).length <= CONTENT_LIMITS.maxTags,
+      `At most ${CONTENT_LIMITS.maxTags} tags are allowed.`,
+    ),
+
+  editorialRef: z.string().trim().max(64).optional().or(z.literal('')),
+  authorId: z.string().uuid().optional().or(z.literal('')),
+  reviewerId: z.string().uuid().optional().or(z.literal('')),
+  reviewedAt: z.string().optional().or(z.literal('')),
+
+  canonicalUrlOverride: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (value) => !value || (isAbsoluteHttpUrl(value) && value.startsWith('https://')),
+      'Canonical URL must be an absolute https URL.',
+    ),
+
+  robotsDirective: z.enum(ROBOTS_DIRECTIVES),
+})
+  // Alt text is required whenever an image is set — accessibility, and the publish checklist
+  // enforces it server-side too.
+  .refine((values) => !values.featuredImageUrl || !!values.featuredImageAlt?.trim(), {
+    message: 'Featured image alt text is required when an image URL is set.',
+    path: ['featuredImageAlt'],
+  });
+
+export type EditorFormValues = z.input<typeof editorDraftSchema>;
+
+/** Which tab owns which field, for per-tab error counts and focus-the-bad-tab behaviour. */
+const FIELD_TAB: Record<string, EditorTab> = {
+  title: 'overview',
+  slug: 'overview',
+  pillar: 'overview',
+  week: 'overview',
+  tagsInput: 'overview',
+  editorialRef: 'overview',
+  authorId: 'overview',
+  reviewerId: 'overview',
+  reviewedAt: 'overview',
+  metaDescription: 'seo',
+  featuredImageUrl: 'seo',
+  featuredImageAlt: 'seo',
+  canonicalUrlOverride: 'seo',
+  robotsDirective: 'seo',
+};
+
+export function tabForField(field: string): EditorTab {
+  return FIELD_TAB[field] ?? 'overview';
+}
+
+export interface DocumentValidationResult {
+  /** Blocks saving. Currently only structural body problems. */
+  errors: EditorIssue[];
+  /** Blocks publishing but not saving. */
+  publishBlockers: EditorIssue[];
+  warnings: EditorIssue[];
+}
+
+/**
+ * Validate the document body twice: once as a draft and once as if publishing.
+ *
+ * The difference between the two runs is exactly the set of publish-only problems, which is what
+ * lets the UI say "this is fine to save, but it will block publishing".
+ */
+export function validateDocument(
+  body: ContentBody,
+  contentType: ContentType,
+): DocumentValidationResult {
+  const draft = validateContentBody(body, { contentType });
+  const publish = validateContentBody(body, { contentType, forPublish: true });
+
+  const draftCodes = new Set(draft.errors.map((issue) => `${issue.code}:${issue.blockId ?? ''}`));
+
+  const errors: EditorIssue[] = draft.errors.map((issue) => ({
+    ...issue,
+    tab: 'content',
+    severity: 'error',
+  }));
+
+  const publishBlockers: EditorIssue[] = publish.errors
+    .filter((issue) => !draftCodes.has(`${issue.code}:${issue.blockId ?? ''}`))
+    .map((issue) => ({ ...issue, tab: 'content', severity: 'error' }));
+
+  const warnings: EditorIssue[] = draft.warnings.map((issue) => ({
+    ...issue,
+    tab: 'content',
+    severity: 'warning',
+  }));
+
+  return { errors, publishBlockers, warnings };
+}
+
+/** Form values → the API's PATCH body, applying shared normalisation exactly once. */
+export function toUpdateBody(
+  values: EditorFormValues,
+  extras: {
+    body?: ContentBody;
+    typeFields?: Record<string, unknown>;
+    editorial?: Record<string, unknown>;
+    expectedUpdatedAt: string;
+    createRevision: boolean;
+    confirmSlugChange?: boolean;
+    changeSummary?: string;
+  },
+) {
+  const tags = normaliseTags((values.tagsInput ?? '').split(/[,\n]/));
+
+  return {
+    title: values.title,
+    slug: normaliseSlug(values.slug),
+    metaDescription: values.metaDescription?.trim() || null,
+    featuredImageUrl: values.featuredImageUrl?.trim() || null,
+    featuredImageAlt: values.featuredImageAlt?.trim() || null,
+    pillar: values.pillar?.trim() || null,
+    week: values.week === undefined || values.week === '' ? null : Number(values.week),
+    tags,
+    editorialRef: values.editorialRef?.trim() || null,
+    authorId: values.authorId || null,
+    reviewerId: values.reviewerId || null,
+    reviewedAt: values.reviewedAt || null,
+    canonicalUrlOverride: values.canonicalUrlOverride?.trim() || null,
+    robotsDirective: values.robotsDirective,
+    ...(extras.body ? { body: extras.body } : {}),
+    ...(extras.typeFields ? { typeFields: extras.typeFields } : {}),
+    ...(extras.editorial ? { editorial: extras.editorial } : {}),
+    expectedUpdatedAt: extras.expectedUpdatedAt,
+    createRevision: extras.createRevision,
+    ...(extras.confirmSlugChange ? { confirmSlugChange: true } : {}),
+    ...(extras.changeSummary ? { changeSummary: extras.changeSummary } : {}),
+  };
+}

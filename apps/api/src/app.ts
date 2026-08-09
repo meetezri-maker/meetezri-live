@@ -38,6 +38,7 @@ import { foundingMembersRoutes } from './modules/founding-members/founding-membe
 import { expertReviewRoutes } from './modules/expert-review/expert-review.routes';
 import { contentHubAdminRoutes } from './modules/content-hub/content-hub.routes';
 import { contentHubPublicRoutes } from './modules/content-hub/content-hub.public.routes';
+import { renderRoutes } from './modules/render/render.routes';
 import { getClientIp } from './lib/client-ip';
 import jwkToPem from 'jwk-to-pem';
 import prisma from './lib/prisma';
@@ -306,6 +307,10 @@ app.register(expertReviewRoutes, { prefix: '/api/admin/expert-reviews' });
 // bypass its role cache, and the public plugin must carry no authenticate preHandler at all.
 app.register(contentHubAdminRoutes, { prefix: '/api/admin/content' });
 app.register(contentHubPublicRoutes, { prefix: '/api/content' });
+// Runtime server rendering for the public Resources pages. Registered at the ROOT, with no
+// prefix: these are user-facing URLs (`/resources`, `/sitemap.xml`, `/robots.txt`) that
+// apps/web/vercel.json rewrites here ahead of the SPA catch-all — not API endpoints.
+app.register(renderRoutes);
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.

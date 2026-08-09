@@ -38,6 +38,27 @@ export const PRELAUNCH_FOUNDING_CIRCLE_BG = "/community/early-access-bg2.png";
 export const PRELAUNCH_FOUNDER_BG = "/community/early-access-bg3.png";
 
 /**
+ * Human Moments section backdrop. Six people around a firepit on a lake jetty at
+ * twilight — string lights, lanterns, distant lit houses. The one genuinely
+ * human, everyday-life plate in the library, matching this chapter's subject.
+ */
+export const PRELAUNCH_HUMAN_MOMENTS_BG = "/community/early-access-bg1.png";
+
+
+export const PRELAUNCH_MEET_SOLACE_BG = "/community/early-access-bg5.png";
+
+export const PRELAUNCH_FAQ_BG = "/community/early-access-bg6.png";
+
+export const PRELAUNCH_JOURNEY_BG = "/community/early-access-bg6.png";
+
+/**
+ * Trust section backdrop. Alpine peaks at dawn above a still sea of cloud:
+ * calm, spacious, cool natural tones. Deliberately scenery — Blueprint 8.3
+ * excludes padlock, shield, and certification imagery from this section.
+ */
+export const PRELAUNCH_TRUST_BG = "/community/early-access-bg4.png";
+
+/**
  * Section 2 — Human Moments. One approved plate per moment, keyed by moment id.
  *
  * Every plate was opened and visually confirmed; filenames in this repository
@@ -68,6 +89,18 @@ export const PRELAUNCH_MOMENT_IMAGES: Record<string, string> = {
  * fabricated portrait.
  */
 export const FOUNDER_VIDEO_SRC: string | null = "/community/founder_video.mp4";
-export const FOUNDER_VIDEO_POSTER: string | null = "/community/founder_video.mp4";
+/**
+ * Preview frame for the founder video, used by the section thumbnail and as the
+ * `<video poster>` in the modal.
+ *
+ * This previously pointed at `founder_video.mp4` — the video file itself, which
+ * an `<img>` cannot decode, so the thumbnail rendered as an empty box
+ * (`naturalWidth === 0`). No founder portrait or captured frame exists in the
+ * repository, so this uses the calmest unused approved plate rather than
+ * fabricating a likeness. Swap it for a real frame from the recording when one
+ * is available.
+ */
+export const FOUNDER_VIDEO_POSTER: string | null =
+  "/solace/onboarding-complete-twilight-lake.jpg";
 export const FOUNDER_VIDEO_CAPTIONS_SRC: string | null = null;
 export const FOUNDER_PORTRAIT_SRC: string | null = null;

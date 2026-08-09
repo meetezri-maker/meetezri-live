@@ -1,8 +1,9 @@
 import { Compass, MessageCircle, Sprout } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SECTION_IDS, YOUR_JOURNEY } from "../prelaunch.content";
-import { FoundingMemberCta, Reveal, SectionHeader } from "../PrelaunchPrimitives";
+import { FoundingMemberCta, Reveal, SectionHeader, SectionBackdrop } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
+import { PRELAUNCH_JOURNEY_BG } from "../prelaunch.imagery";
 
 /**
  * Icons per Blueprint 7.3, which permits subtle icons for conversation,
@@ -41,6 +42,7 @@ export function YourJourneySection() {
       aria-labelledby="prelaunch-your-journey-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
+      <SectionBackdrop src={PRELAUNCH_JOURNEY_BG} />
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_10%,rgba(88,28,135,0.16)_0%,transparent_60%)]"
         aria-hidden

@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "."
+    "rootDir": ".",
+    // The runtime render layer (`src/modules/render`) is React server-rendered to a string.
+    // No DOM lib is added — `renderToStaticMarkup` needs none, and omitting it keeps a stray
+    // `document` reference a compile error rather than a production crash.
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*", "api/**/*"]
 }

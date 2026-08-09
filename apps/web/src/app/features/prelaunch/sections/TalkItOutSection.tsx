@@ -1,10 +1,12 @@
 import { Check, Video } from "lucide-react";
 import { LandingGlowCard } from "@/app/landing/LandingGlowCard";
 import { SECTION_IDS, TALK_IT_OUT } from "../prelaunch.content";
+import { PRELAUNCH_MEET_SOLACE_BG } from "../prelaunch.imagery";
 import {
   CtaSupportingText,
   FoundingMemberCta,
   Reveal,
+  SectionBackdrop,
   SectionHeader,
 } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
@@ -35,6 +37,7 @@ export function TalkItOutSection() {
       aria-labelledby="prelaunch-talk-it-out-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
+      <SectionBackdrop src={PRELAUNCH_MEET_SOLACE_BG} />
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(88,28,135,0.18)_0%,transparent_60%)]"
         aria-hidden

@@ -1,12 +1,16 @@
 import { LandingGlowCard, type LandingGlowVariant } from "@/app/landing/LandingGlowCard";
 import { cn } from "@/lib/utils";
 import { HUMAN_MOMENTS, SECTION_IDS } from "../prelaunch.content";
-import { PRELAUNCH_MOMENT_IMAGES } from "../prelaunch.imagery";
+import {
+  PRELAUNCH_HUMAN_MOMENTS_BG,
+  PRELAUNCH_MOMENT_IMAGES,
+} from "../prelaunch.imagery";
 import { scrollToPrelaunchSection } from "../prelaunch.scroll";
 import {
   CtaSupportingText,
   FoundingMemberCta,
   Reveal,
+  SectionBackdrop,
   SectionHeader,
 } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
@@ -39,6 +43,8 @@ export function HumanMomentsSection() {
       aria-labelledby="prelaunch-human-moments-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
+      <SectionBackdrop src={PRELAUNCH_HUMAN_MOMENTS_BG} />
+
       <div className="landing-section relative z-10">
         <SectionHeader
           badge={HUMAN_MOMENTS.badge}

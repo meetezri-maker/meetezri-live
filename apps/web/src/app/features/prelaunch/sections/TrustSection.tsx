@@ -2,7 +2,13 @@ import { Link } from "react-router-dom";
 import { LandingGlowCard, type LandingGlowVariant } from "@/app/landing/LandingGlowCard";
 import { cn } from "@/lib/utils";
 import { SECTION_IDS, TRUST } from "../prelaunch.content";
-import { FoundingMemberCta, Reveal, SectionHeader } from "../PrelaunchPrimitives";
+import { PRELAUNCH_TRUST_BG } from "../prelaunch.imagery";
+import {
+  FoundingMemberCta,
+  Reveal,
+  SectionBackdrop,
+  SectionHeader,
+} from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
 
 /**
@@ -38,6 +44,8 @@ export function TrustSection() {
       aria-labelledby="prelaunch-trust-heading"
       className="relative overflow-hidden py-20 md:py-10"
     >
+      <SectionBackdrop src={PRELAUNCH_TRUST_BG} />
+
       <div
         className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(6,10,28,0.6)_0%,rgba(5,8,22,0.85)_100%)]"
         aria-hidden

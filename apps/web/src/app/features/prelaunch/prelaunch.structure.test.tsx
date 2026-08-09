@@ -232,8 +232,9 @@ describe("pre-launch landing page structure", () => {
       HUMAN_MOMENTS.moments.length,
     );
 
+    // One plate per moment, plus the section backdrop added alongside them.
     const images = [...section.querySelectorAll("img")];
-    expect(images).toHaveLength(HUMAN_MOMENTS.moments.length);
+    expect(images).toHaveLength(HUMAN_MOMENTS.moments.length + 1);
     for (const img of images) {
       // Decorative: the title and narrative carry the meaning as text.
       expect(img).toHaveAttribute("alt", "");

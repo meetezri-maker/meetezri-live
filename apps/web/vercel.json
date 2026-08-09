@@ -27,6 +27,22 @@
       "destination": "https://meetezri-live-api.vercel.app/api/:path*"
     },
     {
+      "source": "/resources",
+      "destination": "https://meetezri-live-api.vercel.app/resources"
+    },
+    {
+      "source": "/resources/:slug",
+      "destination": "https://meetezri-live-api.vercel.app/resources/:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://meetezri-live-api.vercel.app/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://meetezri-live-api.vercel.app/robots.txt"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

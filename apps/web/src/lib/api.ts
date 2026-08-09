@@ -1,4 +1,9 @@
 import { supabase } from './supabase';
+import type {
+  PublicLabel,
+  PublicResource,
+  PublicResourceCard,
+} from '@meetezri/public-content';
 
 /** Base path for REST calls (no trailing slash). Defaults to same-origin `/api` (Vite proxy in dev, Vercel rewrite in prod). */
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -414,6 +419,163 @@ export interface ContentHubChecklistItem {
 export interface ContentHubChecklist {
   passed: boolean;
   items: ContentHubChecklistItem[];
+}
+
+// ─── Phase 4 shapes ──────────────────────────────────────────────────────────
+
+/**
+ * Partial save body.
+ *
+ * Server-owned fields (status, approvals, published timestamps, derived metrics) are absent by
+ * construction — the API strips them anyway, but they must not be expressible here either.
+ */
+export interface ContentHubUpdateBody {
+  title?: string;
+  slug?: string;
+  metaDescription?: string | null;
+  featuredImageUrl?: string | null;
+  featuredImageAlt?: string | null;
+  body?: unknown;
+  typeFields?: Record<string, unknown>;
+  editorial?: Record<string, unknown>;
+  pillar?: string | null;
+  week?: number | null;
+  tags?: string[];
+  canonicalUrlOverride?: string | null;
+  robotsDirective?: string;
+  authorId?: string | null;
+  reviewerId?: string | null;
+  reviewedAt?: string | null;
+  editorialRef?: string | null;
+  /** Optimistic concurrency token — the `updatedAt` the editor loaded. Required. */
+  expectedUpdatedAt: string;
+  /** Explicit save captures a revision; autosave does not. */
+  createRevision?: boolean;
+  /** Required to change a PUBLISHED slug, so it can never happen as a side effect. */
+  confirmSlugChange?: boolean;
+  changeSummary?: string;
+}
+
+export interface ContentHubRevisionSummary {
+  id: string;
+  revisionNumber: number;
+  trigger: 'manual_save' | 'transition' | 'restore';
+  statusAtCapture: ContentHubStatus;
+  changeSummary: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface ContentHubRevisionList {
+  items: ContentHubRevisionSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ContentHubRevisionDetail extends ContentHubRevisionSummary {
+  snapshot: unknown;
+}
+
+export interface ContentHubLink {
+  id: string;
+  targetKind: 'content' | 'route';
+  targetContentId: string | null;
+  targetRoute: string | null;
+  anchorText: string | null;
+  relation: string;
+  sortOrder: number;
+  /** Hydrated by the API so the editor can show link health without a second round trip. */
+  targetTitle: string | null;
+  targetSlug: string | null;
+  targetStatus: ContentHubStatus | null;
+  targetPublicLabel: string | null;
+  routeLabel: string | null;
+  routeHref: string | null;
+}
+
+export interface ContentHubLinkInput {
+  targetKind: 'content' | 'route';
+  targetContentId?: string | null;
+  targetRoute?: string | null;
+  anchorText?: string | null;
+  relation: string;
+  sortOrder: number;
+}
+
+export interface ContentHubInboundLink {
+  id: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceSlug: string;
+  sourceStatus: ContentHubStatus;
+  relation: string;
+  anchorText: string | null;
+}
+
+/** Public-serialized payload plus preview flags. Contains no internal editorial fields. */
+/**
+ * Admin preview payload.
+ *
+ * The API defines this as `publicDetailSchema.extend({ isPreview, robots })`, so it IS a public
+ * resource plus one flag. Typing it that way rather than restating twenty fields is what lets the
+ * preview screen render the same `ResourceArticle` the public page does — and means a serializer
+ * change cannot leave the preview type quietly wrong.
+ */
+export type ContentHubPreview = PublicResource & { isPreview: true };
+
+export interface ContentHubScheduleResult {
+  scheduledFor: string | null;
+  status: string;
+  schedule: ContentHubScheduleState;
+}
+
+export interface ContentHubClusterMemberReport {
+  contentId: string;
+  editorialRef: string | null;
+  title: string;
+  status: ContentHubStatus;
+  passed: boolean;
+  items: ContentHubChecklistItem[];
+}
+
+export interface ContentHubClusterValidation {
+  passed: boolean;
+  members: ContentHubClusterMemberReport[];
+  linkResolution: Array<{
+    sourceId: string;
+    target: string;
+    resolution: 'published' | 'in_cluster' | 'route' | 'unresolved';
+  }>;
+}
+
+export interface ContentHubClusterPublish {
+  clusterId: string;
+  published: Array<{ id: string; revisionNumber: number }>;
+}
+
+/**
+ * Public Content Hub response types.
+ *
+ * Re-exported from `@meetezri/public-content` rather than redeclared: that package is the view
+ * contract the server renderer, the SPA and the admin preview all share, so a second declaration
+ * here would be a third place to keep in sync.
+ */
+export type { PublicLabel, PublicResource, PublicResourceCard };
+
+export interface PublicResourceListParams {
+  page?: number;
+  pageSize?: number;
+  /** Public label — the public API never accepts an internal content-type string. */
+  type?: PublicLabel;
+}
+
+export interface PublicResourceListResponse {
+  items: PublicResourceCard[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export const api = {
@@ -3544,6 +3706,179 @@ export const api = {
         body: JSON.stringify(body),
       });
       return handleResponse(res, 'Failed to update the content status');
+    },
+
+    // ── Phase 4 ──────────────────────────────────────────────────────────────
+
+    /**
+     * Partial save. `expectedUpdatedAt` is the optimistic-concurrency token; a mismatch returns
+     * 409 STALE_UPDATE rather than silently overwriting another editor's work.
+     */
+    async update(id: string, body: ContentHubUpdateBody): Promise<ContentHubDetail> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to save');
+    },
+
+    async listRevisions(
+      id: string,
+      params?: { page?: number; pageSize?: number }
+    ): Promise<ContentHubRevisionList> {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.page != null) search.set('page', String(params.page));
+      if (params?.pageSize != null) search.set('pageSize', String(params.pageSize));
+      const qs = search.toString();
+      const res = await fetch(
+        `${API_URL}/admin/content/${encodeURIComponent(id)}/revisions${qs ? `?${qs}` : ''}`,
+        { method: 'GET', headers, cache: 'no-store' }
+      );
+      return handleResponse(res, 'Failed to load revisions');
+    },
+
+    async getRevision(id: string, revisionNumber: number): Promise<ContentHubRevisionDetail> {
+      const headers = await getHeaders();
+      const res = await fetch(
+        `${API_URL}/admin/content/${encodeURIComponent(id)}/revisions/${revisionNumber}`,
+        { method: 'GET', headers, cache: 'no-store' }
+      );
+      return handleResponse(res, 'Failed to load the revision');
+    },
+
+    async restoreRevision(
+      id: string,
+      revisionNumber: number,
+      body: { expectedUpdatedAt: string }
+    ): Promise<ContentHubDetail> {
+      const headers = await getHeaders();
+      const res = await fetch(
+        `${API_URL}/admin/content/${encodeURIComponent(id)}/revisions/${revisionNumber}/restore`,
+        { method: 'POST', headers, body: JSON.stringify(body) }
+      );
+      return handleResponse(res, 'Failed to restore the revision');
+    },
+
+    async getLinks(id: string): Promise<{ links: ContentHubLink[] }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/links`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load links');
+    },
+
+    /** Whole-set replacement, committed in one transaction server-side. */
+    async replaceLinks(id: string, links: ContentHubLinkInput[]): Promise<{ links: ContentHubLink[] }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/links`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ links }),
+      });
+      return handleResponse(res, 'Failed to save links');
+    },
+
+    async getInboundLinks(id: string): Promise<{ links: ContentHubInboundLink[] }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/inbound-links`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load inbound links');
+    },
+
+    /**
+     * Preview payload built by the REAL public serializer, so previewing also proves nothing
+     * internal leaks. Never build a preview from the admin record.
+     */
+    async getPreview(id: string): Promise<ContentHubPreview> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/preview`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load the preview');
+    },
+
+    async setSchedule(id: string, scheduledFor: string): Promise<ContentHubScheduleResult> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/schedule`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ scheduledFor }),
+      });
+      return handleResponse(res, 'Failed to set the planned date');
+    },
+
+    async cancelSchedule(id: string): Promise<ContentHubScheduleResult> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/${encodeURIComponent(id)}/schedule`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to cancel the planned date');
+    },
+
+    async validateCluster(contentIds: string[]): Promise<ContentHubClusterValidation> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/clusters/validate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ contentIds }),
+      });
+      return handleResponse(res, 'Failed to validate the cluster');
+    },
+
+    async publishCluster(contentIds: string[]): Promise<ContentHubClusterPublish> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/content/clusters/publish`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ contentIds }),
+      });
+      return handleResponse(res, 'Failed to publish the cluster');
+    },
+  },
+
+  /**
+   * PUBLIC Content Hub reads — `/resources` and `/resources/:slug`.
+   *
+   * A SEPARATE namespace from `api.content`, which is admin-only, because the two differ in a way
+   * that matters: nothing here sends an Authorization header. These endpoints are anonymous, their
+   * responses are shared-cacheable, and mixing them into the admin namespace would eventually put
+   * a bearer token on a request that is meant to be cacheable by a CDN.
+   */
+  publicContent: {
+    async list(params?: PublicResourceListParams): Promise<PublicResourceListResponse> {
+      const search = new URLSearchParams();
+      if (params?.page != null) search.set('page', String(params.page));
+      if (params?.pageSize != null) search.set('pageSize', String(params.pageSize));
+      // The public API accepts the LABEL only. There is no internal type string on this path.
+      if (params?.type) search.set('type', params.type);
+
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/content${qs ? `?${qs}` : ''}`, { method: 'GET' });
+      return handleResponse(res, 'Failed to load resources');
+    },
+
+    async detail(slug: string): Promise<PublicResource> {
+      const res = await fetch(`${API_URL}/content/${encodeURIComponent(slug)}`, { method: 'GET' });
+      return handleResponse(res, 'Failed to load this resource');
+    },
+
+    async related(slug: string, limit = 3): Promise<{ items: PublicResourceCard[] }> {
+      const res = await fetch(
+        `${API_URL}/content/${encodeURIComponent(slug)}/related?limit=${limit}`,
+        { method: 'GET' }
+      );
+      return handleResponse(res, 'Failed to load related resources');
     },
   },
 };
