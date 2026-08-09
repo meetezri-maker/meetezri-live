@@ -10,6 +10,12 @@ import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { PublicResource, PublicResourceCard } from '@meetezri/public-content';
 import type { PublicCard, PublicDetail } from '../../content-hub/content-hub.public.schema';
+import { PUBLIC_CONTRACT_VERIFIED } from '../../content-hub/content-hub.public.contract';
+import type {
+  resolvePublishedContent,
+  resolvePublishedList,
+  resolveSitemapEntries,
+} from '../../content-hub/content-hub.read.service';
 import { STATIC_PUBLIC_ROUTES } from '../sitemap';
 
 const RENDER_DIR = join(__dirname, '..');
@@ -117,19 +123,65 @@ describe('the sitemap invites only public routes', () => {
 });
 
 /**
- * The serializer contract.
+ * The read-seam contract.
  *
- * `PublicDetail` is inferred from the API's zod response schema — the RUNTIME truth, which Fastify
- * validates responses against. `PublicResource` is the VIEW truth the shared renderer consumes.
- * These assignments are the compile-time proof that the two agree; if a serializer field is
- * renamed or dropped, this file fails to compile rather than the public page rendering blanks.
+ * THIS GUARD WAS TOO WEAK AND A DEPLOY PROVED IT. The previous version asserted
+ * `PublicDetail → PublicResource`, but `PublicDetail` was an alias of the schema type — so the
+ * guard was really checking an alias against itself, and it passed happily while the value the
+ * renderer actually receives had drifted. It never touched `resolvePublishedContent`.
+ *
+ * These assertions instead derive the types from the REAL return signatures of the three read-seam
+ * functions the renderer calls, so they describe the exact objects passed to `ResourceArticle`,
+ * `ResourcesLibrary` and `buildSitemap`. If the seam ever returns something broader than the
+ * renderer contract, compilation fails here first.
+ *
+ * The optionality canary lives in `content-hub.public.contract.ts`, next to the schema it watches.
  */
-describe('serializer output satisfies the shared view contract', () => {
-  it('type-checks PublicDetail as a PublicResource', () => {
-    const assertDetail = (input: PublicDetail): PublicResource => input;
-    const assertCard = (input: PublicCard): PublicResourceCard => input;
+type Assert<Condition extends true> = Condition;
+type Extends<A, B> = [A] extends [B] ? true : false;
 
-    expect(typeof assertDetail).toBe('function');
-    expect(typeof assertCard).toBe('function');
+/** Exactly what `renderResourceDetail` passes to `ResourceArticle`. */
+type ResolvedPublished = NonNullable<Awaited<ReturnType<typeof resolvePublishedContent>>>;
+/** Exactly what `renderResourcesIndex` passes to `ResourcesLibrary`. */
+type ResolvedCard = Awaited<ReturnType<typeof resolvePublishedList>>['items'][number];
+/** Exactly what the sitemap route passes to `buildSitemap`. */
+type ResolvedSitemapRow = Awaited<ReturnType<typeof resolveSitemapEntries>>[number];
+
+type _SeamDetailFitsRenderer = Assert<Extends<ResolvedPublished, PublicResource>>;
+type _SeamCardFitsRenderer = Assert<Extends<ResolvedCard, PublicResourceCard>>;
+type _SeamSitemapRowFitsRenderer = Assert<Extends<ResolvedSitemapRow, PublicResourceCard>>;
+
+/** Required keys of the seam's own return type — never `never`, or a field went optional. */
+type RequiredKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? never : K }[keyof T];
+
+type _SeamSlugRequired = Assert<Extends<'slug', RequiredKeys<ResolvedPublished>>>;
+type _SeamLabelRequired = Assert<Extends<'label', RequiredKeys<ResolvedPublished>>>;
+type _SeamTitleRequired = Assert<Extends<'title', RequiredKeys<ResolvedPublished>>>;
+type _SeamBodyRequired = Assert<Extends<'body', RequiredKeys<ResolvedPublished>>>;
+type _SeamCardSlugRequired = Assert<Extends<'slug', RequiredKeys<ResolvedCard>>>;
+
+describe('the read seam satisfies the renderer contract', () => {
+  it('passes the exact resolvePublishedContent return type to the renderer', () => {
+    // The type-level assertions above are the real test — this body exists so the guard is a
+    // reported test rather than a silent compile step, and so the value flow is exercised too.
+    const toRenderer = (input: ResolvedPublished): PublicResource => input;
+    const toCard = (input: ResolvedCard): PublicResourceCard => input;
+    const toSitemapCard = (input: ResolvedSitemapRow): PublicResourceCard => input;
+
+    expect([toRenderer, toCard, toSitemapCard].every((fn) => typeof fn === 'function')).toBe(true);
+  });
+
+  it('keeps the aliased public types identical to the seam types', () => {
+    const detailAlias = (input: PublicDetail): ResolvedPublished => input;
+    const cardAlias = (input: PublicCard): ResolvedCard => input;
+
+    expect(typeof detailAlias).toBe('function');
+    expect(typeof cardAlias).toBe('function');
+  });
+
+  it('binds the Zod schemas to the stated public types in both directions', () => {
+    // Importing the module is what runs the schema↔type assertions in
+    // `content-hub.public.contract.ts`; the constant just proves it was not elided.
+    expect(PUBLIC_CONTRACT_VERIFIED).toBe(true);
   });
 });

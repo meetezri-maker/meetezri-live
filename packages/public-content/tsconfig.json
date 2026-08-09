@@ -1,8 +1,18 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    // Declared here as well as inherited — this package emits the `.d.ts` files the API compiles
+    // against, so a silent loss of `strictNullChecks` would loosen the public contract at its
+    // source. See the note in `apps/api/tsconfig.json`.
+    "strict": true,
+    "strictNullChecks": true,
+
     "outDir": "./dist",
     "rootDir": "./src",
+    // Inside `dist`, so `rm -rf dist` is genuinely a clean build. With `composite`/`incremental`
+    // the default location is next to this file, where a surviving build-info makes tsc believe
+    // the deleted output is still current and emit nothing at all — silently.
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "jsx": "react-jsx",
     "lib": ["ES2020"]
   },

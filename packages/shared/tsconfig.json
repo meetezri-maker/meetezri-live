@@ -1,8 +1,19 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    // Declared here as well as inherited. This package exports several `z.infer` types
+    // (`UserProfile`, the wellness-plan types) into its `.d.ts`, and Zod v3 marks every property
+    // optional when `strictNullChecks` is off. Building it without the inherited flag would
+    // publish an all-optional version of those types to every consumer. See the note in
+    // `apps/api/tsconfig.json` for the deploy failure this prevents.
+    "strict": true,
+    "strictNullChecks": true,
+
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // Inside `dist`, so `rm -rf dist` is genuinely a clean build — see the note in
+    // `packages/public-content/tsconfig.json`.
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo"
   },
   "include": ["src/**/*"]
 }

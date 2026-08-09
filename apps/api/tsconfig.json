@@ -1,6 +1,19 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    // DECLARED HERE, NOT ONLY INHERITED. The repo root sets `strict: true`, but this project is
+    // two directories below it and is built from its own root on Vercel. When that inheritance
+    // does not take effect, tsc falls back to defaults with `strictNullChecks` OFF — and Zod v3
+    // decides property optionality with `undefined extends T[k]`, which is universally true
+    // without strict null checks. Every `z.infer` type then silently becomes all-optional.
+    //
+    // That is exactly how a deploy broke: `PublicDetail` inferred as `{ slug?: string; ... }` and
+    // stopped being assignable to the renderer contract, with no local reproduction because the
+    // inheritance worked here. Stating the flags where the compile happens removes the dependency
+    // on how far up the tree the build can see.
+    "strict": true,
+    "strictNullChecks": true,
+
     "outDir": "./dist",
     "rootDir": ".",
     // The runtime render layer (`src/modules/render`) is React server-rendered to a string.

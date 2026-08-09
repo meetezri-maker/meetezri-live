@@ -17,6 +17,11 @@
 
 import { z } from 'zod';
 import { PUBLIC_CONTENT_LABEL } from '@meetezri/shared';
+import type {
+  PublicBlock as PublicBlockContract,
+  PublicResource,
+  PublicResourceCard,
+} from '@meetezri/public-content';
 
 /** The three public labels. The internal type string is never serialised. */
 export const publicLabelSchema = z.enum([
@@ -246,6 +251,31 @@ export const previewResponseSchema = publicDetailSchema.extend({
 
 export const publicRelatedResponseSchema = z.object({ items: z.array(publicCardSchema) });
 
-export type PublicCard = z.infer<typeof publicCardSchema>;
-export type PublicDetail = z.infer<typeof publicDetailSchema>;
-export type PublicBlock = z.infer<typeof publicBlockSchema>;
+/**
+ * ============================================================================
+ * THE PUBLIC TYPES ARE STATED, NOT INFERRED.
+ * ============================================================================
+ *
+ * These were `z.infer<typeof …>`. That made the TypeScript shape a function of the compiler
+ * settings in force at build time, because Zod v3 decides optionality with
+ * `undefined extends T[k]` — which is universally TRUE when `strictNullChecks` is off. A build
+ * that lost the flag inferred `PublicDetail` as `{ slug?: string; title?: string; … }`, the
+ * renderer contract stopped being satisfied, and production failed to compile.
+ *
+ * So the type now comes from `@meetezri/public-content`, which is the ONE public contract already
+ * shared by the server renderer, the public SPA pages and the admin preview. This is not a second
+ * model — it is the existing one, named once.
+ *
+ * WHAT DID NOT CHANGE:
+ *   - Runtime validation. Fastify still validates every public response against the Zod schemas
+ *     above, so a serializer leak is still a server error rather than a silent disclosure.
+ *   - The allow-list doctrine. The schemas above remain built from scratch; a field is public
+ *     only if it appears in them.
+ *
+ * The two are bound together by `content-hub.public.contract.ts`, which fails to compile if the
+ * schema and the type ever disagree in either direction — so an alias can never quietly become
+ * wider or narrower than what the API actually serialises.
+ */
+export type PublicCard = PublicResourceCard;
+export type PublicDetail = PublicResource;
+export type PublicBlock = PublicBlockContract;
