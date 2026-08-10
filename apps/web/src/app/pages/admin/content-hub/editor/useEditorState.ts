@@ -42,9 +42,42 @@ export function useEditorState({ content, save }: UseEditorStateOptions) {
   const timerRef = useRef<number | null>(null);
   const pendingRef = useRef<(() => ContentHubUpdateBody) | null>(null);
 
+  /**
+   * Adopt the server's concurrency token, including when it moves after we loaded.
+   *
+   * This used to be `if (tokenRef.current === null)` — latched once on first load and never
+   * refreshed. That made the editor page uniquely fragile: an approval, a status transition, a
+   * schedule change or a link replace all bump `content_items.updated_at` server-side, the detail
+   * query refetches with the new value, and the editor carried on holding the pre-change token.
+   * The next save then failed the optimistic-concurrency check against a change the editor had
+   * itself just made. The review queue never hit this because it holds no token at all — which is
+   * exactly why approving from outside the editor worked and approving from inside did not.
+   *
+   * WHEN THE EDITOR IS DIRTY THE TOKEN IS LEFT ALONE. From here a moved timestamp is
+   * indistinguishable between "the workflow action I just took" and "a colleague saved the body",
+   * and silently adopting it in the second case would overwrite their work. Keeping the stale
+   * token means the conflict dialog still fires, which is the behaviour that protects them.
+   */
   useEffect(() => {
-    if (content && tokenRef.current === null) tokenRef.current = content.updatedAt;
-  }, [content]);
+    if (!content) return;
+    if (tokenRef.current === null) {
+      tokenRef.current = content.updatedAt;
+      return;
+    }
+    if (isDirty || saveState.kind === 'saving') return;
+
+    /**
+     * FORWARD ONLY.
+     *
+     * A successful save advances the token immediately, while the detail query still holds the
+     * pre-save payload for a moment. Without this comparison the next render would hand back that
+     * older timestamp and roll the token backwards — turning the very next save into a spurious
+     * conflict. Only a genuinely newer server version is adopted.
+     */
+    const current = tokenRef.current ? Date.parse(tokenRef.current) : 0;
+    const incoming = Date.parse(content.updatedAt);
+    if (Number.isFinite(incoming) && incoming > current) tokenRef.current = content.updatedAt;
+  }, [content, isDirty, saveState.kind]);
 
   /** Published items never autosave — the backend refuses it, and so does the editor. */
   const autosaveAllowed = !!content && content.status !== 'published';
