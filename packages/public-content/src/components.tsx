@@ -314,7 +314,7 @@ export function ResourcesLibrary({
               <li key={filter.text}>
                 <a
                   href={buildHref({ label: filter.label, page: 1 })}
-                  className={isActive ? 'sol-filter sol-filter-active' : 'sol-filter'}
+                  className={isActive ? 'sol-btn sol-btn-primary' : 'sol-btn sol-btn-secondary'}
                   aria-current={isActive ? 'true' : undefined}
                 >
                   {filter.text}
@@ -368,7 +368,7 @@ export function ResourcesLibrary({
       <section className="sol-cta" aria-labelledby="library-cta">
         <h2 id="library-cta">Someone to talk to</h2>
         <p>Solace is a calm, private space to talk things through whenever you need it.</p>
-        <a className="sol-cta-link" href="/how-it-works">
+        <a className="sol-btn sol-btn-primary" href="/how-it-works">
           See how Solace works
         </a>
       </section>

@@ -68,7 +68,9 @@ describe('the rendered document', () => {
   });
 
   it('inlines the stylesheet so the page needs no second request to be correct', () => {
-    expect(html).toContain('<style>.sol-page{');
+    expect(html).toContain('<style>');
+    // The shell rules now precede the page rules, so assert presence rather than position.
+    expect(html).toContain('.sol-page{');
   });
 
   it('renders no raw HTML from content — every value is escaped', () => {
@@ -382,7 +384,10 @@ describe('type-specific public presentation', () => {
   it('renders FAQ answers in the DOM rather than behind a collapsed control', () => {
     const html = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: NO_ASSETS });
     expect(html).toContain('No — clock-watching raises the pressure to fall asleep.');
-    expect(html).not.toContain('<details');
+    // Scoped to the FAQ block: the site header's mobile menu is a <details> disclosure, which is
+    // unrelated to whether FAQ answers are collapsed.
+    const faqSection = html.slice(html.indexOf('class=\"sol-faq\"'));
+    expect(faqSection.slice(0, faqSection.indexOf('</section>'))).not.toContain('<details');
   });
 });
 

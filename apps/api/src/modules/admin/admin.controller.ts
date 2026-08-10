@@ -102,12 +102,19 @@ export async function getUsersHandler(
   reply: FastifyReply
 ) {
   try {
-    const query = request.query as { page?: string; limit?: string; search?: string };
+    const query = request.query as { page?: string; limit?: string; search?: string; role?: string };
     const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
     const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 500;
     const search = typeof query.search === 'string' ? query.search.trim() : undefined;
 
-    const users = await getAllUsers(page, limit, search);
+    // Optional, comma-separated. Omitted keeps the previous behaviour exactly, so the Users
+    // screen is unaffected; the Content Hub picker supplies it to get admins at any table size.
+    const roles =
+      typeof query.role === 'string' && query.role.trim()
+        ? query.role.split(',').map((r) => r.trim()).filter(Boolean)
+        : undefined;
+
+    const users = await getAllUsers(page, limit, search, roles);
     return reply.code(200).send(users);
   } catch (error) {
     request.log.error(error);

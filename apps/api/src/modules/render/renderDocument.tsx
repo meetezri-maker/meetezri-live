@@ -13,7 +13,12 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactNode } from 'react';
-import { PUBLIC_CONTENT_CSS } from '@meetezri/public-content';
+import {
+  PUBLIC_CONTENT_CSS,
+  PublicSiteFooter,
+  PublicSiteHeader,
+  SsrMobileMenu,
+} from '@meetezri/public-content';
 import type { PageMetadata } from './metadata';
 import { serialiseJsonLd } from './structuredData';
 import type { AssetLinks } from './assetManifest';
@@ -22,7 +27,21 @@ export interface DocumentInput {
   metadata: PageMetadata;
   structuredData: Array<Record<string, unknown>>;
   assets: AssetLinks;
+  /** Current path, so the header can mark the active navigation item. */
+  pathname?: string;
   children: ReactNode;
+}
+
+/**
+ * The static logo for server-rendered pages.
+ *
+ * `BrandLogo` in `apps/web` reads `document`, `localStorage` and admin branding events, so it can
+ * neither run here nor produce deterministic output. The server renders the default mark; the SPA
+ * continues to render the real themeable component on every other page. The two are separated by
+ * a slot rather than a fork of the shell.
+ */
+function StaticLogo({ className }: { className?: string }) {
+  return <img src="/logo.svg" alt="Solace" className={className} />;
 }
 
 function MetaTags({ metadata }: { metadata: PageMetadata }) {
@@ -45,6 +64,7 @@ export function renderDocument({
   metadata,
   structuredData,
   assets,
+  pathname,
   children,
 }: DocumentInput): string {
   const markup = renderToStaticMarkup(
@@ -74,7 +94,29 @@ export function renderDocument({
         ))}
       </head>
       <body>
-        <div id="root">{children}</div>
+        {/*
+          The shell lives INSIDE `#root`, matching the SPA exactly.
+
+          `apps/web/src/main.tsx` mounts with `createRoot(...).render()`, not `hydrateRoot` — so
+          React discards this markup wholesale rather than reconciling it. That settles two things.
+          There is no hydration mismatch to engineer around, so the static logo here can be
+          replaced by the themeable `BrandLogo` on takeover with no reconciliation risk. And a
+          shell rendered OUTSIDE this div would survive that takeover while the SPA rendered its
+          own inside it — two headers and two footers on every server-rendered page the moment the
+          bundle loaded.
+
+          Inside `#root`, the server and the client render the same structure and exactly one
+          shell exists at any moment.
+        */}
+        <div id="root">
+          <PublicSiteHeader
+            pathname={pathname}
+            logo={<StaticLogo />}
+            mobileMenu={<SsrMobileMenu />}
+          />
+          {children}
+          <PublicSiteFooter logo={<StaticLogo />} />
+        </div>
         {assets.scripts.map((src) => (
           <script key={src} type="module" src={src} defer />
         ))}

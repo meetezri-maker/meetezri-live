@@ -50,3 +50,21 @@ export {
 } from './format';
 
 export { PUBLIC_CONTENT_CSS } from './styles';
+
+export {
+  PublicSiteHeader,
+  PublicSiteFooter,
+  SsrMobileMenu,
+  SITE_NAV_LINKS,
+  SITE_NAV_ACTIONS,
+  SITE_FOOTER_COLUMNS,
+  SITE_FOOTER_TAGLINE,
+  SITE_FOOTER_COPYRIGHT_YEAR,
+  SITE_FOOTER_DISCLAIMER,
+} from './siteShell';
+
+export type {
+  ShellLink,
+  PublicSiteHeaderProps,
+  PublicSiteFooterProps,
+} from './siteShell';

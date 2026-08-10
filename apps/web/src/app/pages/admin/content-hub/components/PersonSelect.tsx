@@ -18,16 +18,40 @@ interface AdminUser {
   avatar_url?: string | null;
 }
 
-/** Admins are the only candidates in v1 — every author currently also holds an admin account. */
-function useAdminPeople() {
+/**
+ * Roles eligible to be credited as an author or reviewer.
+ *
+ * `therapist` is included alongside the admin roles: a clinician reviewing a wellbeing article is
+ * exactly the reviewer this field exists to record, and excluding them made the list narrower than
+ * the editorial process actually is.
+ */
+export const AUTHOR_ELIGIBLE_ROLES = ['super_admin', 'org_admin', 'team_admin', 'therapist'];
+
+/**
+ * Eligible people, filtered BY THE SERVER.
+ *
+ * This used to request `page=1&limit=100` and filter for admin roles in the browser. With 269
+ * profiles and both admins created months earlier, neither appeared in the newest-100 window, so
+ * every option was discarded and the field offered only "Unassigned" — while the profiles plainly
+ * existed. Asking the API for the roles we want makes the result independent of how many members
+ * have signed up since, which is the part that was actually broken.
+ */
+function useEligiblePeople() {
   return useQuery({
-    queryKey: ['contentHub', 'people'],
+    queryKey: ['contentHub', 'people', AUTHOR_ELIGIBLE_ROLES],
     queryFn: async () => {
-      const result = (await api.admin.getUsers({ page: 1, limit: 100 })) as unknown;
+      const result = (await api.admin.getUsers({
+        page: 1,
+        limit: 200,
+        roles: AUTHOR_ELIGIBLE_ROLES,
+      })) as unknown;
+
+      // The endpoint returns a bare array; the other shapes are tolerated defensively.
       const rows = (result as { users?: AdminUser[]; items?: AdminUser[] } | AdminUser[]) ?? [];
       const list = Array.isArray(rows) ? rows : (rows.users ?? rows.items ?? []);
-      return list.filter((user) =>
-        ['super_admin', 'org_admin', 'team_admin'].includes(String(user.role ?? '')),
+
+      return [...list].sort((a, b) =>
+        (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''),
       );
     },
     staleTime: 5 * 60_000,
@@ -43,8 +67,14 @@ export interface PersonSelectProps {
 }
 
 export function PersonSelect({ id, label, value, onChange, hint }: PersonSelectProps) {
-  const { data, isLoading } = useAdminPeople();
+  const { data, isLoading } = useEligiblePeople();
   const selected = data?.find((person) => person.id === value);
+  /**
+   * A person already stored on the record but absent from the list — deactivated, or their role
+   * changed since. Rendering the raw id would look like data loss and re-saving would silently
+   * drop them, so the current value is always kept selectable.
+   */
+  const hasStoredButUnlisted = !!value && !selected;
 
   return (
     <div>
@@ -60,6 +90,9 @@ export function PersonSelect({ id, label, value, onChange, hint }: PersonSelectP
         className={cn(adminSelect, 'w-full')}
       >
         <option value="">Unassigned</option>
+        {hasStoredButUnlisted ? (
+          <option value={value}>Currently assigned (no longer listed)</option>
+        ) : null}
         {(data ?? []).map((person) => (
           <option key={person.id} value={person.id}>
             {person.full_name || person.email || person.id}

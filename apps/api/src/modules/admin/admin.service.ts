@@ -865,9 +865,24 @@ export async function getUserStatusCounts(): Promise<{
   };
 }
 
-export async function getAllUsers(page: number = 1, limit: number = 20, search?: string) {
+/**
+ * @param roles Optional role filter, applied IN THE QUERY.
+ *
+ * Added because the Content Hub author/reviewer picker used to fetch page one and filter for
+ * admin roles in the browser. With 269 profiles and the two admins created early, neither fell
+ * inside the newest-100 window, so the dropdown offered nothing but "Unassigned" while the
+ * profiles plainly existed. Filtering server-side makes the result independent of how many
+ * members have signed up since.
+ */
+export async function getAllUsers(
+  page: number = 1,
+  limit: number = 20,
+  search?: string,
+  roles?: string[]
+) {
   const searchTerm = search?.trim() ?? '';
-  const cacheKey = `${page}_${limit}_${searchTerm.toLowerCase()}`;
+  const roleKey = roles && roles.length > 0 ? roles.slice().sort().join(',') : '';
+  const cacheKey = `${page}_${limit}_${searchTerm.toLowerCase()}_${roleKey}`;
   const cached = usersCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < USERS_CACHE_TTL)) {
     return cached.data;
@@ -876,15 +891,19 @@ export async function getAllUsers(page: number = 1, limit: number = 20, search?:
   const skip = (page - 1) * limit;
   const take = Math.min(limit, 1000);
 
-  const where =
-    searchTerm.length > 0
-      ? {
-          OR: [
-            { full_name: { contains: searchTerm, mode: 'insensitive' as const } },
-            { email: { contains: searchTerm, mode: 'insensitive' as const } },
-          ],
-        }
-      : undefined;
+  const filters: Array<Record<string, unknown>> = [];
+  if (searchTerm.length > 0) {
+    filters.push({
+      OR: [
+        { full_name: { contains: searchTerm, mode: 'insensitive' as const } },
+        { email: { contains: searchTerm, mode: 'insensitive' as const } },
+      ],
+    });
+  }
+  if (roles && roles.length > 0) {
+    filters.push({ role: { in: roles } });
+  }
+  const where = filters.length > 0 ? { AND: filters } : undefined;
 
   // Single query for list rows; latest mood per user is loaded in one batch (avoids per-row subqueries).
   const users = await prisma.profiles.findMany({

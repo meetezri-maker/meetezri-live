@@ -2225,13 +2225,16 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user counts');
     },
 
-    async getUsers(params?: { page?: number; limit?: number; search?: string }) {
+    async getUsers(params?: { page?: number; limit?: number; search?: string; roles?: string[] }) {
       const headers = await getHeaders();
       const search = new URLSearchParams();
       if (params?.page != null && params.page > 0) search.set('page', String(params.page));
       if (params?.limit != null && params.limit > 0) search.set('limit', String(params.limit));
       const searchTerm = params?.search?.trim();
       if (searchTerm) search.set('search', searchTerm);
+      // Server-side role filter. Without it the caller only sees one page of the newest profiles,
+      // which is how the Content Hub author picker ended up with no options at all.
+      if (params?.roles?.length) search.set('role', params.roles.join(','));
       const qs = search.toString();
       const res = await fetch(`${API_URL}/admin/users${qs ? `?${qs}` : ''}`, {
         method: 'GET',

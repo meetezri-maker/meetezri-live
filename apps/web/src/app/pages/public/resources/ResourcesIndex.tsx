@@ -12,6 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ResourcesLibrary, type PublicLabel } from '@meetezri/public-content';
 import { usePublicResources } from '@/lib/queries/publicContentQueries';
 import { PublicStyles } from './PublicStyles';
+import { ResourcesShell } from './ResourcesShell';
 import { clientCanonical, usePublicMeta } from './publicMeta';
 
 const LABELS: PublicLabel[] = ['Answer', 'Insight', 'Article'];
@@ -51,9 +52,11 @@ export function ResourcesIndex() {
     return (
       <>
         <PublicStyles />
-        <div className="sol-page">
-          <p role="status">Loading resources…</p>
-        </div>
+        <ResourcesShell pathname="/resources">
+          <div className="sol-page">
+            <p role="status">Loading resources…</p>
+          </div>
+        </ResourcesShell>
       </>
     );
   }
@@ -62,13 +65,15 @@ export function ResourcesIndex() {
     return (
       <>
         <PublicStyles />
-        <div className="sol-page">
-          <h1>Resources</h1>
-          <p role="alert">We could not load the resource library just now.</p>
-          <button type="button" className="sol-cta-link" onClick={() => void refetch()}>
-            Try again
-          </button>
-        </div>
+        <ResourcesShell pathname="/resources">
+          <div className="sol-page">
+            <h1>Resources</h1>
+            <p role="alert">We could not load the resource library just now.</p>
+            <button type="button" className="sol-btn sol-btn-primary" onClick={() => void refetch()}>
+              Try again
+            </button>
+          </div>
+        </ResourcesShell>
       </>
     );
   }
@@ -76,7 +81,8 @@ export function ResourcesIndex() {
   return (
     <>
       <PublicStyles />
-      <ResourcesLibrary
+      <ResourcesShell pathname="/resources">
+        <ResourcesLibrary
         items={data.items}
         total={data.total}
         page={data.page}
@@ -86,8 +92,9 @@ export function ResourcesIndex() {
         // full navigation, which the Vercel rewrite serves from the renderer. The reader gets
         // complete HTML with correct metadata instead of a client-patched head, and a bot can
         // follow the same link.
-        buildHref={libraryHref}
-      />
+          buildHref={libraryHref}
+        />
+      </ResourcesShell>
     </>
   );
 }

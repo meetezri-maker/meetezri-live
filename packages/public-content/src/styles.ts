@@ -11,6 +11,72 @@
  */
 
 export const PUBLIC_CONTENT_CSS = `
+/* ─── Shared public-site shell ─────────────────────────────────────────────
+   Self-contained on purpose. The renderer links the web build's Tailwind when the asset
+   manifest resolves, but that lookup is best-effort by design — so the header, footer and
+   buttons carry their own styling and stay presentable even when it does not. */
+.sol-site-header{position:relative;z-index:50;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(7,8,21,.75);backdrop-filter:blur(24px);box-shadow:inset 0 -1px 0 rgba(233,30,99,.14)}
+.sol-site-header-inner{position:relative;margin:0 auto;display:flex;height:4rem;max-width:80rem;align-items:center;justify-content:space-between;gap:1rem;padding:0 1rem}
+@media(min-width:640px){.sol-site-header-inner{padding:0 1.5rem}}
+@media(min-width:1024px){.sol-site-header-inner{padding:0 2rem}}
+.sol-site-logo{position:relative;z-index:10;display:flex;flex-shrink:0;align-items:center;text-decoration:none}
+.sol-site-logo img{height:2.5rem;width:auto;display:block}
+
+.sol-site-nav{position:absolute;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:2rem;font-size:.875rem;letter-spacing:.015em;color:rgba(237,233,254,.78)}
+@media(min-width:768px){.sol-site-nav{display:flex}}
+.sol-site-nav-item{position:relative;padding-bottom:.25rem}
+.sol-site-nav-link{color:inherit;text-decoration:none;transition:color .15s}
+.sol-site-nav-link:hover{color:rgba(255,255,255,.95)}
+.sol-site-nav-link-active{color:#fff}
+.sol-site-nav-underline{position:absolute;bottom:-.125rem;left:0;right:0;height:1px;background:linear-gradient(to right,#E91E63,#e879f9,#9C27B0);box-shadow:0 0 14px rgba(233,30,99,.65)}
+
+.sol-site-actions{position:relative;z-index:10;display:none;align-items:center;gap:1.25rem}
+@media(min-width:640px){.sol-site-actions{display:flex}}
+.sol-site-login{font-size:.875rem;color:rgba(237,233,254,.78);text-decoration:none;transition:color .15s}
+.sol-site-login:hover{color:#fff}
+
+.sol-site-mobile{position:relative;z-index:10}
+@media(min-width:640px){.sol-site-mobile{display:none}}
+.sol-site-disclosure summary{display:flex;height:2.25rem;width:2.25rem;cursor:pointer;align-items:center;justify-content:center;border-radius:.5rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);list-style:none}
+.sol-site-disclosure summary::-webkit-details-marker{display:none}
+.sol-site-disclosure summary:focus-visible{outline:2px solid var(--sol-accent,#5eead4);outline-offset:2px}
+.sol-site-burger{display:flex;flex-direction:column;gap:3px}
+.sol-site-burger span{display:block;height:1.5px;width:16px;background:rgba(255,255,255,.9)}
+.sol-site-disclosure-panel{position:absolute;right:0;top:calc(100% + .5rem);z-index:60;display:flex;min-width:14rem;flex-direction:column;gap:.75rem;border:1px solid rgba(255,255,255,.08);border-radius:.75rem;background:rgba(7,8,18,.97);padding:1rem;font-size:.875rem}
+.sol-site-disclosure-link{color:rgba(237,233,254,.85);text-decoration:none}
+.sol-site-disclosure-link:hover{color:#fff}
+
+.sol-site-footer{border-top:1px solid rgba(255,255,255,.08);background:rgba(4,6,15,.9)}
+.sol-site-footer-rule{margin:0 auto;height:1px;max-width:80rem;background:linear-gradient(to right,transparent,rgba(139,92,246,.35),transparent)}
+.sol-site-footer-inner{margin:0 auto;max-width:80rem;padding:2.5rem 1rem}
+@media(min-width:768px){.sol-site-footer-inner{padding:3rem 2rem}}
+.sol-site-footer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2rem}
+@media(min-width:768px){.sol-site-footer-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.sol-site-footer-brand{grid-column:span 2}
+@media(min-width:768px){.sol-site-footer-brand{grid-column:span 1}}
+.sol-site-footer-brand img{height:3.5rem;width:auto;display:block}
+.sol-site-footer-tagline{margin:.75rem 0 0;font-size:.875rem;color:rgba(237,233,254,.6)}
+.sol-site-footer-social{margin-top:1rem;display:flex;gap:.625rem}
+.sol-site-footer-heading{margin:0 0 .75rem;font-size:.875rem;font-weight:600;color:#fff}
+.sol-site-footer-links{list-style:none;margin:0;padding:0;font-size:.875rem}
+.sol-site-footer-links li{margin-bottom:.375rem}
+.sol-site-footer-link{color:rgba(237,233,254,.6);text-decoration:none}
+.sol-site-footer-link:hover{color:#fff}
+.sol-site-footer-link-accent{color:rgba(196,181,253,.9)}
+.sol-site-footer-legal{margin-top:2rem;border-top:1px solid rgba(255,255,255,.06);padding-top:1.5rem;text-align:center;font-size:.75rem;color:rgba(237,233,254,.6)}
+.sol-site-footer-legal p{margin:0 0 .375rem}
+
+/* Public button language, matching the marketing site's pill CTA and ghost/outline pair. */
+.sol-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:999px;padding:.625rem 1.5rem;font-size:.8125rem;font-weight:500;text-decoration:none;cursor:pointer;border:1px solid transparent;transition:transform .15s,background .15s,color .15s;line-height:1.2}
+.sol-btn:focus-visible{outline:2px solid var(--sol-accent,#5eead4);outline-offset:2px}
+.sol-btn-primary{background:linear-gradient(to right,#E91E63,#9C27B0);color:#fff}
+.sol-btn-primary:hover{transform:scale(1.02)}
+.sol-btn-primary:active{transform:scale(.98)}
+.sol-btn-secondary{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);color:#fff}
+.sol-btn-secondary:hover{background:rgba(255,255,255,.09)}
+.sol-btn-ghost{background:transparent;color:rgba(237,233,254,.78)}
+.sol-btn-ghost:hover{color:#fff;background:rgba(255,255,255,.06)}
+
 .sol-page{--sol-bg:#07090f;--sol-fg:#e8ecf4;--sol-muted:#a3adc2;--sol-line:rgba(255,255,255,.12);--sol-accent:#5eead4;--sol-link:#7dd3fc;color:var(--sol-fg);max-width:72rem;margin:0 auto;padding:1.5rem 1.25rem 4rem;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.65}
 .sol-page a{color:var(--sol-link)}
 .sol-page a:focus-visible,.sol-page button:focus-visible{outline:2px solid var(--sol-accent);outline-offset:2px;border-radius:4px}
@@ -27,8 +93,6 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-library-header{margin-bottom:2rem}
 
 .sol-filters ul{display:flex;flex-wrap:wrap;gap:.5rem;list-style:none;margin:0 0 2rem;padding:0}
-.sol-filter{display:inline-block;padding:.375rem .875rem;border:1px solid var(--sol-line);border-radius:999px;font-size:.875rem;text-decoration:none;color:var(--sol-fg)}
-.sol-filter-active{background:var(--sol-accent);border-color:var(--sol-accent);color:#04211d;font-weight:600}
 
 .sol-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr));gap:1.25rem;list-style:none;margin:0;padding:0}
 .sol-card{border:1px solid var(--sol-line);border-radius:.875rem;overflow:hidden;background:rgba(255,255,255,.025)}
@@ -78,8 +142,6 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-cta{border:1px solid rgba(94,234,212,.3);border-radius:.875rem;padding:1.5rem;margin:2rem 0}
 .sol-cta h2{margin:0 0 .5rem;font-size:1.25rem}
 .sol-cta p{color:var(--sol-muted);margin:0 0 1rem}
-.sol-cta-link{display:inline-block;background:var(--sol-accent);color:#04211d;padding:.625rem 1.25rem;border-radius:999px;font-weight:600;text-decoration:none}
-.sol-cta-link.sol-secondary{background:transparent;color:var(--sol-accent);border:1px solid var(--sol-accent)}
 
 .sol-figure{margin:0 0 1.75rem}
 .sol-figure figcaption{color:var(--sol-muted);font-size:.8125rem;margin-top:.5rem}

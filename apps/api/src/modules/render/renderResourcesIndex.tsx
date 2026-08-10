@@ -47,6 +47,7 @@ export function renderResourcesIndex({
     metadata,
     structuredData: libraryStructuredData(origin, metadata.canonical),
     assets,
+    pathname: '/resources',
     children: (
       <ResourcesLibrary
         items={items}
@@ -80,6 +81,7 @@ export function renderNotFound({
     metadata: notFoundMetadata(origin, path),
     structuredData: [breadcrumbList(origin, [{ name: 'Home', path: '/' }, { name: 'Not found' }])],
     assets,
+    pathname: path,
     children: (
       <div className="sol-page">
         <div className="sol-article">

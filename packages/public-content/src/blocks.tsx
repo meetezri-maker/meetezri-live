@@ -172,7 +172,7 @@ function Block({ block, index }: { block: PublicBlock; index: number }) {
           {block.description ? <p>{block.description}</p> : null}
           <a
             href={href}
-            className={block.style === 'secondary' ? 'sol-cta-link sol-secondary' : 'sol-cta-link'}
+            className={block.style === 'secondary' ? 'sol-btn sol-btn-secondary' : 'sol-btn sol-btn-primary'}
             {...(block.external ? { rel: 'noopener noreferrer', target: '_blank' } : {})}
           >
             {block.label}

@@ -14,11 +14,13 @@ import { useParams } from 'react-router-dom';
 import { ResourceArticle } from '@meetezri/public-content';
 import { usePublicResource } from '@/lib/queries/publicContentQueries';
 import { PublicStyles } from './PublicStyles';
+import { ResourcesShell } from './ResourcesShell';
 import { clientCanonical, usePublicMeta } from './publicMeta';
 
 export function ResourceDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { data, isLoading, isError } = usePublicResource(slug);
+  const path = `/resources/${slug ?? ''}`;
 
   usePublicMeta({
     title: data ? `${data.title} | Solace` : 'Resources | Solace',
@@ -31,9 +33,11 @@ export function ResourceDetail() {
     return (
       <>
         <PublicStyles />
-        <div className="sol-page">
-          <p role="status">Loading…</p>
-        </div>
+        <ResourcesShell pathname={path}>
+          <div className="sol-page">
+            <p role="status">Loading…</p>
+          </div>
+        </ResourcesShell>
       </>
     );
   }
@@ -44,20 +48,22 @@ export function ResourceDetail() {
     return (
       <>
         <PublicStyles />
-        <div className="sol-page">
-          <div className="sol-article">
-            <h1>We could not find that page</h1>
+        <ResourcesShell pathname={path}>
+          <div className="sol-page">
+            <div className="sol-article">
+              <h1>We could not find that page</h1>
             <p className="sol-lede">
               The page you were looking for is not available. It may have moved, or the address may
               be slightly different.
             </p>
-            <p>
-              <a className="sol-cta-link" href="/resources">
-                Browse Solace Resources
-              </a>
-            </p>
+              <p>
+                <a className="sol-btn sol-btn-primary" href="/resources">
+                  Browse Solace Resources
+                </a>
+              </p>
+            </div>
           </div>
-        </div>
+        </ResourcesShell>
       </>
     );
   }
@@ -65,7 +71,9 @@ export function ResourceDetail() {
   return (
     <>
       <PublicStyles />
-      <ResourceArticle resource={data} />
+      <ResourcesShell pathname={path}>
+        <ResourceArticle resource={data} />
+      </ResourcesShell>
     </>
   );
 }
