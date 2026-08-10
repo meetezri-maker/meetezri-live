@@ -44,9 +44,26 @@ export const contentHubKeys = {
 };
 
 /** Surfaces the backend's stable `code` where there is one, falling back to its message. */
+/**
+ * A message an operator can act on, and quote.
+ *
+ * A server error's own text is deliberately generic ("Something went wrong on Server side"),
+ * which told us nothing when the approval endpoint started failing — there was no way to tie the
+ * toast to a server-side record. The API already returns a `requestId` on every error; appending
+ * it costs nothing and turns an unreproducible report into a lookup.
+ *
+ * Only the API's own status, code and request id are shown. Nothing from Prisma or the database
+ * reaches the browser.
+ */
 function describeError(error: unknown, fallback: string): string {
-  if (isApiError(error)) return error.message || fallback;
-  return error instanceof Error ? error.message : fallback;
+  if (!isApiError(error)) {
+    return error instanceof Error ? error.message : fallback;
+  }
+
+  const base = error.status >= 500 ? fallback : error.message || fallback;
+  const requestId = typeof error.body?.requestId === 'string' ? error.body.requestId : null;
+
+  return requestId ? `${base} (reference ${requestId})` : base;
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────

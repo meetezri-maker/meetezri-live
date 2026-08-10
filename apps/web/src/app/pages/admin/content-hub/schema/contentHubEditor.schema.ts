@@ -27,6 +27,46 @@ import {
 /** Which tab an issue belongs to, so the UI can show per-tab error counts. */
 export type EditorTab = 'overview' | 'brief' | 'content' | 'seo' | 'links' | 'review';
 
+// ─── Reviewed-on date conversion ─────────────────────────────────────────────
+
+/**
+ * `reviewed_at` is a `timestamptz` column, but the editor shows a plain calendar date.
+ *
+ * The two conversions below bridge that, and they do it with STRING OPERATIONS ONLY — no `Date`
+ * is constructed in either direction. That is deliberate:
+ *
+ *   `new Date('2026-08-10T00:00:00')`  is parsed in LOCAL time, so in UTC+13 it becomes
+ *   `2026-08-09T11:00:00Z` and the reviewer's date silently moves back a day. The same class of
+ *   bug moves it forward in western timezones. Because nothing here touches `Date`, the day the
+ *   reviewer picked is the day that is stored and the day that is shown, in every timezone.
+ *
+ * Storage is UTC midnight. Both directions agree on that, so a value round-trips exactly.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+
+/** `<input type="date">` value → the ISO datetime the API requires. `'' | null` → `null`. */
+export function dateInputToIso(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+  if (DATE_ONLY.test(trimmed)) return `${trimmed}T00:00:00.000Z`;
+  // Already a full datetime (a value that skipped the date input) — pass it through untouched
+  // rather than mangling it.
+  if (ISO_DATETIME.test(trimmed)) return trimmed;
+  // Anything else is rejected by the field schema before it reaches here; returning null would
+  // silently erase a reviewer's date, so surface it instead.
+  return trimmed;
+}
+
+/** API ISO datetime → `<input type="date">` value. Never feed a full timestamp to a date input. */
+export function isoToDateInput(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return '';
+  // The first ten characters of an ISO-8601 string are its UTC calendar date, which is exactly
+  // what was stored by `dateInputToIso`.
+  return trimmed.slice(0, 10);
+}
+
 export interface EditorIssue extends ValidationIssue {
   tab: EditorTab;
   severity: 'error' | 'warning';
@@ -87,7 +127,17 @@ export const editorDraftSchema = z.object({
   editorialRef: z.string().trim().max(64).optional().or(z.literal('')),
   authorId: z.string().uuid().optional().or(z.literal('')),
   reviewerId: z.string().uuid().optional().or(z.literal('')),
-  reviewedAt: z.string().optional().or(z.literal('')),
+  /**
+   * Held as `YYYY-MM-DD`, because the control is `<input type="date">`.
+   *
+   * `reviewed_at` is a `timestamptz` column and the API requires a full ISO datetime, so this is
+   * converted at the boundary by `toUpdateBody` — not stored in this shape and hoped for.
+   */
+  reviewedAt: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine((value) => !value || DATE_ONLY.test(value), 'Reviewed on must be a calendar date.'),
 
   canonicalUrlOverride: z
     .string()
@@ -201,7 +251,8 @@ export function toUpdateBody(
     editorialRef: values.editorialRef?.trim() || null,
     authorId: values.authorId || null,
     reviewerId: values.reviewerId || null,
-    reviewedAt: values.reviewedAt || null,
+    // Date input (`2026-08-10`) → the ISO datetime the API's `z.string().datetime()` requires.
+    reviewedAt: dateInputToIso(values.reviewedAt),
     canonicalUrlOverride: values.canonicalUrlOverride?.trim() || null,
     robotsDirective: values.robotsDirective,
     ...(extras.body ? { body: extras.body } : {}),

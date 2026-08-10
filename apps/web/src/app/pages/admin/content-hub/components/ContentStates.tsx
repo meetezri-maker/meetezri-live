@@ -8,6 +8,7 @@
 
 import { FileText, RotateCw, SearchX, TriangleAlert } from "lucide-react";
 import { adminBtnPrimary, adminBtnSecondary } from "@/app/admin";
+import { isApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export interface ContentEmptyStateProps {
@@ -65,10 +66,31 @@ export interface ContentErrorStateProps {
   onRetry?: () => void;
   /** Kept generic — never a raw error object or stack. */
   message?: string;
+  /**
+   * The failure the API actually reported.
+   *
+   * Shown as a small technical line beneath the friendly message. It exists because this screen
+   * once reduced a 500 from response-schema validation to "Could not load this content", and
+   * diagnosing it needed a database session — the operator had no way to tell a permissions
+   * problem from a malformed record.
+   *
+   * Only the API's own status and safe message are surfaced; the server never sends a stack or a
+   * query, so there is nothing sensitive to leak here.
+   */
+  error?: unknown;
   className?: string;
 }
 
-export function ContentErrorState({ onRetry, message, className }: ContentErrorStateProps) {
+/** Status and message only — never a stack, a query, or an unknown object's contents. */
+function describeFailure(error: unknown): string | null {
+  if (!isApiError(error)) return null;
+  const code = error.code ? ` · ${error.code}` : '';
+  return `HTTP ${error.status}${code} — ${error.message}`;
+}
+
+export function ContentErrorState({ onRetry, message, error, className }: ContentErrorStateProps) {
+  const detail = describeFailure(error);
+
   return (
     <div
       role="alert"
@@ -82,6 +104,10 @@ export function ContentErrorState({ onRetry, message, className }: ContentErrorS
       <p className="mt-1 max-w-sm text-sm text-[var(--admin-text-secondary)]">
         {message ?? "Something went wrong while loading. Please try again."}
       </p>
+
+      {detail ? (
+        <p className="mt-2 max-w-md font-mono text-xs text-[var(--admin-text-muted)]">{detail}</p>
+      ) : null}
 
       {onRetry ? (
         <button

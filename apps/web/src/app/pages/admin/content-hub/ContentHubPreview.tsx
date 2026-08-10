@@ -31,7 +31,7 @@ const WIDTHS = [
 
 export function ContentHubPreview() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, isError, refetch } = useContentHubPreview(id);
+  const { data, isLoading, isError, error, refetch } = useContentHubPreview(id);
   const [widthId, setWidthId] = useState<(typeof WIDTHS)[number]['id']>('desktop');
   const width = WIDTHS.find((w) => w.id === widthId)!;
 
@@ -87,7 +87,7 @@ export function ContentHubPreview() {
             </p>
           ) : isError || !data ? (
             <div className={adminCardStatic}>
-              <ContentErrorState onRetry={() => void refetch()} message="Could not load the preview." />
+              <ContentErrorState onRetry={() => void refetch()} message="Could not load the preview." error={error} />
             </div>
           ) : (
             <div className="flex justify-center overflow-x-auto">

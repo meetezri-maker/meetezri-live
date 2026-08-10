@@ -12,6 +12,7 @@
 
 import { randomUUID } from 'crypto';
 import {
+  LINK_RELATIONS,
   PUBLIC_CONTENT_LABEL,
   isRouteKey,
   normaliseTags,
@@ -559,6 +560,23 @@ export async function replaceLinks(contentId: string, links: LinkInput[], actor:
   const targetIds: string[] = [];
 
   for (const link of links) {
+    /**
+     * Relation is validated HERE, not only in the route body schema.
+     *
+     * It used to be checked only by `linkInputSchema` on the HTTP route, so anything reaching
+     * this service by another path — a migration script, a seeder — could persist a relation the
+     * enum does not contain. The admin detail RESPONSE schema does contain that enum, so such a
+     * row made `GET /api/admin/content/:id` fail response validation and return 500, and the
+     * editor showed a generic "Could not load content" for a record that was otherwise fine.
+     * Validating at the service means every writer is held to the same contract as the reader.
+     */
+    if (!(LINK_RELATIONS as readonly string[]).includes(link.relation)) {
+      throw invalidLink(
+        `Unknown link relation: ${link.relation}. Expected one of ${LINK_RELATIONS.join(', ')}.`,
+        { relation: link.relation }
+      );
+    }
+
     if (link.targetKind === 'content') {
       if (!link.targetContentId) throw invalidLink('A content link needs a target.');
       if (link.targetContentId === contentId) throw invalidLink('Content cannot link to itself.');

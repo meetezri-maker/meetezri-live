@@ -312,7 +312,7 @@ app.register(contentHubPublicRoutes, { prefix: '/api/content' });
 // apps/web/vercel.json rewrites here ahead of the SPA catch-all — not API endpoints.
 app.register(renderRoutes);
 
-app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+app.setErrorHandler(async (error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.
   const inferredFromName =
     error?.name === 'ZodError' || error?.name === 'ResponseValidationError' ? 400 : undefined;
@@ -360,8 +360,19 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
   if (isServerError) {
     request.log.error({ err: error, requestId: request.id }, 'Unhandled API error');
 
-    // Persist server errors for the admin Error Tracking UI.
-    // Best-effort only (never block the response; ignore DB failures).
+    /**
+     * Persist server errors for the admin Error Tracking UI.
+     *
+     * AWAITED, not fire-and-forget. This used to be `void prisma.error_logs.create(...)` inside a
+     * synchronous try/catch, which lost the error twice over: a serverless function is frozen the
+     * moment `reply.send()` returns, so the un-awaited insert never completed, and a rejected
+     * promise escaped the synchronous catch as an unhandled rejection. The table was empty in
+     * production as a result, and a real 500 on the Content Hub approval endpoint left no trace
+     * at all — the failure had to be guessed at rather than read.
+     *
+     * Still best-effort: the insert is bounded and its own failure is swallowed, because losing an
+     * error log must never turn one failed request into two.
+     */
     try {
       const ctx: Record<string, unknown> = {
         title: typeof error?.name === 'string' ? error.name : 'UnhandledError',
@@ -377,18 +388,22 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
           (request as any)?.auth?.sub ||
           null,
       };
-      // Fire and forget
-      void prisma.error_logs.create({
-        data: {
-          message: typeof error?.message === 'string' && error.message.trim() ? error.message : message,
-          stack_trace: typeof error?.stack === 'string' ? error.stack : null,
-          context: ctx as any,
-          severity: 'error',
-          status: 'open',
-        },
-      });
-    } catch {
-      /* ignore */
+      await Promise.race([
+        prisma.error_logs.create({
+          data: {
+            message:
+              typeof error?.message === 'string' && error.message.trim() ? error.message : message,
+            stack_trace: typeof error?.stack === 'string' ? error.stack : null,
+            context: ctx as any,
+            severity: 'error',
+            status: 'open',
+          },
+        }),
+        // A slow or unreachable database must not hold the error response open.
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    } catch (logError) {
+      request.log.error({ err: logError }, 'Failed to persist error_log row');
     }
   }
 

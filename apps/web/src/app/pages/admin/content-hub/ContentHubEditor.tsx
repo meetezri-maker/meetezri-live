@@ -45,6 +45,7 @@ import { BlockEditor } from './editor/BlockEditor';
 import { useEditorState, useUnsavedChangesWarning } from './editor/useEditorState';
 import {
   editorDraftSchema,
+  isoToDateInput,
   toUpdateBody,
   validateDocument,
   type EditorFormValues,
@@ -79,7 +80,7 @@ export function ContentHubEditor() {
   const urlTab = searchParams.get('tab');
   const activeTab: EditorTab = isEditorTab(urlTab) ? urlTab : 'overview';
 
-  const { data, isLoading, isError, refetch } = useContentHubDetail(id);
+  const { data, isLoading, isError, error, refetch } = useContentHubDetail(id);
   const saveMutation = useSaveContent(id ?? '');
 
   // Body, type fields and editorial live outside react-hook-form: they are nested structures the
@@ -118,7 +119,7 @@ export function ContentHubEditor() {
       editorialRef: data.editorialRef ?? '',
       authorId: data.author?.id ?? '',
       reviewerId: data.reviewer?.id ?? '',
-      reviewedAt: data.reviewedAt ? data.reviewedAt.slice(0, 10) : '',
+      reviewedAt: isoToDateInput(data.reviewedAt),
       canonicalUrlOverride: data.canonicalUrlOverride ?? '',
       robotsDirective: (data.robotsDirective as never) ?? 'index,follow',
     });
@@ -222,7 +223,11 @@ export function ContentHubEditor() {
     return (
       <AdminLayoutNew>
         <div className={cn(adminPageRoot, 'p-6')}>
-          <ContentErrorState onRetry={() => void refetch()} message="Could not load this content." />
+          <ContentErrorState
+            onRetry={() => void refetch()}
+            message="Could not load this content."
+            error={error}
+          />
         </div>
       </AdminLayoutNew>
     );
