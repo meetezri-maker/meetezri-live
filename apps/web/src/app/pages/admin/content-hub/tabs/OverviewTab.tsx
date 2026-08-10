@@ -183,7 +183,7 @@ export function OverviewTab({ form, content, slugTouched, onSlugTouched, onChang
           label="Author"
           value={watch('authorId') ?? ''}
           onChange={(value) => {
-            setValue('authorId', value);
+            setValue('authorId', value, { shouldDirty: true });
             onChange();
           }}
           hint="Shown publicly as the byline."
@@ -193,7 +193,7 @@ export function OverviewTab({ form, content, slugTouched, onSlugTouched, onChang
           label="Reviewer"
           value={watch('reviewerId') ?? ''}
           onChange={(value) => {
-            setValue('reviewerId', value);
+            setValue('reviewerId', value, { shouldDirty: true });
             onChange();
           }}
           hint="Public trust signal — separate from the internal approval gates."

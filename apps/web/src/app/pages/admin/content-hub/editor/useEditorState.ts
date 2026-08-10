@@ -41,6 +41,8 @@ export function useEditorState({ content, save }: UseEditorStateOptions) {
   const tokenRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const pendingRef = useRef<(() => ContentHubUpdateBody) | null>(null);
+  /** Serialises saves, so a queued one reads the token the previous save returned. */
+  const queueRef = useRef<Promise<ContentHubDetail | null>>(Promise.resolve(null));
 
   /**
    * Adopt the server's concurrency token, including when it moves after we loaded.
@@ -84,12 +86,41 @@ export function useEditorState({ content, save }: UseEditorStateOptions) {
 
   const runSave = useCallback(
     async (buildBody: () => ContentHubUpdateBody, createRevision: boolean) => {
-      const token = tokenRef.current;
-      if (!token) return null;
+      /**
+       * SAVES ARE SERIALISED, and this is the whole fix for the false "Someone else changed this
+       * content" on Author/Reviewer.
+       *
+       * `saveNow` cancels the autosave TIMER, but it cannot cancel an autosave that has already
+       * fired and is in flight. Both requests then read the same `tokenRef` and send the same
+       * `expectedUpdatedAt`: the first consumes it, the server advances `updated_at`, and the
+       * second comes back 409 STALE_UPDATE — a conflict with nobody.
+       *
+       * It surfaced on Author and Reviewer because those are dropdowns. A pick followed by a click
+       * on Save lands inside the two-second debounce far more often than typing does, where every
+       * keystroke pushes the timer out again.
+       *
+       * Waiting for the in-flight save means the second one reads the token the first just
+       * returned. Optimistic concurrency is untouched — a genuine external edit still 409s.
+       */
+      // A CHAIN, not a single slot: three overlapping saves must each wait for the one before it.
+      // Awaiting a shared "current" promise would let the second and third both wake on the first
+      // and read the same token, which is the bug this exists to prevent.
+      const previous = queueRef.current;
+      const attempt = (async () => {
+        await previous.catch(() => undefined);
 
-      setSaveState({ kind: 'saving' });
+        const token = tokenRef.current;
+        if (!token) return null;
+
+        setSaveState({ kind: 'saving' });
+        return save({ ...buildBody(), expectedUpdatedAt: token, createRevision });
+      })();
+
+      queueRef.current = attempt;
+
       try {
-        const result = await save({ ...buildBody(), expectedUpdatedAt: token, createRevision });
+        const result = await attempt;
+        if (!result) return null;
         tokenRef.current = result.updatedAt;
         setIsDirty(false);
         setSaveState({ kind: 'saved', at: result.updatedAt });
