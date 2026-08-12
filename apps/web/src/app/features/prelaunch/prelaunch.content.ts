@@ -360,7 +360,7 @@ export const FOUNDER = {
     "Sometimes the most important conversation isn’t the one you have with someone else. It’s the one that helps you better understand yourself.",
   /** VIDEO TITLE, per Appendix A. Replaces the former "Why I Built Solace". */
   videoTitle: "Meet the Founder",
-  videoLength: "60–90 seconds",
+  videoLength: "",
   ctaSupportingText:
     "Join us from the very beginning and help shape the future of Solace.",
 } as const;

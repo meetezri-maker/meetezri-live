@@ -7,7 +7,7 @@ export const DASHBOARD_IMAGES = {
   /** Sidebar profile photo (fallback when user has no avatar_url) */
   userAvatar: "/dashboard-images/user-avatar.png",
   /** Starry lake — hero card atmosphere behind greeting copy */
-  heroAtmosphere: "/dashboard-images/first.png",
+  heroAtmosphere: "/dashboard-images/first.jpg",
   /** Journey: Deep Focus */
   journeyLake: "/dashboard-images/4.png",
   /** Journey: Evening Unwind */

@@ -1,7 +1,7 @@
 /** Static assets under `public/talk-it-out/` for the Talk It Out lobby. */
 export const TALK_IT_OUT_IMAGES = {
   /** Hero — sunset mountain lake (`public/wellness-tools/6.png`) */
-  heroBackground: "/wellness-tools/6.png",
+  heroBackground: "/talk-it-out/talk-it-out.jpg",
   /** Warm candle glow — layered on hero lower-left */
   heroCandleAccent: "/talk-it-out/2.png",
   /** Moonlit lake — hero / environment atmosphere */

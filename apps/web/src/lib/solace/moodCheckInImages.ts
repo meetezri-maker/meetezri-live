@@ -1,7 +1,7 @@
 /** Static assets under `public/mood-check-in/` for Mood Check-In. */
 export const MOOD_CHECKIN_IMAGES = {
   /** Hero banner — lotus on the lake at dusk */
-  heroBanner: "/mood-check-in/1.png",
+  heroBanner: "/mood-check-in/mood-check-in.jpg",
   calm: "/mood-check-in/2.png",
   overwhelmed: "/mood-check-in/3.png",
   hopeful: "/mood-check-in/5.png",
