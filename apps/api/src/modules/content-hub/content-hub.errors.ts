@@ -26,7 +26,8 @@ export type ContentHubErrorCode =
   | 'SCHEDULE_IN_PAST'
   | 'INVALID_LINK'
   | 'REVISION_NOT_FOUND'
-  | 'SLUG_CHANGE_NOT_CONFIRMED';
+  | 'SLUG_CHANGE_NOT_CONFIRMED'
+  | 'TRANSACTION_BUSY';
 
 export class ContentHubError extends Error {
   readonly statusCode: number;
@@ -147,6 +148,29 @@ export function mapPrismaUniqueViolation(error: unknown, context: { slug?: strin
     return invalidLink('That link already exists.');
   }
   return null;
+}
+
+/**
+ * Map "the database was too busy to start/serve this transaction" onto a stable domain error.
+ *
+ * P2028 is Prisma's transaction API error; the variant seen in production is "Unable to start a
+ * transaction in the given time", raised when no pooled connection becomes free within `maxWait`.
+ * P2024 is the sibling case for a plain query waiting on the pool.
+ *
+ * BOTH MEAN NOTHING WAS WRITTEN. The transaction never began, so there is no partial state to
+ * reconcile and the caller can simply try again. Rendering that as a bare 500 ("Something went
+ * wrong on Server side") told operators the opposite of the truth — it reads like a corrupted
+ * write. A 503 with a retry hint is both accurate and actionable.
+ */
+export function mapPrismaTransactionUnavailable(error: unknown) {
+  const err = error as { code?: string; message?: string };
+  if (err?.code !== 'P2028' && err?.code !== 'P2024') return null;
+
+  return new ContentHubError(
+    503,
+    'TRANSACTION_BUSY',
+    'The database was busy and this change was not started. Nothing was modified — please try again.'
+  );
 }
 
 export function isContentHubError(error: unknown): error is ContentHubError {

@@ -284,6 +284,26 @@ export interface TransitionResult {
   invalidatePaths: string[];
 }
 
+/** How long the transition transaction may RUN once it holds a connection. */
+const TRANSACTION_TIMEOUT_MS = 20_000;
+
+/**
+ * How long to wait for a connection before giving up on STARTING the transaction.
+ *
+ * Prisma's default is 2 000 ms, and leaving it there is what produced the intermittent 500s on
+ * draft → in_review (P2028, "Unable to start a transaction in the given time"). In production the
+ * API runs serverless against Supabase's PgBouncer transaction pooler with `connection_limit=1`,
+ * so whenever another query in the same instance holds that one connection, acquisition takes
+ * longer than two seconds and the request fails BEFORE any work happens — while the execution
+ * budget above sat unused at twenty seconds.
+ *
+ * Nothing is written when this expires, so raising it cannot corrupt anything: the choice is only
+ * between waiting for the connection and rejecting a transition that would have succeeded. Ten
+ * seconds matches the pool timeout the runtime already uses elsewhere and stays well inside the
+ * execution budget.
+ */
+const TRANSACTION_MAX_WAIT_MS = 10_000;
+
 export async function transitionContent(
   contentId: string,
   action: TransitionAction,
@@ -387,7 +407,7 @@ export async function transitionContent(
         invalidatePaths: [`/resources/${row.slug}`, '/resources', '/sitemap.xml'],
       };
     },
-    { timeout: 20_000 }
+    { timeout: TRANSACTION_TIMEOUT_MS, maxWait: TRANSACTION_MAX_WAIT_MS }
   );
 }
 

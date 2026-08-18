@@ -11,7 +11,7 @@ import {
   publishCluster,
   validateCluster,
 } from './content-hub.cluster.service';
-import { isContentHubError } from './content-hub.errors';
+import { isContentHubError, mapPrismaTransactionUnavailable } from './content-hub.errors';
 import {
   evaluateChecklist,
   setApprovalGate,
@@ -57,6 +57,20 @@ function actorFrom(request: FastifyRequest): Actor {
  * its detail through this module.
  */
 function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
+  /**
+   * A starved connection pool is not an unexpected failure, and it is not a corrupted write —
+   * the transaction never started. Translating it here, before the generic re-throw, turns the
+   * opaque 500 that draft → in_review was returning into an accurate, retryable 503.
+   */
+  const busy = mapPrismaTransactionUnavailable(error);
+  if (busy) {
+    request.log.warn(
+      { code: busy.code, route: request.routeOptions?.url ?? request.url },
+      'Content Hub transaction could not start; nothing was written'
+    );
+    error = busy;
+  }
+
   if (isContentHubError(error)) {
     request.log.info(
       { code: error.code, route: request.routeOptions?.url ?? request.url },

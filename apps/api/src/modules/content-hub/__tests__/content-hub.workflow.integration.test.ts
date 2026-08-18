@@ -923,3 +923,116 @@ describe('audit trail', () => {
     expect(error).toMatchObject({ statusCode: 404, code: 'CONTENT_NOT_FOUND' });
   });
 });
+
+/**
+ * Regression: draft -> in_review returned a 500 in production (req-y).
+ *
+ * The cause was a transaction that could not START — Prisma's default 2s `maxWait` against a
+ * single-connection pooler — so the request failed before any work happened. That part is covered
+ * in `content-hub.transition-busy.test.ts`. What belongs HERE is the property the 500 called into
+ * question: that this transition is all-or-nothing against a real database.
+ */
+describe('draft -> in_review is atomic', () => {
+  it('moves the status, writes one revision and one audit event together', async () => {
+    const draft = await newDraft();
+    const before = await prisma.audit_logs.count({ where: { actor_id: SUPER.id } });
+
+    const result = await transitionContent(draft.id, 'submit', SUPER);
+
+    expect(result.status).toBe('in_review');
+
+    const row = await prisma.content_items.findUniqueOrThrow({ where: { id: draft.id } });
+    expect(row.status).toBe('in_review');
+    expect(row.updated_by).toBe(SUPER.id);
+
+    const revisions = await prisma.content_revisions.findMany({
+      where: { content_id: draft.id, trigger: 'transition' },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0].status_at_capture).toBe('in_review');
+    expect(revisions[0].created_by).toBe(SUPER.id);
+    expect(revisions[0].revision_number).toBe(result.revisionNumber);
+
+    const events = await prisma.audit_logs.findMany({
+      where: { actor_id: SUPER.id, action: 'content.submitted_for_review' },
+    });
+    const mine = events.filter((e) => (e.details as { contentId?: string })?.contentId === draft.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].details).toMatchObject({ from: 'draft', to: 'in_review' });
+    expect(await prisma.audit_logs.count({ where: { actor_id: SUPER.id } })).toBeGreaterThan(before);
+  });
+
+  it('captures a revision snapshot that carries the body', async () => {
+    const draft = await newDraft();
+    await transitionContent(draft.id, 'submit', SUPER);
+
+    const revision = await prisma.content_revisions.findFirstOrThrow({
+      where: { content_id: draft.id, trigger: 'transition' },
+    });
+    // The production snapshot for W2-G001 was ~14KB of real content; an empty snapshot would mean
+    // a restore could not rebuild the item.
+    expect(revision.snapshot).toBeTruthy();
+    expect(Object.keys(revision.snapshot as object)).toContain('body');
+  });
+
+  it('rejects a REPEATED submit with a domain 409, never a 500', async () => {
+    const draft = await newDraft();
+    await transitionContent(draft.id, 'submit', SUPER);
+
+    const error = await transitionContent(draft.id, 'submit', SUPER).catch((e) => e);
+
+    expect(isContentHubError(error)).toBe(true);
+    expect(error).toMatchObject({ statusCode: 409, code: 'ILLEGAL_TRANSITION' });
+    expect(error.statusCode).not.toBe(500);
+  });
+
+  it('writes no second revision and no second audit event for the rejected repeat', async () => {
+    const draft = await newDraft();
+    await transitionContent(draft.id, 'submit', SUPER);
+    await transitionContent(draft.id, 'submit', SUPER).catch(() => undefined);
+
+    const revisions = await prisma.content_revisions.count({
+      where: { content_id: draft.id, trigger: 'transition' },
+    });
+    expect(revisions).toBe(1);
+
+    const events = await prisma.audit_logs.findMany({
+      where: { actor_id: SUPER.id, action: 'content.submitted_for_review' },
+    });
+    expect(events.filter((e) => (e.details as { contentId?: string })?.contentId === draft.id)).toHaveLength(1);
+  });
+
+  /**
+   * A real mid-transaction failure, not a mocked one.
+   *
+   * `content_revisions.created_by` and `audit_logs.actor_id` both reference `profiles`. An actor
+   * carrying a valid JWT whose profile row does not exist therefore passes the role check, updates
+   * the status, and then fails on a foreign key — after the write that matters. If the transaction
+   * were not atomic, the item would be left sitting in `in_review` with no revision and no audit
+   * trail, which is exactly the half-transitioned state the production 500 raised doubts about.
+   */
+  const GHOST: Actor = { id: randomUUID(), role: 'super_admin' };
+
+  it('rolls back the status change when the transaction fails part-way', async () => {
+    const draft = await newDraft();
+
+    await expect(transitionContent(draft.id, 'submit', GHOST)).rejects.toThrow();
+
+    const row = await prisma.content_items.findUniqueOrThrow({ where: { id: draft.id } });
+    expect(row.status).toBe('draft');
+
+    expect(await prisma.content_revisions.count({ where: { content_id: draft.id } })).toBe(0);
+    expect(await prisma.audit_logs.count({ where: { actor_id: GHOST.id } })).toBe(0);
+  });
+
+  it('still transitions correctly after a failed attempt', async () => {
+    const draft = await newDraft();
+
+    await transitionContent(draft.id, 'submit', GHOST).catch(() => undefined);
+
+    // The rolled-back attempt consumed no revision number and left the item submittable.
+    const result = await transitionContent(draft.id, 'submit', SUPER);
+    expect(result.status).toBe('in_review');
+    expect(result.revisionNumber).toBe(1);
+  });
+});
