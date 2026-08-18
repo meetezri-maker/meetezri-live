@@ -770,7 +770,7 @@ export function Progress() {
           <img
             src={PROGRESS_IMAGES.hero}
             alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_center]"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_86%]"
             loading="eager"
             decoding="async"
           />
@@ -1032,7 +1032,7 @@ export function Progress() {
               className="progress-tools-banner relative overflow-hidden rounded-2xl border border-slate-800/50"
             >
               <img
-                src={DASHBOARD_IMAGES.quoteDecor}
+                src={PROGRESS_IMAGES.toolsBanner}
                 alt=""
                 className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
                 loading="lazy"
@@ -1122,7 +1122,7 @@ export function Progress() {
               <img
                 src={PROGRESS_IMAGES.celebrateBanner}
                 alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_53%]"
                 loading="lazy"
                 decoding="async"
               />

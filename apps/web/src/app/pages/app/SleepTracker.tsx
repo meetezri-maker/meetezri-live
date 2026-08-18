@@ -1000,7 +1000,7 @@ export function SleepTracker() {
                   <img
                     src={SLEEP_TRACKER_IMAGES.hero}
                     alt="Moonlit lake at night with a wooden pier and glowing lantern"
-                    className="sleep-tracker-hero-img pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                    className="sleep-tracker-hero-img pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_45%]"
                     loading="eager"
                     decoding="async"
                     width={1600}

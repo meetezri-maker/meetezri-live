@@ -557,6 +557,23 @@ export const adminContentDetailSchema = adminContentListItemSchema.extend({
   approvalActors: z.array(approvalActorSchema),
 });
 
+/**
+ * Response of `POST /:id/transition`.
+ *
+ * This route used to declare its 200 inline as a RAW JSON SCHEMA
+ * (`{ type: 'object', properties: { … } }`) while the app serialises with
+ * `fastify-type-provider-zod`. That compiler calls `safeParse` on whatever it is handed; given a
+ * plain object it takes the `properties` branch and then throws
+ * `TypeError: schema.safeParse is not a function` — AFTER the transaction has committed. Every
+ * successful transition therefore returned a 500 even though the status change, the revision and
+ * the audit event had all landed. Declaring it as Zod, like every other route in this module, is
+ * the whole fix.
+ */
+export const transitionResponseSchema = z.object({
+  status: contentStatusSchema,
+  revisionNumber: z.number(),
+});
+
 export const checklistItemSchema = z.object({
   code: z.string(),
   label: z.string(),

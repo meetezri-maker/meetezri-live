@@ -873,7 +873,8 @@ export function BrainHealthPage() {
               <img
                 src={BRAIN_HEALTH_IMAGES.hero}
                 alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%] brightness-[1.18] saturate-[1.08] contrast-[1.02]"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[70%_50%] opacity-[0.42] [html[data-ezri-theme=light]_&]:opacity-[0.28]"
+                // className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%] brightness-[1.18] saturate-[1.08] contrast-[1.02]"
                 loading="eager"
                 decoding="async"
               />

@@ -3,7 +3,7 @@ import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
 /** Static assets under `public/community/` for the Community page. */
 export const COMMUNITY_IMAGES = {
   /** Hero — gathering by the lake at twilight */
-  hero: "/community/1.png",
+  hero: "/community/community.jpg",
   /** Right-rail daily reminder card */
   dailyReminder: "/community/2.png",
   /** Optional accent (campfire / togetherness) */

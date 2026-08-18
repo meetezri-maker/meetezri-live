@@ -76,7 +76,7 @@ const PAYG_CAPSULES = [25, 50, 100, 200] as const;
 const INVOICE_PAGE_SIZE_OPTIONS = [8, 10, 20, 50] as const;
 
 /** Cinematic environment only — not UI mockups or reference screenshots */
-const HERO_SCENERY_SRC = "/community/hero-lake.jpg";
+const HERO_SCENERY_SRC = "/community/billing.jpg";
 const HELP_SCENERY_SRC = "/community/scene-water.jpg";
 
 interface GlowRingProps {

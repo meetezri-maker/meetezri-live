@@ -5,5 +5,5 @@ export const HABIT_TRACKER_IMAGES = {
   /** Companion / mascot — purple spirit with glowing heart */
   companionMascot: "/habbit-tracker/2.png",
   /** Candle accent — hero corner + reflection rail */
-  candleAccent: "/habbit-tracker/3.png",
+  candleAccent: "/habbit-tracker/habit-tracker-reflection.jpg",
 } as const;

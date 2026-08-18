@@ -1030,7 +1030,7 @@ export function WellnessTools() {
                 <img
                   src={WELLNESS_TOOLS_IMAGES.hero}
                   alt="Wooden deck with lanterns and candles overlooking a calm lake at dusk"
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_42%]"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_80%]"
                   loading="eager"
                   decoding="async"
                   width={1600}
@@ -1068,73 +1068,6 @@ export function WellnessTools() {
                   <div className="hidden lg:block" aria-hidden />
                 </div>
               </motion.section>
-
-              <section className="space-y-3" aria-labelledby="wellness-support-heading">
-                <div>
-                  <h2
-                    id="wellness-support-heading"
-                    className="text-lg font-semibold tracking-tight text-white sm:text-xl"
-                  >
-                    How can we support you today?
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-400">Start with what you need most right now.</p>
-                </div>
-                <div className="solace-scroll flex flex-nowrap gap-3 overflow-x-auto pb-1 pt-0.5">
-                  {SUPPORT_PILLS.map((pill) => {
-                    const Icon = pill.icon;
-                    const active =
-                      !showOnlyFavorites &&
-                      exploreGroup === null &&
-                      selectedCategoryTab === pill.category;
-                    return (
-                      <button
-                        key={pill.label}
-                        type="button"
-                        onClick={() => {
-                          setExploreGroup(null);
-                          setSelectedCategoryTab(pill.category);
-                          setShowOnlyFavorites(false);
-                        }}
-                        className={cn(
-                          solaceImageCard,
-                          "group relative flex h-[72px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition",
-                          active
-                            ? "border-violet-400/45 shadow-[0_0_36px_rgba(139,92,246,0.35),0_12px_32px_-18px_rgba(236,72,153,0.12)] ring-1 ring-fuchsia-400/20"
-                            : "border-white/[0.1] shadow-[0_14px_36px_-22px_rgba(0,0,0,0.65)] hover:border-violet-400/30 hover:shadow-[0_0_28px_rgba(139,92,246,0.18)]"
-                        )}
-                      >
-                        <div
-                          className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.04]"
-                          style={{ backgroundImage: `url(${pill.image})` }}
-                          aria-hidden
-                        />
-                        <div
-                          className="absolute inset-0 bg-gradient-to-t from-[#07030f]/95 via-black/55 to-violet-950/20"
-                          aria-hidden
-                        />
-                        <div
-                          className={cn(
-                            "absolute inset-0 transition",
-                            active ? "bg-violet-950/35" : "bg-black/25 group-hover:bg-black/15"
-                          )}
-                          aria-hidden
-                        />
-                        <span
-                          className={cn(
-                            "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-black/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[2px]",
-                            pill.glow
-                          )}
-                        >
-                          <Icon className="h-4 w-4 text-zinc-100" aria-hidden />
-                        </span>
-                        <span className="relative z-10 px-1 text-[11px] font-medium leading-tight text-zinc-100 drop-shadow-[0_1px_8px_rgba(0,0,0,0.85)]">
-                          {pill.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
 
               <section className="space-y-3" aria-labelledby="wellness-explore-heading">
                 <div className="flex flex-wrap items-end justify-between gap-2">

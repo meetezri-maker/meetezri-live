@@ -1944,9 +1944,9 @@ export function Achievements() {
               {/* Hero — full-bleed lotus scene */}
               <section className={achievementsHeroShell}>
                 <img
-                  src={ACHIEVEMENTS_IMAGES.hero}
+                  src={ACHIEVEMENTS_IMAGES.heroBanner}
                   alt="Glowing lotus on a moonlit lake with mountains at twilight"
-                  className={cn(achievementsHeroImage, 'object-[58%_50%]')}
+                  className={cn(achievementsHeroImage, 'object-[58%_90%]')}
                   width={1600}
                   height={520}
                   loading="eager"

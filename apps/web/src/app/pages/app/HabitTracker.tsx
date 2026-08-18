@@ -1078,7 +1078,7 @@ export function HabitTracker() {
                     <img
                       src={HABIT_TRACKER_IMAGES.hero}
                       alt=""
-                      className="pointer-events-none absolute inset-0 h-full w-full scale-[1.03] object-cover object-[center_38%] brightness-[1.1] contrast-[1.05] saturate-[1.15]"
+                      className="pointer-events-none absolute inset-0 h-full w-full scale-[1.03] object-cover object-[center_45%] brightness-[1.1] contrast-[1.05] saturate-[1.15]"
                       loading="eager"
                       decoding="async"
                     />

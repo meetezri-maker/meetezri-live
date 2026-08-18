@@ -7,5 +7,5 @@ export const SLEEP_TRACKER_IMAGES = {
   /** Lantern / candle accent — hero corner + wind-down tip */
   candleAccent: "/sleep-tracker/3.png",
   /** Starfield accent — journey strip + support card (not full-page) */
-  starfieldAccent: "/sleep-tracker/4.png",
+  starfieldAccent: "/sleep-tracker/sleep-tracker-footer.jpg",
 } as const;

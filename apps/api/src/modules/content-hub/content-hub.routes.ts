@@ -55,6 +55,7 @@ import {
   safeErrorResponseSchema,
   scheduleBodySchema,
   transitionBodySchema,
+  transitionResponseSchema,
   updateContentBodySchema,
   uuidParamsSchema,
 } from './content-hub.schema';
@@ -157,10 +158,7 @@ export async function contentHubAdminRoutes(app: FastifyInstance) {
       schema: {
         params: uuidParamsSchema,
         body: transitionBodySchema,
-        response: {
-          200: { type: 'object', properties: { status: { type: 'string' }, revisionNumber: { type: 'number' } } },
-          ...errors,
-        },
+        response: { 200: transitionResponseSchema, ...errors },
       },
     },
     transitionHandler

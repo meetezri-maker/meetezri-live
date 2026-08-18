@@ -45,7 +45,7 @@ export const solaceHeroSection = cn(
 );
 
 export const solaceHeroImage = cn(
-  "absolute inset-0 z-0 h-full w-full object-cover object-[center_32%]",
+  "absolute inset-0 z-0 h-full w-full object-cover object-[center_60%]",
   "brightness-[0.94] contrast-[1.05] saturate-[1.08]"
 );
 

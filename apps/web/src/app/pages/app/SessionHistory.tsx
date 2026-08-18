@@ -201,7 +201,7 @@ function formatSessionDuration(s: BackendSession): { label: string; minutesForSt
   return { label: "N/A", minutesForStats: 0 };
 }
 
-const SESSION_HISTORY_HERO_IMG = "/community/2.png";
+const SESSION_HISTORY_HERO_IMG = "/session/talking-history.jpg";
 
 const MOOD_COLORS: Record<string, string> = {
   Anxious: "session-history-mood-pill session-history-mood-pill--amber",

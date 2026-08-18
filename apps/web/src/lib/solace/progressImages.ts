@@ -1,7 +1,7 @@
 /** Static assets under `public/progress/` for the Your Progress page. */
 export const PROGRESS_IMAGES = {
   /** Hero — path toward sunset / mountains */
-  hero: "/progress/1.png",
+  hero: "/progress/progress.jpg",
   /** Quote card — purple landscape */
   quoteLandscape: "/progress/2.png",
   /** This month's reflection — candle, journal, lanterns */
@@ -9,5 +9,7 @@ export const PROGRESS_IMAGES = {
   /** Personal note — fairy-light jar */
   personalNoteJar: "/progress/4.png",
   /** Celebrate banner — warm candle glow (dashboard-images) */
-  celebrateBanner: "/dashboard-images/2.png",
+  celebrateBanner: "/progress/progress-footer.jpg",
+
+  toolsBanner: "/progress/progress-tools.jpg",
 } as const;

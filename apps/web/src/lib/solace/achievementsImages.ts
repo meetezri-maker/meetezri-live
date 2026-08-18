@@ -4,4 +4,5 @@ import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
 export const ACHIEVEMENTS_IMAGES = {
   /** Hero — glowing lotus on a moonlit lake */
   hero: MOOD_CHECKIN_IMAGES.heroBanner,
+  heroBanner: "/achievements/achievements.jpg",
 } as const;

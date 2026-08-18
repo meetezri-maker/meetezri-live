@@ -1,7 +1,7 @@
 /** Static assets under `public/wellness-tools/` for the Wellness Tools page. */
 export const WELLNESS_TOOLS_IMAGES = {
   /** Hero — deck, lanterns, lake at dusk */
-  hero: "/wellness-tools/1.png",
+  hero: "/wellness-tools/wellness-tools.jpg",
   /** Right-rail inspirational quote card */
   quote: "/wellness-tools/14.png",
   explore: {

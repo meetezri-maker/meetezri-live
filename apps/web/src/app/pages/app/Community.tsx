@@ -1157,7 +1157,7 @@ export function Community() {
                 loading="eager"
                 decoding="async"
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover object-[62%_45%]"
+                className="absolute inset-0 h-full w-full object-cover object-[62%_75%]"
               />
               <div
                 className="absolute inset-0 bg-gradient-to-r from-[#050816]/90 via-[#050816]/55 to-[#050816]/20"
