@@ -25,7 +25,8 @@ import {
 export { settingsIconChip } from "./settingsIconChip";
 
 /** Hero — shared mood-check-in banner (community/hero-lake.jpg is not in public assets) */
-export const SETTINGS_HERO_IMG = MOOD_CHECKIN_IMAGES.heroBanner;
+export const SETTINGS_HERO_IMG = '/profile/settings.jpg';
+// MOOD_CHECKIN_IMAGES.heroBanner;
 export const SETTINGS_HELP_IMG = SOLACE_SUPPORT_CARD_IMG;
 
 export const settingsPageAtmosphere = cn(solacePageAtmosphere, "settings-hub-page");

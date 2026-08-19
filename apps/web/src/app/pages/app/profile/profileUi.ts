@@ -12,7 +12,7 @@ import {
   solacePageVignette,
 } from "@/app/solace/solacePageChrome";
 
-export const PROFILE_HERO_IMG = "/community/hero-lake.jpg";
+export const PROFILE_HERO_IMG = "/profile/profile.jpg";
 export const PROFILE_EMERGENCY_BG = "/community/scene-water.jpg";
 export const PROFILE_SIDEBAR_INSPIRATION_IMG = "/community/scene-forest.jpg";
 
