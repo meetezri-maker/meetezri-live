@@ -85,6 +85,8 @@ export interface ActiveSessionViewProps {
   permissionsGranted: boolean;
   sessionStatsOpen: boolean;
   onToggleSessionStats: () => void;
+  transcriptOpen: boolean;
+  onToggleTranscript: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   profileAvatarUrl: string | null | undefined;
@@ -208,6 +210,8 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     permissionsGranted,
     sessionStatsOpen,
     onToggleSessionStats,
+    transcriptOpen,
+    onToggleTranscript,
     isFullscreen,
     onToggleFullscreen,
     profileAvatarUrl,
@@ -362,19 +366,6 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             leftSessionChromeRef={leftSessionChromeRef}
             sessionGreeting={sessionGreeting}
             viewerFirstName={viewerFirstName}
-            transcriptListRef={transcriptListRef}
-            transcript={transcript}
-            liveUserSpeech={liveUserSpeech}
-            isMuted={isMuted}
-            isSessionPaused={isSessionPaused}
-            isSoundOff={isSoundOff}
-            isEzriSpeaking={isEzriSpeaking}
-            isEzriThinking={isEzriThinking}
-            companionName={companionName}
-            sttProvider={sttProvider}
-            ezriWsStatus={ezriWsStatus}
-            ezriWarmupStatus={ezriWarmupStatus}
-            permissionsGranted={permissionsGranted}
           />
 
           <SessionRightRail
@@ -382,6 +373,8 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             stageRailWidthRightClass={stageRailWidthRightClass}
             sessionStatsOpen={sessionStatsOpen}
             onToggleSessionStats={onToggleSessionStats}
+            transcriptOpen={transcriptOpen}
+            onToggleTranscript={onToggleTranscript}
             isFullscreen={isFullscreen}
             onToggleFullscreen={onToggleFullscreen}
             profileAvatarUrl={profileAvatarUrl}
@@ -395,6 +388,17 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             connectionQualityColor={connectionQualityColor}
             sortedMoodPreview={sortedMoodPreview}
             latestMoodEmoji={latestMoodEmoji}
+            transcriptListRef={transcriptListRef}
+            transcript={transcript}
+            liveUserSpeech={liveUserSpeech}
+            isMuted={isMuted}
+            isSessionPaused={isSessionPaused}
+            isSoundOff={isSoundOff}
+            isEzriSpeaking={isEzriSpeaking}
+            isEzriThinking={isEzriThinking}
+            sttProvider={sttProvider}
+            ezriWarmupStatus={ezriWarmupStatus}
+            permissionsGranted={permissionsGranted}
           />
 
           <SessionControlDock

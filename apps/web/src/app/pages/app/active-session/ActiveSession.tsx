@@ -592,11 +592,8 @@ export function ActiveSession() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
-  const [sessionStatsOpen, setSessionStatsOpen] = useState(() => {
-  if (typeof window === "undefined") return true;
-  return window.innerWidth >= 768;
-});
+  const [sessionStatsOpen, setSessionStatsOpen] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [sessionBackdropPreference, setSessionBackdropPreference] =
     useState<SessionBackdropPreference>(() =>
       typeof window !== "undefined"
@@ -5038,7 +5035,19 @@ export function ActiveSession() {
     "relative h-full min-h-0 w-full flex-1 overflow-hidden text-white transition-[background-color] duration-500";
 
   const handleToggleSessionStats = useCallback(() => {
-    setSessionStatsOpen((o) => !o);
+    setSessionStatsOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) setTranscriptOpen(false);
+      return nextOpen;
+    });
+  }, []);
+
+  const handleToggleTranscript = useCallback(() => {
+    setTranscriptOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) setSessionStatsOpen(false);
+      return nextOpen;
+    });
   }, []);
 
   const handleToggleSessionPaused = useCallback(() => {
@@ -5181,6 +5190,8 @@ export function ActiveSession() {
       permissionsGranted={permissionsGranted}
       sessionStatsOpen={sessionStatsOpen}
       onToggleSessionStats={handleToggleSessionStats}
+      transcriptOpen={transcriptOpen}
+      onToggleTranscript={handleToggleTranscript}
       isFullscreen={isFullscreen}
       onToggleFullscreen={toggleFullscreen}
       profileAvatarUrl={profile?.avatar_url}

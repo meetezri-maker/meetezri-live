@@ -1,9 +1,11 @@
 import { memo } from "react";
+import type { RefObject } from "react";
 import {
   Activity,
   Gauge,
   Loader2,
   Maximize,
+  MessageCircle,
   Minimize,
   Smile,
   Wifi,
@@ -13,8 +15,11 @@ import { motion } from "motion/react";
 import { Button } from "@/app/components/ui/button";
 import type { EzriWsStatus } from "@/lib/ezri/realtimeClient";
 import { glassControlBtn, glassPanel } from "../constants";
+import type { LiveUserSpeechStore } from "../hooks/useLiveUserSpeechStore";
 import { moodEmojiForLabel } from "../utils/moodEmoji";
 import { formatSessionTime } from "../utils/sessionFormat";
+import type { TranscriptLine } from "../utils/transcript";
+import { SessionTranscriptPanel } from "./SessionTranscriptPanel";
 
 export interface MoodPreviewRow {
   mood: string;
@@ -27,6 +32,8 @@ export interface SessionRightRailProps {
   stageRailWidthRightClass: string;
   sessionStatsOpen: boolean;
   onToggleSessionStats: () => void;
+  transcriptOpen: boolean;
+  onToggleTranscript: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   profileAvatarUrl: string | null | undefined;
@@ -40,6 +47,17 @@ export interface SessionRightRailProps {
   connectionQualityColor: string;
   sortedMoodPreview: MoodPreviewRow[];
   latestMoodEmoji: string;
+  transcriptListRef: RefObject<HTMLDivElement>;
+  transcript: TranscriptLine[];
+  liveUserSpeech: LiveUserSpeechStore;
+  isMuted: boolean;
+  isSessionPaused: boolean;
+  isSoundOff: boolean;
+  isEzriSpeaking: boolean;
+  isEzriThinking: boolean;
+  sttProvider: string | undefined;
+  ezriWarmupStatus: "idle" | "warming" | "ready";
+  permissionsGranted: boolean;
 }
 
 function SessionRightRailComponent({
@@ -47,6 +65,8 @@ function SessionRightRailComponent({
   stageRailWidthRightClass,
   sessionStatsOpen,
   onToggleSessionStats,
+  transcriptOpen,
+  onToggleTranscript,
   isFullscreen,
   onToggleFullscreen,
   profileAvatarUrl,
@@ -60,6 +80,17 @@ function SessionRightRailComponent({
   connectionQualityColor,
   sortedMoodPreview,
   latestMoodEmoji,
+  transcriptListRef,
+  transcript,
+  liveUserSpeech,
+  isMuted,
+  isSessionPaused,
+  isSoundOff,
+  isEzriSpeaking,
+  isEzriThinking,
+  sttProvider,
+  ezriWarmupStatus,
+  permissionsGranted,
 }: SessionRightRailProps) {
   return (
     <aside
@@ -67,6 +98,20 @@ function SessionRightRailComponent({
       className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-20 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
     >
       <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 md:gap-2.5">
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onToggleTranscript}
+          className={`flex size-10 shrink-0 items-center shaz justify-center rounded-full ${glassControlBtn} transition-transform ${transcriptOpen ? "ring-2 ring-white/35" : ""
+            }`}
+          aria-expanded={transcriptOpen}
+          aria-controls="session-transcript-panel"
+          aria-label={transcriptOpen ? "Hide transcript" : "Transcript"}
+          title="Transcript"
+        >
+          <MessageCircle className="size-5" aria-hidden />
+        </motion.button>
         <motion.button
           type="button"
           whileHover={{ scale: 1.02 }}
@@ -113,7 +158,7 @@ function SessionRightRailComponent({
 
       <div
         id="session-widgets-panel"
-        className={`pointer-events-auto flex flex-col gap-1 ${sessionStatsOpen ? "" : "hidden"}`}
+        className={`pointer-events-auto mt-2 flex flex-col gap-1 ${sessionStatsOpen ? "" : "hidden"}`}
         aria-hidden={!sessionStatsOpen}
       >
         <div className={`${glassPanel} shrink-0 flex items-center gap-2 px-2.5 py-1.5`}>
@@ -270,6 +315,30 @@ function SessionRightRailComponent({
               ) : null}
             </>
           )}
+        </div>
+      </div>
+
+      <div
+        id="session-transcript-panel"
+        className={`pointer-events-auto mt-2 ${transcriptOpen ? "" : "hidden"}`}
+        aria-hidden={!transcriptOpen}
+      >
+        <div className={glassPanel + " shrink-0 p-2"}>
+          <SessionTranscriptPanel
+            transcriptListRef={transcriptListRef}
+            transcript={transcript}
+            liveUserSpeech={liveUserSpeech}
+            isMuted={isMuted}
+            isSessionPaused={isSessionPaused}
+            isSoundOff={isSoundOff}
+            isEzriSpeaking={isEzriSpeaking}
+            isEzriThinking={isEzriThinking}
+            companionName={companionName}
+            sttProvider={sttProvider}
+            ezriWsStatus={ezriWsStatus}
+            ezriWarmupStatus={ezriWarmupStatus}
+            permissionsGranted={permissionsGranted}
+          />
         </div>
       </div>
     </aside>

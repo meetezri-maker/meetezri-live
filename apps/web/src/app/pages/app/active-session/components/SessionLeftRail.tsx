@@ -1,10 +1,6 @@
 import { memo } from "react";
 import type { RefObject } from "react";
-import type { EzriWsStatus } from "@/lib/ezri/realtimeClient";
 import { glassPanel } from "../constants";
-import type { LiveUserSpeechStore } from "../hooks/useLiveUserSpeechStore";
-import type { TranscriptLine } from "../utils/transcript";
-import { SessionTranscriptPanel } from "./SessionTranscriptPanel";
 
 export interface SessionLeftRailProps {
   stageSidePanelInsetL: string;
@@ -12,19 +8,6 @@ export interface SessionLeftRailProps {
   leftSessionChromeRef: RefObject<HTMLDivElement>;
   sessionGreeting: string;
   viewerFirstName: string;
-  transcriptListRef: RefObject<HTMLDivElement>;
-  transcript: TranscriptLine[];
-  liveUserSpeech: LiveUserSpeechStore;
-  isMuted: boolean;
-  isSessionPaused: boolean;
-  isSoundOff: boolean;
-  isEzriSpeaking: boolean;
-  isEzriThinking: boolean;
-  companionName: string;
-  sttProvider: string | undefined;
-  ezriWsStatus: EzriWsStatus;
-  ezriWarmupStatus: "idle" | "warming" | "ready";
-  permissionsGranted: boolean;
 }
 
 function SessionLeftRailComponent({
@@ -33,23 +16,10 @@ function SessionLeftRailComponent({
   leftSessionChromeRef,
   sessionGreeting,
   viewerFirstName,
-  transcriptListRef,
-  transcript,
-  liveUserSpeech,
-  isMuted,
-  isSessionPaused,
-  isSoundOff,
-  isEzriSpeaking,
-  isEzriThinking,
-  companionName,
-  sttProvider,
-  ezriWsStatus,
-  ezriWarmupStatus,
-  permissionsGranted,
 }: SessionLeftRailProps) {
   return (
     <aside
-      aria-label="Talking greeting and transcript"
+      aria-label="Talking greeting"
       className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 flex max-h-[min(100dvh-5rem,100%)] ${stageRailWidthLeftClass} flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2`}
     >
       <div
@@ -65,21 +35,6 @@ function SessionLeftRailComponent({
             feels right in this moment.
           </p>
         </div>
-        <SessionTranscriptPanel
-          transcriptListRef={transcriptListRef}
-          transcript={transcript}
-          liveUserSpeech={liveUserSpeech}
-          isMuted={isMuted}
-          isSessionPaused={isSessionPaused}
-          isSoundOff={isSoundOff}
-          isEzriSpeaking={isEzriSpeaking}
-          isEzriThinking={isEzriThinking}
-          companionName={companionName}
-          sttProvider={sttProvider}
-          ezriWsStatus={ezriWsStatus}
-          ezriWarmupStatus={ezriWarmupStatus}
-          permissionsGranted={permissionsGranted}
-        />
       </div>
     </aside>
   );

@@ -40,7 +40,8 @@ import {
   settingsSubpageHeroTitleSerif,
 } from "@/app/pages/app/settings-hub/settingsSubpageHero";
 
-const HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+// const HERO_IMG = SETTINGS_SUBPAGE_HERO_IMG;
+const HERO_IMG = "/profile/support.jpg";
 const BANNER_IMG = "/community/scene-water.jpg";
 const COMFORT_IMG = TALK_ENV_CANDLE;
 const LANTERN_IMG = SOLACE_SUPPORT_CARD_IMG;
