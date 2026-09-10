@@ -381,6 +381,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
           start_date: new Date(subscription.current_period_start * 1000),
           end_date: new Date(subscription.current_period_end * 1000),
           next_billing_at: new Date(subscription.current_period_end * 1000),
+          stripe_synced_at: new Date(),
           ...amountPatch,
         },
       });
@@ -394,6 +395,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
           start_date: new Date(subscription.current_period_start * 1000),
           end_date: new Date(subscription.current_period_end * 1000),
           next_billing_at: new Date(subscription.current_period_end * 1000),
+          stripe_synced_at: new Date(),
           ...amountPatch,
         },
       });
@@ -407,6 +409,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
           start_date: new Date(subscription.current_period_start * 1000),
           end_date: new Date(subscription.current_period_end * 1000),
           next_billing_at: new Date(subscription.current_period_end * 1000),
+          stripe_synced_at: new Date(),
           ...amountPatch,
         },
       });
@@ -498,6 +501,7 @@ async function handleSubscriptionUpdated(subscription: any) {
         ...(planChanged && newPlanType ? { plan_type: newPlanType } : {}),
         end_date: new Date(subscription.current_period_end * 1000),
         next_billing_at: new Date(subscription.current_period_end * 1000),
+        stripe_synced_at: new Date(),
         ...amountPatch,
       },
     });
@@ -516,6 +520,7 @@ async function handleSubscriptionDeleted(subscription: any) {
     data: {
       status: 'canceled',
       plan_type: 'trial',
+      stripe_synced_at: new Date(),
     },
   });
 }
@@ -559,6 +564,7 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
           status: subscription.status,
           end_date: new Date(subscription.current_period_end * 1000),
           next_billing_at: new Date(subscription.current_period_end * 1000),
+          stripe_synced_at: new Date(),
           ...amountPatch,
         },
       });

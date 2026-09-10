@@ -11,7 +11,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import * as userService from '../users/user.service';
 import { listStripeInvoicesForAdmin, type AdminStripeInvoice } from '../billing/services/admin-stripe-list.service';
 import { isPaygInvoice } from '../billing/services/admin-billing-shared';
-import { ensureSingleActiveTrial } from '../billing/services/trial.service';
+import { provisionDiscoverTrial } from '../billing/services/trial.service';
 import { invalidateUserSubscriptionCache } from '../billing/services/subscription.service';
 
 // Simple in-memory cache for dashboard stats (keyed by query options)
@@ -1137,7 +1137,7 @@ type AdminPlanType = 'trial' | 'core' | 'pro';
 export async function applyUserSubscriptionPlan(userId: string, subscription: AdminPlanType) {
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   if (!profile) {
     throw new Error('User not found');
@@ -1166,28 +1166,10 @@ export async function applyUserSubscriptionPlan(userId: string, subscription: Ad
     });
   }
 
-  const trialStart = new Date();
-  const trialEnd = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-
   if (subscription === 'trial') {
-    // Delegate to the canonical helper so this path cannot produce a second active trial row
-    // once `subscriptions_one_active_trial_per_user` exists.
-    //
-    // WAS: took the newest ACTIVE row of ANY plan and flipped it to trial — which could both
-    //      convert a paid row into a trial AND, when no active row existed, create a second
-    //      active trial alongside one the user already had.
-    // NOW: scoped to the user's active TRIAL row. An existing active trial is reused and
-    //      reshaped; otherwise a new one is created. A paid row is never matched, so it is
-    //      never converted.
-    //
-    // Trial duration (7 days), credit behaviour, authorization, audit logging and the
-    // response shape are all unchanged — the credit write below still runs exactly as before.
-    await ensureSingleActiveTrial(userId, {
-      match: 'active_trial',
+    // Only the Discover branch uses this provisioner; paid-plan behavior below is unchanged.
+    await provisionDiscoverTrial(userId, profile.email ?? '', {
       billingCycle: 'monthly',
-      startDate: trialStart,
-      endDate: trialEnd,
-      reshapeExisting: true,
     });
   } else if (sub) {
     await prisma.subscriptions.update({
@@ -1213,11 +1195,14 @@ export async function applyUserSubscriptionPlan(userId: string, subscription: Ad
 
   await prisma.profiles.update({
     where: { id: userId },
-    data: {
-      credits: planCredits,
-      credits_seconds: planCredits * 60,
-      signup_type: subscription === 'trial' ? 'trial' : 'plan',
-    },
+    data:
+      subscription === 'trial'
+        ? { signup_type: 'trial' }
+        : {
+            credits: planCredits,
+            credits_seconds: planCredits * 60,
+            signup_type: 'plan',
+          },
   });
 
   userService.invalidateUserProfileCache(userId);

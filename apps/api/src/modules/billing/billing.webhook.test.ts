@@ -356,6 +356,7 @@ describe('billing.webhook stripeWebhookHandler', () => {
           user_id: 'user-2',
           stripe_sub_id: 'sub_stripe_1',
           plan_type: 'core',
+          stripe_synced_at: expect.any(Date),
         }),
       })
     );
@@ -408,7 +409,14 @@ describe('billing.webhook stripeWebhookHandler', () => {
 
     await stripeWebhookHandler(request, reply);
 
-    expect(mockPrisma.subscriptions.update).toHaveBeenCalled();
+    expect(mockPrisma.subscriptions.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          next_billing_at: new Date(1_700_259_200 * 1000),
+          stripe_synced_at: expect.any(Date),
+        }),
+      })
+    );
     expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
       where: { id: 'user-3' },
       data: { credits: 500, credits_seconds: 500 * 60 },
@@ -481,3 +489,5 @@ describe('beginStripeWebhookProcessing', () => {
     expect(mockStripeWebhookEvents.create).toHaveBeenCalledTimes(2);
   });
 });
+
+export {};

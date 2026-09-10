@@ -6,14 +6,15 @@
  *      target plan. For `trial` that meant it could (a) convert an active PAID row into a
  *      trial, and (b) when no active row existed, create a second active trial alongside one
  *      the user already held — which the new index rejects.
- * NOW: the trial branch delegates to `ensureSingleActiveTrial`, scoped to the user's active
- *      TRIAL row. Paid rows are never matched. Duration, credits, authorization, audit logging
- *      and the response shape are unchanged.
+ * NOW: the trial branch delegates to canonical Discover provisioning. Any historical trial is
+ *      reused without reshaping or recrediting; new rows receive the email-derived 7/30-day
+ *      window. Paid rows and paid-plan assignment remain unchanged.
  */
 
 const mockPrisma = {
   profiles: { findUnique: jest.fn(), update: jest.fn(), upsert: jest.fn() },
   subscriptions: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  founding_members: { findUnique: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -65,7 +66,7 @@ describe('admin trial assignment — one-active-trial compatibility', () => {
     // The lookup is scoped to the active TRIAL row — the helper's signature query.
     expect(mockPrisma.subscriptions.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ plan_type: 'trial', status: 'active' }),
+        where: expect.objectContaining({ plan_type: 'trial' }),
       })
     );
     expect(mockPrisma.subscriptions.create).toHaveBeenCalledTimes(1);
@@ -84,16 +85,14 @@ describe('admin trial assignment — one-active-trial compatibility', () => {
     if (result === null) return;
 
     expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
-    expect(mockPrisma.subscriptions.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'existing-trial' } })
-    );
+    expect(mockPrisma.subscriptions.update).not.toHaveBeenCalled();
   });
 
   it('never converts a paid row into a trial', async () => {
     // Only a paid row exists. The active-trial-scoped lookup must not match it.
     mockPrisma.subscriptions.findFirst.mockImplementation(async (args: any) => {
       const w = args?.where ?? {};
-      if (w.plan_type === 'trial' && w.status === 'active') return null;
+      if (w.plan_type === 'trial') return null;
       return { id: 'paid-row', plan_type: 'pro', status: 'active' };
     });
 

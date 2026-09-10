@@ -10,7 +10,7 @@ import {
   clearSubscriptionsCache,
 } from '../billing.cache';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
-import { ensureSingleActiveTrial } from './trial.service';
+import { provisionDiscoverTrial } from './trial.service';
 import { isStripeSubIdUniqueViolation } from './subscription-constraints';
 import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
 
@@ -27,6 +27,34 @@ function clearUserBillingCaches(userId: string) {
   userSubscriptionInFlight.delete(userId);
   userBillingHistoryCache.delete(userId);
   userBillingHistoryInFlight.delete(userId);
+}
+
+
+function setCachedSubscription(userId: string, data: any) {
+  userSubscriptionCache.set(userId, { data: data ?? null, timestamp: Date.now() });
+}
+
+function dateMs(value: unknown) {
+  if (!value) return null;
+  const ms = new Date(value as any).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function decimalString(value: unknown) {
+  if (value == null) return null;
+  return String(value);
+}
+
+function stripeBackedFieldsChanged(existing: any, next: any) {
+  if (!existing) return true;
+  if ((existing.stripe_sub_id ?? null) !== (next.stripe_sub_id ?? null)) return true;
+  if ((existing.status ?? null) !== (next.status ?? null)) return true;
+  if ((existing.plan_type ?? null) !== (next.plan_type ?? null)) return true;
+  if (dateMs(existing.start_date) !== dateMs(next.start_date)) return true;
+  if (dateMs(existing.end_date) !== dateMs(next.end_date)) return true;
+  if (dateMs(existing.next_billing_at) !== dateMs(next.next_billing_at)) return true;
+  if ('amount' in next && decimalString(existing.amount) !== decimalString(next.amount)) return true;
+  return false;
 }
 
 /**
@@ -72,7 +100,7 @@ export async function getSubscription(userId: string) {
     });
 
     if (!sub) {
-      userSubscriptionCache.set(userId, { data: null, timestamp: Date.now() });
+      setCachedSubscription(userId, null);
       return null;
     }
 
@@ -81,11 +109,11 @@ export async function getSubscription(userId: string) {
 
     // If canceled and past end date, treat as no subscription (fall back to trial/free)
     if (['canceled', 'cancelled'].includes(status) && sub.end_date && sub.end_date < now) {
-      userSubscriptionCache.set(userId, { data: null, timestamp: Date.now() });
+      setCachedSubscription(userId, null);
       return null;
     }
 
-    userSubscriptionCache.set(userId, { data: sub, timestamp: Date.now() });
+    setCachedSubscription(userId, sub);
     return sub;
   })().finally(() => {
     userSubscriptionInFlight.delete(userId);
@@ -96,37 +124,13 @@ export async function getSubscription(userId: string) {
 }
 
 export async function createCheckoutSession(userId: string, email: string, data: CreateSubscriptionInput) {
-  // Handle Trial Plan - Create subscription directly without Stripe.
-  // Row creation is owned by the canonical helper, which enforces at-most-one-active-trial.
-  //
-  // BEHAVIOUR CHANGE (plan §2.1 W14, disposition "Fixed in-scope"): the lookup was previously
-  // `findFirst({ user_id })` — ANY row, any plan, any status — so this endpoint could flip an
-  // active PAID row to trial and reset that user's balance. It is now scoped to the user's
-  // active TRIAL row, so a paid subscription is never downgraded here.
-  //
-  // The credit RESET below is deliberately left exactly as-is: it is overwrite semantics
-  // (allowance impl A6), not stacking, and routing it through an audited adjustment path is
-  // §4A / Gate 8 work that has not been approved yet.
+  // Discover is provisioned locally. The canonical service owns duration, idempotency,
+  // founding-member recognition, and the one-time minute grant; no Stripe call is involved.
   if (data.plan_type === 'trial') {
-    const trialCredits = PLAN_LIMITS.trial.credits;
-
-    const { subscription } = await ensureSingleActiveTrial(userId, {
-      match: 'active_trial',
+    const { subscription } = await provisionDiscoverTrial(userId, email, {
       billingCycle: data.billing_cycle,
       amount: 0,
-      endDate: null, // Ongoing until upgraded or limits hit
-      reshapeExisting: true,
     });
-
-    // Reset/Set credits for trial
-    await prisma.profiles.update({
-      where: { id: userId },
-      data: {
-        credits: trialCredits,
-        credits_seconds: trialCredits * 60,
-      },
-    });
-
     return { subscription };
   }
 
@@ -366,6 +370,7 @@ export async function linkSubscriptionToUser(
     start_date: new Date(stripeSub.current_period_start * 1000),
     end_date: new Date(stripeSub.current_period_end * 1000),
     next_billing_at: new Date(stripeSub.current_period_end * 1000),
+    stripe_synced_at: new Date(),
     updated_at: new Date(),
     ...(mrrUsd != null ? { amount: mrrUsd } : {}),
   };
@@ -660,8 +665,18 @@ export async function syncSubscriptionWithStripe(userId: string) {
   const activeSub = stripeSubs.data.find((s) => validStatuses.includes(s.status));
 
   if (!activeSub) {
-    // No active subscription in Stripe
-    return getSubscription(userId);
+    // No active subscription in Stripe. Mark reconciliation fresh for the current local row
+    // so read-time reconciliation stays bounded even for canceled/ended Stripe states.
+    const local = await getSubscription(userId);
+    if (local?.id) {
+      const row = await prisma.subscriptions.update({
+        where: { id: local.id },
+        data: { stripe_synced_at: new Date() },
+      });
+      setCachedSubscription(userId, row);
+      return row;
+    }
+    return local;
   }
 
   const priceId = activeSub.items.data[0].price.id;
@@ -677,12 +692,32 @@ export async function syncSubscriptionWithStripe(userId: string) {
   }
 
   if (planType === 'trial') {
-    return getSubscription(userId);
+    const local = await getSubscription(userId);
+    if (local?.id) {
+      const row = await prisma.subscriptions.update({
+        where: { id: local.id },
+        data: { stripe_synced_at: new Date() },
+      });
+      setCachedSubscription(userId, row);
+      return row;
+    }
+    return local;
   }
 
   const existingByStripeId = await prisma.subscriptions.findFirst({
     where: { stripe_sub_id: activeSub.id },
-    select: { id: true, plan_type: true },
+    select: {
+      id: true,
+      user_id: true,
+      stripe_sub_id: true,
+      status: true,
+      plan_type: true,
+      start_date: true,
+      end_date: true,
+      next_billing_at: true,
+      amount: true,
+      stripe_synced_at: true,
+    },
   });
 
   const pendingCandidate = !existingByStripeId
@@ -694,7 +729,18 @@ export async function syncSubscriptionWithStripe(userId: string) {
           plan_type: planType,
         },
         orderBy: { created_at: 'desc' },
-        select: { id: true, plan_type: true },
+        select: {
+          id: true,
+          user_id: true,
+          stripe_sub_id: true,
+          status: true,
+          plan_type: true,
+          start_date: true,
+          end_date: true,
+          next_billing_at: true,
+          amount: true,
+          stripe_synced_at: true,
+        },
       })
     : null;
 
@@ -709,7 +755,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
     start_date: new Date(activeSub.current_period_start * 1000),
     end_date: new Date(activeSub.current_period_end * 1000),
     next_billing_at: new Date(activeSub.current_period_end * 1000),
-    updated_at: new Date(),
+    stripe_synced_at: new Date(),
     ...(mrrUsd != null ? { amount: mrrUsd } : {}),
   };
 
@@ -724,20 +770,27 @@ export async function syncSubscriptionWithStripe(userId: string) {
   const runSync = () => prisma.$transaction(async (tx) => {
     let row: any;
     if (existingByStripeId) {
+      const businessFieldsChanged = stripeBackedFieldsChanged(existingByStripeId, subData);
       row = await tx.subscriptions.update({
         where: { id: existingByStripeId.id },
-        data: subData,
+        data: businessFieldsChanged
+          ? { ...subData, updated_at: new Date() }
+          : { stripe_synced_at: subData.stripe_synced_at },
       });
     } else if (pendingCandidate) {
+      const businessFieldsChanged = stripeBackedFieldsChanged(pendingCandidate, subData);
       row = await tx.subscriptions.update({
         where: { id: pendingCandidate.id },
-        data: subData,
+        data: businessFieldsChanged
+          ? { ...subData, updated_at: new Date() }
+          : { stripe_synced_at: subData.stripe_synced_at },
       });
     } else {
       row = await tx.subscriptions.create({
         data: {
           user_id: userId,
           ...subData,
+          updated_at: new Date(),
           billing_cycle: 'monthly',
         },
       });
@@ -748,6 +801,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
       await addSubscriptionAllowanceMinutes(userId, planCredits, tx);
     }
 
+    setCachedSubscription(userId, row);
     return row;
   });
 
@@ -774,6 +828,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
       return getSubscription(userId);
     }
 
+    setCachedSubscription(userId, winner);
     return winner;
   }
 }

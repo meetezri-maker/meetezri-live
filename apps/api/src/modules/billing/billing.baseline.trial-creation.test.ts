@@ -37,6 +37,7 @@ const mockPrisma = {
   },
   users: { findUnique: jest.fn() },
   $transaction: jest.fn(),
+  founding_members: { findUnique: jest.fn() },
 };
 
 jest.mock('../../config/stripe', () => ({ stripe: mockStripe }));
@@ -250,7 +251,7 @@ describe('BASELINE — trial creation via POST /billing (W14: createCheckoutSess
    * The overwrite is allowance implementation "A6" in plan §4.1 terms — a sixth grant
    * behaviour that RESETS rather than stacks.
    */
-  it('first trial creation: creates an open-ended trial row and overwrites credits to 30', async () => {
+  it('first trial creation: creates a bounded 7-day trial and grants 30 minutes', async () => {
     const { createCheckoutSession } = await loadSubscriptionService();
 
     mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
@@ -270,7 +271,8 @@ describe('BASELINE — trial creation via POST /billing (W14: createCheckoutSess
       amount: 0,
     });
     // No end_date on this path — the trial row is open-ended.
-    expect(created.end_date).toBeUndefined();
+    expect(created.end_date).toBeInstanceOf(Date);
+    expect(created.end_date.getTime() - created.start_date.getTime()).toBe(7 * 24 * 60 * 60 * 1000);
 
     expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
@@ -320,9 +322,9 @@ describe('BASELINE — trial creation via POST /billing (W14: createCheckoutSess
       billing_cycle: 'monthly',
     } as any);
 
-    // The lookup is now scoped to the active trial row only.
+    // Any historical trial suppresses a replacement grant.
     expect(mockPrisma.subscriptions.findFirst).toHaveBeenCalledWith({
-      where: { user_id: USER_ID, plan_type: 'trial', status: 'active' },
+      where: { user_id: USER_ID, plan_type: 'trial' },
       orderBy: { created_at: 'desc' },
     });
 
@@ -362,16 +364,7 @@ describe('BASELINE — trial creation via POST /billing (W14: createCheckoutSess
     } as any);
 
     expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
-    expect(mockPrisma.subscriptions.update).toHaveBeenCalledWith({
-      where: { id: 'trial-row-1' },
-      data: {
-        plan_type: 'trial',
-        status: 'active',
-        billing_cycle: 'monthly',
-        amount: 0,
-        end_date: null,
-      },
-    });
+    expect(mockPrisma.subscriptions.update).not.toHaveBeenCalled();
   });
 
   /**
@@ -404,7 +397,8 @@ describe('BASELINE — trial creation via POST /billing (W14: createCheckoutSess
     await createCheckoutSession(USER_ID, 'a@b.com', { plan_type: 'trial', billing_cycle: 'monthly' } as any);
 
     expect(mockPrisma.subscriptions.create).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.subscriptions.update).not.toHaveBeenCalled();
+    expect(mockPrisma.profiles.update).toHaveBeenCalledTimes(1);
   });
 
   /**

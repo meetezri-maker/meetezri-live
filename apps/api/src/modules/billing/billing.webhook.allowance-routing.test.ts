@@ -347,7 +347,7 @@ describe('webhook allowance grants route through the shared helper', () => {
 
   /**
    * Subscription-row mutation on a plan change is unchanged: status, the new `plan_type`,
-   * both period fields, and the MRR amount — and it still happens AFTER the grant.
+   * both period fields, the Stripe freshness marker, and the MRR amount — and it still happens AFTER the grant.
    */
   it('customer.subscription.updated still writes the same subscription-row fields', async () => {
     const { stripeWebhookHandler } = await loadWebhookHandler();
@@ -381,6 +381,7 @@ describe('webhook allowance grants route through the shared helper', () => {
         plan_type: 'pro',
         end_date: new Date(PERIOD_END * 1000),
         next_billing_at: new Date(PERIOD_END * 1000),
+        stripe_synced_at: expect.any(Date),
         amount: 49,
       },
     });

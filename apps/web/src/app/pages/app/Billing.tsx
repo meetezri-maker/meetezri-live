@@ -70,6 +70,7 @@ import {
   billingSelectTrigger,
   billingStatusBadgeClass,
 } from "@/app/pages/app/billing/billingUi";
+import { buildBillingDateModel } from "@/app/pages/app/billing/billingDate";
 
 const PAYG_CAPSULES = [25, 50, 100, 200] as const;
 
@@ -249,8 +250,8 @@ export function Billing() {
     creditsRemaining: 0,
     creditsTotal: 0,
     billingCycle: {
-      startDate: new Date().toISOString(),
-      endDate: new Date().toISOString(),
+      startDate: "",
+      endDate: "",
       renewsOn: null,
     },
     payAsYouGoCredits: 0,
@@ -298,7 +299,6 @@ export function Billing() {
         const rawPlanId = subData.plan_type;
         const planId = (SUBSCRIPTION_PLANS[rawPlanId as PlanTier] ? rawPlanId : "trial") as PlanTier;
         const plan = SUBSCRIPTION_PLANS[planId];
-        const now = new Date();
 
         const creditsView = buildCreditsMinutesView(creditsData);
         const creditsRemaining = creditsView.subscriptionRemainingMinutes;
@@ -320,12 +320,13 @@ export function Billing() {
           }));
 
         const subscriptionStartDate = subData.start_date || new Date().toISOString();
-        const parsedStartDate = new Date(subscriptionStartDate);
-        const trialFallbackEndDate = new Date(
-          (Number.isNaN(parsedStartDate.getTime()) ? now : parsedStartDate).getTime() + 30 * 24 * 60 * 60 * 1000
-        ).toISOString();
-        const fallbackEndDate =
-          planId === "trial" ? trialFallbackEndDate : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+        const status = String(subData.status || "");
+        const isCancelledStatus = ["canceled", "cancelled"].includes(status.toLowerCase());
+        const canonicalPeriodEnd = isCancelledStatus
+          ? subData.next_billing_at || subData.end_date || ""
+          : planId === "trial"
+            ? subData.end_date || ""
+            : subData.next_billing_at || "";
 
         const subscription: UserSubscription = {
           userId: subData.user_id,
@@ -335,8 +336,8 @@ export function Billing() {
           creditsTotal: creditsView.subscriptionPeriodTotalMinutes || plan.credits,
           billingCycle: {
             startDate: subscriptionStartDate,
-            endDate: subData.next_billing_at || fallbackEndDate,
-            renewsOn: subData.next_billing_at,
+            endDate: canonicalPeriodEnd,
+            renewsOn: planId === "trial" ? null : subData.next_billing_at || null,
           },
           payAsYouGoCredits,
           totalSpent: 0,
@@ -402,28 +403,27 @@ export function Billing() {
     String(userSubscription.status || "").toLowerCase()
   );
 
-  const billingEndDate = userSubscription.billingCycle.endDate ? new Date(userSubscription.billingCycle.endDate) : null;
-  const billingEndIsValid = !!billingEndDate && !Number.isNaN(billingEndDate.getTime());
-  const daysUntilRenewal = billingEndIsValid
-    ? Math.ceil((billingEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-  const normalizedDaysUntilRenewal = daysUntilRenewal == null ? null : Math.max(0, daysUntilRenewal);
+  const billingDateModel = useMemo(
+    () =>
+      buildBillingDateModel({
+        planId: userSubscription.planId,
+        status: userSubscription.status,
+        nextBillingAt: userSubscription.billingCycle.renewsOn,
+        endDate: userSubscription.billingCycle.endDate,
+      }),
+    [
+      userSubscription.planId,
+      userSubscription.status,
+      userSubscription.billingCycle.renewsOn,
+      userSubscription.billingCycle.endDate,
+    ]
+  );
+  const billingEndDate = billingDateModel.date;
+  const billingEndIsValid = Boolean(billingEndDate);
 
   const heroRenewalLead = useMemo(() => {
-    if (isCancelled) {
-      return normalizedDaysUntilRenewal === 0
-        ? "Your membership access ends today."
-        : `Your membership access ends in ${normalizedDaysUntilRenewal ?? 0} days.`;
-    }
-    if (userSubscription.planId === "trial") {
-      return normalizedDaysUntilRenewal === 0
-        ? "Your trial period ends today."
-        : `Your trial continues · ${normalizedDaysUntilRenewal ?? 0} days remaining.`;
-    }
-    return normalizedDaysUntilRenewal === 0
-      ? "Your membership renews today."
-      : `Your membership renews in ${normalizedDaysUntilRenewal ?? 0} days.`;
-  }, [isCancelled, userSubscription.planId, normalizedDaysUntilRenewal]);
+    return billingDateModel.lead;
+  }, [billingDateModel.lead]);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -444,16 +444,7 @@ export function Billing() {
       : 0;
   const accountProgressRounded = Math.round(accountProgress);
 
-  const googleCalendarRenewalUrl = useMemo(() => {
-    if (!billingEndIsValid || !billingEndDate) return null;
-    const day = new Date(billingEndDate);
-    day.setHours(9, 0, 0, 0);
-    const end = new Date(day.getTime() + 60 * 60 * 1000);
-    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-    const text = encodeURIComponent("Solace — plan renewal");
-    const details = encodeURIComponent("Your Solace membership renews.");
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${details}&dates=${fmt(day)}/${fmt(end)}`;
-  }, [billingEndIsValid, billingEndDate]);
+  const googleCalendarRenewalUrl = billingDateModel.calendarUrl;
 
   const sortedInvoices = useMemo(() => {
     return [...invoices].sort((a, b) => {
@@ -712,7 +703,7 @@ export function Billing() {
               <h1 className={billingPageTitle}>
                 Billing &{" "}
                 <span className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-teal-600 bg-clip-text text-transparent">
-                  Subscription
+                  Membership
                 </span>
               </h1>
               <p className={billingPageSubtitle}>
@@ -770,7 +761,7 @@ export function Billing() {
                     <p className={billingHeroLead}>{heroRenewalLead}</p>
                     {billingEndIsValid ? (
                       <p className="text-sm font-medium text-zinc-100 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)]">
-                        {billingEndDate!.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                        {billingDateModel.fullLabel}
                       </p>
                     ) : null}
                     <div className="flex flex-wrap gap-3 pt-1">
@@ -1039,7 +1030,7 @@ export function Billing() {
                                     {invoice.created ? new Date(invoice.created).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}
                                   </td>
                                   <td className="max-w-[240px] truncate px-4 py-4 text-zinc-200">
-                                    {invoice.description || "Solace subscription"}
+                                    {invoice.description || "Solace Membership"}
                                   </td>
                                   <td className="whitespace-nowrap px-4 py-4 tabular-nums text-zinc-200">
                                     ${Number(invoice.amount_due).toFixed(2)}
@@ -1227,9 +1218,9 @@ export function Billing() {
 
               {/* 3 Upcoming renewal */}
               <div className={cn("p-6", panel)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Upcoming renewal</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">{billingDateModel.cardTitle}</p>
                 <p className="mt-4 font-serif text-xl font-light text-zinc-50">
-                  {billingEndIsValid ? billingEndDate!.toLocaleDateString(undefined, { dateStyle: "long" }) : "—"}
+                  {billingDateModel.longLabel ?? "—"}
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-zinc-500">{heroRenewalLead}</p>
                 {googleCalendarRenewalUrl ? (
@@ -1405,7 +1396,7 @@ export function Billing() {
                   {" "}
                   on{" "}
                   <span className="font-medium text-zinc-200">
-                    {billingEndDate!.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+                    {billingDateModel.longLabel}
                   </span>
                 </>
               )}

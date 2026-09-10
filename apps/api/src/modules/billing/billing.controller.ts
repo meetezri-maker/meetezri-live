@@ -22,6 +22,28 @@ import {
 } from './index';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from './billing.schema';
 
+const STRIPE_RECONCILIATION_TTL_MS = 5 * 60 * 1000;
+const stripeReconciliationInFlight = new Map<string, Promise<any | null>>();
+
+function isStripeReconciliationStale(subscription: any, now = Date.now()) {
+  if (!subscription?.stripe_sub_id) return false;
+  if (!subscription.stripe_synced_at) return true;
+  const syncedAt = new Date(subscription.stripe_synced_at).getTime();
+  return Number.isNaN(syncedAt) || now - syncedAt >= STRIPE_RECONCILIATION_TTL_MS;
+}
+
+async function reconcileStripeSubscription(userId: string, subscription: any) {
+  const key = String(subscription?.stripe_sub_id || userId);
+  const existing = stripeReconciliationInFlight.get(key);
+  if (existing) return existing;
+
+  const run = syncSubscriptionWithStripe(userId).finally(() => {
+    stripeReconciliationInFlight.delete(key);
+  });
+  stripeReconciliationInFlight.set(key, run);
+  return run;
+}
+
 interface UserPayload {
   sub: string;
   email?: string;
@@ -49,7 +71,16 @@ export async function getSubscriptionHandler(
       payment_method: null,
     });
   }
-  
+
+  if (isStripeReconciliationStale(subscription)) {
+    try {
+      const synced = await reconcileStripeSubscription(user.sub, subscription);
+      if (synced) return reply.send(synced);
+    } catch (error: any) {
+      request.log.warn({ error: error?.message || error, userId: user.sub }, 'Failed to refresh Stripe subscription before billing read');
+    }
+  }
+
   return reply.send(subscription);
 }
 

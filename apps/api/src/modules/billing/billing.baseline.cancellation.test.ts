@@ -146,6 +146,7 @@ describe('BASELINE — handleSubscriptionDeleted (customer.subscription.deleted)
         status: 'canceled',
         // The real plan ('pro') is destroyed here.
         plan_type: 'trial',
+        stripe_synced_at: expect.any(Date),
       },
     });
     expect(reply.send).toHaveBeenCalledWith({ received: true });
@@ -154,7 +155,7 @@ describe('BASELINE — handleSubscriptionDeleted (customer.subscription.deleted)
   /**
    * Current behaviour. This test intentionally documents existing behaviour.
    *
-   * The update payload contains exactly two fields. `end_date`, `next_billing_at`,
+   * The update payload contains status, plan_type and the Stripe freshness marker. `end_date`, `next_billing_at`,
    * `updated_at` and `amount` are NOT touched, so a canceled row keeps whatever period
    * bounds it already had.
    *
@@ -181,9 +182,10 @@ describe('BASELINE — handleSubscriptionDeleted (customer.subscription.deleted)
     await stripeWebhookHandler(buildRequest() as any, buildReply());
 
     const payload = mockPrisma.subscriptions.update.mock.calls[0][0].data;
-    expect(Object.keys(payload).sort()).toEqual(['plan_type', 'status']);
+    expect(Object.keys(payload).sort()).toEqual(['plan_type', 'status', 'stripe_synced_at']);
     expect(payload).not.toHaveProperty('end_date');
     expect(payload).not.toHaveProperty('next_billing_at');
+    expect(payload.stripe_synced_at).toBeInstanceOf(Date);
     expect(payload).not.toHaveProperty('updated_at');
     expect(payload).not.toHaveProperty('amount');
   });

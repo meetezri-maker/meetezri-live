@@ -104,7 +104,7 @@ const SESSION_ENVIRONMENTS = [
   { value: "minimal", label: "Minimal Studio", emoji: "⬜", gradient: "from-gray-100 to-gray-300" }
 ];
 
-const LOBBY_DURATION_PRESETS: readonly number[] = [10, 25, 45];
+const LOBBY_DURATION_PRESETS: readonly number[] = [10, 20, 30];
 
 function environmentLabel(value: string | undefined | null): string {
   if (!value) return "Default";
@@ -146,9 +146,9 @@ export function SessionLobby() {
   const environmentSectionRef = useRef<HTMLDivElement>(null);
   const [showCarveoutBanner, setShowCarveoutBanner] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
-  const [selectedDuration, setSelectedDuration] = useState(25);
+  const [selectedDuration, setSelectedDuration] = useState(20);
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
-  const [customMinutesInput, setCustomMinutesInput] = useState("25");
+  const [customMinutesInput, setCustomMinutesInput] = useState("20");
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [isSavingCustomize, setIsSavingCustomize] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);

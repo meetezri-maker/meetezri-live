@@ -1,5 +1,10 @@
 import prisma, { type PrismaClientLike } from '../../../lib/prisma';
+import { PLAN_LIMITS } from '../billing.constants';
 import { isActiveTrialUniqueViolation as isActiveTrialConflict } from './subscription-constraints';
+
+export const STANDARD_DISCOVER_TRIAL_DAYS = 7;
+export const FOUNDING_MEMBER_DISCOVER_TRIAL_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Canonical trial-row creation — plan §8A.4.
@@ -13,12 +18,8 @@ import { isActiveTrialUniqueViolation as isActiveTrialConflict } from './subscri
  * with a single active trial row remains valid (21 production users are in exactly that state
  * after upgrading — `getSubscription` is newest-row-wins and correctly surfaces the paid row).
  *
- * SCOPE OF THE GUARANTEE: this is an application-level, SEQUENTIAL invariant. A repeated
- * request observes the row the previous one committed and reuses it. It is NOT concurrency-
- * safe: two simultaneous callers can still both miss the lookup and both create a row, because
- * `subscriptions` has no partial unique index on (user_id) WHERE plan_type='trial' AND
- * status='active' yet. That index is the real guarantee and lands with the approved cleanup
- * migration (plan §8A.3 Option A / §17 Gate 3b).
+ * Sequential requests reuse the existing row. Concurrent first requests are protected by the
+ * active-trial partial unique index and the race recovery below.
  */
 
 /** How an existing row is matched before deciding to create a new one. */
@@ -33,10 +34,10 @@ export interface EnsureActiveTrialOptions {
   match?: TrialMatchMode;
   billingCycle?: string;
   /**
-   * Trial window end. Pass a Date for a bounded trial, `null` for an open-ended one.
-   * Omitted means "leave whatever the row already has" on reuse, and unset on create.
+   * Trial window end. Omitted leaves an existing row untouched and omits the field on create.
+   * Canonical Discover provisioning always supplies a bounded end date.
    */
-  endDate?: Date | null;
+  endDate?: Date;
   /** Written on create only; some callers record a zero amount explicitly. */
   amount?: number;
   /**
@@ -115,7 +116,7 @@ export async function ensureSingleActiveTrial(
         status: 'active',
         billing_cycle: billingCycle,
         ...(amount !== undefined ? { amount } : {}),
-        ...(endDate !== undefined ? { end_date: endDate } : {}),
+        ...(endDate instanceof Date ? { end_date: endDate } : {}),
       },
     });
     return { subscription: updated, created: false, reshaped: true };
@@ -130,7 +131,7 @@ export async function ensureSingleActiveTrial(
         billing_cycle: billingCycle,
         start_date: startDate ?? new Date(),
         ...(amount !== undefined ? { amount } : {}),
-        ...(endDate !== undefined && endDate !== null ? { end_date: endDate } : {}),
+        ...(endDate instanceof Date ? { end_date: endDate } : {}),
       },
     });
 
@@ -158,4 +159,68 @@ export async function ensureSingleActiveTrial(
 
     return { subscription: winner, created: false, reshaped: false, raceRecovered: true };
   }
+}
+export interface ProvisionDiscoverTrialOptions {
+  billingCycle?: string;
+  amount?: number;
+  /** Injectable only so duration tests can assert exact timestamps. */
+  startDate?: Date;
+}
+
+export interface ProvisionDiscoverTrialResult extends EnsureActiveTrialResult {
+  foundingMember: boolean;
+  trialDays: typeof STANDARD_DISCOVER_TRIAL_DAYS | typeof FOUNDING_MEMBER_DISCOVER_TRIAL_DAYS;
+}
+
+/**
+ * Canonical Discover trial provisioning.
+ *
+ * Founding Members are identified solely by normalized email presence in `founding_members`.
+ * Any historical trial row makes the operation a no-op: its dates and minute balance are left
+ * untouched. This makes retries safe and intentionally does not repair legacy rows.
+ */
+export async function provisionDiscoverTrial(
+  userId: string,
+  email: string,
+  options: ProvisionDiscoverTrialOptions = {},
+  client: PrismaClientLike = prisma
+): Promise<ProvisionDiscoverTrialResult> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const foundingMemberRow = normalizedEmail
+    ? await client.founding_members.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      })
+    : null;
+  const foundingMember = Boolean(foundingMemberRow);
+  const trialDays = foundingMember
+    ? FOUNDING_MEMBER_DISCOVER_TRIAL_DAYS
+    : STANDARD_DISCOVER_TRIAL_DAYS;
+  const startDate = options.startDate ?? new Date();
+
+  const result = await ensureSingleActiveTrial(
+    userId,
+    {
+      match: 'any_trial',
+      billingCycle: options.billingCycle,
+      amount: options.amount,
+      startDate,
+      endDate: new Date(startDate.getTime() + trialDays * DAY_MS),
+      reshapeExisting: false,
+    },
+    client
+  );
+
+  if (result.created) {
+    const trialCredits = PLAN_LIMITS.trial.credits;
+    await client.profiles.update({
+      where: { id: userId },
+      data: {
+        credits: trialCredits,
+        credits_seconds: trialCredits * 60,
+      },
+    });
+  }
+
+  return { ...result, foundingMember, trialDays };
 }

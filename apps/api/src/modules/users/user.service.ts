@@ -5,7 +5,7 @@ import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing';
 import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
-import { ensureSingleActiveTrial } from '../billing/services/trial.service';
+import { provisionDiscoverTrial } from '../billing/services/trial.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
@@ -912,16 +912,9 @@ export async function createProfile(
     });
   }
 
-  // Create Trial Subscription (7 days) via the canonical helper, which owns the
-  // at-most-one-active-trial invariant. `match: 'any_trial'` preserves this path's historical
-  // semantics exactly: any pre-existing trial row — active or not — suppresses creation, and
-  // an existing row is never reshaped here.
-  const trialStart = new Date();
-  await ensureSingleActiveTrial(userId, {
-    match: 'any_trial',
+  // Canonical Discover provisioning chooses the 7/30-day window and is retry-safe.
+  await provisionDiscoverTrial(userId, email, {
     billingCycle: 'monthly',
-    startDate: trialStart,
-    endDate: new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000),
   });
 
   return profile;

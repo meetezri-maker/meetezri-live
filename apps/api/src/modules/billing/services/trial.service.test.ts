@@ -8,6 +8,8 @@
 
 const mockPrisma = {
   subscriptions: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  founding_members: { findUnique: jest.fn() },
+  profiles: { update: jest.fn() },
 };
 
 jest.mock('../../../lib/prisma', () => ({
@@ -15,7 +17,10 @@ jest.mock('../../../lib/prisma', () => ({
   default: mockPrisma,
 }));
 
-import { ensureSingleActiveTrial } from './trial.service';
+import {
+  ensureSingleActiveTrial,
+  provisionDiscoverTrial,
+} from './trial.service';
 
 const USER_ID = 'user-trial-helper';
 
@@ -74,10 +79,10 @@ describe('ensureSingleActiveTrial — first creation', () => {
     expect(data.end_date).toEqual(end);
   });
 
-  it('omits end_date entirely for an open-ended trial', async () => {
+  it('omits end_date when the low-level helper receives no end date', async () => {
     mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
 
-    await ensureSingleActiveTrial(USER_ID, { endDate: null, amount: 0 });
+    await ensureSingleActiveTrial(USER_ID, { amount: 0 });
 
     const data = mockPrisma.subscriptions.create.mock.calls[0][0].data;
     expect(data).not.toHaveProperty('end_date');
@@ -120,8 +125,8 @@ describe('ensureSingleActiveTrial — the active-trial invariant (sequential)', 
     const result = await ensureSingleActiveTrial(USER_ID, {
       reshapeExisting: true,
       billingCycle: 'monthly',
+      endDate: null as any,
       amount: 0,
-      endDate: null,
     });
 
     expect(result).toMatchObject({ created: false, reshaped: true });
@@ -133,7 +138,6 @@ describe('ensureSingleActiveTrial — the active-trial invariant (sequential)', 
         status: 'active',
         billing_cycle: 'monthly',
         amount: 0,
-        end_date: null,
       },
     });
   });
@@ -344,6 +348,91 @@ describe('ensureSingleActiveTrial — transaction client', () => {
     expect(tx.subscriptions.create).toHaveBeenCalledTimes(1);
     expect(mockPrisma.subscriptions.findFirst).not.toHaveBeenCalled();
     expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('provisionDiscoverTrial - canonical Discover provisioning', () => {
+  const START = new Date('2026-01-01T00:00:00.000Z');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.founding_members.findUnique.mockResolvedValue(null);
+    mockPrisma.profiles.update.mockResolvedValue({});
+    mockPrisma.subscriptions.create.mockResolvedValue({ id: 'row-new' });
+    mockPrisma.subscriptions.update.mockResolvedValue({ id: 'row-existing' });
+  });
+
+  it('creates a 7-day trial for a non-founding Discover user', async () => {
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
+
+    const result = await provisionDiscoverTrial(
+      USER_ID,
+      'person@example.com',
+      { startDate: START }
+    );
+
+    const data = mockPrisma.subscriptions.create.mock.calls[0][0].data;
+    expect(result).toMatchObject({ created: true, foundingMember: false, trialDays: 7 });
+    expect(data.start_date).toEqual(START);
+    expect(data.end_date.getTime() - data.start_date.getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it('normalizes email and creates a 30-day trial when that email is in founding_members', async () => {
+    mockPrisma.founding_members.findUnique.mockResolvedValue({ id: 'founder-1' });
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
+
+    const result = await provisionDiscoverTrial(
+      USER_ID,
+      '  Founder@Example.COM ',
+      { startDate: START }
+    );
+
+    expect(mockPrisma.founding_members.findUnique).toHaveBeenCalledWith({
+      where: { email: 'founder@example.com' },
+      select: { id: true },
+    });
+    const data = mockPrisma.subscriptions.create.mock.calls[0][0].data;
+    expect(result).toMatchObject({ created: true, foundingMember: true, trialDays: 30 });
+    expect(data.end_date.getTime() - data.start_date.getTime()).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  it('preserves an existing trial end_date and does not replenish minutes on repeat provisioning', async () => {
+    const existingEndDate = new Date('2026-02-01T00:00:00.000Z');
+    mockPrisma.subscriptions.findFirst.mockResolvedValue({
+      id: 'row-existing',
+      plan_type: 'trial',
+      status: 'active',
+      end_date: existingEndDate,
+    });
+
+    const result = await provisionDiscoverTrial(
+      USER_ID,
+      'person@example.com',
+      { startDate: START }
+    );
+
+    expect(result).toMatchObject({ created: false, reshaped: false });
+    expect(mockPrisma.subscriptions.update).not.toHaveBeenCalled();
+    expect(mockPrisma.subscriptions.create).not.toHaveBeenCalled();
+    expect(mockPrisma.profiles.update).not.toHaveBeenCalled();
+    expect(result.subscription.end_date).toBe(existingEndDate);
+  });
+
+  it('grants trial minutes only for the one newly created row across sequential retries', async () => {
+    mockPrisma.subscriptions.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'row-new', plan_type: 'trial', status: 'active' });
+
+    await provisionDiscoverTrial(USER_ID, 'person@example.com', { startDate: START });
+    await provisionDiscoverTrial(USER_ID, 'person@example.com', { startDate: START });
+
+    expect(mockPrisma.subscriptions.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.profiles.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      data: { credits: 30, credits_seconds: 1800 },
+    });
+
   });
 });
 
