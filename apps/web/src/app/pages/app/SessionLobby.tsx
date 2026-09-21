@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 import { cn } from "@/lib/utils";
+import { queryKeys } from "@/lib/queries";
 import {
   resolveVoiceLabelForCompanion,
 } from "@/lib/ezri/voiceForCompanion";
@@ -141,6 +143,7 @@ export function SessionLobby() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const voiceSectionRef = useRef<HTMLDivElement>(null);
   const avatarSectionRef = useRef<HTMLDivElement>(null);
   const environmentSectionRef = useRef<HTMLDivElement>(null);
@@ -280,11 +283,15 @@ export function SessionLobby() {
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
 
   useEffect(() => {
-    // Use the dedicated credits endpoint (no-cache) so "Minutes available" matches Dashboard.
+    // Reuse a recent Dashboard value for display; session start still refreshes authoritatively.
     if (isAuthLoading || !user?.id) return;
     const loadCredits = async () => {
       try {
-        const { credits_seconds, credits } = await api.getCredits();
+        const { credits_seconds, credits } = await queryClient.fetchQuery({
+          queryKey: queryKeys.credits.byUser(user.id),
+          queryFn: () => api.getCredits(),
+          staleTime: 60_000,
+        });
         const seconds =
           typeof credits_seconds === "number"
             ? Math.max(0, credits_seconds)
@@ -297,7 +304,7 @@ export function SessionLobby() {
       }
     };
     loadCredits();
-  }, [isAuthLoading, user?.id]);
+  }, [isAuthLoading, queryClient, user?.id]);
 
   const minutesAvailable = useMemo(() => {
     if (liveCreditsSeconds !== null) {
@@ -469,10 +476,14 @@ export function SessionLobby() {
     };
   };
 
-  const loadUpcomingSessions = async () => {
+  const loadUpcomingSessions = async (options?: { force?: boolean }) => {
     try {
       setIsLoadingSessions(true);
-      const sessions = await api.sessions.list({ status: "scheduled" });
+      const sessions = await queryClient.fetchQuery({
+        queryKey: queryKeys.sessions.list({ status: "scheduled" }),
+        queryFn: () => api.sessions.list({ status: "scheduled" }),
+        staleTime: options?.force ? 0 : 60_000,
+      });
       const nowMs = Date.now();
       const mappedSessions: UpcomingSession[] = (sessions as BackendSession[])
         .filter((s) => {
@@ -557,7 +568,6 @@ export function SessionLobby() {
         },
       });
 
-      void loadUpcomingSessions();
     } catch (err: any) {
       const message = err?.message || "Failed to start session";
       if (message.includes("trial has expired")) {
@@ -610,7 +620,7 @@ export function SessionLobby() {
             prev.map((s) => (s.id === mapped.id ? mapped : s))
           );
         } else {
-          void loadUpcomingSessions();
+          void loadUpcomingSessions({ force: true });
         }
       } else {
         const created = (await api.sessions.schedule({
@@ -632,7 +642,7 @@ export function SessionLobby() {
             return [mapped, ...without];
           });
         } else {
-          void loadUpcomingSessions();
+          void loadUpcomingSessions({ force: true });
         }
       }
       setShowScheduleModal(false);

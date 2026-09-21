@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
@@ -124,10 +124,18 @@ function EmergencyNotificationCard({
 }
 
 export function NotificationHistory() {
-  const { notifications: allNotifications, isLoading } = useNotifications();
+  const {
+    notifications: allNotifications,
+    isLoading,
+    ensureNotificationsLoaded,
+  } = useNotifications();
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<EmergencyFeedTab>("all");
   const [sort, setSort] = useState<EmergencySort>("recent");
+
+  useEffect(() => {
+    ensureNotificationsLoaded();
+  }, [ensureNotificationsLoaded]);
 
   const prefs = profile?.notification_preferences;
   const inAppEnabled = true;

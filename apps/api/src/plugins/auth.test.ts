@@ -8,6 +8,9 @@ const mockPrisma = {
   users: {
     findUnique: jest.fn(),
   },
+  subscriptions: {
+    findFirst: jest.fn(),
+  },
 };
 
 jest.mock('../lib/prisma', () => ({

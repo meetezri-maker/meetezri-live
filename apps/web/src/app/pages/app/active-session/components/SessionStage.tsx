@@ -1,6 +1,5 @@
-import { lazy, memo, Suspense, type MutableRefObject } from "react";
+import { memo, type MutableRefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Loader2 } from "lucide-react";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
 import type {
@@ -11,10 +10,10 @@ import type {
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { StaticSessionPortrait } from "./StaticSessionPortrait";
 import { SessionBackdrop } from "./SessionBackdrop";
-
-const ThreeAvatar = lazy(() =>
-  import("./ThreeAvatar").then((m) => ({ default: m.ThreeAvatar })),
-);
+// Which avatar implementation runs — flag, failure boundary and fallback — is
+// resolved entirely inside AvatarRuntimeSwitch. This file is unchanged in every
+// other respect: same props, same layout, same backdrop, same speaking wash.
+import { AvatarRuntimeSwitch } from "./AvatarRuntimeSwitch";
 
 export interface SessionStageProps {
   stageRoundClass: string;
@@ -108,42 +107,33 @@ export const SessionStage = memo(function SessionStage({
           className="relative z-[2] h-full w-full [-webkit-mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-repeat:no-repeat] [mask-size:100%_100%] [mask-position:center]"
         >
           {sessionUsesCompanion3d ? (
-            <Suspense
-              fallback={
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-purple-300" aria-hidden />
-                  <p className="text-sm text-white/70">Loading avatar…</p>
-                </div>
-              }
-            >
-              <ThreeAvatar
-                sessionRoomThemeKey={sessionRoomThemeKey}
-                rawAvatarLabel={companionAvatarLabel}
-                activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
-                modelUrl={companionModelUrl}
-                viewTuning={companionViewTuning}
-                fixedViewportConfig={companionFixedViewportConfig}
-                useRfv2Morphs={sessionUsesRfv2Morphs}
-                useSaraRfv2Preview={saraLiveRfv2PreviewEnabled}
-                onSaraRfv2Fallback={onSaraLiveRfv2Fallback}
-                isSpeaking={isEzriSpeaking}
-                isListening={isListening}
-                isThinking={isEzriThinking}
-                mouthAudioLevelRef={mouthAudioLevelRef}
-                avatarPhonemeTimelineRef={avatarPhonemeTimelineRef}
-                avatarAudioCurrentTimeRef={avatarAudioCurrentTimeRef}
-                speechTextRef={speechTextRef}
-                speechCharIndexRef={speechCharIndexRef}
-                speechPulseRef={speechPulseRef}
-                latestUserTextRef={latestUserTextRef}
-                latestJordanTextRef={latestJordanTextRef}
-                userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
-                userLastSpeechAtMsRef={userLastSpeechAtMsRef}
-                jordanSpeechStartedAtMsRef={jordanSpeechStartedAtMsRef}
-                jordanLastSpeechAtMsRef={jordanLastSpeechAtMsRef}
-                sentimentCompoundRef={sentimentCompoundRef}
-              />
-            </Suspense>
+            <AvatarRuntimeSwitch
+              sessionRoomThemeKey={sessionRoomThemeKey}
+              rawAvatarLabel={companionAvatarLabel}
+              activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
+              modelUrl={companionModelUrl}
+              viewTuning={companionViewTuning}
+              fixedViewportConfig={companionFixedViewportConfig}
+              useRfv2Morphs={sessionUsesRfv2Morphs}
+              useSaraRfv2Preview={saraLiveRfv2PreviewEnabled}
+              onSaraRfv2Fallback={onSaraLiveRfv2Fallback}
+              isSpeaking={isEzriSpeaking}
+              isListening={isListening}
+              isThinking={isEzriThinking}
+              mouthAudioLevelRef={mouthAudioLevelRef}
+              avatarPhonemeTimelineRef={avatarPhonemeTimelineRef}
+              avatarAudioCurrentTimeRef={avatarAudioCurrentTimeRef}
+              speechTextRef={speechTextRef}
+              speechCharIndexRef={speechCharIndexRef}
+              speechPulseRef={speechPulseRef}
+              latestUserTextRef={latestUserTextRef}
+              latestJordanTextRef={latestJordanTextRef}
+              userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
+              userLastSpeechAtMsRef={userLastSpeechAtMsRef}
+              jordanSpeechStartedAtMsRef={jordanSpeechStartedAtMsRef}
+              jordanLastSpeechAtMsRef={jordanLastSpeechAtMsRef}
+              sentimentCompoundRef={sentimentCompoundRef}
+            />
           ) : (
             <StaticSessionPortrait
               imageUrl={companionPortraitUrl}

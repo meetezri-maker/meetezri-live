@@ -165,8 +165,8 @@ export function Dashboard() {
     liveCreditsTotalSeconds !== null ? Math.ceil(liveCreditsTotalSeconds / 60) : null;
 
   const { data: activityRaw } = useQuery({
-    queryKey: queryKeys.activity.recent(user?.id, 20),
-    queryFn: () => api.getRecentActivity(20) as Promise<unknown>,
+    queryKey: queryKeys.activity.recent(user?.id, 10),
+    queryFn: () => api.getRecentActivity(10) as Promise<unknown>,
     enabled: !!user?.id,
     staleTime: 60_000,
   });

@@ -50,24 +50,38 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
-          if (id.includes('three') || id.includes('@react-three')) return 'vendor-three';
-          if (id.includes('recharts')) return 'vendor-charts';
-          if (id.includes('d3-')) return 'vendor-charts';
-          if (id.includes('@mui') || id.includes('@emotion')) return 'vendor-mui';
-          if (id.includes('@stripe')) return 'vendor-stripe';
-          if (id.includes('@supabase')) return 'vendor-supabase';
-          if (id.includes('@radix-ui')) return 'vendor-radix';
-          if (id.includes('lucide-react')) return 'vendor-icons';
-          if (id.includes('motion')) return 'vendor-motion';
-          if (id.includes('date-fns')) return 'vendor-datefns';
-          if (id.includes('socket.io')) return 'vendor-socket';
-          if (id.includes('lodash')) return 'vendor-lodash';
-          if (id.includes('react-hook-form') || id.includes('@hookform')) return 'vendor-forms';
-          if (id.includes('zod')) return 'vendor-forms';
+          if (id.includes('/node_modules/clsx/')) return 'vendor-utils';
+
+          const isPackage = (packageName: string) =>
+            id.includes(`/node_modules/${packageName}/`);
+
+          // Match the installed package segment, not pnpm's parent directory metadata.
+          // Broad substring checks can pull shared dependencies into a route-only chunk
+          // and make Vite preload the entire chunk from the application entry.
+          if (
+            isPackage('react') ||
+            isPackage('react-dom') ||
+            isPackage('scheduler') ||
+            isPackage('react-router') ||
+            isPackage('react-router-dom') ||
+            isPackage('@remix-run/router')
+          ) return 'vendor-react';
+          if (isPackage('three') || id.includes('/node_modules/@react-three/')) return 'vendor-three';
+          if (isPackage('recharts') || id.includes('/node_modules/d3-')) return 'vendor-charts';
+          if (id.includes('/node_modules/@mui/') || id.includes('/node_modules/@emotion/')) return 'vendor-mui';
+          if (id.includes('/node_modules/@stripe/')) return 'vendor-stripe';
+          if (id.includes('/node_modules/@supabase/')) return 'vendor-supabase';
+          if (id.includes('/node_modules/@radix-ui/')) return 'vendor-radix';
+          if (isPackage('lucide-react')) return 'vendor-icons';
+          if (isPackage('motion') || isPackage('framer-motion')) return 'vendor-motion';
+          if (isPackage('date-fns')) return 'vendor-datefns';
+          if (isPackage('socket.io-client') || id.includes('/node_modules/@socket.io/')) return 'vendor-socket';
+          if (isPackage('lodash') || isPackage('lodash-es')) return 'vendor-lodash';
+          if (isPackage('react-hook-form') || id.includes('/node_modules/@hookform/') || isPackage('zod')) return 'vendor-forms';
           // TipTap/ProseMirror are admin-only and reached through a lazy import, so they must
           // land in their own chunk and never enter the public or member-app bundles.
-          if (id.includes('@tiptap') || id.includes('prosemirror')) return 'vendor-editor';
-          if (id.includes('core-js')) return 'vendor-corejs';
+          if (id.includes('/node_modules/@tiptap/') || id.includes('/node_modules/prosemirror-')) return 'vendor-editor';
+          if (isPackage('core-js')) return 'vendor-corejs';
         },
       },
     },

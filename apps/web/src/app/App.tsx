@@ -210,23 +210,44 @@ const NoDeviceAccess  = lazy(() => import('@/app/pages/errors/NoDeviceAccess').t
  * inactivity period (default 30 min).
  */
 function IdleTimeoutEnforcer() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile, profileStatus } = useAuth();
   const location = useLocation();
   const timerRef = useRef<number | null>(null);
   const timeoutMsRef = useRef(30 * 60 * 1000); // default 30 min
+  const settingsLoadedRef = useRef<{ userId: string; at: number } | null>(null);
 
   useEffect(() => {
-    if (!user || isPublicAuthPath(location.pathname)) return;
+    if (!user) {
+      settingsLoadedRef.current = null;
+      return;
+    }
+    if (isPublicAuthPath(location.pathname)) return;
 
-    // Load saved security settings to get configured timeout
-    api.getSettings(undefined, { skipSignOutOn401: true }).then((rows: unknown) => {
-      const list = Array.isArray(rows) ? rows : [];
-      const row = list.find((r: { key?: string }) => r.key === 'admin_security_settings');
-      const minutes = parseInt(String(row?.value?.sessionTimeout ?? '30'), 10);
-      if (Number.isFinite(minutes) && minutes > 0) {
-        timeoutMsRef.current = minutes * 60 * 1000;
-      }
-    }).catch(() => {/* use default */});
+    const loaded = settingsLoadedRef.current;
+    const now = Date.now();
+    const canReadSystemSettings = ['super_admin', 'org_admin', 'team_admin'].includes(
+      String(profile?.role ?? '')
+    );
+
+    if (
+      canReadSystemSettings &&
+      (!loaded || loaded.userId !== user.id || now - loaded.at >= 60_000)
+    ) {
+      settingsLoadedRef.current = { userId: user.id, at: now };
+      api.getSettings(undefined, { skipSignOutOn401: true }).then((rows: unknown) => {
+        const list = Array.isArray(rows) ? rows : [];
+        const row = list.find((r: { key?: string }) => r.key === 'admin_security_settings');
+        const minutes = parseInt(String(row?.value?.sessionTimeout ?? '30'), 10);
+        if (Number.isFinite(minutes) && minutes > 0) {
+          timeoutMsRef.current = minutes * 60 * 1000;
+        }
+      }).catch(() => {/* use default */});
+    } else if (profileStatus === 'ready' && !canReadSystemSettings) {
+      // Normal app users cannot read the privileged system-settings endpoint. Keep the
+      // existing default idle timeout locally instead of spending a DB/auth slot on a
+      // predictable 403 during dashboard startup. Admin roles still load the saved setting.
+      settingsLoadedRef.current = { userId: user.id, at: now };
+    }
 
     const resetTimer = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -243,7 +264,7 @@ function IdleTimeoutEnforcer() {
       if (timerRef.current) clearTimeout(timerRef.current);
       activityEvents.forEach((e) => window.removeEventListener(e, resetTimer));
     };
-  }, [user, signOut, location.pathname]);
+  }, [user, signOut, location.pathname, profile?.role, profileStatus]);
 
   return null;
 }

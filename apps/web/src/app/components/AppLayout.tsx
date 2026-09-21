@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { BrandLogo } from "./BrandLogo";
-import { SolaceSidebar } from "@/app/solace";
+import { SolaceSidebar } from "@/app/solace/SolaceSidebar";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";

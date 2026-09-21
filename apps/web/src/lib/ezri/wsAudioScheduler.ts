@@ -32,6 +32,21 @@ export type EzriWsAudioSchedulerHandlers = {
        * buffer start.
        */
       leadInSec: number;
+      /**
+       * THE CHUNK'S ALREADY-DECODED BUFFER — read-only, for analysis only.
+       *
+       * This is the exact `AudioBuffer` this scheduler decoded and just handed
+       * to `source.start()`; it is not a copy, not a re-decode and not a second
+       * buffer. It is exposed so the avatar can run acoustic analysis over audio
+       * that is already in memory rather than fetching or decoding anything of
+       * its own.
+       *
+       * OWNERSHIP DOES NOT TRANSFER. The scheduler remains the owner of
+       * playback. A consumer may read channel data; it must never play, stop,
+       * mutate, replace or dispose this buffer, and must not retain it beyond
+       * its own analysis.
+       */
+      audioBuffer: AudioBuffer;
     },
   ) => void;
   /** Fired when a chunk physically starts playing (after jitter buffer delay). */
@@ -367,6 +382,12 @@ export class EzriWsAudioScheduler {
         audioContextStartTime: startTime,
         durationMs,
         leadInSec,
+        // Additive, read-only exposure of the buffer already decoded above and
+        // already committed to `source.start()` on the line above that. Nothing
+        // about scheduling, ordering, lead-in trimming or interruption changes;
+        // a consumer that ignores this field sees the previous behaviour byte
+        // for byte.
+        audioBuffer,
       });
 
       const timeUntilPlay = Math.max(0, startTime - ctx.currentTime);

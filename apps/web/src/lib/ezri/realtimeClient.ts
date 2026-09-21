@@ -1,5 +1,6 @@
 import type { EzriAudioSource } from "./audio";
 import { looksLikeBase64, sniffMimeFromBytes } from "./audio";
+import { traceRealtimeBinary, traceRealtimeConnect, traceRealtimeJson } from "./realtimeTrace";
 
 export type EzriWsStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
 
@@ -175,6 +176,14 @@ export class EzriRealtimeClient {
         ? `&country_code=${encodeURIComponent(args.countryCode)}`
         : "");
 
+    traceRealtimeConnect({
+      url,
+      brainProvider: args.brainProvider,
+      ttsProvider: args.ttsProvider,
+      sttProvider: args.sttProvider,
+      voice: args.voice,
+    });
+
     try {
       this.ws = new WebSocket(url);
     } catch (e) {
@@ -201,6 +210,7 @@ export class EzriRealtimeClient {
           return;
         }
         const mimeType = sniffMimeFromBytes(bytes);
+        traceRealtimeBinary(bytes.byteLength, mimeType);
         const blob = new Blob([bytes], { type: mimeType });
         this.handlers.onAudio?.({ kind: "blob", blob });
         return;
@@ -213,6 +223,7 @@ export class EzriRealtimeClient {
       }
 
       const msg = parsed as AnyObj;
+      traceRealtimeJson(msg);
 
       const errType = typeof msg.type === "string" ? msg.type.toLowerCase() : "";
       if (errType === "error" || errType === "ezri_error") {

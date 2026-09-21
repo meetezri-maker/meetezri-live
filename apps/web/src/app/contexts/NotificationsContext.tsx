@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +24,7 @@ interface NotificationsContextType {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
+  ensureNotificationsLoaded: () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
@@ -49,14 +50,21 @@ export function normalizeNotifications(payload: unknown): Notification[] {
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [notificationListUserId, setNotificationListUserId] = useState<string | null>(null);
   const onPublicAuthPage =
     typeof window !== 'undefined' && isPublicAuthPath(window.location.pathname);
+  const shouldLoadNotifications = !!user?.id && notificationListUserId === user.id;
 
-  // Recent notifications for header / emergency history (first page only).
+  const ensureNotificationsLoaded = useCallback(() => {
+    if (user?.id) setNotificationListUserId(user.id);
+  }, [user?.id]);
+
+  // The closed app shell only needs the unread badge. Load the larger first page
+  // when a notification list screen explicitly asks for it.
   const { data: notificationsRaw, isPending, isFetching } = useQuery({
     queryKey: queryKeys.notifications.byUser(user?.id),
     queryFn: () => api.notifications.getAll({ page: 1, limit: 100 }),
-    enabled: !!user && !onPublicAuthPage,
+    enabled: shouldLoadNotifications && !onPublicAuthPage,
     staleTime: 30_000,
     retry: 1,
   });
@@ -100,6 +108,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             queryKeys.notifications.byUser(user.id),
             (old: unknown) => {
               const existing = normalizeNotifications(old);
+              // Do not create a partial list cache before the complete list is requested.
+              // The unread-count query is invalidated below.
+              if (old == null) return undefined;
               // Dedupe by id — realtime can replay inserts on reconnect.
               if (existing.some((item) => item.id === newNotification.id)) {
                 return old;
@@ -198,6 +209,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         markAsRead,
         markAllAsRead,
         refreshNotifications,
+        ensureNotificationsLoaded,
       }}
     >
       {children}

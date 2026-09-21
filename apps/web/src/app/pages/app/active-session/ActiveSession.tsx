@@ -61,6 +61,11 @@ import {
 } from "@/avatar/saraV3/saraV3Diagnostics";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import { normalizeAvatarPhonemeTimeline } from "@/lib/avatar/phonemeToViseme";
+import {
+  createHyper3dLiveSpeechAdapter,
+  registerHyper3dLiveEngine,
+  type Hyper3dLiveSpeechAdapter,
+} from "@/lib/avatar/hyper3d";
 import * as THREE from "three";
 import { ActiveSessionView } from "./components";
 import type { FixedAvatarViewportConfig } from "./components/ThreeAvatar";
@@ -88,6 +93,22 @@ import {
   int16PcmToArrayBuffer,
 } from "./utils/pcmStream";
 import { usePipDrag } from "./hooks/usePipDrag";
+import {
+  attachLateWelcomeAvatarData,
+  releasePrePermissionWelcome,
+} from "./utils/welcomePlayback";
+import {
+  retainCurrentResponseAvatarData,
+  takeCurrentResponseAvatarData,
+  takePendingAvatarData,
+} from "./utils/pendingAvatarData";
+import { hyper3dTimelineForScheduledChunk } from "./utils/hyper3dChunkTimeline";
+import {
+  describeRawPhonemes,
+  REALTIME_TRACE_ENABLED,
+  traceRealtimeAssociation,
+} from "@/lib/ezri/realtimeTrace";
+import { isHyper3dRuntimeCommitted } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
 
 type SaraGreetingSyncState = {
   id: number;
@@ -103,6 +124,14 @@ type WsAudioQueueItem = {
   audioReceived: number | null;
   avatarDataReceived: number | null;
   saraGreetingSync?: SaraGreetingSyncState;
+  prePermissionWelcome?: boolean;
+  /**
+   * The session's first assistant audio (the backend greeting), whether or not
+   * mic permission was already granted when it arrived. Diagnostics only.
+   */
+  sessionGreeting?: boolean;
+  /** How `avatarData` was associated with this audio. Diagnostics only. */
+  metadataAssociation?: string;
 };
 
 /** B1.1b: one scheduled chunk, keyed by AudioContext start/end for clock-driven selection. */
@@ -722,6 +751,41 @@ export function ActiveSession() {
    */
   const wsSwapAuditPrevActiveRef = useRef<WsTimelineScheduleEntry | null>(null);
   const wsSwapAuditLastTickRef = useRef(0);
+  /**
+   * PHASE 1 SEAM — Solace live audio/timing → accepted Hyper3D runtime.
+   *
+   * Read-only with respect to playback: it is handed accessors for the
+   * scheduler's AudioContext time and pipeline state and holds no reference that
+   * could schedule, stop or reorder audio. Every call site below is placed AFTER
+   * the audio-critical work it observes, so no avatar work can sit between a
+   * chunk arriving and `source.start()`.
+   *
+   * Constructed through the same lazy-init idiom this file already uses for
+   * `wsSchedulerRef`, so the adapter is built once instead of being allocated
+   * and thrown away on every render of this component.
+   *
+   * REGISTRATION IS PART OF THE SAME LAZY INIT, and has to be. The engine
+   * factory closes over this adapter, and `Hyper3DImperativeHost` asks the
+   * registry synchronously inside its own mount effect — React runs child
+   * effects before parent effects, so registering from an effect here would
+   * always lose that race and report `engine-missing` on first mount. Rendering
+   * a parent happens before rendering or mounting its children, so this is
+   * ordered correctly.
+   *
+   * Registering does NOT select the avatar. The flag alone does that, in
+   * `AvatarRuntimeSwitch`; with the flag off nothing ever asks the registry and
+   * the factory is never called.
+   */
+  const hyper3dLiveAdapterRef = useRef<Hyper3dLiveSpeechAdapter | null>(null);
+  if (!hyper3dLiveAdapterRef.current) {
+    hyper3dLiveAdapterRef.current = createHyper3dLiveSpeechAdapter({
+      getContextTime: () =>
+        wsSchedulerRef.current?.getAudioContext()?.currentTime ?? null,
+      isPipelineActive: () =>
+        wsSchedulerRef.current?.isPipelineActive() ?? false,
+    });
+    registerHyper3dLiveEngine(hyper3dLiveAdapterRef.current);
+  }
   const wsIsPlaybackActiveRef = useRef(false);
   /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
   const wsTtsStreamingRef = useRef(false);
@@ -956,8 +1020,27 @@ export function ActiveSession() {
   // single `avatarPendingDataRef` slot, which dropped phonemes whenever a normal
   // multi-sentence reply deviated from strict avatar_data→audio alternation.
   const avatarPendingQueueRef = useRef<
-    Array<{ data: EzriAvatarData; receivedAt: number; chunkIndex: number | null }>
+    Array<{
+      data: EzriAvatarData;
+      receivedAt: number;
+      chunkIndex: number | null;
+      responseEpoch?: number;
+    }>
   >([]);
+  /**
+   * RESPONSE EPOCH. The protocol carries no response id and `chunk_index`
+   * restarts at 0 in every response, so metadata ownership is bounded by the
+   * response-lifecycle messages the client already handles (status, warmup,
+   * step, transcription, tts_done, interrupt). Every `audio_start` site in the
+   * deployed backend is preceded by one of them inside its own response.
+   * `audio_start` itself does NOT advance it: the greeting's and comfort
+   * phrase's metadata arrive just before it and belong to the audio after it.
+   * Read only by the Hyper3D association path; counting alone changes nothing.
+   */
+  const wsResponseEpochRef = useRef(0);
+  const advanceWsResponseEpoch = () => {
+    wsResponseEpochRef.current += 1;
+  };
   // Ordinal of the next raw binary audio frame in this turn (binary frames carry
   // no index, so the audio side counts; avatar_data carries chunk_index).
   const wsBinaryAudioSeqRef = useRef(0);
@@ -967,6 +1050,7 @@ export function ActiveSession() {
       data,
       receivedAt,
       chunkIndex: typeof data.chunk_index === "number" ? data.chunk_index : null,
+      responseEpoch: wsResponseEpochRef.current,
     });
     while (queue.length > 16) {
       queue.shift();
@@ -980,14 +1064,34 @@ export function ActiveSession() {
   // chunk_index), else null (the existing late-repair chain stays the fallback).
   const takePendingAvatarDataForSeq = (
     seq: number,
-  ): { data: EzriAvatarData; receivedAt: number } | null => {
-    const queue = avatarPendingQueueRef.current;
-    const exactIdx = queue.findIndex((entry) => entry.chunkIndex === seq);
-    const idx = exactIdx >= 0 ? exactIdx : queue.length > 0 ? 0 : -1;
-    if (idx < 0) return null;
-    const [entry] = queue.splice(idx, 1);
-    return { data: entry.data, receivedAt: entry.receivedAt };
+    audioEpoch: number,
+  ): { data: EzriAvatarData; receivedAt: number; method: string } | null => {
+    if (isHyper3dRuntimeCommitted()) {
+      // Hyper3D: only metadata owned by the response this audio arrived in.
+      const result = takeCurrentResponseAvatarData(avatarPendingQueueRef.current, seq, audioEpoch);
+      if (REALTIME_TRACE_ENABLED && (result.rejectedStale > 0 || result.retiredDuplicates > 0)) {
+        traceRealtimeAssociation("binary_audio_paired", {
+          seq,
+          rejectedStale: result.rejectedStale,
+          retiredDuplicates: result.retiredDuplicates,
+        });
+      }
+      return result.entry
+        ? { data: result.entry.data, receivedAt: result.entry.receivedAt, method: result.method }
+        : null;
+    }
+    // Existing avatar runtimes: the original B1.1c pairing, unchanged.
+    const entry = takePendingAvatarData(avatarPendingQueueRef.current, seq);
+    return entry
+      ? {
+          data: entry.data,
+          receivedAt: entry.receivedAt,
+          method: entry.chunkIndex === seq ? "exact-index" : "existing-fifo",
+        }
+      : null;
   };
+  /** Set once the session's first assistant audio (the greeting) has arrived. */
+  const sessionGreetingAudioSeenRef = useRef(false);
   // Non-consuming head peek — for the legacy REST-fallback diagnostics that only
   // ask "is there pending avatar_data / what is it" (1-deep behavior preserved).
   const peekPendingAvatarData = ():
@@ -1001,7 +1105,14 @@ export function ActiveSession() {
       (entry) => entry.data !== data,
     );
   };
-  const clearPendingAvatarData = () => {
+  const clearPendingAvatarData = (via?: string) => {
+    if (REALTIME_TRACE_ENABLED) {
+      traceRealtimeAssociation("pending_cleared", {
+        via: via ?? "unspecified",
+        clearedCount: avatarPendingQueueRef.current.length,
+        binarySeqBefore: wsBinaryAudioSeqRef.current,
+      });
+    }
     avatarPendingQueueRef.current = [];
     wsBinaryAudioSeqRef.current = 0;
   };
@@ -1148,6 +1259,10 @@ export function ActiveSession() {
     wsSchedulerRef.current?.stop();
     wsScheduledChunkMapRef.current.clear();
     wsTimelineScheduleRef.current = []; // B1.1b: barge-in invalidates scheduled timelines
+    // Same invalidation, one line later: the scheduler's `stop()` above has
+    // already bumped its session id, so no chunk from the cancelled turn can
+    // reach the adapter — this only drops what was already converted.
+    hyper3dLiveAdapterRef.current?.cancel("barge_in");
     wsAudioQueueRef.current = [];
     wsAudioReorderBufferRef.current = {};
     wsNextExpectedChunkIndexRef.current = 0;
@@ -1184,7 +1299,11 @@ export function ActiveSession() {
     mouthAudioLevelRef.current = 0;
     avatarAudioCurrentTimeRef.current = 0;
     avatarPhonemeTimelineRef.current = null;
-    clearPendingAvatarData();
+    // Mirrors the line above: the live driver's timeline is nulled here, so the
+    // Hyper3D timeline is cleared at the same instant. Nothing from a finished
+    // or cancelled turn survives into the next one.
+    hyper3dLiveAdapterRef.current?.cancel("audio_and_speech_driver_stopped");
+    clearPendingAvatarData("stopAudioAndSpeechDriver");
     updateSaraV3AudioDiagnostics({
       isSpeaking: false,
       audioCurrentTime: 0,
@@ -2182,13 +2301,59 @@ export function ActiveSession() {
     pre.push({ role: "assistant", content: t });
   };
 
-  const resetWsAudioReorderBuffer = () => {
+  const resetWsAudioReorderBuffer = (options?: { atAudioStart?: boolean; traceReason?: string }) => {
     wsAudioReorderBufferRef.current = {};
     wsNextExpectedChunkIndexRef.current = 0;
-    clearPendingAvatarData();
+    // DEV observation only: the pending metadata this reset is about to act on.
+    const pendingBeforeReset = REALTIME_TRACE_ENABLED ? avatarPendingQueueRef.current.length : 0;
+    const pendingSummaryBeforeReset = REALTIME_TRACE_ENABLED
+      ? JSON.stringify(
+          avatarPendingQueueRef.current.slice(0, 4).map((entry) => {
+            const phonemes = describeRawPhonemes(entry.data.phonemes);
+            return {
+              chunkIndex: entry.chunkIndex,
+              bundledAudio: Boolean(entry.data.audio_b64),
+              phonemeShape: phonemes.shape,
+              phonemeCount: phonemes.count,
+              responseEpoch: entry.responseEpoch ?? null,
+              sentence: (entry.data.sentence ?? "").slice(0, 60),
+            };
+          }),
+        )
+      : "";
+    const hyper3dRetention = Boolean(options?.atAudioStart) && isHyper3dRuntimeCommitted();
+    const resetVia = `resetWsAudioReorderBuffer:${options?.traceReason ?? "unspecified"}`;
+    if (hyper3dRetention) {
+      // Hyper3D only. The backend's greeting and comfort-phrase `avatar_data`
+      // arrive just BEFORE `audio_start`, in the same response. Keep exactly the
+      // split metadata owned by the current response epoch; drop the rest.
+      const retained = retainCurrentResponseAvatarData(
+        avatarPendingQueueRef.current,
+        wsResponseEpochRef.current,
+      );
+      clearPendingAvatarData(`${resetVia}(hyper3d-epoch-retention)`);
+      avatarPendingQueueRef.current = retained.kept;
+    } else {
+      // Existing behaviour for every other runtime and every other caller.
+      clearPendingAvatarData(resetVia);
+    }
+    if (REALTIME_TRACE_ENABLED && options?.atAudioStart) {
+      traceRealtimeAssociation("audio_start_pending_metadata", {
+        hyper3dRuntimeCommitted: isHyper3dRuntimeCommitted(),
+        associationPath: hyper3dRetention ? "2F.2-epoch-retention" : "original-full-clear",
+        responseEpoch: wsResponseEpochRef.current,
+        pendingBeforeReset,
+        pendingSummaryBeforeReset,
+        pendingAfterReset: avatarPendingQueueRef.current.length,
+        /** What the original (HEAD) reset destroys here: everything pending. */
+        originalSemanticsWouldClear: pendingBeforeReset,
+      });
+    }
     // B1.1b: new turn = new context-timeline domain (nextStartTime resets), so
     // the previous turn's scheduled entries are invalid.
     wsTimelineScheduleRef.current = [];
+    // Same reason, same moment: a new turn is a new response origin.
+    hyper3dLiveAdapterRef.current?.beginTurn();
   };
 
   const processWsAudioReorderBuffer = () => {
@@ -2217,6 +2382,7 @@ export function ActiveSession() {
       avatarData: data,
       audioReceived: now,
       avatarDataReceived: now,
+      metadataAssociation: "bundled",
     };
     processWsAudioReorderBufferRef.current();
   };
@@ -2289,6 +2455,9 @@ export function ActiveSession() {
   const sendPlaybackDoneNow = useCallback(() => {
     if (ezriWsAudioPipelineActive()) {
       pendingPlaybackDoneRef.current = true;
+      if (REALTIME_TRACE_ENABLED) {
+        traceRealtimeAssociation("playback_done_attempt", { outcome: "deferred_pipeline_active" });
+      }
       return;
     }
     if (playbackDoneCooldownTimerRef.current !== null) {
@@ -2302,6 +2471,9 @@ export function ActiveSession() {
       if (ws?.getStatus() === "connected") {
         try {
           const ok = ws.sendPlaybackDone();
+          if (REALTIME_TRACE_ENABLED) {
+            traceRealtimeAssociation("playback_done_attempt", { outcome: ok ? "sent" : "send_failed" });
+          }
           if (ok) {
             playbackDoneAckRef.current = true;
             console.log("[WS] playback_done sent — server mic unlocked");
@@ -2477,6 +2649,10 @@ export function ActiveSession() {
           avatarPhonemeTimelineRef.current = active.timeline;
         }
       }
+      // PHASE 1 SEAM diagnostics. Rides the RAF that is already running — no new
+      // loop, no React state, no allocation — and compiles out of production via
+      // the `import.meta.env.DEV` guard inside `sampleClock`.
+      hyper3dLiveAdapterRef.current?.sampleClock();
       // No active entry (pre-roll before chunk 0, or the tail/idle gap after the
       // last chunk): leave clock + timeline as-is. The clock naturally freezes
       // past the last phoneme end → driver relaxes the mouth. Cross-turn staleness
@@ -2501,6 +2677,7 @@ export function ActiveSession() {
     isEzriSpeakingRef.current = true;
     setIsEzriSpeaking(true);
     wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
+    hyper3dLiveAdapterRef.current?.setStatus("playing");
 
     // B1.1b: the clock rebase and timeline attach that used to live here have
     // moved to the audio-clock-keyed queue (`onChunkScheduled` + `tickClock`).
@@ -2529,9 +2706,18 @@ export function ActiveSession() {
    */
   const handleWsSchedulerChunkScheduled = (
     item: WsAudioQueueItem | undefined,
-    timing: { audioContextStartTime: number; durationMs: number },
+    timing: {
+      audioContextStartTime: number;
+      durationMs: number;
+      leadInSec?: number;
+      audioBuffer?: AudioBuffer;
+    },
   ) => {
     if (!item) return;
+
+    // Anchor for the §18 latency metric: the instant the scheduler handed this
+    // chunk over, measured before any avatar work runs.
+    const hyper3dHandoffAtMs = performance.now();
 
     const ctx = wsSchedulerRef.current?.getAudioContext() ?? null;
     // §4d — entries are keyed to one AudioContext's timeline; drop the old
@@ -2579,11 +2765,81 @@ export function ActiveSession() {
     }
 
     startWsSchedulerMouthAnalyser();
+
+    // PHASE 1 SEAM. Last in this handler on purpose: everything above — and, in
+    // the scheduler, `source.start()` itself — has already run, so the avatar's
+    // timeline work provably cannot move `audioScheduledStart`. Guarded because
+    // an adapter fault must never break playback.
+    try {
+      // The same normalization `tickClock` applies, so the seam reads exactly
+      // what the live driver reads — restricted to backend-timed phonemes.
+      const hyper3dChunk = hyper3dTimelineForScheduledChunk(
+        item.avatarData,
+        timing.durationMs / 1000,
+      );
+      if (REALTIME_TRACE_ENABLED) {
+        const phonemes = describeRawPhonemes(item.avatarData?.phonemes);
+        traceRealtimeAssociation("chunk_scheduled", {
+          hasAvatarData: Boolean(item.avatarData),
+          phonemeShape: phonemes.shape,
+          phonemeCount: phonemes.count,
+          firstStart: phonemes.firstStart,
+          lastEnd: phonemes.lastEnd,
+          chunkIndex: item.avatarData?.chunk_index ?? null,
+          audioContextStartTime: startTime,
+          durationMs: timing.durationMs,
+          leadInSec: timing.leadInSec ?? 0,
+          hyper3dTimelineHandedOver: Boolean(hyper3dChunk.timeline),
+          rawPhonemeFormat: hyper3dChunk.rawPhonemeFormat,
+        });
+      }
+      const hyper3dAppend = hyper3dLiveAdapterRef.current?.onChunkScheduled({
+        audioContextStartTime: startTime,
+        durationMs: timing.durationMs,
+        leadInSec: timing.leadInSec ?? 0,
+        ...hyper3dChunk,
+        chunkIndex:
+          typeof item.avatarData?.chunk_index === "number"
+            ? item.avatarData.chunk_index
+            : null,
+        sentence: item.avatarData?.sentence?.trim() || item.subtitle.trim(),
+        scheduledAtMs: hyper3dHandoffAtMs,
+        // Borrowed, read-only. The scheduler decoded and scheduled this buffer
+        // before this handler ran; the avatar analyses it and drops it.
+        audioBuffer: timing.audioBuffer ?? null,
+        isWelcome: item.prePermissionWelcome === true || item.sessionGreeting === true,
+        associationMethod: item.metadataAssociation ?? null,
+        audioB64Present: Boolean(item.avatarData?.audio_b64),
+      });
+      if (REALTIME_TRACE_ENABLED && hyper3dAppend) {
+        const payload = hyper3dLiveAdapterRef.current?.getPayload();
+        traceRealtimeAssociation("hyper3d_append", {
+          appendResult: hyper3dAppend.accepted ? "accepted" : hyper3dAppend.reason,
+          appendedPhonemes: hyper3dAppend.accepted ? hyper3dAppend.appendedPhonemes : 0,
+          responseOffsetSeconds: hyper3dAppend.accepted ? hyper3dAppend.chunkOffsetSeconds : null,
+          timelinePhonemeCount: payload?.phonemes.length ?? 0,
+          timelineAudioDuration: payload?.audio_duration ?? 0,
+        });
+      }
+    } catch (error) {
+      console.warn("[Hyper3D] live timeline append failed (non-fatal):", error);
+    }
   };
 
   const handleWsSchedulerPipelineIdle = () => {
+    if (REALTIME_TRACE_ENABLED) {
+      traceRealtimeAssociation("scheduler_pipeline_idle", {
+        pendingPlaybackDone: pendingPlaybackDoneRef.current,
+        permissionsGranted: permissionsGrantedRef.current,
+      });
+    }
     wsTtsStreamingRef.current = false;
     wsIsPlaybackActiveRef.current = false;
+    // Records that this turn ENDED rather than being discarded. The teardown
+    // below then clears the timeline and drops the status to "idle"; both map to
+    // the accepted runtime's IDLE conversation state, so the distinction is for
+    // diagnostics, not behaviour.
+    hyper3dLiveAdapterRef.current?.setStatus("completed");
     stopWsSchedulerMouthAnalyser();
     stopAudioAndSpeechDriver();
     maybeResumeMicAfterEzriPlayback(true);
@@ -2599,7 +2855,15 @@ export function ActiveSession() {
   const wsSchedulerCallbacksRef = useRef({
     onChunkScheduled: (
       _meta: { subtitle: string; chunkId?: string },
-      _timing: { audioContextStartTime: number; durationMs: number },
+      // `leadInSec` is already supplied by EzriWsAudioScheduler; naming it here
+      // only makes the existing payload visible to this handler.
+      _timing: {
+        audioContextStartTime: number;
+        durationMs: number;
+        leadInSec: number;
+        /** Already-decoded, read-only; borrowed by the avatar for analysis. */
+        audioBuffer: AudioBuffer;
+      },
     ) => {},
     onChunkStart: (
       _meta: { subtitle: string; chunkId?: string },
@@ -2677,6 +2941,20 @@ export function ActiveSession() {
     const chunkId = `${performance.now()}_${Math.random().toString(36).slice(2, 9)}`;
     wsScheduledChunkMapRef.current.set(chunkId, item);
 
+    if (REALTIME_TRACE_ENABLED) {
+      const phonemes = describeRawPhonemes(item.avatarData?.phonemes);
+      traceRealtimeAssociation("scheduler_enqueue", {
+        hasAvatarData: Boolean(item.avatarData),
+        phonemeShape: phonemes.shape,
+        phonemeCount: phonemes.count,
+        chunkIndex: item.avatarData?.chunk_index ?? null,
+        sentence: (item.avatarData?.sentence ?? item.subtitle ?? "").slice(0, 80),
+        prePermissionWelcome: item.prePermissionWelcome === true,
+        sessionGreeting: item.sessionGreeting === true,
+        association: item.metadataAssociation ?? null,
+      });
+    }
+
     void wsSchedulerRef.current?.schedule(item.audio as EzriAudioSource, {
       subtitle: item.subtitle,
       chunkId,
@@ -2717,11 +2995,21 @@ export function ActiveSession() {
     }
     prePermissionTranscriptRef.current = [];
 
-    const queued = prePermissionAudioQueueRef.current.splice(0);
-    if (queued.length > 0) {
-      wsAudioQueueRef.current.push(...queued);
-      flushWsAudioQueue();
-    } else if (
+    const releasedWelcomeCount = releasePrePermissionWelcome({
+      queue: prePermissionAudioQueueRef.current,
+      prepareScheduledTurn: () => {
+        resetWsAudioReorderBuffer({ traceReason: "welcome_release" });
+        hyper3dLiveAdapterRef.current?.setStatus("ready");
+      },
+      enqueueAll: (queued) => {
+        wsAudioQueueRef.current.push(...queued);
+        flushWsAudioQueue();
+      },
+      ttsDoneReceived: wsTtsDoneReceivedRef.current,
+      markSchedulerTtsDone: () => wsSchedulerRef.current?.setTtsDoneReceived(),
+    });
+    if (
+      releasedWelcomeCount === 0 &&
       wsTtsDoneReceivedRef.current &&
       !wsIsPlaybackActiveRef.current &&
       wsAudioQueueRef.current.length === 0
@@ -2750,7 +3038,7 @@ export function ActiveSession() {
     wsPendingFallbackTextRef.current = "";
     assistantReplyStartedRef.current = false;
     resetAssistantTurnAccumulation();
-    resetWsAudioReorderBuffer();
+    resetWsAudioReorderBuffer({ traceReason: "barge_in" });
 
     if (restAbortControllerRef.current) {
       restAbortControllerRef.current.abort();
@@ -3079,7 +3367,7 @@ export function ActiveSession() {
         wsActiveTurnRef.current += 1;
         wsAudioSeenTurnRef.current = 0;
         assistantReplyStartedRef.current = false;
-        resetWsAudioReorderBuffer();
+        resetWsAudioReorderBuffer({ traceReason: "typed_chat" });
         wsAssistantBufferRef.current = "";
         if (wsSpeakFallbackTimerRef.current) {
           window.clearTimeout(wsSpeakFallbackTimerRef.current);
@@ -3963,8 +4251,12 @@ export function ActiveSession() {
     const client =
       wsClientRef.current ||
       new EzriRealtimeClient({
-        onStatus: (s) => setEzriWsStatus(s),
+        onStatus: (s) => {
+          advanceWsResponseEpoch();
+          setEzriWsStatus(s);
+        },
         onAssistantText: (text, kind) => {
+          advanceWsResponseEpoch();
           // Drop everything from the old turn until the user's new message is sent.
           if (suppressIncomingAudioRef.current) return;
           // Drop old in-flight responses that arrived before the merged message's response.
@@ -4017,6 +4309,7 @@ export function ActiveSession() {
           pendingUserTextRef.current = "";
         },
         onUserTranscript: (text) => {
+          advanceWsResponseEpoch();
           if (dropOldResponsesRef.current > 0) {
             dropOldResponsesRef.current = 0;
           }
@@ -4038,6 +4331,7 @@ export function ActiveSession() {
           }
         },
         onTtsDone: () => {
+          advanceWsResponseEpoch();
           // Greeting may finish before mic permission â€” defer playback_done until audio plays.
           if (!permissionsGrantedRef.current) {
             assistantReplyStartedRef.current = false;
@@ -4107,11 +4401,12 @@ export function ActiveSession() {
           }, TTS_DONE_GRACE_MS);
         },
         onAudioStart: (info) => {
-          resetWsAudioReorderBuffer();
+          resetWsAudioReorderBuffer({ atAudioStart: true, traceReason: "audio_start" });
           wsSchedulerRef.current?.setAudioFormat(info.format, info.sampleRate);
         },
         onSpeakingStart: () => {
-          resetWsAudioReorderBuffer();
+          advanceWsResponseEpoch();
+          resetWsAudioReorderBuffer({ traceReason: "step_speaking" });
           // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
           playbackDoneAckRef.current = false;
           pendingPlaybackDoneRef.current = false;
@@ -4127,58 +4422,84 @@ export function ActiveSession() {
           isEzriThinkingRef.current = false;
         },
         onAvatarData: (data) => {
+          const pendingBeforeAvatarData = REALTIME_TRACE_ENABLED
+            ? avatarPendingQueueRef.current.length
+            : 0;
+          const traceAvatarDataRoute = (route: string) => {
+            if (!REALTIME_TRACE_ENABLED) return;
+            const phonemes = describeRawPhonemes(data.phonemes);
+            traceRealtimeAssociation("avatar_data_routed", {
+              route,
+              chunkIndex: data.chunk_index ?? null,
+              sentence: (data.sentence ?? "").slice(0, 80),
+              bundledAudio: Boolean(data.audio_b64),
+              phonemeCount: phonemes.count,
+              phonemeShape: phonemes.shape,
+              firstStart: phonemes.firstStart,
+              lastEnd: phonemes.lastEnd,
+              permissionsGranted: permissionsGrantedRef.current,
+              pendingBefore: pendingBeforeAvatarData,
+              pendingAfter: avatarPendingQueueRef.current.length,
+              responseEpoch: wsResponseEpochRef.current,
+            });
+          };
           if (data.audio_b64) {
             enqueueWsAvatarAudioChunk(data);
+            traceAvatarDataRoute("enqueued_with_bundled_audio");
           }
           // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
           const avatarDataReceived = performance.now();
           const queuedGreetingWithoutData =
-            companionCanonicalId === "sarah" &&
-            !permissionsGrantedRef.current
-              ? prePermissionAudioQueueRef.current.find(
-                  (item) => item.saraGreetingSync && !item.avatarData
-                )
-              : undefined;
-          if (queuedGreetingWithoutData?.saraGreetingSync) {
-            queuedGreetingWithoutData.avatarData = data;
-            queuedGreetingWithoutData.subtitle =
-              data.sentence?.trim() || queuedGreetingWithoutData.subtitle;
-            queuedGreetingWithoutData.saraGreetingSync = {
-              ...queuedGreetingWithoutData.saraGreetingSync,
-              sentence:
-                data.sentence?.trim() ||
-                queuedGreetingWithoutData.saraGreetingSync.sentence,
-              avatarDataReceived,
-            };
+            !data.audio_b64 &&
+            !permissionsGrantedRef.current &&
+            (String(resolvedAvatarRuntime) === "hyper3d" || companionCanonicalId === "sarah")
+              ? (attachLateWelcomeAvatarData(
+                prePermissionAudioQueueRef.current,
+                data,
+                avatarDataReceived,
+              ) as WsAudioQueueItem | null)
+            : null;
+          if (queuedGreetingWithoutData) {
+            if (queuedGreetingWithoutData.saraGreetingSync) {
+              queuedGreetingWithoutData.saraGreetingSync = {
+                ...queuedGreetingWithoutData.saraGreetingSync,
+                sentence:
+                  data.sentence?.trim() ||
+                  queuedGreetingWithoutData.saraGreetingSync.sentence,
+                avatarDataReceived,
+              };
+            }
             const timeline = normalizeAvatarPhonemeTimeline(data);
             const firstPhoneme = timeline?.phonemes[0] ?? null;
-            updateSaraGreetingDiagnostics({
-              greetingSentence:
-                data.sentence?.trim() ||
-                queuedGreetingWithoutData.saraGreetingSync.sentence,
-              avatarDataReceived,
-              timelineAttached: !!timeline?.phonemes.length,
-              phonemeCount: timeline?.phonemes.length ?? 0,
-              firstPhoneme: firstPhoneme
-                ? {
-                    phoneme: firstPhoneme.phoneme,
-                    start: firstPhoneme.start,
-                    end: firstPhoneme.end ?? null,
-                  }
-                : null,
-            });
-            console.log("[Sara Greeting Sync]", {
-              greetingSentence:
-                data.sentence?.trim() ||
-                queuedGreetingWithoutData.saraGreetingSync.sentence,
-              audioReceived: queuedGreetingWithoutData.saraGreetingSync.audioReceived,
-              avatarDataReceived,
-              phonemeCount: timeline?.phonemes.length ?? 0,
-              firstPhonemeStart: firstPhoneme?.start ?? null,
-              playbackStart: null,
-              firstVisemeApplied: null,
-              repairedLateAvatarData: true,
-            });
+            if (queuedGreetingWithoutData.saraGreetingSync) {
+              updateSaraGreetingDiagnostics({
+                greetingSentence:
+                  data.sentence?.trim() ||
+                  queuedGreetingWithoutData.saraGreetingSync.sentence,
+                avatarDataReceived,
+                timelineAttached: !!timeline?.phonemes.length,
+                phonemeCount: timeline?.phonemes.length ?? 0,
+                firstPhoneme: firstPhoneme
+                  ? {
+                      phoneme: firstPhoneme.phoneme,
+                      start: firstPhoneme.start,
+                      end: firstPhoneme.end ?? null,
+                    }
+                  : null,
+              });
+              console.log("[Sara Greeting Sync]", {
+                greetingSentence:
+                  data.sentence?.trim() ||
+                  queuedGreetingWithoutData.saraGreetingSync.sentence,
+                audioReceived: queuedGreetingWithoutData.saraGreetingSync.audioReceived,
+                avatarDataReceived,
+                phonemeCount: timeline?.phonemes.length ?? 0,
+                firstPhonemeStart: firstPhoneme?.start ?? null,
+                playbackStart: null,
+                firstVisemeApplied: null,
+                repairedLateAvatarData: true,
+              });
+            }
             if (companionCanonicalId === "sarah" && useSaraV3ForSara) {
               updateSaraV3WelcomeDiagnostics({
                 welcomeHasAvatarData: true,
@@ -4204,6 +4525,7 @@ export function ActiveSession() {
               });
             }
             removePendingAvatarData(data);
+            traceAvatarDataRoute("attached_to_queued_prepermission_welcome");
           } else {
             const sentence = data.sentence?.trim() ?? "";
             const chunkIndex =
@@ -4227,6 +4549,13 @@ export function ActiveSession() {
               queuedWithoutData.avatarDataReceived = avatarDataReceived;
               queuedWithoutData.subtitle = sentence;
               removePendingAvatarData(data);
+              if (REALTIME_TRACE_ENABLED) {
+                traceAvatarDataRoute(
+                  [...wsScheduledChunkMapRef.current.values()].includes(queuedWithoutData)
+                    ? "late_attach_to_already_scheduled_item"
+                    : "late_attach_to_unscheduled_item",
+                );
+              }
             } else if (
               wsIsPlaybackActiveRef.current &&
               sentence.length > 0 &&
@@ -4237,8 +4566,10 @@ export function ActiveSession() {
                 avatarPhonemeTimelineRef.current = lateTimeline;
               }
               removePendingAvatarData(data);
+              traceAvatarDataRoute("legacy_timeline_ref_only");
             } else {
               pushPendingAvatarData(data, avatarDataReceived);
+              traceAvatarDataRoute("pending_for_binary_audio");
             }
           }
           latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
@@ -4248,6 +4579,7 @@ export function ActiveSession() {
           }
         },
         onInterrupt: () => {
+          advanceWsResponseEpoch();
           // Server Silero VAD fired handle_interrupt (reference app.js case 'interrupt').
           suppressIncomingAudioRef.current = false;
 
@@ -4275,16 +4607,19 @@ export function ActiveSession() {
           resumeStt(0, { ignoreSpeakingGate: true });
         },
         onWarmupStart: () => {
+          advanceWsResponseEpoch();
           ezriWarmupReadyRef.current = false;
           wsTtsDoneReceivedRef.current = false;
           setEzriWarmupStatus("warming");
         },
         onWarmupDone: () => {
+          advanceWsResponseEpoch();
           ezriWarmupReadyRef.current = true;
           setEzriWarmupStatus("ready");
           // Do not send playback_done here (app.js waits until greeting audio finishes playing).
         },
         onPipelineStep: (status) => {
+          advanceWsResponseEpoch();
           if (status === "thinking") {
             setIsEzriThinking(true);
             isEzriThinkingRef.current = true;
@@ -4299,6 +4634,9 @@ export function ActiveSession() {
           // Drop audio belonging to old in-flight responses.
           if (dropOldResponsesRef.current > 0) return;
           const audioReceived = performance.now();
+          // The response this audio belongs to is the one it ARRIVED in, even if
+          // pairing is deferred below.
+          const audioEpoch = wsResponseEpochRef.current;
 
           const enqueueAudioWithPendingAvatarData = () => {
             if (suppressIncomingAudioRef.current) return;
@@ -4307,7 +4645,10 @@ export function ActiveSession() {
             // B1.1c: pair this raw binary audio frame with its phonemes by per-turn
             // ordinal (exact chunk_index → FIFO → null; late-repair chain covers null).
             const seq = wsBinaryAudioSeqRef.current++;
-            const paired = takePendingAvatarDataForSeq(seq);
+            const pendingBeforePairing = REALTIME_TRACE_ENABLED
+              ? avatarPendingQueueRef.current.length
+              : 0;
+            const paired = takePendingAvatarDataForSeq(seq, audioEpoch);
 
             const buffered = wsAssistantBufferRef.current.trim();
             const sentence = paired?.data.sentence?.trim() ?? "";
@@ -4356,7 +4697,30 @@ export function ActiveSession() {
               audioReceived,
               avatarDataReceived: paired?.receivedAt ?? null,
               saraGreetingSync,
+              prePermissionWelcome: !permissionsGrantedRef.current,
+              sessionGreeting: !sessionGreetingAudioSeenRef.current,
+              metadataAssociation: paired?.method ?? "no-metadata",
             };
+            sessionGreetingAudioSeenRef.current = true;
+            if (REALTIME_TRACE_ENABLED) {
+              const pairedPhonemes = describeRawPhonemes(paired?.data.phonemes);
+              traceRealtimeAssociation("binary_audio_paired", {
+                seq,
+                audioEpoch,
+                hyper3dAssociation: isHyper3dRuntimeCommitted(),
+                method: chunk.metadataAssociation ?? null,
+                paired: Boolean(paired),
+                pairedChunkIndex: paired?.data.chunk_index ?? null,
+                pairedPhonemeCount: pairedPhonemes.count,
+                pairedPhonemeShape: pairedPhonemes.shape,
+                pairedSentence: (paired?.data.sentence ?? "").slice(0, 80),
+                pendingBefore: pendingBeforePairing,
+                pendingRemaining: avatarPendingQueueRef.current.length,
+                permissionsGranted: permissionsGrantedRef.current,
+                prePermissionWelcome: chunk.prePermissionWelcome === true,
+                sessionGreeting: chunk.sessionGreeting === true,
+              });
+            }
 
             if (saraGreetingSync) {
               const timeline = normalizeAvatarPhonemeTimeline(chunk.avatarData);
@@ -4584,6 +4948,9 @@ export function ActiveSession() {
         silentSink.connect(audioCtx.destination);
         setIsListening(true);
         pcmChunksSentRef.current = 0;
+        if (REALTIME_TRACE_ENABLED) {
+          traceRealtimeAssociation("pcm_streaming_started", { captureRate });
+        }
         console.log(
           "[PCM] Streaming started at",
           captureRate,

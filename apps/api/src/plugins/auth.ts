@@ -17,20 +17,19 @@ function extractBearerToken(request: FastifyRequest): string | null {
   return null;
 }
 
-// Simple in-memory cache for user roles/permissions to reduce DB calls
-// Map<userId, { role, permissions, onboardingCompleted, timestamp }>
-const userRoleCache = new Map<
-  string,
-  {
-    role: string;
-    permissions: any;
-    onboardingCompleted: boolean;
-    /** Resolved via the shared resolver, so never null - see resolveSignupTypeForRequest. */
-    signupType: SignupType;
-    accountStatus: string | null;
-    timestamp: number;
-  }
->();
+type CachedUserRole = {
+  role: string;
+  permissions: any;
+  onboardingCompleted: boolean;
+  /** Resolved via the shared resolver, so never null - see resolveSignupTypeForRequest. */
+  signupType: SignupType;
+  accountStatus: string | null;
+  timestamp: number;
+};
+
+// Simple in-memory cache for user roles/permissions to reduce DB calls.
+const userRoleCache = new Map<string, CachedUserRole>();
+const userRoleResolutionInFlight = new Map<string, Promise<void>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const INACTIVE_ACCOUNT_ALLOWED_PREFIXES = [
@@ -277,7 +276,6 @@ export default fp(async (fastify: FastifyInstance) => {
           'JWT verified via Supabase (local clock skew tolerance)'
         );
       }
-
       request.log.info(
         {
           url: request.url,
@@ -294,7 +292,6 @@ export default fp(async (fastify: FastifyInstance) => {
         const now = Date.now();
         const path = request.url.split('?')[0] || '';
         const isPrivilegedRoute = isPrivilegedApi(path);
-
         if (cached && !isPrivilegedRoute && (now - cached.timestamp < CACHE_TTL)) {
           user.appRole = normalizeAppRole(cached.role);
           user.permissions = cached.permissions;
@@ -356,6 +353,27 @@ export default fp(async (fastify: FastifyInstance) => {
             }
           }
         } else {
+          const pendingResolution = !isPrivilegedRoute
+            ? userRoleResolutionInFlight.get(user.sub)
+            : undefined;
+
+          if (pendingResolution) {
+            await pendingResolution;
+            await fastify.authenticate(request, reply);
+            return;
+          }
+
+          let finishResolution: (() => void) | undefined;
+          if (!isPrivilegedRoute) {
+            userRoleResolutionInFlight.set(
+              user.sub,
+              new Promise<void>((resolve) => {
+                finishResolution = resolve;
+              })
+            );
+          }
+
+          try {
           // Fetch from DB if not in cache or expired
           // Important: keep login stable even if the DB migration isn't applied yet.
           // If `onboarding_completed` column doesn't exist, Prisma will throw.
@@ -399,7 +417,6 @@ export default fp(async (fastify: FastifyInstance) => {
           
           if (profile) {
             const resolvedAppRole = await resolveAppRole(user.sub, profile.role, isPrivilegedRoute);
-
             user.appRole = resolvedAppRole;
             user.permissions = profile.permissions;
 
@@ -411,7 +428,6 @@ export default fp(async (fastify: FastifyInstance) => {
               user.sub,
               profile as any
             );
-
             // Resolve onboarding completion deterministically.
             // Trial completion == "required trial profile setup is done".
             const onboardingCompletedResolved = (() => {
@@ -577,6 +593,12 @@ export default fp(async (fastify: FastifyInstance) => {
               return;
             }
           }
+        } finally {
+          if (!isPrivilegedRoute) {
+            userRoleResolutionInFlight.delete(user.sub);
+            finishResolution?.();
+          }
+        }
         }
       }
     } catch (err) {

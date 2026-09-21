@@ -128,13 +128,23 @@ const PRIORITY_META: Record<
 
 export function Notifications() {
   const { user, profile, refreshProfile } = useAuth();
-  const { notifications: allNotifications, markAsRead, markAllAsRead, isLoading } = useNotifications();
+  const {
+    notifications: allNotifications,
+    markAsRead,
+    markAllAsRead,
+    isLoading,
+    ensureNotificationsLoaded,
+  } = useNotifications();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<NotificationCategory>("All");
   const [quietMode, setQuietMode] = useState(false);
   const [quietModeSaving, setQuietModeSaving] = useState(false);
+  useEffect(() => {
+    ensureNotificationsLoaded();
+  }, [ensureNotificationsLoaded]);
+
 
   const { data: activityRaw } = useQuery({
     queryKey: queryKeys.activity.recent(user?.id, 50),

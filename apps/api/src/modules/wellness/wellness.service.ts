@@ -487,38 +487,47 @@ function mapDifficultyLabel(goalCriteria: unknown): 'Easy' | 'Medium' | 'Hard' {
   return 'Easy';
 }
 
-async function computeChallengeProgressForUser(
-  userId: string,
-  challenge: {
-    id: string;
-    title: string;
-    category: string | null;
-    start_date: Date;
-    end_date: Date;
-    goal_criteria: unknown;
-  },
-  participation: { progress: number | null; is_completed: boolean | null } | null,
-  profileStreakDays: number
-): Promise<number> {
-  const target = getChallengeTargetFromCriteria(challenge.goal_criteria);
-  if (participation?.is_completed) {
-    return target;
-  }
-  if (
-    typeof participation?.progress === 'number' &&
-    participation.progress > 0
-  ) {
-    return Math.min(participation.progress, target);
-  }
+type DashboardChallengeProgressKind =
+  | 'mood_streak'
+  | 'meditation_sessions'
+  | 'journal_entries'
+  | 'breathing'
+  | 'wellness_sessions'
+  | 'sleep_nights'
+  | 'mood_entries'
+  | 'stored_progress';
 
+type DashboardChallengeForProgress = {
+  id: string;
+  title: string;
+  category: string | null;
+  start_date: Date;
+  end_date: Date;
+  goal_criteria: unknown;
+};
+
+type DashboardChallengeParticipation = {
+  progress: number | null;
+  is_completed: boolean | null;
+} | null;
+
+type DashboardProgressSources = {
+  wellnessProgress: Array<{
+    completed_at: Date | null;
+    wellness_tools?: { category: string | null } | null;
+  }>;
+  journalEntries: Array<{ created_at: Date }>;
+  sleepEntries: Array<{ created_at: Date }>;
+  moodEntries: Array<{ created_at: Date }>;
+};
+
+function getDashboardChallengeProgressKind(
+  challenge: DashboardChallengeForProgress
+): DashboardChallengeProgressKind {
   const gc = (challenge.goal_criteria || {}) as Record<string, unknown>;
   const metric = typeof gc.metric === 'string' ? gc.metric : '';
   const title = (challenge.title || '').toLowerCase();
   const cat = (challenge.category || '').toLowerCase();
-  const start = challenge.start_date;
-  const end = challenge.end_date;
-
-  let raw = 0;
 
   if (
     metric === 'mood_streak' ||
@@ -526,32 +535,22 @@ async function computeChallengeProgressForUser(
     title.includes('check in') ||
     title.includes('daily check')
   ) {
-    raw = Math.min(profileStreakDays, target);
-  } else if (metric === 'meditation_sessions' || title.includes('meditation')) {
-    raw = await prisma.user_wellness_progress.count({
-      where: {
-        user_id: userId,
-        completed_at: { gte: start, lte: end, not: null },
-        wellness_tools: { category: 'Meditation' },
-      },
-    });
-  } else if (
+    return 'mood_streak';
+  }
+  if (metric === 'meditation_sessions' || title.includes('meditation')) {
+    return 'meditation_sessions';
+  }
+  if (
     metric === 'journal_entries' ||
     cat === 'journaling' ||
     title.includes('journal')
   ) {
-    raw = await prisma.journal_entries.count({
-      where: { user_id: userId, created_at: { gte: start, lte: end } },
-    });
-  } else if (metric === 'breathing' || title.includes('breath')) {
-    raw = await prisma.user_wellness_progress.count({
-      where: {
-        user_id: userId,
-        completed_at: { gte: start, lte: end, not: null },
-        wellness_tools: { category: 'Relaxation' },
-      },
-    });
-  } else if (
+    return 'journal_entries';
+  }
+  if (metric === 'breathing' || title.includes('breath')) {
+    return 'breathing';
+  }
+  if (
     metric === 'wellness_sessions' ||
     title.includes('wellness warrior') ||
     cat === 'exercise' ||
@@ -560,20 +559,174 @@ async function computeChallengeProgressForUser(
     title.includes('fitness') ||
     title.includes('gym')
   ) {
-    raw = await prisma.user_wellness_progress.count({
-      where: {
-        user_id: userId,
-        completed_at: { gte: start, lte: end, not: null },
-      },
-    });
-  } else if (metric === 'sleep_nights' || title.includes('sleep')) {
-    raw = await prisma.sleep_entries.count({
-      where: { user_id: userId, created_at: { gte: start, lte: end } },
-    });
-  } else if (metric === 'mood_entries' || title.includes('mood')) {
-    raw = await prisma.mood_entries.count({
-      where: { user_id: userId, created_at: { gte: start, lte: end } },
-    });
+    return 'wellness_sessions';
+  }
+  if (metric === 'sleep_nights' || title.includes('sleep')) {
+    return 'sleep_nights';
+  }
+  if (metric === 'mood_entries' || title.includes('mood')) {
+    return 'mood_entries';
+  }
+  return 'stored_progress';
+}
+
+function hasStoredDashboardProgress(
+  participation: DashboardChallengeParticipation
+): participation is { progress: number; is_completed: boolean | null } {
+  return (
+    typeof participation?.progress === 'number' &&
+    participation.progress > 0
+  );
+}
+
+function challengeNeedsDashboardProgressSource(
+  challenge: DashboardChallengeForProgress,
+  participation: DashboardChallengeParticipation
+): boolean {
+  if (participation?.is_completed || hasStoredDashboardProgress(participation)) return false;
+  const kind = getDashboardChallengeProgressKind(challenge);
+  return kind !== 'mood_streak' && kind !== 'stored_progress';
+}
+
+function countDatesInChallengeWindow(
+  rows: Array<{ created_at: Date }>,
+  challenge: DashboardChallengeForProgress
+): number {
+  const start = challenge.start_date.getTime();
+  const end = challenge.end_date.getTime();
+  return rows.reduce((count, row) => {
+    const time = row.created_at.getTime();
+    return time >= start && time <= end ? count + 1 : count;
+  }, 0);
+}
+
+function countWellnessProgressInChallengeWindow(
+  rows: DashboardProgressSources['wellnessProgress'],
+  challenge: DashboardChallengeForProgress,
+  category?: 'Meditation' | 'Relaxation'
+): number {
+  const start = challenge.start_date.getTime();
+  const end = challenge.end_date.getTime();
+  return rows.reduce((count, row) => {
+    if (!row.completed_at) return count;
+    const time = row.completed_at.getTime();
+    if (time < start || time > end) return count;
+    if (category && row.wellness_tools?.category !== category) return count;
+    return count + 1;
+  }, 0);
+}
+
+async function getDashboardProgressSources(
+  userId: string,
+  challenges: DashboardChallengeForProgress[],
+  partMap: Map<string, DashboardChallengeParticipation>
+): Promise<DashboardProgressSources> {
+  const challengesNeedingSource = challenges.filter((challenge) =>
+    challengeNeedsDashboardProgressSource(challenge, partMap.get(challenge.id) ?? null)
+  );
+  if (challengesNeedingSource.length === 0) {
+    return {
+      wellnessProgress: [],
+      journalEntries: [],
+      sleepEntries: [],
+      moodEntries: [],
+    };
+  }
+
+  const minStart = new Date(
+    Math.min(...challengesNeedingSource.map((challenge) => challenge.start_date.getTime()))
+  );
+  const maxEnd = new Date(
+    Math.max(...challengesNeedingSource.map((challenge) => challenge.end_date.getTime()))
+  );
+  const neededKinds = new Set(
+    challengesNeedingSource.map((challenge) => getDashboardChallengeProgressKind(challenge))
+  );
+
+  const [wellnessProgress, journalEntries, sleepEntries, moodEntries] = await Promise.all([
+    neededKinds.has('meditation_sessions') ||
+    neededKinds.has('breathing') ||
+    neededKinds.has('wellness_sessions')
+      ? prisma.user_wellness_progress.findMany({
+          where: {
+            user_id: userId,
+            completed_at: { gte: minStart, lte: maxEnd, not: null },
+          },
+          select: {
+            completed_at: true,
+            wellness_tools: {
+              select: { category: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    neededKinds.has('journal_entries')
+      ? prisma.journal_entries.findMany({
+          where: { user_id: userId, created_at: { gte: minStart, lte: maxEnd } },
+          select: { created_at: true },
+        })
+      : Promise.resolve([]),
+    neededKinds.has('sleep_nights')
+      ? prisma.sleep_entries.findMany({
+          where: { user_id: userId, created_at: { gte: minStart, lte: maxEnd } },
+          select: { created_at: true },
+        })
+      : Promise.resolve([]),
+    neededKinds.has('mood_entries')
+      ? prisma.mood_entries.findMany({
+          where: { user_id: userId, created_at: { gte: minStart, lte: maxEnd } },
+          select: { created_at: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    wellnessProgress,
+    journalEntries,
+    sleepEntries,
+    moodEntries,
+  };
+}
+
+function computeChallengeProgressForUser(
+  challenge: DashboardChallengeForProgress,
+  participation: DashboardChallengeParticipation,
+  profileStreakDays: number,
+  progressSources: DashboardProgressSources
+): number {
+  const target = getChallengeTargetFromCriteria(challenge.goal_criteria);
+  if (participation?.is_completed) {
+    return target;
+  }
+  if (hasStoredDashboardProgress(participation)) {
+    return Math.min(participation.progress, target);
+  }
+
+  let raw = 0;
+  const kind = getDashboardChallengeProgressKind(challenge);
+
+  if (kind === 'mood_streak') {
+    raw = Math.min(profileStreakDays, target);
+  } else if (kind === 'meditation_sessions') {
+    raw = countWellnessProgressInChallengeWindow(
+      progressSources.wellnessProgress,
+      challenge,
+      'Meditation'
+    );
+  } else if (kind === 'journal_entries') {
+    raw = countDatesInChallengeWindow(progressSources.journalEntries, challenge);
+  } else if (kind === 'breathing') {
+    raw = countWellnessProgressInChallengeWindow(
+      progressSources.wellnessProgress,
+      challenge,
+      'Relaxation'
+    );
+  } else if (kind === 'wellness_sessions') {
+    raw = countWellnessProgressInChallengeWindow(progressSources.wellnessProgress, challenge);
+  } else if (kind === 'sleep_nights') {
+    raw = countDatesInChallengeWindow(progressSources.sleepEntries, challenge);
+  } else if (kind === 'mood_entries') {
+    raw = countDatesInChallengeWindow(progressSources.moodEntries, challenge);
   } else {
     raw = typeof participation?.progress === 'number' ? participation.progress : 0;
   }
@@ -670,15 +823,16 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
     Math.min(99, Math.floor(totalPoints / 200) + 1)
   );
 
-  const mapped = await Promise.all(
-    challenges.map(async (c) => {
+  const progressSources = await getDashboardProgressSources(userId, challenges, partMap);
+
+  const mapped = challenges.map((c) => {
       const part = partMap.get(c.id) ?? null;
       const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
-      const progress = await computeChallengeProgressForUser(
-        userId,
+      const progress = computeChallengeProgressForUser(
         c,
         part,
-        streakDays
+        streakDays,
+        progressSources
       );
       const isCompleted = part?.is_completed === true || progress >= target;
       const gc = (c.goal_criteria || {}) as Record<string, unknown>;
@@ -698,8 +852,7 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
         category: c.category,
         endDate: c.end_date.toISOString(),
       };
-    })
-  );
+    });
 
   // Fire-and-forget: persist completed challenges so totalPoints is accurate on subsequent loads
   const toComplete = mapped.filter(c => c.isCompleted);
