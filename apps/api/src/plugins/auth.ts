@@ -1,6 +1,8 @@
 import fp from 'fastify-plugin';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../lib/prisma';
+import { performance } from 'perf_hooks';
+import { recordTiming } from '../lib/perfTiming';
 import { verifySupabaseAccessToken } from '../lib/verifySupabaseToken';
 import {
   buildSignupTypeEvidence,
@@ -233,6 +235,7 @@ async function resolveSignupTypeForRequest(
 
 export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authTimingStart = performance.now();
     try {
       request.log.info(
         {
@@ -612,11 +615,14 @@ export default fp(async (fastify: FastifyInstance) => {
         },
         'Authentication failed in auth plugin'
       );
+      recordTiming("auth", performance.now() - authTimingStart);
       reply.code(401).send({
         statusCode: 401,
         error: 'Unauthorized',
         message: 'Authentication failed'
       });
+    } finally {
+      recordTiming('auth', performance.now() - authTimingStart);
     }
   });
 

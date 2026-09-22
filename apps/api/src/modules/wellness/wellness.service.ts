@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client';
+import { performance } from "perf_hooks";
 import prisma from '../../lib/prisma';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
 import { onUserActivity } from '../system-achievements/system-achievements.triggers';
+import { recordTiming, timeAsync, timeSync } from "../../lib/perfTiming";
 import {
   CreateWellnessChallengeInput,
   CreateWellnessToolInput,
@@ -738,24 +740,37 @@ function computeChallengeProgressForUser(
  * Active challenges with per-user progress for dashboard / app UI.
  */
 export async function getWellnessChallengesForUserDashboard(userId: string) {
+  const challengesTotalStart = performance.now();
   const cached = wellnessChallengesDashboardCache.get(userId);
   if (cached && Date.now() - cached.timestamp < WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL) {
+    recordTiming("challenges.memoryCache", 0, "hit");
+    recordTiming("challenges.total", performance.now() - challengesTotalStart, "memory_hit");
     return cached.data;
   }
+  recordTiming("challenges.memoryCache", 0, "miss");
 
-  const shared = await sharedGetJson<any>(`wellness:challenges:dashboard:${userId}`);
+  const shared = await timeAsync("challenges.sharedCache", () =>
+    sharedGetJson<any>("wellness:challenges:dashboard:" + userId)
+  );
   if (shared) {
     wellnessChallengesDashboardCache.set(userId, { data: shared, timestamp: Date.now() });
+    recordTiming("challenges.total", performance.now() - challengesTotalStart, "shared_hit");
     return shared;
   }
 
   const inFlight = wellnessChallengesDashboardInFlight.get(userId);
-  if (inFlight) return await inFlight;
+  if (inFlight) {
+    recordTiming("challenges.inFlight", 0, "hit");
+    const result = await inFlight;
+    recordTiming("challenges.total", performance.now() - challengesTotalStart, "in_flight");
+    return result;
+  }
+  recordTiming("challenges.inFlight", 0, "miss");
 
   const run = (async () => {
   const now = new Date();
 
-  const [challengeRows, recentMoods] = await Promise.all([
+  const [challengeRows, recentMoods] = await timeAsync("challenges.initialDb", () => Promise.all([
     prisma.wellness_challenges.findMany({
       where: {
         start_date: { lte: now },
@@ -770,7 +785,7 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
       take: 60,
       select: { created_at: true },
     }),
-  ]);
+  ]));
 
   const streakDays = calculateMoodStreakDays(recentMoods);
 
@@ -784,6 +799,7 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
   }).slice(0, 12);
 
   if (challenges.length === 0) {
+    recordTiming("challenges.total", performance.now() - challengesTotalStart, "empty");
     return {
       totalPoints: 0,
       currentLevel: 1,
@@ -793,14 +809,15 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
     };
   }
 
-  const participationRows = await prisma.user_challenge_participation.findMany({
-    where: {
-      user_id: userId,
-      challenge_id: { in: challenges.map((c) => c.id) },
-    },
-  });
+  const participationRows = await timeAsync("challenges.participationDb", () =>
+    prisma.user_challenge_participation.findMany({
+      where: {
+        user_id: userId,
+        challenge_id: { in: challenges.map((c) => c.id) },
+      },
+    })
+  );
   const partMap = new Map(participationRows.map((p) => [p.challenge_id, p]));
-
   // Sum reward points in SQL (avoids loading all completed rows into Node).
   const totalPointsRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
     Prisma.sql`
@@ -823,9 +840,12 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
     Math.min(99, Math.floor(totalPoints / 200) + 1)
   );
 
-  const progressSources = await getDashboardProgressSources(userId, challenges, partMap);
+  const progressSources = await timeAsync("challenges.progressSourcesDb", () =>
+    getDashboardProgressSources(userId, challenges, partMap)
+  );
 
-  const mapped = challenges.map((c) => {
+  const mapped = timeSync("challenges.compute", () =>
+    challenges.map((c) => {
       const part = partMap.get(c.id) ?? null;
       const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
       const progress = computeChallengeProgressForUser(
@@ -841,7 +861,7 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
       return {
         id: c.id,
         title: c.title,
-        description: c.description ?? '',
+        description: c.description ?? "",
         progress,
         target,
         reward: c.reward_points ?? 0,
@@ -852,10 +872,12 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
         category: c.category,
         endDate: c.end_date.toISOString(),
       };
-    });
+    })
+  );
 
   // Fire-and-forget: persist completed challenges so totalPoints is accurate on subsequent loads
   const toComplete = mapped.filter(c => c.isCompleted);
+  recordTiming("challenges.completionUpsertSchedule", 0, toComplete.length > 0 ? "scheduled" : "skipped");
   if (toComplete.length > 0) {
     void Promise.all(
       toComplete.map(c =>
@@ -878,6 +900,8 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
       : 0,
     challenges: mapped,
   };
+  recordTiming("challenges.sharedCacheWrite", 0, "scheduled");
+  recordTiming("challenges.total", performance.now() - challengesTotalStart, "cold_miss");
   wellnessChallengesDashboardCache.set(userId, { data, timestamp: Date.now() });
   void sharedSetJson(`wellness:challenges:dashboard:${userId}`, data, WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL);
   return data;

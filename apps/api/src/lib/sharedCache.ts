@@ -1,5 +1,7 @@
 import Redis from 'ioredis';
 
+import { performance } from 'perf_hooks';
+import { recordTiming } from './perfTiming';
 const REDIS_URL = process.env.REDIS_URL;
 const REDIS_PREFIX = process.env.REDIS_PREFIX || 'meetezri:';
 
@@ -31,30 +33,44 @@ function k(key: string) {
 
 export async function sharedGetJson<T>(key: string): Promise<T | null> {
   const r = getRedis();
-  if (!r) return null;
+  if (!r) {
+    recordTiming("redis.get", 0, "unavailable");
+    return null;
+  }
   try {
-    if (r.status === 'wait') await r.connect().catch(() => {});
+    if (r.status === "wait") {
+      const connectStart = performance.now();
+      await r.connect().catch(() => {});
+      recordTiming("redis.connect", performance.now() - connectStart, r.status);
+    } else {
+      recordTiming("redis.connect", 0, "connected");
+    }
+    const getStart = performance.now();
     const raw = await r.get(k(key));
+    recordTiming("redis.get", performance.now() - getStart, raw ? "hit" : "miss");
     if (!raw) return null;
     return JSON.parse(raw) as T;
   } catch {
+    recordTiming("redis.get", 0, "error");
     return null;
   }
 }
-
 export async function sharedSetJson(
   key: string,
   value: unknown,
   ttlMs: number
 ): Promise<void> {
   const r = getRedis();
-  if (!r) return;
+  if (!r) { recordTiming("redis.set", 0, "unavailable"); return; }
   try {
     if (r.status === 'wait') await r.connect().catch(() => {});
     const ttlSeconds = Math.max(1, Math.ceil(ttlMs / 1000));
+    const setStart = performance.now();
     await r.set(k(key), JSON.stringify(value), 'EX', ttlSeconds);
+    recordTiming("redis.set", performance.now() - setStart, "ok");
   } catch {
     // ignore
+    recordTiming("redis.set", 0, "error");
   }
 }
 

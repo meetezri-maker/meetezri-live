@@ -8,7 +8,9 @@ import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-
 import { provisionDiscoverTrial } from '../billing/services/trial.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
+import { performance } from 'perf_hooks';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
+import { recordTiming, timeAsync, timeSync } from '../../lib/perfTiming';
 import {
   buildSignupTypeEvidence,
   detectSignupTypeConflict,
@@ -1432,43 +1434,60 @@ export async function getProfile(userId: string) {
 }
 
 export async function getCredits(userId: string) {
+  const creditsTotalStart = performance.now();
   const cached = creditsCache.get(userId);
   if (cached && Date.now() - cached.timestamp < CREDITS_CACHE_TTL) {
+    recordTiming("credits.memoryCache", 0, "hit");
+    recordTiming("credits.total", performance.now() - creditsTotalStart, "memory_hit");
     return cached.data;
   }
 
-  const shared = await sharedGetJson<any>(`users:credits:${userId}`);
+  recordTiming("credits.memoryCache", 0, "miss");
+  const shared = await timeAsync("credits.sharedCache", () =>
+    sharedGetJson<any>("users:credits:" + userId)
+  );
   if (shared) {
     creditsCache.set(userId, { data: shared, timestamp: Date.now() });
+    recordTiming("credits.total", performance.now() - creditsTotalStart, "shared_hit");
     return shared;
   }
-
   const inFlight = creditsInFlight.get(userId);
-  if (inFlight) return await inFlight;
+
+  if (inFlight) {
+    recordTiming("credits.inFlight", 0, "hit");
+    const result = await inFlight;
+    recordTiming("credits.total", performance.now() - creditsTotalStart, "in_flight");
+    return result;
+  }
+  recordTiming("credits.inFlight", 0, "miss");
 
   const run = (async () => {
     const [activeSub, profile] = await Promise.all([
-      prisma.subscriptions.findFirst({
-        where: {
-          user_id: userId,
-          status: { in: ['active', 'trialing', 'past_due'] },
-        },
-        orderBy: { created_at: 'desc' },
-        select: {
-          start_date: true,
-          end_date: true,
-          created_at: true,
-        },
-      }),
-      prisma.profiles.findUnique({
-        where: { id: userId },
-        select: {
-          credits: true,
-          purchased_credits: true,
-          credits_seconds: true,
-          purchased_credits_seconds: true,
-        },
-      }),
+      timeAsync("credits.subscriptionDb", () =>
+        prisma.subscriptions.findFirst({
+          where: {
+            user_id: userId,
+            status: { in: ["active", "trialing", "past_due"] },
+          },
+          orderBy: { created_at: "desc" },
+          select: {
+            start_date: true,
+            end_date: true,
+            created_at: true,
+          },
+        })
+      ),
+      timeAsync("credits.profileDb", () =>
+        prisma.profiles.findUnique({
+          where: { id: userId },
+          select: {
+            credits: true,
+            purchased_credits: true,
+            credits_seconds: true,
+            purchased_credits_seconds: true,
+          },
+        })
+      ),
     ]);
 
     const subscriptionSeconds = resolveBucketSeconds(
@@ -1492,8 +1511,10 @@ export async function getCredits(userId: string) {
     const cachedPeriod = creditsPeriodUsedCache.get(periodKey);
     let usedSecondsThisPeriod: number;
     if (cachedPeriod && Date.now() - cachedPeriod.timestamp < CREDITS_PERIOD_USED_TTL) {
+      recordTiming("credits.periodUsageCache", 0, "hit");
       usedSecondsThisPeriod = cachedPeriod.totalSeconds;
     } else {
+      recordTiming("credits.periodUsageCache", 0, "miss");
       const usedPeriodRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
         Prisma.sql`
           SELECT COALESCE(SUM(COALESCE(s.billed_seconds, 0)), 0)::bigint AS total
@@ -1522,6 +1543,8 @@ export async function getCredits(userId: string) {
     };
     creditsCache.set(userId, { data: result, timestamp: Date.now() });
     void sharedSetJson(`users:credits:${userId}`, result, CREDITS_CACHE_TTL);
+    recordTiming("credits.sharedCacheWrite", 0, "scheduled");
+    recordTiming("credits.total", performance.now() - creditsTotalStart, "cold_miss");
     return result;
   })().finally(() => {
     creditsInFlight.delete(userId);
@@ -1572,21 +1595,34 @@ function formatRecentActivitySessionDuration(session: {
 }
 
 export async function getRecentActivity(userId: string, limit: number = 25) {
+  const activityTotalStart = performance.now();
   const safeLimit = Math.min(Math.max(limit, 1), 100);
   const cacheKey = recentActivityCacheKey(userId, safeLimit);
   const cached = recentActivityCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < RECENT_ACTIVITY_CACHE_TTL) {
+    recordTiming("activity.memoryCache", 0, "hit");
+    recordTiming("activity.total", performance.now() - activityTotalStart, "memory_hit");
     return cached.data;
   }
+  recordTiming("activity.memoryCache", 0, "miss");
 
-  const shared = await sharedGetJson<any[]>(`users:activity:${userId}:${safeLimit}`);
+  const shared = await timeAsync("activity.sharedCache", () =>
+    sharedGetJson<any[]>("users:activity:" + userId + ":" + safeLimit)
+  );
   if (shared) {
     recentActivityCache.set(cacheKey, { data: shared, timestamp: Date.now() });
+    recordTiming("activity.total", performance.now() - activityTotalStart, "shared_hit");
     return shared;
   }
 
   const inFlight = recentActivityInFlight.get(cacheKey);
-  if (inFlight) return await inFlight;
+  if (inFlight) {
+    recordTiming("activity.inFlight", 0, "hit");
+    const result = await inFlight;
+    recordTiming("activity.total", performance.now() - activityTotalStart, "in_flight");
+    return result;
+  }
+  recordTiming("activity.inFlight", 0, "miss");
 
   const run = (async () => {
     const normalizeSessionTypeLabel = (value: string | null | undefined) => {
@@ -1699,6 +1735,8 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
 
     recentActivityCache.set(cacheKey, { data: result, timestamp: Date.now() });
     void sharedSetJson(`users:activity:${userId}:${safeLimit}`, result, RECENT_ACTIVITY_CACHE_TTL);
+    recordTiming("activity.sharedCacheWrite", 0, "scheduled");
+    recordTiming("activity.total", performance.now() - activityTotalStart, "cold_miss");
     return result;
   })().finally(() => {
     recentActivityInFlight.delete(cacheKey);

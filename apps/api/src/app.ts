@@ -41,6 +41,7 @@ import { contentHubPublicRoutes } from './modules/content-hub/content-hub.public
 import { renderRoutes } from './modules/render/render.routes';
 import { getClientIp } from './lib/client-ip';
 import jwkToPem from 'jwk-to-pem';
+import { buildServerTimingHeader, runWithRequestTiming } from './lib/perfTiming';
 import prisma from './lib/prisma';
 const jwtLib = require('jsonwebtoken');
 
@@ -76,7 +77,7 @@ app.setSerializerCompiler(serializerCompiler);
 // Performance monitoring hooks
 app.addHook('onRequest', (request, reply, done) => {
   (request as any).startTime = performance.now();
-  done();
+  runWithRequestTiming(done);
 });
 
 app.addHook('onSend', (request, reply, payload, done) => {
@@ -87,7 +88,7 @@ app.addHook('onSend', (request, reply, payload, done) => {
       const ms = Math.max(0, Math.round(duration));
       // Useful for Chrome DevTools and quick perf triage.
       reply.header('x-api-ms', String(ms));
-      reply.header('Server-Timing', `app;dur=${ms}`);
+      reply.header('Server-Timing', buildServerTimingHeader(duration));
     }
   }
   done(null, payload);
