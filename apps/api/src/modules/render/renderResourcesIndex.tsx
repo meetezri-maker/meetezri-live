@@ -48,6 +48,7 @@ export function renderResourcesIndex({
     structuredData: libraryStructuredData(origin, metadata.canonical),
     assets,
     pathname: '/resources',
+    bootstrapScripts: false,
     children: (
       <ResourcesLibrary
         items={items}

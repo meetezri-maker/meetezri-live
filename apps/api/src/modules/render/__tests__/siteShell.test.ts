@@ -21,6 +21,7 @@ import { answerDetail, card, FORBIDDEN_TERMS } from './fixtures';
 
 const ORIGIN = 'https://meetezri.com';
 const NO_ASSETS = { scripts: [], styles: [] };
+const SPA_ASSETS = { scripts: ['/assets/index-test.js'], styles: ['/assets/index-test.css'] };
 
 const detailHtml = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: NO_ASSETS });
 const indexHtml = renderResourcesIndex({
@@ -30,7 +31,7 @@ const indexHtml = renderResourcesIndex({
   page: 1,
   pageSize: 12,
   label: null,
-  assets: NO_ASSETS,
+  assets: SPA_ASSETS,
 });
 const notFoundHtml = renderNotFound({ origin: ORIGIN, path: '/resources/nope', assets: NO_ASSETS });
 
@@ -77,6 +78,7 @@ describe('every server-rendered public page carries the site shell', () => {
 
   it('still contains the article content itself', () => {
     expect(detailHtml).toContain('Get out of bed, keep the lights low, and do something dull.');
+    expect(indexHtml).not.toContain('/assets/index-test.js');
     expect(indexHtml).toContain('What should I do when I cannot sleep?');
   });
 });

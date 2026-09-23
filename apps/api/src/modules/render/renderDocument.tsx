@@ -29,6 +29,14 @@ export interface DocumentInput {
   assets: AssetLinks;
   /** Current path, so the header can mark the active navigation item. */
   pathname?: string;
+  /**
+   * Whether to emit the SPA bootstrap module scripts discovered from the web app.
+   *
+   * Server-rendered documents default to the historical handoff behavior. Individual pages may opt
+   * out only when their SSR HTML is fully functional without React and a destructive client mount
+   * would harm layout stability.
+   */
+  bootstrapScripts?: boolean;
   children: ReactNode;
 }
 
@@ -65,6 +73,7 @@ export function renderDocument({
   structuredData,
   assets,
   pathname,
+  bootstrapScripts = true,
   children,
 }: DocumentInput): string {
   const markup = renderToStaticMarkup(
@@ -117,9 +126,9 @@ export function renderDocument({
           {children}
           <PublicSiteFooter logo={<StaticLogo />} />
         </div>
-        {assets.scripts.map((src) => (
+        {bootstrapScripts ? assets.scripts.map((src) => (
           <script key={src} type="module" src={src} defer />
-        ))}
+        )) : null}
       </body>
     </html>
   );
