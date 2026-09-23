@@ -24,6 +24,8 @@ const NO_ASSETS = { scripts: [], styles: [] };
 const SPA_ASSETS = { scripts: ['/assets/index-test.js'], styles: ['/assets/index-test.css'] };
 
 const detailHtml = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: NO_ASSETS });
+const detailHtmlWithAssets = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: SPA_ASSETS });
+const notFoundHtmlWithAssets = renderNotFound({ origin: ORIGIN, path: '/resources/nope', assets: SPA_ASSETS });
 const indexHtml = renderResourcesIndex({
   origin: ORIGIN,
   items: [card()],
@@ -80,6 +82,10 @@ describe('every server-rendered public page carries the site shell', () => {
     expect(detailHtml).toContain('Get out of bed, keep the lights low, and do something dull.');
     expect(indexHtml).not.toContain('/assets/index-test.js');
     expect(indexHtml).toContain('What should I do when I cannot sleep?');
+    expect(detailHtmlWithAssets).not.toContain('/assets/index-test.js');
+    expect(detailHtmlWithAssets).toContain('Get out of bed, keep the lights low, and do something dull.');
+    expect(detailHtmlWithAssets).toContain('application/ld+json');
+    expect(notFoundHtmlWithAssets).toContain('/assets/index-test.js');
   });
 });
 

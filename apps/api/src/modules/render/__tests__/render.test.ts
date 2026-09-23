@@ -100,7 +100,7 @@ describe('the rendered document', () => {
       detail: answerDetail(),
       assets: { scripts: ['/assets/index-abc.js'], styles: ['/assets/index-abc.css'] },
     });
-    expect(withAssets).toContain('src="/assets/index-abc.js"');
+    expect(withAssets).not.toContain('src="/assets/index-abc.js"');
     expect(withAssets).toContain('href="/assets/index-abc.css"');
 
     // Without a manifest the page still has everything that matters.
