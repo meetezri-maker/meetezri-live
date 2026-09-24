@@ -1,4 +1,5 @@
 import { getAnalyticsConfig } from "./config";
+import { deferAnalyticsScriptAppend } from "./deferredScript";
 
 type GtagCommand = "js" | "config" | "event";
 type Gtag = (command: GtagCommand, target: string | Date, params?: Record<string, unknown>) => void;
@@ -32,13 +33,15 @@ export function initializeGa4(): boolean {
       target.dataLayer?.push(args);
     };
 
-  if (!document.querySelector(`script[data-solace-ga4="${gaMeasurementId}"]`)) {
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaMeasurementId)}`;
-    script.dataset.solaceGa4 = gaMeasurementId;
-    document.head.appendChild(script);
-  }
+  deferAnalyticsScriptAppend("ga4:" + gaMeasurementId, () => {
+    if (!document.querySelector("script[data-solace-ga4]")) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(gaMeasurementId);
+      script.dataset.solaceGa4 = gaMeasurementId;
+      document.head.appendChild(script);
+    }
+  });
 
   target.gtag("js", new Date());
   target.gtag("config", gaMeasurementId, { send_page_view: false });

@@ -1,4 +1,5 @@
 import { getAnalyticsConfig } from "./config";
+import { deferAnalyticsScriptAppend } from "./deferredScript";
 
 type Fbq = {
   (...args: unknown[]): void;
@@ -45,13 +46,15 @@ export function initializeMetaPixel(): boolean {
     target._fbq = fbq;
   }
 
-  if (!document.querySelector(`script[data-solace-meta="${metaPixelId}"]`)) {
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://connect.facebook.net/en_US/fbevents.js";
-    script.dataset.solaceMeta = metaPixelId;
-    document.head.appendChild(script);
-  }
+  deferAnalyticsScriptAppend("meta:" + metaPixelId, () => {
+    if (!document.querySelector("script[data-solace-meta]")) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://connect.facebook.net/en_US/fbevents.js";
+      script.dataset.solaceMeta = metaPixelId;
+      document.head.appendChild(script);
+    }
+  });
 
   // No advanced matching object is passed here. Keep Pixel identity-less in Phase 1.
   target.fbq("init", metaPixelId, {});
