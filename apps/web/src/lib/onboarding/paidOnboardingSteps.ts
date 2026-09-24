@@ -1,4 +1,4 @@
-import { isValidRequiredAppPhone } from "@meetezri/shared";
+import { isValidRequiredAppPhone } from "@meetezri/shared/phoneValidation";
 import { paidOnboardingStepPath } from "./onboardingResume";
 
 export type PaidOnboardingStepAction =

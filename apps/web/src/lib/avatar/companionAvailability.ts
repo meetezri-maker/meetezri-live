@@ -3,7 +3,7 @@
  * Used everywhere members can pick an avatar or environment (lobby, onboarding, settings).
  */
 
-import { matchDefaultCompanionByAvatarName } from "@meetezri/shared";
+import { matchDefaultCompanionByAvatarName } from "@meetezri/shared/defaultAiCompanions";
 
 /** Canonical companion ids from `DEFAULT_AI_COMPANIONS` (also matches "Alex Rivera", etc.). */
 export const COMING_SOON_COMPANION_IDS = ["Alex", "Maya Chen"] as const;

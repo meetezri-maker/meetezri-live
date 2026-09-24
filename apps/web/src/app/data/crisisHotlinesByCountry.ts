@@ -13,7 +13,7 @@ import {
   isSupportedCrisisCountry,
   type CountryHotlineEntry,
   type CrisisHotlineExtra,
-} from '@meetezri/shared';
+} from '@meetezri/shared/crisisHotlines';
 
 export type { CountryHotlineEntry, CrisisHotlineExtra };
 export {

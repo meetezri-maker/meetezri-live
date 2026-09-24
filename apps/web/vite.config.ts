@@ -15,6 +15,18 @@ export default defineConfig({
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
       // Monorepo package: npm dev does not link workspace:*; resolve source directly
+      '@meetezri/shared/phoneValidation': path.resolve(
+        __dirname,
+        '../../packages/shared/src/phoneValidation.ts'
+      ),
+      '@meetezri/shared/defaultAiCompanions': path.resolve(
+        __dirname,
+        '../../packages/shared/src/defaultAiCompanions.ts'
+      ),
+      '@meetezri/shared/crisisHotlines': path.resolve(
+        __dirname,
+        '../../packages/shared/src/crisisHotlines.ts'
+      ),
       '@meetezri/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
       // Same treatment for the shared public renderer, so the SPA, the admin preview and the
       // server renderer all compile from one source rather than a stale dist.

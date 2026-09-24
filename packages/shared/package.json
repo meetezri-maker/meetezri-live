@@ -15,5 +15,23 @@
     "typescript": "^5.2.2",
     "@types/node": "^20.9.0",
     "eslint": "^8.53.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./phoneValidation": {
+      "types": "./dist/phoneValidation.d.ts",
+      "default": "./dist/phoneValidation.js"
+    },
+    "./defaultAiCompanions": {
+      "types": "./dist/defaultAiCompanions.d.ts",
+      "default": "./dist/defaultAiCompanions.js"
+    },
+    "./crisisHotlines": {
+      "types": "./dist/crisisHotlines.d.ts",
+      "default": "./dist/crisisHotlines.js"
+    }
   }
 }
