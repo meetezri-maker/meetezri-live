@@ -5,6 +5,8 @@ import {
   type Hyper3dImperativeHost as HostInstance,
 } from "@/lib/avatar/hyper3d/hyper3dImperativeHost";
 import { getHyper3dPlaybackClock } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
+import { recordHyper3dAssetTimeline } from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
+import { Hyper3DEyelashTestPanel } from "./Hyper3DEyelashTestPanel";
 
 /**
  * The React shell around the imperative host.
@@ -56,6 +58,12 @@ export function Hyper3DImperativeHost({
     const container = containerRef.current;
     if (!container) return;
 
+    // Phase 2G.1C: the earliest stamp in the startup timeline — everything the
+    // avatar does begins here. One assignment; it cannot affect the mount.
+    recordHyper3dAssetTimeline({
+      hostMountedAtMs: Math.round(performance.now()),
+    });
+
     const registeredPlaybackClock = getHyper3dPlaybackClock();
     const host = createHyper3dImperativeHost({
       container,
@@ -77,5 +85,11 @@ export function Hyper3DImperativeHost({
     // and nothing in this list may change without a full reload of the avatar.
   }, [avatarAudioCurrentTimeRef, mouthAudioLevelRef]);
 
-  return <div ref={containerRef} className="absolute inset-0" aria-hidden />;
+  return (
+    <>
+      <div ref={containerRef} className="absolute inset-0" aria-hidden />
+      {/* DEV eyelash review controls. Renders null unless ?hyper3dEyelashTest=1. */}
+      <Hyper3DEyelashTestPanel />
+    </>
+  );
 }

@@ -68,6 +68,12 @@ import {
   type Hyper3dIdleShowcaseRuntime,
   type Hyper3dIdleShowcaseYieldReason,
 } from "./hyper3dIdleExpressionShowcase";
+import {
+  applyHyper3dEyelashTestPose,
+  getHyper3dEyelashTestIntensity,
+  getHyper3dEyelashTestState,
+  hyper3dEyelashTestAvailable,
+} from "./hyper3dEyelashTest";
 
 /**
  * THE ACCEPTED FRAME SEQUENCE, in one place.
@@ -158,6 +164,14 @@ export type Hyper3dMouthTrace = {
   showcaseEligible: boolean;
   showcaseActive: boolean;
   showcaseYieldReason: Hyper3dIdleShowcaseYieldReason | null;
+  /**
+   * Phase 2G.1C (audit risk B3). `isSpeaking` is the conversation flag as THIS
+   * frame saw it, which is what gates the showcase. `showcaseOwnsLowerFace` is
+   * measured, not assumed: it is true only when an active showcase actually
+   * changed a speech mouth channel between `afterPresence` and `final`.
+   */
+  isSpeaking: boolean;
+  showcaseOwnsLowerFace: boolean;
   /** Filled by the engine factory from the real mesh after the write. */
   glb: {
     faceMeshResolved: boolean;
@@ -216,6 +230,8 @@ export function createHyper3dMouthTrace(): Hyper3dMouthTrace {
     showcaseEligible: false,
     showcaseActive: false,
     showcaseYieldReason: null,
+    isSpeaking: false,
+    showcaseOwnsLowerFace: false,
     glb: {
       faceMeshResolved: false,
       teethMeshResolved: false,
@@ -511,12 +527,46 @@ export function resolveHyper3dFrame(
     mouthTrace.showcaseEligible = showcaseYieldReason === null;
     mouthTrace.showcaseActive = showcaseSample?.active === true;
     mouthTrace.showcaseYieldReason = showcaseYieldReason;
+    mouthTrace.isSpeaking = input.isSpeaking === true;
   }
   if (showcaseSample) {
     pose = applyHyper3dIdleShowcasePose(pose, showcaseSample);
     publishHyper3dIdleShowcaseDiagnostics(showcaseSample.diagnostics);
   }
-  if (mouthTrace) traceMouthStage(mouthTrace.final, pose);
+
+  /**
+   * DEV EYELASH REVIEW — last, and deliberately so.
+   *
+   * It pins the FINAL eye channels, after Active Presence and the showcase, so
+   * the reviewer sees the value that actually reaches `morph.write` rather than
+   * one some later layer will still max-merge over. It touches the fourteen eye
+   * channels and nothing else, so head motion, speech and warmth keep running
+   * underneath — which is exactly what makes the "does Object_2002 follow
+   * Head_M" check possible while an eye state stands still.
+   *
+   * In production `hyper3dEyelashTestAvailable` is false (it is behind
+   * `import.meta.env.DEV`), the condition short-circuits on a boolean, and the
+   * pose object is neither copied nor touched.
+   */
+  if (hyper3dEyelashTestAvailable) {
+    const testState = getHyper3dEyelashTestState();
+    if (testState !== "runtime") {
+      pose = applyHyper3dEyelashTestPose(pose, testState, getHyper3dEyelashTestIntensity());
+    }
+  }
+  if (mouthTrace) {
+    const trace = mouthTrace;
+    traceMouthStage(trace.final, pose);
+    // B3, measured rather than inferred: an active showcase deletes its owned
+    // set (which includes jawOpen and the mouth channels) before writing its own
+    // pose, so a lower-face channel that DIFFERS across that one step is the
+    // direct evidence that the showcase took the lower face on this frame.
+    trace.showcaseOwnsLowerFace =
+      trace.showcaseActive &&
+      HYPER3D_SPEECH_MOUTH_CHANNELS.some(
+        (name) => (trace.afterPresence.channels[name] ?? 0) !== (trace.final.channels[name] ?? 0),
+      );
+  }
 
   const review: Hyper3dFrameReview | undefined = captureReview
     ? {

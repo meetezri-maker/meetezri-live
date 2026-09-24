@@ -109,6 +109,11 @@ import {
   traceRealtimeAssociation,
 } from "@/lib/ezri/realtimeTrace";
 import { isHyper3dRuntimeCommitted } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
+// Phase 2G.1C, DEV-only observation. Both are no-ops in a production build.
+import {
+  noteHyper3dLateAvatarDataAfterSchedule,
+  recordHyper3dWelcomeStartup,
+} from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
 
 type SaraGreetingSyncState = {
   id: number;
@@ -2998,6 +3003,10 @@ export function ActiveSession() {
     const releasedWelcomeCount = releasePrePermissionWelcome({
       queue: prePermissionAudioQueueRef.current,
       prepareScheduledTurn: () => {
+        recordHyper3dWelcomeStartup({
+          releaseResetAtMs: Math.round(performance.now()),
+          releaseResetReason: "welcome_release",
+        });
         resetWsAudioReorderBuffer({ traceReason: "welcome_release" });
         hyper3dLiveAdapterRef.current?.setStatus("ready");
       },
@@ -4549,9 +4558,16 @@ export function ActiveSession() {
               queuedWithoutData.avatarDataReceived = avatarDataReceived;
               queuedWithoutData.subtitle = sentence;
               removePendingAvatarData(data);
+              const attachedToScheduledItem = [
+                ...wsScheduledChunkMapRef.current.values(),
+              ].includes(queuedWithoutData);
+              // Hyper3D's `onChunkScheduled` has already run for a scheduled
+              // item, so this repair cannot reach its timeline. Counted, not
+              // acted on — the fix is a later phase's decision.
+              if (attachedToScheduledItem) noteHyper3dLateAvatarDataAfterSchedule();
               if (REALTIME_TRACE_ENABLED) {
                 traceAvatarDataRoute(
-                  [...wsScheduledChunkMapRef.current.values()].includes(queuedWithoutData)
+                  attachedToScheduledItem
                     ? "late_attach_to_already_scheduled_item"
                     : "late_attach_to_unscheduled_item",
                 );

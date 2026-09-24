@@ -857,6 +857,140 @@ const AUTHORED_MAP = "hyper3dAuthoredAlbedo";
 
 export type Hyper3dSkinAlbedo = "authored" | "evened";
 
+/**
+ * FACE ALBEDO DIAGNOSTIC — OBSERVATION ONLY. Changes no behaviour whatsoever.
+ *
+ * It answers one question that cannot be answered by reading this file: at the
+ * moment you are looking at the avatar, WHICH texture is actually bound to
+ * `M_Face.002`?
+ *
+ * The swap below is asynchronous and its failure path is deliberately silent, so
+ * the material can legitimately be carrying either map:
+ *
+ *   t0  the pass runs and leaves the GLB's EMBEDDED albedo bound
+ *   t1  `scene.add` — the avatar starts rendering, still on the embedded map
+ *   t2  the external PNG resolves and `face.map` is swapped
+ *
+ * Between t1 and t2 the face renders with whatever the designer embedded; if the
+ * fetch rejects, it renders with it permanently and nothing says so. This record
+ * captures t0, t1-ish, t2, the requested URL and the failure reason, and
+ * `window.__solaceHyper3dFaceMaterial()` reports the LIVE binding on demand.
+ *
+ * Nothing here alters the swap, the fallback, the material values or the load.
+ */
+type AlbedoSource = "EMBEDDED GLB texture_diffuse" | "EXTERNAL texture_diffuse_evened.png" | "OTHER" | "NONE";
+
+interface FaceAlbedoRecord {
+  materials: MeshStandardMaterial[];
+  meshNames: string[];
+  embeddedMap: Texture | null;
+  externalDiffuse: Texture | null;
+  albedoMode: Hyper3dSkinAlbedo | null;
+  requestedUrl: string | null;
+  requestStartedAtMs: number | null;
+  requestSettledAtMs: number | null;
+  requestOutcome: "pending" | "succeeded" | "failed" | "not-requested";
+  failureReason: string | null;
+  embeddedBoundAtMs: number | null;
+  swapAtMs: number | null;
+  needsUpdateSet: boolean;
+  servedFromCache: boolean;
+}
+
+const faceAlbedo: FaceAlbedoRecord = {
+  materials: [], meshNames: [], embeddedMap: null, externalDiffuse: null, albedoMode: null,
+  requestedUrl: null, requestStartedAtMs: null, requestSettledAtMs: null,
+  requestOutcome: "not-requested", failureReason: null,
+  embeddedBoundAtMs: null, swapAtMs: null, needsUpdateSet: false, servedFromCache: false,
+};
+
+const now = () => Math.round(globalThis.performance?.now?.() ?? 0);
+
+/** Name, identity and pixel dimensions of a texture, however it was created. */
+const describeTexture = (texture: Texture | null | undefined) => {
+  if (!texture) return null;
+  const data = (texture as { source?: { data?: unknown } }).source?.data as
+    | { width?: number; height?: number; naturalWidth?: number; naturalHeight?: number; src?: string; currentSrc?: string }
+    | undefined;
+  return {
+    name: texture.name || "(unnamed)",
+    uuid: texture.uuid,
+    width: data?.naturalWidth ?? data?.width ?? null,
+    height: data?.naturalHeight ?? data?.height ?? null,
+    // A TextureLoader texture carries the URL it came from; a GLTFLoader one
+    // carries a blob: URL or an ImageBitmap with no src at all.
+    src: data?.currentSrc ?? data?.src ?? null,
+    kind: (data && "src" in data) || (data && "currentSrc" in data) ? "HTMLImageElement" : data ? "ImageBitmap/other" : "none",
+    colorSpace: (texture as { colorSpace?: string }).colorSpace ?? null,
+    flipY: texture.flipY,
+  };
+};
+
+/** Identity comparison, not a name guess: which of the two known maps is bound. */
+const classifyBoundMap = (map: Texture | null | undefined): AlbedoSource => {
+  if (!map) return "NONE";
+  if (faceAlbedo.externalDiffuse && map === faceAlbedo.externalDiffuse) return "EXTERNAL texture_diffuse_evened.png";
+  if (faceAlbedo.embeddedMap && map === faceAlbedo.embeddedMap) return "EMBEDDED GLB texture_diffuse";
+  return "OTHER";
+};
+
+/** The live report. Safe to call at any time; reads the material, changes nothing. */
+export const reportHyper3dFaceMaterial = () => {
+  const first = faceAlbedo.materials[0] ?? null;
+  const boundMap = (first?.map ?? null) as Texture | null;
+  return {
+    FACE_MATERIAL: {
+      meshNames: faceAlbedo.meshNames,
+      materialNames: faceAlbedo.materials.map((m) => m.name),
+      materialCount: faceAlbedo.materials.length,
+      albedoModeRequested: faceAlbedo.albedoMode,
+    },
+    BOUND_MAP: {
+      verdict: classifyBoundMap(boundMap),
+      map: describeTexture(boundMap),
+      normalMap: describeTexture((first?.normalMap ?? null) as Texture | null),
+      embeddedCandidate: describeTexture(faceAlbedo.embeddedMap),
+      externalCandidate: describeTexture(faceAlbedo.externalDiffuse),
+    },
+    EXTERNAL_LOAD: {
+      requestedUrl: faceAlbedo.requestedUrl,
+      outcome: faceAlbedo.requestOutcome,
+      failureReason: faceAlbedo.failureReason,
+      startedAtMs: faceAlbedo.requestStartedAtMs,
+      settledAtMs: faceAlbedo.requestSettledAtMs,
+      durationMs:
+        faceAlbedo.requestStartedAtMs !== null && faceAlbedo.requestSettledAtMs !== null
+          ? faceAlbedo.requestSettledAtMs - faceAlbedo.requestStartedAtMs
+          : null,
+      servedFromCache: faceAlbedo.servedFromCache,
+    },
+    SWAP: {
+      embeddedBoundAtMs: faceAlbedo.embeddedBoundAtMs,
+      externalBoundAtMs: faceAlbedo.swapAtMs,
+      // How long the avatar could render the designer's embedded albedo. Null
+      // while the swap has not happened — which, once the avatar is on screen,
+      // is itself the answer.
+      embeddedVisibleForMs:
+        faceAlbedo.embeddedBoundAtMs !== null && faceAlbedo.swapAtMs !== null
+          ? faceAlbedo.swapAtMs - faceAlbedo.embeddedBoundAtMs
+          : null,
+      needsUpdateSet: faceAlbedo.needsUpdateSet,
+      note: "embeddedBoundAtMs is when the material pass left the embedded map bound; first paint follows it. performance.now() milliseconds.",
+    },
+  };
+};
+
+const installFaceMaterialProbe = () => {
+  if (!import.meta.env?.DEV) return;
+  try {
+    if (typeof window === "undefined") return;
+    (window as unknown as { __solaceHyper3dFaceMaterial?: typeof reportHyper3dFaceMaterial })
+      .__solaceHyper3dFaceMaterial = reportHyper3dFaceMaterial;
+  } catch {
+    // A sandboxed window must never break the material pass.
+  }
+};
+
 export const applyHyper3dGlbMaterials = (
   root: Object3D,
   textureBaseUrl: string,
@@ -887,6 +1021,7 @@ export const applyHyper3dGlbMaterials = (
     skin: { mode: faceLook, normalScale: skin.normalScale, roughness: skin.roughness }
   };
   const faceMaterials: MeshStandardMaterial[] = [];
+  const faceMeshNames: string[] = [];
   const seen = new Set<string>();
 
   root.traverse((object) => {
@@ -902,6 +1037,8 @@ export const applyHyper3dGlbMaterials = (
       const standardMaterial = material as MeshStandardMaterial;
       if (stem === "M_Face" && standardMaterial?.isMeshStandardMaterial) {
         if (!seen.has(name)) { seen.add(name); report.textured.push(name); }
+        // Diagnostic only: which mesh carries the face material.
+        if (!faceMeshNames.includes(mesh.name)) faceMeshNames.push(mesh.name);
         // The sweep value is part of the key, or a re-apply at a new strength
         // would be swallowed as "already ours".
         const stamp = `glb|${faceLook}|${normalScaleOverride ?? "look"}`;
@@ -941,7 +1078,24 @@ export const applyHyper3dGlbMaterials = (
     ...report.unusedMaps.map((entry) => `Shipped map left unbound: ${entry}`)
   ];
 
+  // ── DIAGNOSTIC: capture the pre-swap state. Observation only. ────────────
+  // Runs before the async load, so `face.map` here is still whatever the GLB
+  // embedded — the exact texture the avatar renders until the swap lands.
+  faceAlbedo.materials = faceMaterials;
+  faceAlbedo.meshNames = faceMeshNames;
+  faceAlbedo.albedoMode = albedo;
+  faceAlbedo.embeddedMap = (faceMaterials[0]?.map ?? null) as Texture | null;
+  faceAlbedo.embeddedBoundAtMs = now();
+  installFaceMaterialProbe();
+
   if (faceMaterials.length) {
+    const diffuseFile = albedo === "evened" ? EVENED_ALBEDO_FILE : "texture_diffuse.png";
+    faceAlbedo.requestedUrl = `${textureBaseUrl}/${diffuseFile}`;
+    faceAlbedo.requestStartedAtMs = now();
+    faceAlbedo.requestOutcome = "pending";
+    // The loader memoises by key, so a second engine mount resolves instantly;
+    // recorded so a 0 ms "load" is not mistaken for a suspiciously fast fetch.
+    faceAlbedo.servedFromCache = texturePromises.has(`${textureBaseUrl}|${false}|${diffuseFile}`);
     /**
      * `flipY: false` — the glTF convention, which is what this mesh's UVs are.
      * See `loadTextures` for the measurement behind that, and for why binding
@@ -949,6 +1103,9 @@ export const applyHyper3dGlbMaterials = (
      */
     void loadTextures(textureBaseUrl, false, albedo === "evened" ? EVENED_ALBEDO_FILE : undefined)
       .then(({ diffuse, normal }) => {
+        faceAlbedo.requestOutcome = "succeeded";
+        faceAlbedo.requestSettledAtMs = now();
+        faceAlbedo.externalDiffuse = diffuse;
         for (const face of faceMaterials) {
           // The map is bound once; the strength is re-asserted every time, so a
           // sweep step still lands on a material that already carries the map.
@@ -963,7 +1120,12 @@ export const applyHyper3dGlbMaterials = (
            */
           if (albedo === "evened") {
             if (face.userData[AUTHORED_MAP] === undefined) face.userData[AUTHORED_MAP] = face.map;
-            if (face.map !== diffuse) { face.map = diffuse; face.needsUpdate = true; }
+            if (face.map !== diffuse) {
+              face.map = diffuse; face.needsUpdate = true;
+              // Diagnostic: the moment the external map actually became bound.
+              if (faceAlbedo.swapAtMs === null) faceAlbedo.swapAtMs = now();
+              faceAlbedo.needsUpdateSet = true;
+            }
           } else if (face.userData[AUTHORED_MAP] !== undefined) {
             const authored = face.userData[AUTHORED_MAP] as typeof face.map;
             if (face.map !== authored) { face.map = authored; face.needsUpdate = true; }
@@ -973,9 +1135,25 @@ export const applyHyper3dGlbMaterials = (
           face.needsUpdate = true;
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         // The face keeps the GLB's own authored diffuse and a flat normal. The
         // caller reports it; a missing map must not take the canvas down.
+        //
+        // FALLBACK BEHAVIOUR IS UNCHANGED — this still swallows. The only
+        // addition is that the failure stops being invisible: it is recorded for
+        // `__solaceHyper3dFaceMaterial()` and, in DEV, said out loud. Silently
+        // keeping the embedded albedo is exactly the state that is hard to tell
+        // apart from "the swap has not happened yet".
+        faceAlbedo.requestOutcome = "failed";
+        faceAlbedo.requestSettledAtMs = now();
+        faceAlbedo.failureReason =
+          error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        if (import.meta.env?.DEV === true) {
+          console.warn(
+            `[hyper3d] face albedo failed to load: ${faceAlbedo.requestedUrl} — ${faceAlbedo.failureReason}. ` +
+              `The face KEEPS the GLB's embedded texture_diffuse. Run __solaceHyper3dFaceMaterial() for the full record.`,
+          );
+        }
       });
   }
 

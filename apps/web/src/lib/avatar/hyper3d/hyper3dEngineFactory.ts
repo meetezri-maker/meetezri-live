@@ -10,6 +10,7 @@ import {
   HYPER3D_GLB_URL,
   HYPER3D_LEGACY_GLB_URL,
 } from "./engine/mappings/avatars/hyper3dAssetSelection";
+import { HYPER3D_EYELASH_TARGET_NAMES } from "./engine/mappings/avatars/hyper3dEyelashBinding";
 import { AvatarController } from "./engine/engine/avatar/AvatarController";
 import { MorphTargetController } from "./engine/engine/avatar/MorphTargetController";
 import { BoneController } from "./engine/engine/avatar/BoneController";
@@ -119,6 +120,14 @@ export type Hyper3dBindingReport = {
   hairMeshes: string[];
   materials: string[];
   attachedHeadMeshes: string[];
+  /**
+   * OPTIONAL CHANNEL — reported, never gated. Null mesh or a short target list
+   * means this asset carries no eyelashes, or fewer than the binding table
+   * expects, and the avatar runs exactly as it did before they existed.
+   */
+  eyelashMesh: string | null;
+  eyelashTargetsBound: string[];
+  eyelashTargetsMissing: string[];
 };
 
 /** Thrown when a required binding is absent — init fails, nothing half-renders. */
@@ -305,6 +314,36 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     const morphNames = new Set(morph.names());
     const missingMorphs = EXPECTED_MINIFACE_BLENDSHAPES.filter((name) => !morphNames.has(name));
     const hairMeshes = CONFIG.meshNames.hair.filter((name) => findMeshByName(scene!, name));
+
+    /**
+     * EYELASHES — resolved ONCE, here, and never gated.
+     *
+     * Resolution is a diagnostic only. The lash influences are written by
+     * `morph.write` through `morphMapping`, using the mesh/index pairs
+     * `morph.discover` already cached above, so nothing in the frame loop
+     * traverses the scene or looks a name up. This block exists so that an asset
+     * without lashes says so in the report instead of failing silently, and so
+     * that a re-export which renames a target is visible immediately.
+     *
+     * Phase 10 of the brief, stated as code: an absent optional channel must not
+     * take the avatar down. There is no `fail()` below.
+     */
+    const eyelashMesh = CONFIG.meshNames.eyelashes[0]
+      ? findMeshByName(scene, CONFIG.meshNames.eyelashes[0])
+      : null;
+    const eyelashBound: string[] = [];
+    const eyelashMissing: string[] = [];
+    for (const target of HYPER3D_EYELASH_TARGET_NAMES) {
+      if (eyelashMesh?.morphTargetDictionary?.[target] !== undefined) eyelashBound.push(target);
+      else eyelashMissing.push(target);
+    }
+    if (import.meta.env.DEV === true && CONFIG.meshNames.eyelashes.length && eyelashMissing.length) {
+      console.warn(
+        `[hyper3d] eyelashes degraded: mesh ${eyelashMesh ? `"${eyelashMesh.name}" resolved` : `"${CONFIG.meshNames.eyelashes[0]}" NOT FOUND`}, ` +
+          `${eyelashBound.length}/${HYPER3D_EYELASH_TARGET_NAMES.length} targets bound. ` +
+          `Missing: ${eyelashMissing.join(", ")}. The avatar runs without them.`,
+      );
+    }
     const eyeGazeSupport = eyeBoneGaze.getSupport();
     const boneSupport = bones.getSupport();
 
@@ -321,6 +360,9 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
       hairMeshes,
       materials: materialReport ? [...materialReport.textured, ...materialReport.flat] : [],
       attachedHeadMeshes: attachment.attached,
+      eyelashMesh: eyelashMesh?.name ?? null,
+      eyelashTargetsBound: eyelashBound,
+      eyelashTargetsMissing: eyelashMissing,
     };
 
     /**

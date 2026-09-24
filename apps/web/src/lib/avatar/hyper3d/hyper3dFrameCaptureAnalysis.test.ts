@@ -33,6 +33,13 @@ const frame = (nowMs: number, responseClock: number, jaw: number): Hyper3dFullFr
   presenceOwns: false,
   showcaseActive: false,
   showcaseYieldReason: "speaking",
+  isSpeaking: true,
+  showcaseOwnsLowerFace: false,
+  stages: {
+    seam: { jawOpen: jaw, mouthClose: 0, mouthFunnel: 0, mouthPucker: 0, mouthMax: jaw },
+    affect: { jawOpen: jaw, mouthClose: 0, mouthFunnel: 0, mouthPucker: 0, mouthMax: jaw },
+    presence: { jawOpen: jaw, mouthClose: 0, mouthFunnel: 0, mouthPucker: 0, mouthMax: jaw },
+  },
 });
 
 const capture = (frames: Hyper3dFullFrameRecord[]): Hyper3dFullFrameCapture => ({
@@ -51,6 +58,7 @@ const capture = (frames: Hyper3dFullFrameRecord[]): Hyper3dFullFrameCapture => (
       audioContextStartTime: 1,
       durationMs: 400,
       leadInSec: 0.1,
+      scheduledAtMs: 0,
       expectedAudibleEndContextTime: 1.4,
       responseOffsetSeconds: 0,
       decodedDurationSeconds: 0.5,

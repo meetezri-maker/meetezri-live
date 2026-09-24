@@ -16,6 +16,10 @@ import {
   useLegacyHyper3dFbx,
   type Hyper3dAssetId
 } from "./avatars/hyper3dAssetSelection";
+import {
+  HYPER3D_EYELASH_MESH_NAME,
+  withHyper3dEyelashBindings
+} from "./avatars/hyper3dEyelashBinding";
 
 export type AvatarModelId = "miniface-male" | "female" | "hyper3d-usc";
 export type CompatibilityStatus = "Supported" | "Partial" | "Missing" | "Not tested";
@@ -509,7 +513,7 @@ export const avatarModelConfigs: Record<AvatarModelId, AvatarModelConfig> = {
           teeth: ["Teeth"],
           tongue: [],
           eyes: ["Eyes"],
-          eyelashes: [],
+          eyelashes: [HYPER3D_EYELASH_MESH_NAME],
           hair: ["Character002", "Character002_1"],
           body: ["Face002", "Face002_1", "Face002_2", "Face002_3"]
         },
@@ -527,8 +531,22 @@ export const avatarModelConfigs: Record<AvatarModelId, AvatarModelConfig> = {
      * `Eyes` is deliberately absent: it is skinned to `FACIAL_L/R_EyeParallel`,
      * which are already descendants of `head`, so it follows on its own and
      * reparenting it would apply the head transform twice.
+     *
+     * `Object_2002`, THE EYELASHES, added 2026-09-24 with the re-exported asset
+     * and for exactly the reason above. MEASURED on the new GLB: the lash node
+     * carries no `JOINTS_0`/`WEIGHTS_0`, references no skin, and sits at the
+     * scene ROOT with no parent at all. It is the hair problem again — morphing
+     * the lashes would deform them correctly while the head turned out from
+     * under them, leaving the lashes hanging in space. It is unskinned, so
+     * `attachHeadMeshes` accepts it rather than refusing it the way it refuses
+     * `Eyes` and `Teeth`; `attach()` preserves the world transform, and the lash
+     * AABB already sits on the eyes at rest (world X -0.041..+0.041,
+     * Y 1.355..1.382 against the eyeball mesh's X -0.036..+0.036,
+     * Y 1.357..1.379), so the rest pose does not move.
      */
-    headAttachedMeshes: useLegacyHyper3dFbx ? [] : ["blendshapes", "Teeth", "Character002", "Character002_1"],
+    headAttachedMeshes: useLegacyHyper3dFbx
+      ? []
+      : ["blendshapes", "Teeth", "Character002", "Character002_1", HYPER3D_EYELASH_MESH_NAME],
     /**
      * Resolved by `hyper3dRigAdapter`, which is the only file that knows a rig's
      * node names. See it for the measured FBX -> GLB map and for why the GLB's
@@ -566,10 +584,23 @@ export const avatarModelConfigs: Record<AvatarModelId, AvatarModelConfig> = {
      * separate mesh with a separate target, and without this line the jaw would
      * open while the teeth stayed put. Weight 1 on both bindings, so the
      * influence that reaches each is exactly the influence the runtime asked for.
+     *
+     * The 2026-09-24 re-export adds FOURTEEN more bindings of that same shape,
+     * for the same reason: `withHyper3dEyelashBindings` gives each of the eye
+     * blink / look / squint / wide channels a second target on the new
+     * `Object_2002` lash mesh. The lashes are a follower — they receive the
+     * final composed influence the eyelid receives, so they inherit the blink
+     * trajectory, the resting lid closure and the gaze rails instead of
+     * restating any of them. See `hyper3dEyelashBinding` for why this is a
+     * mapping rather than an adapter, and for the four target names the asset
+     * misspells.
      */
     morphMapping: useLegacyHyper3dFbx
       ? identityMorphMapping
-      : { ...identityMorphMapping, jawOpen: [{ target: "jawOpen" }, { target: "JawOpen" }] },
+      : withHyper3dEyelashBindings({
+          ...identityMorphMapping,
+          jawOpen: [{ target: "jawOpen" }, { target: "JawOpen" }]
+        }),
     /**
      * Deliberately absent on BOTH assets: `eyeGeometry`.
      *

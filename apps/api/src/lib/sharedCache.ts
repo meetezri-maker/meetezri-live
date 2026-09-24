@@ -7,6 +7,53 @@ const REDIS_PREFIX = process.env.REDIS_PREFIX || 'meetezri:';
 
 let redis: Redis | null = null;
 
+const SAFE_REDIS_STATUSES = new Set([
+  'wait',
+  'connecting',
+  'connect',
+  'ready',
+  'reconnecting',
+  'close',
+  'end',
+]);
+
+const SAFE_REDIS_ERROR_CODES = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EPIPE',
+]);
+
+function safeRedisStatus(status: string | undefined): string {
+  return status && SAFE_REDIS_STATUSES.has(status) ? status : 'unknown';
+}
+
+function safeRedisErrorCode(error: unknown): string | null {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && SAFE_REDIS_ERROR_CODES.has(code) ? code : null;
+}
+
+function classifyRedisError(error: unknown): string {
+  const code = safeRedisErrorCode(error);
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return code.toLowerCase();
+  if (code === 'ECONNREFUSED') return 'connection_refused';
+  if (code === 'ECONNRESET') return 'connection_reset';
+  if (code === 'ETIMEDOUT') return 'timeout';
+  if (code === 'EPIPE') return 'socket_closed';
+
+  const name = (error as { name?: unknown } | null)?.name;
+  if (name === 'MaxRetriesPerRequestError') return 'max_retries';
+  if (name === 'ReplyError') return 'protocol';
+
+  return 'unknown';
+}
+
+function recordRedisStatus(metric: string, status: string | undefined): void {
+  recordTiming(metric, 0, safeRedisStatus(status));
+}
+
 function getRedis(): Redis | null {
   if (!REDIS_URL) return null;
   if (redis) return redis;
@@ -37,21 +84,29 @@ export async function sharedGetJson<T>(key: string): Promise<T | null> {
     recordTiming("redis.get", 0, "unavailable");
     return null;
   }
+  recordRedisStatus("redis.statusBefore", r.status);
+  let getStart = 0;
   try {
     if (r.status === "wait") {
       const connectStart = performance.now();
-      await r.connect().catch(() => {});
-      recordTiming("redis.connect", performance.now() - connectStart, r.status);
+      try {
+        await r.connect();
+        recordTiming("redis.connect", performance.now() - connectStart, "succeeded");
+      } catch (error) {
+        recordTiming("redis.connect", performance.now() - connectStart, classifyRedisError(error));
+      }
+      recordRedisStatus("redis.statusAfterConnect", r.status);
     } else {
-      recordTiming("redis.connect", 0, "connected");
+      recordTiming("redis.connect", 0, safeRedisStatus(r.status));
     }
-    const getStart = performance.now();
+    getStart = performance.now();
     const raw = await r.get(k(key));
     recordTiming("redis.get", performance.now() - getStart, raw ? "hit" : "miss");
     if (!raw) return null;
     return JSON.parse(raw) as T;
-  } catch {
-    recordTiming("redis.get", 0, "error");
+  } catch (error) {
+    recordTiming("redis.get", getStart ? performance.now() - getStart : 0, classifyRedisError(error));
+    recordRedisStatus("redis.statusAfterError", r.status);
     return null;
   }
 }

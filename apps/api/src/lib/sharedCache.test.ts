@@ -15,16 +15,18 @@ const get = jest.fn().mockResolvedValue(null);
 const set = jest.fn().mockResolvedValue('OK');
 
 const redisInstances: any[] = [];
+let mockRedisStatus = 'ready';
 
 jest.mock('ioredis', () => {
   return jest.fn().mockImplementation(() => {
-    const instance = { quit, disconnect, on, connect, del, get, set, status: 'ready' };
+    const instance = { quit, disconnect, on, connect, del, get, set, status: mockRedisStatus };
     redisInstances.push(instance);
     return instance;
   });
 });
 
 const ORIGINAL_REDIS_URL = process.env.REDIS_URL;
+const ORIGINAL_DEBUG_API_TIMING = process.env.DEBUG_API_TIMING;
 
 beforeAll(() => {
   // The leak only exists when a Redis URL is configured — which it is in this API's environment.
@@ -34,11 +36,20 @@ beforeAll(() => {
 afterAll(() => {
   if (ORIGINAL_REDIS_URL === undefined) delete process.env.REDIS_URL;
   else process.env.REDIS_URL = ORIGINAL_REDIS_URL;
+  if (ORIGINAL_DEBUG_API_TIMING === undefined) delete process.env.DEBUG_API_TIMING;
+  else process.env.DEBUG_API_TIMING = ORIGINAL_DEBUG_API_TIMING;
 });
 
 beforeEach(() => {
   jest.clearAllMocks();
   redisInstances.length = 0;
+  process.env.REDIS_URL = 'redis://127.0.0.1:6379';
+  delete process.env.DEBUG_API_TIMING;
+  mockRedisStatus = 'ready';
+  get.mockResolvedValue(null);
+  set.mockResolvedValue('OK');
+  del.mockResolvedValue(1);
+  connect.mockResolvedValue(undefined);
   jest.resetModules();
 });
 
@@ -128,5 +139,137 @@ describe('shared cache client lifecycle', () => {
 
     expect(redisInstances).toHaveLength(0);
     process.env.REDIS_URL = 'redis://127.0.0.1:6379';
+  });
+});
+
+
+describe('shared cache Redis diagnostics', () => {
+  async function captureTiming(
+    operation: (cache: ReturnType<typeof loadSharedCache>) => Promise<unknown>
+  ) {
+    process.env.DEBUG_API_TIMING = '1';
+    const cache = loadSharedCache();
+    const perf = require('./perfTiming') as typeof import('./perfTiming');
+    let header = '';
+    await perf.runWithRequestTiming(async () => {
+      await operation(cache);
+      header = perf.buildServerTimingHeader(1);
+    });
+    return header;
+  }
+
+  it('keeps diagnostics dormant when DEBUG_API_TIMING is disabled', async () => {
+    const cache = loadSharedCache();
+
+    await cache.sharedGetJson('users:credits:user-secret');
+    const perf = require('./perfTiming') as typeof import('./perfTiming');
+
+    expect(perf.buildServerTimingHeader(1)).toBe('');
+  });
+
+  it('classifies unavailable Redis without creating a client', async () => {
+    process.env.DEBUG_API_TIMING = '1';
+    delete process.env.REDIS_URL;
+    const cache = loadSharedCache();
+    const perf = require('./perfTiming') as typeof import('./perfTiming');
+
+    let header = '';
+    await perf.runWithRequestTiming(async () => {
+      await cache.sharedGetJson('users:credits:user-secret');
+      header = perf.buildServerTimingHeader(1);
+    });
+
+    expect(redisInstances).toHaveLength(0);
+    expect(header).toContain('redis.get;dur=0;desc="unavailable"');
+    expect(header).not.toContain('user-secret');
+  });
+
+  it('preserves Redis miss diagnostics without exposing the key', async () => {
+    const header = await captureTiming(async (cache: ReturnType<typeof loadSharedCache>) => {
+      await cache.sharedGetJson('users:activity:user-secret:10');
+    });
+
+    expect(header).toContain('redis.statusBefore;dur=0;desc="ready"');
+    expect(header).toContain('redis.connect;dur=0;desc="ready"');
+    expect(header).toContain('redis.get;dur=');
+    expect(header).toContain('desc="miss"');
+    expect(header).not.toContain('user-secret');
+  });
+
+  it('preserves Redis hit behavior without exposing cached values', async () => {
+    get.mockResolvedValueOnce(JSON.stringify({ token: 'cached-value-secret' }));
+
+    let result: unknown;
+    const header = await captureTiming(async (cache: ReturnType<typeof loadSharedCache>) => {
+      result = await cache.sharedGetJson('users:credits:user-secret');
+    });
+
+    expect(result).toEqual({ token: 'cached-value-secret' });
+    expect(header).toContain('desc="hit"');
+    expect(header).not.toContain('cached-value-secret');
+    expect(header).not.toContain('user-secret');
+  });
+
+  it('classifies GET failures with elapsed timing and no secret leakage', async () => {
+    const err = new Error('redis://user:password@secret-host:6379 leaked message');
+    (err as any).code = 'ENOTFOUND';
+    get.mockRejectedValueOnce(err);
+
+    const header = await captureTiming(async (cache: ReturnType<typeof loadSharedCache>) => {
+      await expect(cache.sharedGetJson('users:credits:user-secret')).resolves.toBeNull();
+    });
+
+    expect(header).toContain('redis.get;dur=');
+    expect(header).toContain('desc="enotfound"');
+    expect(header).toContain('redis.statusAfterError;dur=0;desc="ready"');
+    expect(header).not.toContain('secret-host');
+    expect(header).not.toContain('password');
+    expect(header).not.toContain('leaked message');
+    expect(header).not.toContain('user-secret');
+    expect(header).not.toContain('stack');
+  });
+
+  it('classifies connect failures and preserves fallback', async () => {
+    const err = new Error('token and host must not leak');
+    (err as any).code = 'ETIMEDOUT';
+    connect.mockImplementationOnce(async () => {
+      redisInstances[0].status = 'reconnecting';
+      throw err;
+    });
+    get.mockRejectedValueOnce(Object.assign(new Error('still no leak'), { code: 'EPIPE' }));
+
+    let header = '';
+    process.env.DEBUG_API_TIMING = '1';
+    mockRedisStatus = 'wait';
+    const cache = loadSharedCache();
+    const perf = require('./perfTiming') as typeof import('./perfTiming');
+
+    await perf.runWithRequestTiming(async () => {
+      await cache.sharedGetJson('users:credits:user-secret');
+      header = perf.buildServerTimingHeader(1);
+    });
+
+    expect(header).toContain('redis.statusBefore;dur=0;desc="wait"');
+    expect(header).toContain('redis.connect;dur=');
+    expect(header).toContain('desc="timeout"');
+    expect(header).toContain('redis.statusAfterConnect;dur=0;desc="reconnecting"');
+    expect(header).toContain('redis.get;dur=');
+    expect(header).toContain('desc="socket_closed"');
+    expect(header).not.toContain('token');
+    expect(header).not.toContain('host');
+    expect(header).not.toContain('user-secret');
+  });
+
+  it('falls back to unknown for unallowlisted errors without leaking details', async () => {
+    get.mockRejectedValueOnce(Object.assign(new Error('contains redis://secret-host'), { code: 'SOME_VENDOR_CODE' }));
+
+    const header = await captureTiming(async (cache: ReturnType<typeof loadSharedCache>) => {
+      await cache.sharedGetJson('users:credits:user-secret');
+    });
+
+    expect(header).toContain('desc="unknown"');
+    expect(header).not.toContain('SOME_VENDOR_CODE');
+    expect(header).not.toContain('secret-host');
+    expect(header).not.toContain('user-secret');
   });
 });

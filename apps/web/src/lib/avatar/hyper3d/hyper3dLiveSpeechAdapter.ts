@@ -13,6 +13,7 @@ import {
   countHyper3dAppendSuccess,
   countHyper3dRecorderCall,
   getHyper3dPathReport,
+  recordHyper3dWelcomeStartup,
 } from "./hyper3dPathDiagnostics";
 import {
   createLiveSpeechTimeline,
@@ -98,6 +99,19 @@ export type Hyper3dScheduledChunk = {
   audioB64Present?: boolean;
 };
 
+/**
+ * One ownership stage's speech-owned channels. Five numbers, so carrying three
+ * of these per frame costs about what one of the existing channel-map spreads
+ * already costs.
+ */
+export type Hyper3dMouthStageSample = {
+  jawOpen: number;
+  mouthClose: number;
+  mouthFunnel: number;
+  mouthPucker: number;
+  mouthMax: number;
+};
+
 /** One evaluated, audible render frame. DEV full-frame capture. */
 export type Hyper3dFullFrameRecord = {
   frame: number;
@@ -125,6 +139,22 @@ export type Hyper3dFullFrameRecord = {
   presenceOwns: boolean;
   showcaseActive: boolean;
   showcaseYieldReason: string | null;
+  /** Phase 2G.1C (B3): the conversation flag this frame rendered under. */
+  isSpeaking: boolean;
+  /** Phase 2G.1C (B3): the showcase actually changed the lower face here. */
+  showcaseOwnsLowerFace: boolean;
+  /**
+   * The intermediate ownership stages between `controller` and `final`, so a
+   * divergence names the layer that caused it. `controller` is the pose BEFORE
+   * any ownership layer; `seam` is after the threejs face-ownership seam,
+   * `affect` after semantic affect, `presence` after Active Presence, and
+   * `final` (above) is after the idle showcase.
+   */
+  stages: {
+    seam: Hyper3dMouthStageSample;
+    affect: Hyper3dMouthStageSample;
+    presence: Hyper3dMouthStageSample;
+  };
 };
 
 export type Hyper3dCapturedPhoneme = {
@@ -151,6 +181,8 @@ export type Hyper3dFullFrameCapture = {
     audioContextStartTime: number;
     durationMs: number;
     leadInSec: number;
+    /** `performance.now()` when the scheduler handed this chunk over. */
+    scheduledAtMs: number;
     expectedAudibleEndContextTime: number;
     responseOffsetSeconds: number | null;
     decodedDurationSeconds: number | null;
@@ -507,6 +539,21 @@ const MAX_SAMPLES = 500;
 const MAX_REVIEW_SAMPLES = 120;
 const REVIEW_SAMPLE_INTERVAL_MS = 100;
 const MAX_SCHEDULED_CHUNKS = 64;
+/** Reads one ownership stage's speech channels off the existing mouth trace. */
+function stageSample(stage: {
+  jawOpen: number;
+  mouthMax: number;
+  channels: Record<string, number>;
+}): Hyper3dMouthStageSample {
+  return {
+    jawOpen: stage.jawOpen,
+    mouthClose: stage.channels.mouthClose ?? 0,
+    mouthFunnel: stage.channels.mouthFunnel ?? 0,
+    mouthPucker: stage.channels.mouthPucker ?? 0,
+    mouthMax: stage.mouthMax,
+  };
+}
+
 const LIP_SYNC_MOTION_EPSILON = 0.01;
 const LIP_SYNC_MAX_SAMPLES = 32;
 const LIP_SYNC_SAMPLE_EVERY_FRAMES = 6;
@@ -655,6 +702,9 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
     isWelcome: boolean;
   }> = [];
   let lastScheduledSentence = "";
+  /** Phase 2G.1C: the welcome's first handoff and first audible frame, once each. */
+  let welcomeFirstChunkSeen = false;
+  let welcomeFirstAudibleFrameSeen = false;
   let lastReviewSampleAt = Number.NEGATIVE_INFINITY;
   let lastEvaluationTime: number | null = null;
   let controllerCreateCount = 0;
@@ -723,9 +773,9 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
   let fullFrameCounter = 0;
   let activeCapture: Hyper3dFullFrameCapture | null = null;
 
-  /** Copies the existing acoustic analysis into the capture before a turn resets it. */
-  function finalizeFullFrameCapture() {
-    if (!DEV || !activeCapture || activeCapture.finalized) return;
+  /** Copies the existing acoustic analysis into the capture. Idempotent; no state. */
+  function copyAcousticsIntoCapture() {
+    if (!activeCapture) return;
     const frames = acoustics.getFrames();
     const limit = Math.min(frames.length, FULL_FRAME_MAX_ACOUSTIC_FRAMES);
     activeCapture.acousticFrames = [];
@@ -733,6 +783,12 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       const frame = frames[index];
       activeCapture.acousticFrames.push({ time: frame.time, energy: frame.energy, voicing: frame.voicing });
     }
+  }
+
+  /** Copies the existing acoustic analysis into the capture before a turn resets it. */
+  function finalizeFullFrameCapture() {
+    if (!DEV || !activeCapture || activeCapture.finalized) return;
+    copyAcousticsIntoCapture();
     activeCapture.finalized = true;
     publish();
   }
@@ -783,6 +839,7 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       audioContextStartTime: chunk.audioContextStartTime,
       durationMs: chunk.durationMs,
       leadInSec: chunk.leadInSec,
+      scheduledAtMs: Math.round(chunk.scheduledAtMs),
       expectedAudibleEndContextTime: chunk.audioContextStartTime + chunk.durationMs / 1000,
       responseOffsetSeconds: result.accepted ? result.chunkOffsetSeconds : null,
       decodedDurationSeconds: buffer && buffer.sampleRate ? buffer.length / buffer.sampleRate : null,
@@ -1060,6 +1117,28 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
     clock,
     /** Authoritative continuous response clock consumed by AvatarController. */
     getPlaybackTime: () => clock.getCurrentTime(),
+    /**
+     * DEV read-back support: refresh the capture's acoustic frames WITHOUT
+     * finalizing it, so a reply can be exported while its turn is still the
+     * current one. `finalized` is untouched, so the real finalize on the next
+     * `beginTurn` still happens exactly once.
+     */
+    refreshDiagnosticsAcoustics(): void {
+      if (!DEV) return;
+      copyAcousticsIntoCapture();
+      publish();
+    },
+    /**
+     * Phase 2G.1C — a read-only window onto both clocks for the DEV render-loop
+     * capture. Pure reads of values this adapter already maintains; it takes no
+     * decision, caches nothing and has no side effect. `responseClock` is null
+     * until a response has an origin, so a gap before any audio is not reported
+     * as sitting at response time 0.
+     */
+    getAudioClocks: (): { contextTime: number | null; responseClock: number | null } => ({
+      contextTime: deps.getContextTime(),
+      responseClock: timeline.getOrigin() === null ? null : clock.getCurrentTime(),
+    }),
     getLiveReview: () => liveReview,
     shouldCaptureReviewFrame: () => {
       if (!DEV) return false;
@@ -1343,11 +1422,28 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
             presenceOwns: trace.presenceOwned,
             showcaseActive: trace.showcaseActive,
             showcaseYieldReason: trace.showcaseYieldReason,
+            isSpeaking: trace.isSpeaking,
+            showcaseOwnsLowerFace: trace.showcaseOwnsLowerFace,
+            stages: {
+              seam: stageSample(trace.afterFaceOwnership),
+              affect: stageSample(trace.afterAffect),
+              presence: stageSample(trace.afterPresence),
+            },
           });
         }
       }
 
       if (chunk.isWelcome) {
+        // Phase 2G.1C: the first frame that rendered while welcome audio was
+        // genuinely audible — the far end of the startup window.
+        if (audioActive && !welcomeFirstAudibleFrameSeen) {
+          welcomeFirstAudibleFrameSeen = true;
+          recordHyper3dWelcomeStartup({
+            firstAudibleFrameAtMs: Math.round(now()),
+            firstAudibleResponseClock: t,
+            responseOriginContextTime: origin,
+          });
+        }
         summary.audioActive = audioActive;
         summary.phonemesExist = phonemes.length > 0;
         summary.clockInsidePhoneme = Boolean(active);
@@ -1534,6 +1630,33 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       const finishedAt = now();
       pushSample(convertCostMs, finishedAt - startedAt);
       pushSample(appendDelayMs, finishedAt - chunk.scheduledAtMs);
+
+      /**
+       * Phase 2G.1C (audit risks B1 and B2) — the WELCOME's first handoff, as
+       * Hyper3D actually received it. `rawAvatarDataPresent` is the queue item's
+       * state at the instant `onChunkScheduled` ran, which is precisely the
+       * question B1 asks; a later repair cannot rewrite it. Observation only:
+       * nothing below this is read by the timeline, planner or scheduler.
+       */
+      if (DEV && chunk.isWelcome === true && !welcomeFirstChunkSeen) {
+        welcomeFirstChunkSeen = true;
+        const contextAtSchedule = deps.getContextTime();
+        recordHyper3dWelcomeStartup({
+          firstChunkScheduledAtMs: Math.round(startedAt),
+          firstChunkHandoffAtMs: Math.round(chunk.scheduledAtMs),
+          firstChunkHadAvatarData: chunk.rawAvatarDataPresent ?? null,
+          firstChunkRawPhonemeFormat: chunk.rawPhonemeFormat ?? null,
+          firstChunkTimedPhonemeCount: chunk.timeline?.phonemes.length ?? 0,
+          firstChunkAppendResult: result.accepted ? "accepted" : result.reason,
+          firstChunkAudioContextStartTime: chunk.audioContextStartTime,
+          audioContextTimeAtFirstSchedule: contextAtSchedule,
+          firstChunkLeadMs:
+            contextAtSchedule === null
+              ? null
+              : Math.round((chunk.audioContextStartTime - contextAtSchedule) * 1000),
+          responseOriginContextTime: timeline.getOrigin(),
+        });
+      }
 
       if (result.accepted) {
         const acceptedPhonemes = timeline.getPayload().phonemes.slice(phonemeCountBefore);

@@ -69,6 +69,45 @@ export type Hyper3dPathReport = {
    * does NOT live in `loop` (which resets with each host).
    */
   assetTimeline: Hyper3dAssetTimeline;
+  /**
+   * Phase 2G.1C: what the WELCOME turn did around the startup window, recorded
+   * so the three architecture-audit risks can be checked against THIS
+   * reproduction instead of argued from the architecture.
+   */
+  welcomeStartup: Hyper3dWelcomeStartup;
+};
+
+/**
+ * Phase 2G.1C — the welcome turn's own startup facts. OBSERVATION ONLY: nothing
+ * here is read by any scheduling, association or rendering decision.
+ */
+export type Hyper3dWelcomeStartup = {
+  /** B2 — the reorder-buffer reset the special welcome release performs. */
+  releaseResetAtMs: number | null;
+  releaseResetReason: string | null;
+  /** The first welcome chunk Hyper3D was handed, at `onChunkScheduled`. */
+  firstChunkScheduledAtMs: number | null;
+  /** `chunk.scheduledAtMs` — when the SCHEDULER handed it over. */
+  firstChunkHandoffAtMs: number | null;
+  /** B1 — was `avatar_data` on the queue item at the moment of the handoff? */
+  firstChunkHadAvatarData: boolean | null;
+  firstChunkRawPhonemeFormat: string | null;
+  firstChunkTimedPhonemeCount: number | null;
+  firstChunkAppendResult: string | null;
+  firstChunkAudioContextStartTime: number | null;
+  audioContextTimeAtFirstSchedule: number | null;
+  /** `audioContextStartTime − currentTime` at the handoff, ms. Negative = late. */
+  firstChunkLeadMs: number | null;
+  responseOriginContextTime: number | null;
+  /**
+   * B1 — `avatar_data` attached to an item that had ALREADY been scheduled, so
+   * Hyper3D's `onChunkScheduled` had already run against the un-repaired item.
+   */
+  lateAvatarDataAfterScheduleCount: number;
+  lateAvatarDataAfterScheduleAtMs: number[];
+  /** The first render frame that observed AUDIBLE welcome audio. */
+  firstAudibleFrameAtMs: number | null;
+  firstAudibleResponseClock: number | null;
 };
 
 /**
@@ -78,6 +117,13 @@ export type Hyper3dPathReport = {
  */
 export type Hyper3dAssetTimeline = {
   url: string | null;
+  /** The React host's mount effect — the first instant the avatar exists at all. */
+  hostMountedAtMs: number | null;
+  /** The registered factory wrapper was CALLED: the host asked for an engine. */
+  engineFactoryRequestedAtMs: number | null;
+  /** `import("./hyper3dEngineFactory")` — the engine CHUNK, not the GLB. */
+  engineModuleImportStartedAtMs: number | null;
+  engineModuleImportCompletedAtMs: number | null;
   /** Immediately before `loader.load(...)` is called. */
   loadStartedAtMs: number | null;
   /** The LAST `onProgress` event GLTFLoader delivered (network read progress). */
@@ -136,6 +182,13 @@ export type Hyper3dFrameTiming = {
   selfCheckResidualMs: number | null;
   documentVisibilityState: string;
   documentHasFocus: boolean;
+  /**
+   * `AudioContext.currentTime` and the response clock, read at TICK ENTRY — the
+   * END of the gap this frame's `rawDeltaMs` measures. Null when no audio probe
+   * is registered (no session) or the response has no origin yet.
+   */
+  audioContextTime: number | null;
+  responseClockSeconds: number | null;
 };
 
 export type Hyper3dLongTask = {
@@ -172,6 +225,8 @@ export type Hyper3dLoopSample = {
   documentHidden: boolean;
   documentHasFocus: boolean;
   engineStatus: string;
+  audioContextTime: number | null;
+  responseClockSeconds: number | null;
 };
 
 export type Hyper3dLoopGap = {
@@ -182,6 +237,9 @@ export type Hyper3dLoopGap = {
   visibilityAfter: string;
   focusBefore: boolean;
   focusAfter: boolean;
+  /** Read at the gap's END — the tick that finally ran. */
+  audioContextTimeAtGapEnd: number | null;
+  responseClockAtGapEnd: number | null;
 };
 
 export type Hyper3dLoopDiagnostics = {
@@ -360,9 +418,34 @@ function createLoopDiagnostics(): Hyper3dLoopDiagnostics {
   };
 }
 
+function createWelcomeStartup(): Hyper3dWelcomeStartup {
+  return {
+    releaseResetAtMs: null,
+    releaseResetReason: null,
+    firstChunkScheduledAtMs: null,
+    firstChunkHandoffAtMs: null,
+    firstChunkHadAvatarData: null,
+    firstChunkRawPhonemeFormat: null,
+    firstChunkTimedPhonemeCount: null,
+    firstChunkAppendResult: null,
+    firstChunkAudioContextStartTime: null,
+    audioContextTimeAtFirstSchedule: null,
+    firstChunkLeadMs: null,
+    responseOriginContextTime: null,
+    lateAvatarDataAfterScheduleCount: 0,
+    lateAvatarDataAfterScheduleAtMs: [],
+    firstAudibleFrameAtMs: null,
+    firstAudibleResponseClock: null,
+  };
+}
+
 function createAssetTimeline(): Hyper3dAssetTimeline {
   return {
     url: null,
+    hostMountedAtMs: null,
+    engineFactoryRequestedAtMs: null,
+    engineModuleImportStartedAtMs: null,
+    engineModuleImportCompletedAtMs: null,
     loadStartedAtMs: null,
     lastProgressAtMs: null,
     progressLoaded: null,
@@ -379,6 +462,37 @@ function createAssetTimeline(): Hyper3dAssetTimeline {
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
+
+/**
+ * Phase 2G.1C — a READ-ONLY window onto the two audio clocks, so the render
+ * loop can be correlated with audio without the host importing anything from
+ * the audio or adapter layers. The probe is registered by the live-engine
+ * binding, which already holds the adapter; it is called at most once per frame
+ * and nothing it returns influences rendering, scheduling or timing.
+ */
+export type Hyper3dAudioProbe = () => {
+  contextTime: number | null;
+  responseClock: number | null;
+};
+
+let audioProbe: Hyper3dAudioProbe | null = null;
+
+export function registerHyper3dAudioProbe(probe: Hyper3dAudioProbe | null): void {
+  if (!DEV) return;
+  audioProbe = probe;
+}
+
+const NO_AUDIO = { contextTime: null, responseClock: null };
+
+function readAudioProbe(): { contextTime: number | null; responseClock: number | null } {
+  if (!audioProbe) return NO_AUDIO;
+  try {
+    return audioProbe();
+  } catch {
+    // A diagnostics read must never be able to break a frame.
+    return NO_AUDIO;
+  }
+}
 
 const visibilityState = (): string =>
   typeof document === "undefined" ? "unavailable" : document.visibilityState;
@@ -413,6 +527,7 @@ const report: Hyper3dPathReport = {
   events: [],
   loop: createLoopDiagnostics(),
   assetTimeline: createAssetTimeline(),
+  welcomeStartup: createWelcomeStartup(),
 };
 
 const PHASE_ORDER: readonly Hyper3dPathPhase[] = [
@@ -558,7 +673,9 @@ export function recordHyper3dLoopFrame(sample: {
   const loop = report.loop;
   const visibility = visibilityState();
   const hasFocus = documentHasFocus();
-  openFrameTiming(sample, visibility, hasFocus);
+  // ONE probe read per frame, shared by the sample, the frame split and any gap.
+  const audio = readAudioProbe();
+  openFrameTiming(sample, visibility, hasFocus, audio);
   const entry: Hyper3dLoopSample = {
     performanceNow: Math.round(sample.performanceNow),
     rawDeltaMs: Math.round(sample.rawDeltaMs * 100) / 100,
@@ -567,6 +684,8 @@ export function recordHyper3dLoopFrame(sample: {
     documentHidden: documentHidden(),
     documentHasFocus: hasFocus,
     engineStatus: sample.engineStatus,
+    audioContextTime: audio.contextTime,
+    responseClockSeconds: audio.responseClock,
   };
   loop.samples.push(entry);
   if (loop.samples.length > MAX_LOOP_SAMPLES) loop.samples.shift();
@@ -586,6 +705,8 @@ export function recordHyper3dLoopFrame(sample: {
       visibilityAfter: visibility,
       focusBefore: previous?.documentHasFocus ?? false,
       focusAfter: hasFocus,
+      audioContextTimeAtGapEnd: audio.contextTime,
+      responseClockAtGapEnd: audio.responseClock,
     };
     loop.longGaps.push(gap);
     if (loop.longGaps.length > MAX_LONG_GAPS) loop.longGaps.shift();
@@ -616,6 +737,7 @@ function openFrameTiming(
   sample: { performanceNow: number; rawDeltaMs: number; outsideTickMs?: number | null },
   visibility: string,
   hasFocus: boolean,
+  audio: { contextTime: number | null; responseClock: number | null },
 ): void {
   const timing = report.loop.timing;
   timedFrameIndex += 1;
@@ -642,6 +764,8 @@ function openFrameTiming(
     selfCheckResidualMs: residual === null ? null : round2(residual),
     documentVisibilityState: visibility,
     documentHasFocus: hasFocus,
+    audioContextTime: audio.contextTime,
+    responseClockSeconds: audio.responseClock,
   };
   if (outside !== null) {
     timing.sumOutsideTickMs = round2(timing.sumOutsideTickMs + outside);
@@ -838,6 +962,28 @@ export function captureHyper3dAssetResourceTiming(url: string): void {
   }
 }
 
+/** Phase 2G.1C — welcome-turn startup facts. Merged; never interpreted here. */
+export function recordHyper3dWelcomeStartup(patch: Partial<Hyper3dWelcomeStartup>): void {
+  if (!DEV) return;
+  Object.assign(report.welcomeStartup, patch);
+  publish();
+}
+
+/**
+ * B1 observation: `avatar_data` was attached to a queue item that had already
+ * been scheduled, i.e. AFTER Hyper3D's `onChunkScheduled` ran for it.
+ */
+export function noteHyper3dLateAvatarDataAfterSchedule(): void {
+  if (!DEV) return;
+  const welcome = report.welcomeStartup;
+  welcome.lateAvatarDataAfterScheduleCount += 1;
+  welcome.lateAvatarDataAfterScheduleAtMs.push(Math.round(performance.now()));
+  if (welcome.lateAvatarDataAfterScheduleAtMs.length > 16) {
+    welcome.lateAvatarDataAfterScheduleAtMs.shift();
+  }
+  publish();
+}
+
 /** visibilitychange / focus / blur / pagehide / pageshow. Observation only. */
 export function recordHyper3dVisibilityEvent(type: string): void {
   if (!DEV) return;
@@ -892,8 +1038,10 @@ export function __resetHyper3dPathForTests(): void {
     framesRendered: 0,
     loop: createLoopDiagnostics(),
     assetTimeline: createAssetTimeline(),
+    welcomeStartup: createWelcomeStartup(),
     events: [],
   });
+  audioProbe = null;
   pendingTiming = null;
   pendingTimingKept = false;
   pendingEngineSpans = null;

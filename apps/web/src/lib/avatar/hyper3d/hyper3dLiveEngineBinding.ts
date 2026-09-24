@@ -3,7 +3,11 @@ import {
   registerHyper3dEngineFactory,
   registerHyper3dPlaybackClock,
 } from "./hyper3dEngineRegistry";
-import { recordHyper3dPath } from "./hyper3dPathDiagnostics";
+import {
+  recordHyper3dAssetTimeline,
+  recordHyper3dPath,
+  registerHyper3dAudioProbe,
+} from "./hyper3dPathDiagnostics";
 import type { Hyper3dLiveSpeechAdapter } from "./hyper3dLiveSpeechAdapter";
 
 /**
@@ -118,9 +122,51 @@ export function registerHyper3dLiveEngine(adapter: Hyper3dLiveSpeechAdapter): vo
    * rejects here and the seam falls back exactly as any other init failure does.
    */
   registerHyper3dEngineFactory(async (init) => {
+    // Phase 2G.1C: the engine CHUNK's own fetch and evaluate, which precedes the
+    // GLB and has never been separated from it. Two stamps around an await that
+    // already existed.
+    const requestedAtMs = Math.round(globalThis.performance.now());
+    recordHyper3dAssetTimeline({
+      engineFactoryRequestedAtMs: requestedAtMs,
+      engineModuleImportStartedAtMs: requestedAtMs,
+    });
     const { createHyper3dEngineFactory } = await import("./hyper3dEngineFactory");
+    recordHyper3dAssetTimeline({
+      engineModuleImportCompletedAtMs: Math.round(globalThis.performance.now()),
+    });
     return createHyper3dEngineFactory(live)(init);
   });
+
+  /**
+   * Phase 2G.1C — the render loop's READ-ONLY window onto the audio clocks.
+   *
+   * The capture has to answer "what was the audio doing during that gap?", and
+   * the host holds no audio reference by design. This hands the DEV diagnostics
+   * a pure getter over values the adapter already computes. It is registered
+   * here because this is the one module that has the adapter and is already the
+   * adapter-to-engine shim; nothing but the DEV capture reads it.
+   */
+  registerHyper3dAudioProbe(() => adapter.getAudioClocks());
+
+  // Phase 2G.1C: publishes the DEV read-back functions. `import.meta.env.DEV` is
+  // statically replaced, so a production build drops this branch and never emits
+  // the report module at all.
+  if (import.meta.env.DEV === true) {
+    void import("./hyper3dStartupReport")
+      .then((module) => module.installHyper3dStartupReport())
+      .catch(() => {
+        /* a diagnostics surface must never break a session */
+      });
+    // The normal-reply read-back. It needs the adapter only to refresh the
+    // capture's acoustic frames at export time, which is a copy, not a decision.
+    void import("./hyper3dReplyReport")
+      .then((module) =>
+        module.installHyper3dReplyReport(() => adapter.refreshDiagnosticsAcoustics()),
+      )
+      .catch(() => {
+        /* a diagnostics surface must never break a session */
+      });
+  }
 
   recordHyper3dPath({ factoryRegistered: true }, "engine factory registered from the live adapter");
 }
