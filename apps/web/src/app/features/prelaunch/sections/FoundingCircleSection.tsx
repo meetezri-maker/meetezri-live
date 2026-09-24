@@ -3,7 +3,7 @@ import { LandingGlowCard } from "@/app/landing/LandingGlowCard";
 import { FOUNDING_CIRCLE, FOUNDING_FORM, SECTION_IDS } from "../prelaunch.content";
 import { PRELAUNCH_FOUNDING_CIRCLE_BG } from "../prelaunch.imagery";
 import { Reveal, SectionBackdrop, SectionHeader } from "../PrelaunchPrimitives";
-import { FoundingMemberForm } from "../FoundingMemberForm";
+import { DeferredFoundingMemberForm } from "../DeferredFoundingMemberForm";
 
 /**
  * Section 8 — Become a Founding Member.
@@ -96,7 +96,7 @@ export function FoundingCircleSection() {
 
             {/* Names the form region so assistive technology announces it. */}
             <div aria-labelledby={FORM_HEADING_ID} className="mt-6">
-              <FoundingMemberForm origin="founding_circle_section" />
+              <DeferredFoundingMemberForm origin="founding_circle_section" />
             </div>
           </LandingGlowCard>
 

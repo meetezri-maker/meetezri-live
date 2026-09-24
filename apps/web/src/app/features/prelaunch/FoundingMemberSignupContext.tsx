@@ -13,7 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
-import { FoundingMemberForm } from "./FoundingMemberForm";
+import {
+  FoundingMemberFormSuspense,
+  preloadFoundingMemberForm,
+} from "./DeferredFoundingMemberForm";
 import { FOUNDING_CIRCLE, FOUNDING_FORM, SECTION_IDS } from "./prelaunch.content";
 import { trackPrelaunchEvent } from "./prelaunch.analytics";
 
@@ -39,6 +42,7 @@ export function FoundingMemberSignupProvider({ children }: { children: ReactNode
   const openSignup = useCallback((nextOrigin: string) => {
     setOrigin(nextOrigin);
     trackPrelaunchEvent("founding_member_cta_clicked", { origin: nextOrigin });
+    preloadFoundingMemberForm();
 
     // Section 8 owns the inline form; sending the visitor there keeps the full
     // benefits context visible instead of hiding it behind a modal.
@@ -73,7 +77,7 @@ export function FoundingMemberSignupProvider({ children }: { children: ReactNode
             </DialogDescription>
           </DialogHeader>
 
-          <FoundingMemberForm origin={origin} compact className="mt-2" />
+          <FoundingMemberFormSuspense origin={origin} compact className="mt-2" />
         </DialogContent>
       </Dialog>
     </FoundingMemberSignupContext.Provider>

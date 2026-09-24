@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,18 @@ globalThis.ResizeObserver ??= class {
 
 // jsdom implements neither of these; the sections call them on mount/interaction.
 globalThis.IntersectionObserver ??= class {
-  observe() {}
+  private callback: IntersectionObserverCallback;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element) {
+    this.callback(
+      [{ isIntersecting: true, target } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
+  }
   unobserve() {}
   disconnect() {}
   takeRecords() {
@@ -255,7 +266,7 @@ describe("pre-launch landing page structure", () => {
 
     // The shared signup dialog, not a new conversion path.
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(dialog).findByLabelText("Email address")).toBeInTheDocument();
   });
 
   it("renders Talk It Out exactly as Appendix A Page 3 specifies", () => {
@@ -287,7 +298,7 @@ describe("pre-launch landing page structure", () => {
 
     await user.click(ctas[0]);
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(dialog).findByLabelText("Email address")).toBeInTheDocument();
   });
 
   it("gates the infinite CTA glow behind the reduced-motion guard", () => {
@@ -370,7 +381,7 @@ describe("pre-launch landing page structure", () => {
     await user.click(cta);
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(dialog).findByLabelText("Email address")).toBeInTheDocument();
   });
 
   it("renders the Founder frame from Appendix A Page 5", () => {
@@ -452,16 +463,16 @@ describe("pre-launch landing page structure", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("keeps exactly one signup form, inline in the Founding Circle section", () => {
+  it("keeps exactly one signup form, inline in the Founding Circle section", async () => {
     renderPage();
 
     // A modal-only experience, or a second form, would split the conversion.
+    await waitFor(() => expect(document.querySelectorAll("form")).toHaveLength(1));
     const forms = document.querySelectorAll("form");
-    expect(forms).toHaveLength(1);
 
     const section = document.getElementById("membership") as HTMLElement;
     expect(section.contains(forms[0])).toBe(true);
-    expect(within(section).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(section).findByLabelText("Email address")).toBeInTheDocument();
     expect(
       within(section).getByRole("button", { name: PRIMARY_CTA_LABEL }),
     ).toHaveAttribute("type", "submit");
@@ -484,10 +495,11 @@ describe("pre-launch landing page structure", () => {
     );
   });
 
-  it("keeps the consent text and Privacy Policy link with the inline form", () => {
+  it("keeps the consent text and Privacy Policy link with the inline form", async () => {
     renderPage();
 
     const section = document.getElementById("membership") as HTMLElement;
+    await within(section).findByLabelText("Email address");
     expect(section.textContent).toContain(FOUNDING_FORM.consent);
     expect(within(section).getByRole("link", { name: /Privacy Policy/i })).toHaveAttribute(
       "href",
@@ -518,7 +530,7 @@ describe("pre-launch landing page structure", () => {
     renderPage();
 
     const section = document.getElementById("membership") as HTMLElement;
-    await user.type(within(section).getByLabelText("Email address"), "new@example.com");
+    await user.type(await within(section).findByLabelText("Email address"), "new@example.com");
     await user.click(within(section).getByRole("button", { name: PRIMARY_CTA_LABEL }));
 
     await screen.findByText(FOUNDING_FORM.successHeading);
@@ -540,7 +552,7 @@ describe("pre-launch landing page structure", () => {
     renderPage();
 
     const section = document.getElementById("membership") as HTMLElement;
-    await user.type(within(section).getByLabelText("Email address"), "again@example.com");
+    await user.type(await within(section).findByLabelText("Email address"), "again@example.com");
     await user.click(within(section).getByRole("button", { name: PRIMARY_CTA_LABEL }));
 
     expect(await screen.findByText(FOUNDING_FORM.existingHeading)).toBeInTheDocument();
@@ -553,7 +565,7 @@ describe("pre-launch landing page structure", () => {
     renderPage();
 
     const section = document.getElementById("membership") as HTMLElement;
-    await user.type(within(section).getByLabelText("Email address"), "fail@example.com");
+    await user.type(await within(section).findByLabelText("Email address"), "fail@example.com");
     await user.click(within(section).getByRole("button", { name: PRIMARY_CTA_LABEL }));
 
     const alert = await within(section).findByRole("alert");
@@ -698,7 +710,7 @@ describe("pre-launch landing page structure", () => {
 
     await user.click(cta);
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(dialog).findByLabelText("Email address")).toBeInTheDocument();
   });
 
   it("makes no unsupported privacy, security, clinical, or crisis claim", () => {
@@ -787,7 +799,7 @@ describe("pre-launch landing page structure", () => {
     ).toHaveAttribute("href", "/privacy#safety");
   });
 
-  it("folds the final invitation into the FAQ with one CTA and no dead anchor", () => {
+  it("folds the final invitation into the FAQ with one CTA and no dead anchor", async () => {
     renderPage();
 
     const section = document.getElementById("faq") as HTMLElement;
@@ -804,7 +816,7 @@ describe("pre-launch landing page structure", () => {
 
     // No second form and no repeat of the Founding Circle benefits.
     expect(section.querySelector("form")).toBeNull();
-    expect(document.querySelectorAll("form")).toHaveLength(1);
+    await waitFor(() => expect(document.querySelectorAll("form")).toHaveLength(1));
     for (const benefit of FOUNDING_CIRCLE.benefits) {
       expect(within(section).queryByText(benefit.title)).not.toBeInTheDocument();
     }
@@ -865,7 +877,7 @@ describe("pre-launch landing page structure", () => {
     await user.click(heroCta);
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Email address")).toBeInTheDocument();
+    expect(await within(dialog).findByLabelText("Email address")).toBeInTheDocument();
   });
 
   it("scrolls to the Founding Circle section rather than opening a second flow", async () => {
@@ -876,7 +888,7 @@ describe("pre-launch landing page structure", () => {
     expect(membershipSection).not.toBeNull();
     // Section 8 hosts the inline form, so its own submit is the conversion control.
     expect(
-      within(membershipSection as HTMLElement).getByRole("button", { name: PRIMARY_CTA_LABEL }),
+      await within(membershipSection as HTMLElement).findByRole("button", { name: PRIMARY_CTA_LABEL }),
     ).toHaveAttribute("type", "submit");
 
     await user.click(screen.getByRole("button", { name: HERO.secondaryCta }));
