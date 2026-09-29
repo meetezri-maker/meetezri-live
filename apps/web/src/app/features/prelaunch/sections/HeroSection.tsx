@@ -76,7 +76,6 @@ export function HeroSection() {
             text is exactly HERO.headline. */}
         <motion.h1
           id="prelaunch-hero-heading"
-          {...fade(0.2)}
           className="landing-serif prelaunch-hero-headline mx-auto max-w-[20ch] text-white"
         >
           {HERO.headlineLead}{" "}
