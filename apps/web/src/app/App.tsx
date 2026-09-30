@@ -9,7 +9,6 @@ import { NotificationsProvider } from '@/app/contexts/NotificationsContext';
 import { SafetyProvider } from '@/app/contexts/SafetyContext';
 import { OnboardingProvider } from '@/app/contexts/OnboardingContext';
 import { useAuth } from '@/app/contexts/AuthContext';
-import { ProtectedRoute } from '@/app/components/ProtectedRoute';
 import { AnalyticsRouteTracker } from '@/app/analytics';
 
 // Components (shell / layout — keep eager so they render before any lazy page loads)
@@ -24,7 +23,6 @@ import {
   applyAccessibilitySettings,
   loadAccessibilitySettings,
 } from '@/app/pages/app/accessibility-settings/applyAccessibilitySettings';
-import { AppLayout } from '@/app/components/AppLayout';
 import { PageLoader } from '@/app/components/PageLoader';
 
 // ─── Public Pages ────────────────────────────────────────────────────────────
@@ -49,6 +47,7 @@ const ForgotPassword       = lazy(() => import('@/app/pages/ForgotPassword').the
 const ResetPassword        = lazy(() => import('@/app/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const InviteCreatePassword = lazy(() => import('@/app/pages/InviteCreatePassword').then(m => ({ default: m.InviteCreatePassword })));
 const AuthActivateAccount  = lazy(() => import('@/app/pages/AuthActivateAccount').then(m => ({ default: m.AuthActivateAccount })));
+const ProtectedRoute       = lazy(() => import("@/app/components/ProtectedRoute").then(m => ({ default: m.ProtectedRoute })));
 
 // Admin public auth pages (no role required — treated as auth section)
 const AdminLogin           = lazy(() => import('@/app/pages/admin/AdminLogin').then(m => ({ default: m.AdminLogin })));
@@ -203,6 +202,7 @@ const Maintenance     = lazy(() => import('@/app/pages/errors/Maintenance').then
 const PermissionDenied = lazy(() => import('@/app/pages/errors/PermissionDenied').then(m => ({ default: m.PermissionDenied })));
 const TrialExpired    = lazy(() => import('@/app/pages/errors/TrialExpired').then(m => ({ default: m.TrialExpired })));
 const NoDeviceAccess  = lazy(() => import('@/app/pages/errors/NoDeviceAccess').then(m => ({ default: m.NoDeviceAccess })));
+const AppLayout       = lazy(() => import("@/app/components/AppLayout").then(m => ({ default: m.AppLayout })));
 
 /**
  * Reads saved security settings and enforces idle session timeout.
@@ -487,7 +487,7 @@ export default function App() {
           </Route>
 
           {/* ── Protected Routes ──────────────────────────────────────────── */}
-          <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+          <Route element={<Suspense fallback={<PageLoader />}><ProtectedRoute><Outlet /></ProtectedRoute></Suspense>}>
 
             {/* ── Boundary 3: Member App Routes (onboarding + /app/*) ───── */}
             <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
