@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HERO, PRIMARY_CTA_LABEL, SECTION_IDS } from "../prelaunch.content";
-import { PRELAUNCH_HERO_BG } from "../prelaunch.imagery";
+import { PRELAUNCH_HERO_BG, PRELAUNCH_HERO_SIZES, PRELAUNCH_HERO_WEBP_SRCSET } from "../prelaunch.imagery";
 import { SectionBadge } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
 import { FounderVideoModal } from "../FounderVideoModal";
@@ -46,22 +46,30 @@ export function HeroSection() {
       className="relative flex min-h-[100svh] items-center justify-center overflow-hidden pb-24 pt-28 sm:pt-32"
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <motion.img
-          src={PRELAUNCH_HERO_BG}
-          alt=""
-          // The hero plate is the one above-the-fold asset worth loading eagerly.
-          loading="eager"
-          decoding="async"
-          width={2400}
-          height={1350}
-          className="h-full w-full object-cover object-[center_55%]"
-          animate={reduceMotion ? undefined : { scale: [1, 1.045, 1] }}
-          transition={
-            reduceMotion
-              ? undefined
-              : { duration: 48, repeat: Infinity, ease: "easeInOut" }
-          }
-        />
+        <picture className="block h-full w-full">
+          <source
+            type="image/webp"
+            srcSet={PRELAUNCH_HERO_WEBP_SRCSET}
+            sizes={PRELAUNCH_HERO_SIZES}
+          />
+          <motion.img
+            src={PRELAUNCH_HERO_BG}
+            alt=""
+            // The hero plate is the one above-the-fold asset worth loading eagerly.
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            width={1402}
+            height={1122}
+            className="h-full w-full object-cover object-[center_55%]"
+            animate={reduceMotion ? undefined : { scale: [1, 1.045, 1] }}
+            transition={
+              reduceMotion
+                ? undefined
+                : { duration: 48, repeat: Infinity, ease: "easeInOut" }
+            }
+          />
+        </picture>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.55)_0%,rgba(5,8,22,0.68)_50%,rgba(5,8,22,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_30%,rgba(88,28,135,0.24)_0%,transparent_58%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_90%,rgba(251,191,36,0.1)_0%,transparent_40%)]" />

@@ -9,6 +9,13 @@
 
 /** Section 1 — hero. Night lake, same plate the main site hero uses. */
 export const PRELAUNCH_HERO_BG = "/community/hero-early.png";
+export const PRELAUNCH_HERO_WEBP_SRCSET = [
+  "/community/hero-early-640.webp 640w",
+  "/community/hero-early-960.webp 960w",
+  "/community/hero-early-1200.webp 1200w",
+  "/community/hero-early-1402.webp 1402w",
+].join(", ");
+export const PRELAUNCH_HERO_SIZES = "100vw";
 
 /*
  * The former recognition backdrop (`/community/scene-forest.jpg`) was retired
