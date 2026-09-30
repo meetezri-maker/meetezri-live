@@ -66,6 +66,7 @@ const capture = (frames: Hyper3dFullFrameRecord[]): Hyper3dFullFrameCapture => (
       decodedChannels: 1,
       appendResult: "accepted",
       appendedPhonemes: 2,
+      timeScale: 1,
       backendPhonemes: [
         { index: 0, phoneme: "AA", rawPhoneme: "AA1", start: 0, end: 0.2, duration: 0.2 },
         { index: 1, phoneme: "S", rawPhoneme: "S", start: 0.2, end: 0.45, duration: 0.25 },

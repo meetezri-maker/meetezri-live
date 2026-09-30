@@ -176,3 +176,87 @@ describe("avatar runtime switch — fallback", () => {
     });
   });
 });
+
+/**
+ * Hyper3D replaces SARA ONLY.
+ *
+ * `normalizeCompanionId` is deliberately NOT mocked here: the point of these
+ * cases is that the real helper is fed a value it can actually resolve.
+ */
+describe("avatar runtime switch — Sara-only eligibility", () => {
+  const jordan = () => ({
+    ...props(),
+    rawAvatarLabel: "Jordan Taylor",
+    activeAvatarId: "jordan",
+    modelUrl: "/avatars/jordanTaylor.glb",
+  });
+
+  it("flag on + Jordan renders Jordan's existing avatar, not Hyper3D", async () => {
+    flagState.enabled = true;
+    render(<AvatarRuntimeSwitch {...jordan()} />);
+
+    expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
+    expect(screen.queryByTestId("hyper3d-avatar")).toBeNull();
+    expect(threeAvatarRenders.mock.calls[0][0].modelUrl).toBe("/avatars/jordanTaylor.glb");
+  });
+
+  it("flag on + Jordan never mounts the Hyper3D host — no background init", async () => {
+    flagState.enabled = true;
+    // Would fail loudly if it ever mounted; it must not get the chance.
+    hostBehaviour = "throw-on-render";
+    const { rerender } = render(<AvatarRuntimeSwitch {...jordan()} />);
+    await screen.findByTestId("existing-avatar");
+
+    for (let i = 0; i < 5; i += 1) {
+      rerender(<AvatarRuntimeSwitch {...jordan()} isSpeaking={i % 2 === 0} />);
+    }
+    await waitFor(() => expect(screen.getByTestId("existing-avatar")).toBeTruthy());
+    expect(hostMounts).not.toHaveBeenCalled();
+  });
+
+  it("flag off + Jordan is unchanged", async () => {
+    render(<AvatarRuntimeSwitch {...jordan()} />);
+    expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
+    expect(hostMounts).not.toHaveBeenCalled();
+  });
+
+  /**
+   * REGRESSION GUARD. `activeAvatarId` is the RUNTIME key, not the canonical id:
+   * `SessionStage` derives it from `resolveCompanionAvatarRuntime`, so Sara
+   * arrives as `"saraV3"` (the live value, `useSaraV3ForSara === true`) or
+   * `"sara"`. `normalizeCompanionId("saraV3")` is `null`, so a Sara-check keyed
+   * on that prop alone would deny Sara the runtime she is meant to get.
+   */
+  it("flag on + Sara on the saraV3 runtime key still renders Hyper3D", async () => {
+    flagState.enabled = true;
+    render(
+      <AvatarRuntimeSwitch
+        {...props()}
+        rawAvatarLabel="Sara Mitchell"
+        activeAvatarId="saraV3"
+      />,
+    );
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+  });
+
+  it("flag on + Sara identified by the runtime key alone still renders Hyper3D", async () => {
+    flagState.enabled = true;
+    render(
+      <AvatarRuntimeSwitch
+        {...props()}
+        rawAvatarLabel={undefined}
+        activeAvatarId="saraV3"
+      />,
+    );
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+  });
+
+  it("flag on + an unresolvable companion keeps the existing avatar", async () => {
+    flagState.enabled = true;
+    render(
+      <AvatarRuntimeSwitch {...props()} rawAvatarLabel={undefined} activeAvatarId={null} />,
+    );
+    expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
+    expect(hostMounts).not.toHaveBeenCalled();
+  });
+});

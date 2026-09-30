@@ -43,6 +43,101 @@ const ENGINE_DEFAULT_WINDOW = 0.08;
 export const ENVELOPE_SUSTAIN_FRACTION = 0;
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DURATION-AWARE APEX HOLD — the short-label delivery fix.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE DEFECT, measured end to end through `CoarticulationEngine` ->
+ * `FacialPoseMixer` -> `calibrateHyper3dPose` at 60 Hz. A phoneme's ENVELOPE
+ * already peaks at 1.0 whatever its length — the loss is entirely in the
+ * FOLLOWER. `smoothingSpeedByRegion` damps the mouth at 28 and the jaw at 24,
+ * i.e. alpha 0.373 / 0.330 per frame, so reaching a target takes about six
+ * frames; and with the sustain at zero the triangle holds its apex for ONE.
+ * Isolated-label delivery against each phoneme's own calibrated ceiling:
+ *
+ *   label    20 ms   35 ms   50 ms   70 ms   90 ms   120 ms   150 ms
+ *   vowels      7 %    35 %    44 %    54 %    64 %     81 %     92 %
+ *
+ * The corpus median label is 70 ms and 312 of 401 labels on
+ * `david-natural-speech-paragraph` are under 100 ms, so the pipeline delivers
+ * roughly half of what the accepted pose table asks for on most of what it says.
+ *
+ * WHY NOT THE GLOBAL SUSTAIN. Raising `ENVELOPE_SUSTAIN_FRACTION` was already
+ * measured and rejected: it buys the flat top by compressing BOTH ramps, which
+ * steepens the rising edge on the long labels that never needed help. Re-measured
+ * here as a duration-aware PROPORTIONAL curve, the same defect survives — to
+ * reach the 90 ms target it costs +11.7 % p99 jerk and +17.3 % on the worst
+ * single frame, which is the trade this project has twice declined.
+ *
+ * WHAT SHIPS. Two changes that are one idea: hold the apex for a fixed number of
+ * frames, and buy that hold from the RELEASE rather than from both ramps.
+ *
+ *   HOLD       `sustain = min(ENVELOPE_SUSTAIN_MAX, HOLD / duration)`, so the
+ *              flat top is a constant ~33 ms — two frames at 60 Hz, which is what
+ *              a 0.33-0.37 follower needs to close most of its gap — instead of a
+ *              constant FRACTION that scales with the wrong thing.
+ *   ALLOCATION the authored attack is preserved whenever the budget allows
+ *              (`ENVELOPE_ATTACK_SHARE_MAX`), and the release absorbs the
+ *              remainder. The rising edge is where the worst per-frame step
+ *              lives, so leaving it alone is what removes the cost; the apex is
+ *              flat, so the frames spent there DECAY toward the target instead of
+ *              chasing a moving one.
+ *
+ * MEASURED over 16 aligned payloads, rendered geometry, against the shipped path:
+ *
+ *   worst single-frame step   3.281 -> 3.199 mm   (-2.5 %)
+ *   aperture p99 step         2.205 -> 2.204 mm   (-0.0 %)
+ *   p99 jerk                197 k  ->  194 k      (-2.3 %)
+ *   direction reversals        850  ->   684      (-19.5 %)
+ *   p95 step                  0.298 -> 0.333 mm   (+11.7 %)
+ *
+ * The one number that rises is p95, and it rises because the mouth spends more
+ * frames in mid-travel — which is the change, not a cost. Every metric the
+ * previous sustain experiments were rejected on moves the other way.
+ *
+ * DELIVERY AFTER, same isolated measurement:
+ *
+ *   label    20 ms   35 ms   50 ms   70 ms   90 ms   120 ms   150 ms
+ *   vowels     37 %    41 %    60 %    72 %    82 %     82 %     92 %
+ *
+ * CONVERGENCE IS STRUCTURAL, not tuned. Both ramps are only ever re-allocated
+ * inside the existing `total > rampBudget` branch, so a label long enough to
+ * contain its own authored attack and release is untouched by construction. At
+ * 150 ms and 200 ms every one of the fourteen measured phonemes renders the
+ * byte-identical value it rendered before.
+ *
+ * A 15 ms label still delivers nothing, and deliberately so: no frame lands
+ * inside it at 60 Hz. That is a sampling defect, not an envelope one, and it
+ * belongs with the bilabial closure work rather than here.
+ */
+/** Seconds the apex is held flat: two frames at 60 Hz. */
+export const ENVELOPE_APEX_HOLD_SECONDS = 0.033;
+/**
+ * Ceiling on the duration-derived sustain.
+ *
+ * 0.5 is not a round number chosen for comfort: it is exactly
+ * `AFFRICATE_SUSTAIN_FRACTION`, so `Math.max(base, 0.5)` below can never resolve
+ * to anything but 0.5 on CH and JH. The affricate sustain is therefore preserved
+ * BY CONSTRUCTION rather than by a special case, and no affricate is ever
+ * double-sustained.
+ */
+export const ENVELOPE_SUSTAIN_MAX = 0.5;
+/** Largest share of the ramp budget the attack may take, so a release survives. */
+export const ENVELOPE_ATTACK_SHARE_MAX = 0.8;
+
+/**
+ * The sustain a label of this duration earns, so the apex lasts `holdSeconds`.
+ *
+ * Deterministic and stateless: it reads the label's own length and nothing else —
+ * no clock, no history, no neighbour. `holdSeconds` of 0 returns 0, which is the
+ * exact pre-fix path and how the regressions drive it as a negative control.
+ */
+export const apexSustainFor = (durationSeconds: number, holdSeconds = ENVELOPE_APEX_HOLD_SECONDS) => {
+  if (!(holdSeconds > 0) || !(durationSeconds > 0)) return 0;
+  return Math.min(ENVELOPE_SUSTAIN_MAX, holdSeconds / durationSeconds);
+};
+
+/**
  * The weight a phoneme's own look-ahead ramp has already reached by the instant
  * it starts, in the same units as `nextWeight` below. **This is the fix this
  * pass ships.**
@@ -532,6 +627,14 @@ export interface CoarticulationInput {
   envelopeSustainFraction?: number;
   envelopeLookAheadCarry?: number;
   /**
+   * Test-only overrides for the duration-aware apex hold. Driving
+   * `envelopeApexHoldSeconds` to 0 and `envelopeAttackPreserving` to false
+   * reproduces the pre-fix envelope EXACTLY, which is how the regressions prove
+   * the two mechanisms named here are the ones that moved.
+   */
+  envelopeApexHoldSeconds?: number;
+  envelopeAttackPreserving?: boolean;
+  /**
    * Test-only overrides for the two halves of the `"changing"` correction.
    * Driving `affricateSustainFraction` to 0 and `affricateAnticipation` to false
    * reproduces the pre-fix path EXACTLY, which is how the regression proves the
@@ -586,7 +689,8 @@ const compressedEnvelope = (
   event: TimedPhoneme,
   time: number,
   sustainFraction = ENVELOPE_SUSTAIN_FRACTION,
-  lookAheadCarry = ENVELOPE_LOOKAHEAD_CARRY
+  lookAheadCarry = ENVELOPE_LOOKAHEAD_CARRY,
+  attackPreserving = true
 ) => {
   if (time < event.start_time || time > event.end_time) return 0;
   const duration = Math.max(0.001, event.end_time - event.start_time);
@@ -595,9 +699,24 @@ const compressedEnvelope = (
   const rampBudget = duration * (1 - clamp(sustainFraction, 0, 0.95));
   const total = attack + release;
   if (total > rampBudget) {
-    const scale = rampBudget / total;
-    attack *= scale;
-    release *= scale;
+    /**
+     * THE ALLOCATION. Only reached when the label cannot contain its own
+     * authored ramps — a long label never enters this branch, which is what
+     * makes convergence structural rather than tuned.
+     *
+     * `attackPreserving` keeps the rising edge exactly as authored for as long
+     * as the budget allows and takes the shortfall out of the release. The
+     * proportional branch is the shipped behaviour, kept so the regressions can
+     * drive the pre-fix path exactly.
+     */
+    if (attackPreserving) {
+      attack = Math.min(attack, Math.max(0.001, rampBudget * ENVELOPE_ATTACK_SHARE_MAX));
+      release = Math.max(0.001, rampBudget - attack);
+    } else {
+      const scale = rampBudget / total;
+      attack *= scale;
+      release *= scale;
+    }
   }
   // Only phonemes that actually get a look-ahead ramp may carry one in. A
   // phoneme with no `coarticulationBefore` was never blended as `next`, so
@@ -663,7 +782,24 @@ export class CoarticulationEngine {
      * driving the global sustain UP still gets what it asked for, and driving
      * `affricateSustainFraction` to 0 reproduces the pre-fix envelope exactly.
      */
-    const baseSustain = input.envelopeSustainFraction ?? ENVELOPE_SUSTAIN_FRACTION;
+    /**
+     * THE DURATION-AWARE APEX HOLD, composed with the two sustains that already
+     * existed by `Math.max` — so it can only ever ADD hold, never shorten one.
+     *
+     * The order matters and is deliberate. The duration term is capped at
+     * `ENVELOPE_SUSTAIN_MAX`, which IS `AFFRICATE_SUSTAIN_FRACTION`, so on CH and
+     * JH the outer `Math.max` resolves to exactly 0.5 whatever the label length:
+     * the affricate sustain is preserved by arithmetic rather than by a branch,
+     * and the two mechanisms cannot stack.
+     */
+    const apexHoldSeconds = input.envelopeApexHoldSeconds ?? ENVELOPE_APEX_HOLD_SECONDS;
+    const durationSustain = input.current
+      ? apexSustainFor(input.current.end_time - input.current.start_time, apexHoldSeconds)
+      : 0;
+    const baseSustain = Math.max(
+      input.envelopeSustainFraction ?? ENVELOPE_SUSTAIN_FRACTION,
+      durationSustain
+    );
     const sustainFraction =
       currentDef && AFFRICATE_SUSTAIN_PHONEMES.has(currentDef.phoneme)
         ? Math.max(baseSustain, input.affricateSustainFraction ?? AFFRICATE_SUSTAIN_FRACTION)
@@ -675,7 +811,8 @@ export class CoarticulationEngine {
             input.current,
             input.time,
             sustainFraction,
-            input.envelopeLookAheadCarry ?? ENVELOPE_LOOKAHEAD_CARRY
+            input.envelopeLookAheadCarry ?? ENVELOPE_LOOKAHEAD_CARRY,
+            input.envelopeAttackPreserving ?? true
           )
         : 0;
     let previousWeight = 0;

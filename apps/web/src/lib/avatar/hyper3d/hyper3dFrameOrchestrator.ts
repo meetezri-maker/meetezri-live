@@ -74,6 +74,15 @@ import {
   getHyper3dEyelashTestState,
   hyper3dEyelashTestAvailable,
 } from "./hyper3dEyelashTest";
+import {
+  applyHyper3dArticulationTestPose,
+  getHyper3dArticulationTestDelivery,
+  getHyper3dArticulationTestGlide,
+  getHyper3dArticulationTestIntensity,
+  getHyper3dArticulationTestMode,
+  getHyper3dArticulationTestState,
+  hyper3dArticulationTestAvailable,
+} from "./hyper3dArticulationTest";
 
 /**
  * THE ACCEPTED FRAME SEQUENCE, in one place.
@@ -552,6 +561,36 @@ export function resolveHyper3dFrame(
     const testState = getHyper3dEyelashTestState();
     if (testState !== "runtime") {
       pose = applyHyper3dEyelashTestPose(pose, testState, getHyper3dEyelashTestIntensity());
+    }
+  }
+
+  /**
+   * DEV ARTICULATION REVIEW — beside the eyelash review, and for the same reason.
+   *
+   * It pins the FINAL lower-face channels, after Active Presence, warmth and the
+   * showcase, so the reviewer sees the value that actually reaches `morph.write`
+   * rather than one a later layer will still max-merge over. It touches the
+   * mouth and jaw channels and nothing else, so head motion, gaze, blink, brows
+   * and cheeks keep running underneath while one mouth shape stands still.
+   *
+   * The two harnesses write disjoint channel sets, so their order is immaterial.
+   *
+   * In production `hyper3dArticulationTestAvailable` is false (it is behind
+   * `import.meta.env.DEV`), the condition short-circuits on a boolean, and the
+   * pose object is neither copied nor touched.
+   */
+  if (hyper3dArticulationTestAvailable) {
+    const articulationState = getHyper3dArticulationTestState();
+    if (articulationState !== "runtime") {
+      pose = applyHyper3dArticulationTestPose(
+        pose,
+        articulationState,
+        getHyper3dArticulationTestMode(),
+        getHyper3dArticulationTestGlide(),
+        getHyper3dArticulationTestIntensity(),
+        getHyper3dArticulationTestDelivery(),
+        delta,
+      );
     }
   }
   if (mouthTrace) {

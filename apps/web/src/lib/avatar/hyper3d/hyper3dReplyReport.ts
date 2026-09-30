@@ -197,6 +197,8 @@ export type Hyper3dReplyReport = {
     responseOffsetSeconds: number | null;
     backendPhonemeCount: number;
     appendedPhonemes: number;
+    /** What the backend times were multiplied by; 1 means the conversion was a pure offset. */
+    timeScale: number | null;
     backendFirstStart: number | null;
     backendLastEnd: number | null;
   }>;
@@ -762,6 +764,7 @@ export function buildHyper3dReplyReport(): Hyper3dReplyReport {
       chunk.responseOffsetSeconds === null ? null : round3(chunk.responseOffsetSeconds),
     backendPhonemeCount: chunk.backendPhonemeCount,
     appendedPhonemes: chunk.appendedPhonemes,
+    timeScale: chunk.timeScale == null ? null : round3(chunk.timeScale),
     backendFirstStart: chunk.backendFirstStart,
     backendLastEnd: chunk.backendLastEnd,
   }));
@@ -862,14 +865,15 @@ export function formatHyper3dReplyReport(report = buildHyper3dReplyReport()): st
     "",
     `origin (AudioContext): ${cell(report.audio.responseOriginContextTime)} · first start ${cell(report.audio.firstScheduledStart)} · last expected end ${cell(report.audio.lastExpectedEnd)} · total audible ${report.audio.totalAudibleSeconds}s`,
     "",
-    "| # | idx | start | end | dur | decoded | leadIn | respOffset | assoc | fmt | timed | b64 | append | backend φ | appended φ |",
-    "|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---:|---:|",
+    "| # | idx | start | end | dur | decoded | leadIn | respOffset | assoc | fmt | timed | b64 | append | scale | backend φ | appended φ | lost φ |",
+    "|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---:|---:|---:|---:|",
   );
   report.chunks.forEach((chunk, index) => {
     lines.push(
       `| ${index} | ${cell(chunk.chunkIndex)} | ${chunk.audioContextStartTime} | ${chunk.expectedAudibleEndContextTime} | ${chunk.durationSeconds} | ` +
         `${cell(chunk.decodedDurationSeconds)} | ${chunk.leadInSec} | ${cell(chunk.responseOffsetSeconds)} | ${cell(chunk.associationMethod)} | ` +
-        `${cell(chunk.rawPhonemeFormat)} | ${chunk.timestampsExplicit} | ${cell(chunk.audioB64Present)} | ${chunk.appendResult} | ${chunk.backendPhonemeCount} | ${chunk.appendedPhonemes} |`,
+        `${cell(chunk.rawPhonemeFormat)} | ${chunk.timestampsExplicit} | ${cell(chunk.audioB64Present)} | ${chunk.appendResult} | ${cell(chunk.timeScale)} | ` +
+        `${chunk.backendPhonemeCount} | ${chunk.appendedPhonemes} | ${chunk.backendPhonemeCount - chunk.appendedPhonemes} |`,
     );
   });
 

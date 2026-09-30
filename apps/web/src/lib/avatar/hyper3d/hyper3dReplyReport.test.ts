@@ -110,6 +110,7 @@ function capture(options: {
       decodedChannels: 1,
       appendResult: "accepted",
       appendedPhonemes: 2,
+      timeScale: 1,
       backendPhonemes: [
         { index: 0, phoneme: "M", rawPhoneme: "M", start: 0, end: 0.2, duration: 0.2 },
         { index: 1, phoneme: "AA", rawPhoneme: "AA", start: 0.2, end: 0.4, duration: 0.2 },

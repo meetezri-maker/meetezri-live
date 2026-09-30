@@ -22,6 +22,7 @@ import {
 } from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
 import type { Hyper3dHostFailure } from "@/lib/avatar/hyper3d/hyper3dImperativeHost";
 import { setHyper3dRuntimeCommitted } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
+import { normalizeCompanionId } from "@/lib/avatar/companionModelUrl";
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { AvatarFailureBoundary } from "./AvatarFailureBoundary";
 import { Hyper3DImperativeHost } from "./Hyper3DImperativeHost";
@@ -29,6 +30,46 @@ import { Hyper3DImperativeHost } from "./Hyper3DImperativeHost";
 const ThreeAvatar = lazy(() =>
   import("./ThreeAvatar").then((m) => ({ default: m.ThreeAvatar })),
 );
+
+/**
+ * `activeAvatarId` carries the RUNTIME key, not the canonical companion id.
+ *
+ * `SessionStage` builds it as
+ * `resolvedAvatarKey ?? fixedViewportConfig?.avatarId ?? companionCanonicalId`,
+ * and `resolvedAvatarKey` comes from `resolveCompanionAvatarRuntime`, so for
+ * Sara it is `"sara"` (legacy hybrid) or `"saraV3"` — never `"sarah"`. With
+ * `useSaraV3ForSara === true` the live value today is `"saraV3"`, and
+ * `normalizeCompanionId("saraV3")` returns `null`, so keying Hyper3D off that
+ * prop alone would silently deny Sara the runtime she is supposed to get.
+ *
+ * These are therefore the Sara RUNTIME keys, checked beside the canonical id.
+ */
+const SARA_AVATAR_RUNTIME_KEYS: ReadonlySet<string> = new Set(["sara", "saraV3"]);
+
+/**
+ * Is this session's companion Sara?
+ *
+ * `rawAvatarLabel` is the authoritative signal: it is `config.avatar` verbatim
+ * (e.g. `"Sara Mitchell"`), the same value `ActiveSession` feeds to
+ * `normalizeCompanionId` to derive `companionCanonicalId`. `activeAvatarId` is
+ * consulted as well so this holds if a caller ever supplies only the runtime
+ * key — see `SARA_AVATAR_RUNTIME_KEYS`.
+ *
+ * Pure and cheap, so it is computed per render rather than frozen at mount.
+ * That is safe because `SessionStage` only mounts this component when
+ * `companionSessionUses3dModel` has already resolved the companion to Sara or
+ * Jordan, so the answer is settled before the first render and cannot arrive
+ * late.
+ */
+function isSaraCompanion(
+  rawAvatarLabel: string | undefined,
+  activeAvatarId: string | null,
+): boolean {
+  if (normalizeCompanionId(rawAvatarLabel) === "sarah") return true;
+  if (!activeAvatarId) return false;
+  if (SARA_AVATAR_RUNTIME_KEYS.has(activeAvatarId)) return true;
+  return normalizeCompanionId(activeAvatarId) === "sarah";
+}
 
 /**
  * THE ONE SEAM.
@@ -41,8 +82,17 @@ const ThreeAvatar = lazy(() =>
  * Resolution order:
  *
  *   flag off ........................ existing Solace avatar   (the default)
- *   flag on, Hyper3D healthy ........ Hyper3D
- *   flag on, Hyper3D fails .......... existing Solace avatar, latched
+ *   flag on, companion is not Sara .. existing Solace avatar
+ *   flag on, Sara, Hyper3D healthy .. Hyper3D
+ *   flag on, Sara, Hyper3D fails .... existing Solace avatar, latched
+ *
+ * HYPER3D REPLACES SARA ONLY. The flag is a migration switch for one companion,
+ * not a global avatar override: Jordan keeps his existing 3D model on the flag's
+ * "on" setting, and every other companion is untouched. Eligibility is resolved
+ * here, in the same seam as the flag, so no other file learns the distinction —
+ * and because the host is only RENDERED for Sara, a Jordan session never mounts
+ * `Hyper3DImperativeHost`, never creates a WebGL renderer, never dynamically
+ * imports the engine chunk and never fetches the Hyper3D GLB.
  *
  * FAILURE IS A ONE-WAY LATCH. Once Hyper3D has failed for this stage it is not
  * retried: no reload loop, no session reset, no audio restart. The swap is a
@@ -97,6 +147,12 @@ export function AvatarRuntimeSwitch(props: AvatarRuntimeSwitchProps) {
   const latchedRef = useRef(false);
 
   /**
+   * SARA ONLY. Not a hook — a pure read of props, so it adds nothing to the
+   * hook sequence and cannot reorder the two effects below.
+   */
+  const hyper3dEligible = isSaraCompanion(props.rawAvatarLabel, props.activeAvatarId);
+
+  /**
    * WHAT ACTUALLY COMMITTED, recorded at commit time rather than during render.
    *
    * A render can be discarded (Suspense, concurrent re-render), and a diagnostic
@@ -110,7 +166,9 @@ export function AvatarRuntimeSwitch(props: AvatarRuntimeSwitchProps) {
    * genuinely off.
    */
   const committedBranch: Hyper3dPathBranch =
-    !hyper3dRequested || hyper3dFailed ? "existing-solace-avatar" : "hyper3d";
+    !hyper3dRequested || !hyper3dEligible || hyper3dFailed
+      ? "existing-solace-avatar"
+      : "hyper3d";
   useEffect(() => {
     recordHyper3dPath(
       {
@@ -118,9 +176,11 @@ export function AvatarRuntimeSwitch(props: AvatarRuntimeSwitchProps) {
         flagResolved: hyper3dRequested,
         selectedBranch: committedBranch,
       },
-      `avatar branch: ${committedBranch}`,
+      // The companion is named because "flag on, existing avatar" now has two
+      // distinct causes, and they are not otherwise distinguishable here.
+      `avatar branch: ${committedBranch} (hyper3d eligible: ${hyper3dEligible})`,
     );
-  }, [hyper3dRequested, committedBranch]);
+  }, [hyper3dRequested, hyper3dEligible, committedBranch]);
 
   // Same commit-time rule: live metadata association follows the avatar that
   // actually mounted, so a fallback restores the existing avatar's behaviour.
@@ -196,7 +256,11 @@ export function AvatarRuntimeSwitch(props: AvatarRuntimeSwitchProps) {
     [props],
   );
 
-  if (!hyper3dRequested || hyper3dFailed) {
+  // Gating the RENDER is what keeps Hyper3D out of a Jordan session entirely:
+  // the host's three.js work, its engine `import()` and its GLB fetch all live
+  // in `Hyper3DImperativeHost`'s mount effect, which never runs if it is not
+  // rendered. Nothing above this line touches three.js.
+  if (!hyper3dRequested || !hyper3dEligible || hyper3dFailed) {
     return renderExistingAvatar();
   }
 

@@ -166,17 +166,43 @@ export const BASELINE_BILABIAL = {
 } as const;
 
 /**
- * COARTICULATION / ENVELOPE — unchanged, and the zero is a MEASURED decision.
+ * COARTICULATION / ENVELOPE.
  *
- * `ENVELOPE_SUSTAIN_FRACTION` was swept end to end on the production payload.
- * Every non-zero value reduces direction reversals but raises the worst
- * per-frame step (0.4357 -> 0.4992 at 0.45, +15 %) and p99 velocity (+24 %),
- * which is the opposite of the abruptness it would be raised to fix. See
+ * `ENVELOPE_SUSTAIN_FRACTION` REMAINS 0, and the zero is still a MEASURED
+ * decision. It was swept end to end on the production payload and every non-zero
+ * GLOBAL value reduces direction reversals but raises the worst per-frame step
+ * (0.4357 -> 0.4992 at 0.45, +15 %) and p99 velocity (+24 %), which is the
+ * opposite of the abruptness it would be raised to fix. See
  * `docs/hyper3d-facial-coordination.md` §4.
+ *
+ * ADDED, and NOT a retune of the above: the DURATION-AWARE APEX HOLD. The
+ * rejected sweeps all asked one question — "what fraction of EVERY label should
+ * be flat" — and the answer is still zero. These ask a different one: "how many
+ * frames must the apex survive for the mouth follower to reach it", which is a
+ * constant in SECONDS and therefore inert on the long labels the sweep was
+ * rejected on. It is paired with an allocation rule that leaves the authored
+ * attack alone, so the rising edge — where the worst step lives, and the reason
+ * the sweeps failed — does not steepen.
+ *
+ * Measured over 16 aligned payloads, rendered geometry: worst single-frame step
+ * -2.5 %, aperture p99 -0.0 %, p99 jerk -2.3 %, direction reversals -19.5 %,
+ * p95 step +11.7 %. Isolated delivery against each phoneme's calibrated ceiling
+ * at 70 / 90 ms: 54 % -> 72 % and 64 % -> 82 %. Byte-identical at 200 ms on every
+ * phoneme measured. See `CoarticulationEngine` for the full derivation and
+ * `hyper3dApexHold.test.ts` for the regressions.
+ *
+ * NOT YET HARDWARE-ACCEPTED. Unlike every other constant in this file, these two
+ * are pending the review described in the Fix 1 hand-off.
  */
 export const BASELINE_COARTICULATION = {
   envelopeSustainFraction: 0,
-  envelopeLookAheadCarry: 0.35
+  envelopeLookAheadCarry: 0.35,
+  /** Seconds the apex is held flat: two frames at 60 Hz. */
+  envelopeApexHoldSeconds: 0.033,
+  /** Ceiling on the duration-derived sustain; equals AFFRICATE_SUSTAIN_FRACTION. */
+  envelopeSustainMax: 0.5,
+  /** Largest share of the ramp budget the attack may take. */
+  envelopeAttackShareMax: 0.8
 } as const;
 
 /**

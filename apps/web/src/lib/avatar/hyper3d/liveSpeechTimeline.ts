@@ -31,13 +31,52 @@ import { normalizeLivePhoneme } from "./phonemeNormalization";
  * `audioContextStartTime` is the AUDIBLE onset, not the buffer start: the
  * scheduler measures each chunk's leading digital silence (`computeLeadInSec`,
  * windowed RMS) and skips it via `source.start(when, leadInSec)`, and everything
- * it models downstream uses `audibleDuration`. Solace's backend phoneme times
- * are speech-relative with t=0 at that same voice onset. The two therefore share
- * an origin per chunk and the conversion is a pure offset:
+ * it models downstream uses `audibleDuration`.
+ *
+ * Solace's backend phoneme times for the BUNDLED `together_ai` transport are an
+ * ESTIMATED CONTIGUOUS SPAN, not measured acoustic times. Three properties were
+ * read off real captures and hold on every bundled chunk:
+ *
+ *     firstStart               ≈ 0                  no lead-in gap is encoded
+ *     lastEnd                  ≈ decodedDuration    the span fills the buffer
+ *     max|start[i+1] − end[i]| ≈ 0                  contiguous, no silences
+ *
+ * `docs/workstreams.md` D2 says the same thing from the producer side — "swap
+ * rule-based durations for CTC forced alignment (torchaudio) — same contract,
+ * real numbers" — so today's numbers are rule-based durations distributed across
+ * a known total, and the only information they carry is PROPORTION.
+ *
+ * Two earlier readings of this contract are therefore both wrong, and both lose
+ * exactly `leadIn / decodedDuration` of every chunk — 19.5% measured across a
+ * 20-chunk reply:
+ *
+ *     treat as audible-local   tail past `audibleDuration` collapses at the end
+ *     subtract `leadInSeconds` head below zero collapses at the start
+ *
+ * An offset cannot be right for a span that already fills the buffer: there is
+ * no silence gap inside the phoneme domain to remove, so subtracting one must
+ * push that much off the front. The operator that reads proportion — and the
+ * only one that is order-preserving, total, and exact at both boundaries — is a
+ * linear rescale onto the audible window:
  *
  *     chunkOffset  = audioContextStartTime − responsePlaybackOrigin
- *     start_time   = chunkOffset + chunkRelativeStart
- *     end_time     = chunkOffset + chunkRelativeEnd
+ *     scale        = audibleDuration / backendSpan        (backendSpan = last end)
+ *     start_time   = chunkOffset + backendStart × scale
+ *     end_time     = chunkOffset + backendEnd   × scale
+ *
+ * `docs/workstreams.md` B1 already specified this step ("linearly rescale all
+ * timestamps to fit the audio"); the measurement above is what justifies doing
+ * it unconditionally rather than behind a mismatch threshold.
+ *
+ * It also degrades to nothing on its own. When the backend ships forced
+ * alignment, `backendSpan` starts tracking the true end of SPEECH rather than
+ * the end of the BUFFER, `scale → 1`, and this becomes the identity — no second
+ * migration, and no code here to delete.
+ *
+ * `leadInSeconds` is NOT applied to phonemes. It stays a real quantity for the
+ * ACOUSTIC track, whose frames are genuine measurements of the decoded buffer
+ * and so do need `chunkOffsetSeconds + (frame.time − leadInSeconds)`. The two
+ * inputs are different kinds of data and take different conversions.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * RESPONSE ORIGIN
@@ -65,6 +104,49 @@ const OVERLAP_TOLERANCE_SECONDS = 0.005;
 /** Below this a phoneme cannot be rendered meaningfully; it is dropped, not stretched. */
 const MIN_PHONEME_SECONDS = 0.001;
 
+/**
+ * What a chunk's BACKEND phoneme times ARE, which decides the conversion.
+ *
+ *  - `estimated-span`  rule-based durations laid end to end across the whole
+ *    decoded buffer. They carry proportion, not absolute time, so they are
+ *    RESCALED onto the audible window.
+ *  - `audible-onset`   absolute times whose t=0 is the voice onset. Already
+ *    audible-local; the conversion is the pure offset it has always been.
+ */
+export type PhonemeTimeDomain = "estimated-span" | "audible-onset";
+
+/**
+ * THE ONE PLACE the clock-domain assumption lives.
+ *
+ * No backend field declares the timing domain today, so it is derived from the
+ * TRANSPORT the chunk arrived on — the most explicit path identity the runtime
+ * already carries, and the one `livePhonemeDelivery.test.ts` already asserts per
+ * path:
+ *
+ *   "bundled"                         `avatar_data` carried `audio_b64`
+ *                                     → together_ai batch / streaming
+ *   "exact-index" | "existing-fifo"   split `avatar_data` + a separate binary
+ *   | "no-metadata"                   frame → greeting, comfort
+ *
+ * Only the bundled path has been MEASURED — real captures where every chunk read
+ * `firstStart ≈ 0`, `lastEnd ≈ decodedDuration` and zero gap between successive
+ * phonemes, which is a generated span and not an alignment. The split greeting
+ * path's contract is NOT independently established — its fixture encodes
+ * onset-relative times — so it keeps the pre-existing behaviour until real
+ * greeting evidence says otherwise. Comfort is untimed and never reaches the
+ * conversion at all.
+ *
+ * This is a documented ASSUMPTION about transport, not a measurement of the
+ * greeting. When the backend starts declaring the domain, replace this function's
+ * body with that field and delete the transport mapping — every caller already
+ * speaks in {@link PhonemeTimeDomain}, so nothing else has to change.
+ */
+export function phonemeTimeDomainForAssociation(
+  associationMethod: string | null | undefined,
+): PhonemeTimeDomain {
+  return associationMethod === "bundled" ? "estimated-span" : "audible-onset";
+}
+
 export type LiveChunkAppendInput = {
   /**
    * `onChunkScheduled` → `timing.audioContextStartTime`. AudioContext seconds,
@@ -73,8 +155,21 @@ export type LiveChunkAppendInput = {
   audioContextStartTime: number;
   /** `timing.durationMs / 1000` — the AUDIBLE duration the scheduler modelled. */
   durationSeconds: number;
-  /** `computeLeadInSec` result, carried for diagnostics only. Never applied twice. */
+  /**
+   * `computeLeadInSec` result — the leading digital silence `source.start(when,
+   * offset)` skips. Carried for diagnostics and NEVER applied to phoneme times:
+   * an estimated span encodes no silence gap to remove, and an audible-onset
+   * time has already had it removed. `liveAcousticTrack` does subtract it, from
+   * analyzer frames, which are measurements of the buffer rather than estimates.
+   */
   leadInSeconds: number;
+  /**
+   * What the backend phoneme times inside {@link timeline} are, and so the single
+   * thing that decides whether they are rescaled or passed through. Required
+   * rather than defaulted: a silently wrong domain mistimes every phoneme of the
+   * chunk. Set from {@link phonemeTimeDomainForAssociation}.
+   */
+  phonemeTimeDomain: PhonemeTimeDomain;
   /** Chunk-relative phonemes, as already normalized by `normalizeAvatarPhonemeTimeline`. */
   timeline: AvatarPhonemeTimeline | null;
   /** `avatar_data.chunk_index` when the backend supplied one. */
@@ -96,6 +191,13 @@ export type LiveChunkAppendResult =
       clampedOverlaps: number;
       /** Seconds between this chunk's audible start and the clock at append time. */
       lookAheadSeconds: number;
+      /**
+       * `audibleDuration / backendSpan` — what the backend times were multiplied
+       * by. Exactly 1 on the `audible-onset` path and whenever the rescale had to
+       * degrade to the identity, so a report can tell a real rescale from a
+       * skipped one. Observational; nothing reads it back.
+       */
+      timeScale: number;
     }
   | {
       accepted: false;
@@ -333,6 +435,36 @@ export function createLiveSpeechTimeline() {
       }
 
       const chunkEnd = chunkOffset + input.durationSeconds;
+
+      /**
+       * The span the backend laid its estimate across: the last phoneme's `end`,
+       * or its `start` when `end` is missing. This is deliberately the MEASURED
+       * end of the sequence rather than `decodedDuration` — the two coincide
+       * today, but once the backend ships forced alignment the last phoneme will
+       * end where SPEECH ends instead of where the BUFFER ends, and reading the
+       * sequence itself is what makes `scale` fall to 1 on its own.
+       */
+      const lastItem = source[source.length - 1];
+      const backendSpan = lastItem ? (lastItem.end ?? lastItem.start) : 0;
+
+      /**
+       * Applied ONLY to an estimated span, and only while that span's premise
+       * holds: it fills the decoded buffer, so it must be at least as long as the
+       * audible window and `scale` must land in (0, 1].
+       *
+       * A span SHORTER than the audio is the premise failing — a truncated
+       * sequence, or a future producer emitting real alignment with trailing
+       * silence. Stretching an estimate to cover more audio than it claims would
+       * be inventing timing, so that case degrades to 1: the pure-offset
+       * arithmetic this module has always used. `timeScale` on the result makes
+       * the degradation visible instead of silent.
+       */
+      const spanCoversAudio =
+        Number.isFinite(backendSpan) && backendSpan >= input.durationSeconds - MIN_PHONEME_SECONDS;
+      const scale =
+        input.phonemeTimeDomain === "estimated-span" && spanCoversAudio && backendSpan > 0
+          ? input.durationSeconds / backendSpan
+          : 1;
       let appended = 0;
       let localDroppedUnknown = 0;
       let localDroppedDegenerate = 0;
@@ -356,15 +488,31 @@ export function createLiveSpeechTimeline() {
         if (result.exact) exactLabelMatches += 1;
         else normalizedLabelMatches += 1;
 
-        const rawStart = chunkOffset + item.start;
-        const rawEnd =
-          item.end != null
-            ? chunkOffset + item.end
-            : chunkOffset + (source[i + 1]?.start ?? input.durationSeconds);
+        // Proportion in, audible-local out. A missing `end` falls back to the
+        // next phoneme's start — the span is contiguous, so that IS this
+        // phoneme's end.
+        //
+        // A FINAL phoneme with no `end` carries no span information at all, so
+        // there is nothing to rescale: it runs to the audible end, exactly where
+        // it ran before. Scaling `backendSpan` here instead would map it onto its
+        // own start and collapse it to zero length.
+        const nextStart = source[i + 1]?.start;
+        const backendEnd = item.end ?? nextStart;
+        const localStart = item.start * scale;
+        const localEnd = backendEnd != null ? backendEnd * scale : input.durationSeconds;
+
+        const rawStart = chunkOffset + localStart;
+        const rawEnd = chunkOffset + localEnd;
 
         // Clip into the chunk's own audible window. This is the guard that makes
         // cross-chunk overlap impossible without touching anything published:
         // the next chunk starts at or after this chunk's end.
+        //
+        // A rescaled span lands inside `[chunkOffset, chunkEnd]` by construction,
+        // so this clip is now a SAFETY NET rather than the thing that decides how
+        // many phonemes survive. It still has to be here: it is what contains a
+        // degraded `scale` of 1, an out-of-order backend sequence, or a future
+        // domain whose times genuinely exceed the window.
         let start = Math.min(Math.max(rawStart, chunkOffset), chunkEnd);
         let end = Math.min(Math.max(rawEnd, start), chunkEnd);
 
@@ -417,6 +565,7 @@ export function createLiveSpeechTimeline() {
         droppedDegenerate: localDroppedDegenerate,
         clampedOverlaps: localClamped,
         lookAheadSeconds,
+        timeScale: scale,
       };
     },
 

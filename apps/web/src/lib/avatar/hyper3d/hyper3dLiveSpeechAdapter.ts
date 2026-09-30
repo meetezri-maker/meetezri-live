@@ -17,6 +17,7 @@ import {
 } from "./hyper3dPathDiagnostics";
 import {
   createLiveSpeechTimeline,
+  phonemeTimeDomainForAssociation,
   type LiveChunkAppendResult,
   type LiveSpeechTimeline,
   type LiveTimelineStats,
@@ -190,6 +191,12 @@ export type Hyper3dFullFrameCapture = {
     decodedChannels: number | null;
     appendResult: string;
     appendedPhonemes: number;
+    /**
+     * `audibleDuration / backendSpan` — what the backend times were multiplied by.
+     * 1 means no rescale: either an `audible-onset` transport, or an estimated
+     * span that failed its own premise and degraded to a pure offset.
+     */
+    timeScale: number | null;
     backendPhonemes: Hyper3dCapturedPhoneme[];
     backendFirstStart: number | null;
     backendLastEnd: number | null;
@@ -773,9 +780,22 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
   let fullFrameCounter = 0;
   let activeCapture: Hyper3dFullFrameCapture | null = null;
 
-  /** Copies the existing acoustic analysis into the capture. Idempotent; no state. */
+  /**
+   * Copies the existing acoustic analysis into the capture. Idempotent; no state.
+   *
+   * A FINALIZED capture is never re-read. `acoustics` is turn-scoped: the
+   * `beginTurn` / `cancel` that finalized this capture emptied it immediately
+   * afterwards, so reading it again returns nothing and the assignment below
+   * would replace a complete copy with an empty array. That is what made an
+   * exported report read `acoustic reference frames: 0` for a reply whose live
+   * `acousticFrameCount` had reached the thousands — `buildHyper3dReplyReport`
+   * calls the refresh unconditionally at export time, long after the turn ended.
+   *
+   * `finalizeFullFrameCapture` copies BEFORE it sets the flag, so finalization
+   * itself is unaffected.
+   */
   function copyAcousticsIntoCapture() {
-    if (!activeCapture) return;
+    if (!activeCapture || activeCapture.finalized) return;
     const frames = acoustics.getFrames();
     const limit = Math.min(frames.length, FULL_FRAME_MAX_ACOUSTIC_FRAMES);
     activeCapture.acousticFrames = [];
@@ -847,6 +867,7 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       decodedChannels: buffer?.numberOfChannels ?? null,
       appendResult: result.accepted ? "accepted" : result.reason,
       appendedPhonemes: result.accepted ? result.appendedPhonemes : 0,
+      timeScale: result.accepted ? result.timeScale : null,
       backendPhonemes,
       backendFirstStart: raw.length ? raw[0].start : null,
       backendLastEnd: raw.length ? raw[raw.length - 1].end ?? null : null,
@@ -1621,6 +1642,10 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
         audioContextStartTime: chunk.audioContextStartTime,
         durationSeconds: chunk.durationMs / 1000,
         leadInSeconds: chunk.leadInSec,
+        // Transport decides the clock domain; see the function's own note. The
+        // association method is already on the chunk, so nothing new is computed
+        // or plumbed for this.
+        phonemeTimeDomain: phonemeTimeDomainForAssociation(chunk.associationMethod),
         timeline: chunk.timeline,
         chunkIndex: chunk.chunkIndex,
         sentence: chunk.sentence,

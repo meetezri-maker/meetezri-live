@@ -7,6 +7,7 @@ import {
 import { getHyper3dPlaybackClock } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
 import { recordHyper3dAssetTimeline } from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
 import { Hyper3DEyelashTestPanel } from "./Hyper3DEyelashTestPanel";
+import { Hyper3DArticulationTestPanel } from "./Hyper3DArticulationTestPanel";
 
 /**
  * The React shell around the imperative host.
@@ -90,6 +91,8 @@ export function Hyper3DImperativeHost({
       <div ref={containerRef} className="absolute inset-0" aria-hidden />
       {/* DEV eyelash review controls. Renders null unless ?hyper3dEyelashTest=1. */}
       <Hyper3DEyelashTestPanel />
+      {/* DEV articulation review controls. Renders null unless ?hyper3dArticulationTest=1. */}
+      <Hyper3DArticulationTestPanel />
     </>
   );
 }
