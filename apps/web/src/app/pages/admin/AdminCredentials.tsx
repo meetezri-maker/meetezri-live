@@ -1,3 +1,4 @@
+import "@/styles/admin-route-styles.css";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { Crown, Building2, Users, Shield, Copy, CheckCircle2, ArrowRight } from "lucide-react";

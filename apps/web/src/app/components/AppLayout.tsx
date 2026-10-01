@@ -1,3 +1,4 @@
+import "@/styles/app-route-styles.css";
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";

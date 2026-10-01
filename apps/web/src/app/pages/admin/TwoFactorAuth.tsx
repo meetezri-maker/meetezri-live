@@ -1,3 +1,4 @@
+import "@/styles/admin-route-styles.css";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { ArrowLeft, ArrowRight, Shield, Key, CheckCircle2, Check, Copy, AlertCircle, Smartphone, QrCode } from "lucide-react";

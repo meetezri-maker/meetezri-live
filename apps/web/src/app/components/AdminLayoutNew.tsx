@@ -1,3 +1,4 @@
+import "@/styles/admin-route-styles.css";
 import {
   Menu,
   X,

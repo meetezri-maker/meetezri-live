@@ -1,3 +1,4 @@
+import "@/styles/admin-route-styles.css";
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
