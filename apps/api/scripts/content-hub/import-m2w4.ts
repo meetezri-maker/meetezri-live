@@ -1,17 +1,17 @@
 /**
- * Week 2 Content Hub import — a ONE-TIME, CONTROLLED migration utility.
+ * Month 2 Week 4 Content Hub import — a ONE-TIME, CONTROLLED migration utility.
  *
  * The Week 1 importer's twin, and deliberately so: same two passes, same service layer, same
  * idempotency key, same refusal rules. It reuses `validateAsset` and `decideAction` from
  * `week1-import.helpers` rather than reimplementing them, so the two imports cannot drift.
  *
  *   Dry run (default, no writes):
- *     npx ts-node-dev --transpile-only --respawn=false scripts/content-hub/import-week2.ts
+ *     npx ts-node-dev --transpile-only --respawn=false scripts/content-hub/import-m2w4.ts
  *
  *   Apply:
- *     … scripts/content-hub/import-week2.ts --apply --confirm-production --actor=<profile-id>
+ *     … scripts/content-hub/import-m2w4.ts --apply --confirm-production --actor=<profile-id>
  *
- * TWO PASSES, because the Week 2 link graph is cyclic (B↔G, B↔A, G↔A). No single-pass import can
+ * TWO PASSES, because the Month 2 Week 4 link graph is cyclic (A→B, A→G). No single-pass import can
  * resolve `editorial_ref → id` for a target that does not exist yet.
  *   Pass 1 — create/update the three items, no content links.
  *   Pass 2 — resolve refs to ids, then replace each item's link set.
@@ -37,10 +37,10 @@ import {
   type Actor,
 } from '../../src/modules/content-hub/content-hub.service';
 import {
-  WEEK2_ASSETS,
+  M2W4_ASSETS,
   EXPECTED_CONTENT_EDGES,
-  type Week2Asset,
-} from '../../src/modules/content-hub/week2/week2-content';
+  type M2W4Asset,
+} from '../../src/modules/content-hub/month2week4/m2w4-content';
 import {
   decideAction,
   validateAsset,
@@ -94,13 +94,13 @@ function line(text = '') {
   console.log(text);
 }
 
-function countFaqItems(asset: Week2Asset): number {
+function countFaqItems(asset: M2W4Asset): number {
   const faq = asset.body.blocks.find((b) => b.type === 'faq') as { items?: unknown[] } | undefined;
   return faq?.items?.length ?? 0;
 }
 
 /** Words in the body, counted the same way the service derives `word_count`. */
-function countWords(asset: Week2Asset): number {
+function countWords(asset: M2W4Asset): number {
   const text: string[] = [];
   const walk = (node: unknown) => {
     if (Array.isArray(node)) {
@@ -118,7 +118,7 @@ function countWords(asset: Week2Asset): number {
   return text.join(' ').split(/\s+/).filter(Boolean).length;
 }
 
-function blockTypeSummary(asset: Week2Asset): string {
+function blockTypeSummary(asset: M2W4Asset): string {
   const counts = new Map<string, number>();
   for (const block of asset.body.blocks) {
     counts.set(block.type, (counts.get(block.type) ?? 0) + 1);
@@ -131,13 +131,13 @@ async function main() {
   const mode = APPLY ? 'APPLY (writes enabled)' : 'DRY RUN (no writes)';
 
   line('═'.repeat(78));
-  line('  SOLACE CONTENT HUB — WEEK 2 IMPORT');
+  line('  SOLACE CONTENT HUB — MONTH 2 WEEK 4 IMPORT');
   line('═'.repeat(78));
   line(`  mode          : ${mode}`);
   line(`  host          : ${target.host}`);
   line(`  database      : ${target.database}`);
   line(`  supabase ref  : ${target.project}`);
-  line('  source        : SOLACE  Week 2nd Operational Workbook.docx (W2-B001, W2-G001, W2-A001)');
+  line('  source        : Month 2 Week 4 Operational Workbookqqq.docx (M2-W4-B001, M2-W4-G001, M2-W4-A001)');
   line('═'.repeat(78));
 
   if (APPLY && target.looksProduction && !CONFIRM_PRODUCTION) {
@@ -149,7 +149,7 @@ async function main() {
 
   /**
    * ACTOR and AUTHOR are two different people, and conflating them would be a factual claim.
-   * `--actor` is WHO RAN THE IMPORT. `--author` is the CONTENT'S BYLINE. The Week 2 workbook
+   * `--actor` is WHO RAN THE IMPORT. `--author` is the CONTENT'S BYLINE. The Month 2 Week 1 workbook
    * names no author, so the byline stays unresolved and the publish checklist reports it.
    */
   let actor: Actor | null = null;
@@ -194,7 +194,7 @@ async function main() {
 
   // ── Asset summary ─────────────────────────────────────────────────────────
   line('\n─── ASSETS ───');
-  for (const asset of WEEK2_ASSETS) {
+  for (const asset of M2W4_ASSETS) {
     line(`\n  ${asset.editorialRef} → ${asset.contentType} (public label "${asset.publicLabel}")`);
     line(`    title      : ${asset.title}`);
     line(`    slug       : /resources/${asset.slug}`);
@@ -228,7 +228,7 @@ async function main() {
   // ── Validation ────────────────────────────────────────────────────────────
   line('\n─── VALIDATION (before any write) ───');
   const validated = new Map<string, ReturnType<typeof validateAsset>>();
-  for (const asset of WEEK2_ASSETS) {
+  for (const asset of M2W4_ASSETS) {
     const result = validateAsset(asset);
     validated.set(asset.editorialRef, result);
     const status = result.errors.length === 0 ? 'OK' : `${result.errors.length} ERROR(S)`;
@@ -242,7 +242,7 @@ async function main() {
   line('\n─── PASS 1: content items ───');
   const idByRef = new Map<string, string>();
 
-  for (const asset of WEEK2_ASSETS) {
+  for (const asset of M2W4_ASSETS) {
     const check = validated.get(asset.editorialRef)!;
     const outcome: AssetOutcome = {
       editorialRef: asset.editorialRef,
@@ -331,7 +331,7 @@ async function main() {
           ...fields,
           expectedUpdatedAt: fresh.updated_at.toISOString(),
           createRevision: false,
-          changeSummary: 'Week 2 workbook import',
+          changeSummary: 'Month 2 Week 4 workbook import',
         } as never,
         actor!,
       );
@@ -346,7 +346,7 @@ async function main() {
           ...fields,
           expectedUpdatedAt: fresh.updated_at.toISOString(),
           createRevision: false,
-          changeSummary: 'Week 2 workbook re-import',
+          changeSummary: 'Month 2 Week 4 workbook re-import',
         } as never,
         actor!,
       );
@@ -365,7 +365,7 @@ async function main() {
   // ── Pass 2 ────────────────────────────────────────────────────────────────
   line('\n─── PASS 2: links (editorial_ref → id) ───');
 
-  for (const asset of WEEK2_ASSETS) {
+  for (const asset of M2W4_ASSETS) {
     const sourceId = idByRef.get(asset.editorialRef);
     if (!sourceId) {
       line(`  ${asset.editorialRef}: skipped (no id — asset was not imported)`);
@@ -383,10 +383,38 @@ async function main() {
 
     for (const link of asset.links) {
       if (link.targetKind === 'content') {
-        const targetId = idByRef.get(link.targetRef ?? '');
+        /**
+         * Week 4 is the first import with CROSS-WEEK edges, so a target may be an existing
+         * published row rather than one of this run's three. Resolution order is this run first,
+         * then the database by `editorial_ref`.
+         *
+         * The lookup is by the FULL ref, never a suffix match: `M2-W3-G001` and `W3-G001` are
+         * different records from different months, and silently hitting the Month 1 row would
+         * wire the Week 4 cluster into the wrong content.
+         */
+        const ref = link.targetRef ?? '';
+        let targetId = idByRef.get(ref);
+        if (!targetId) {
+          const existingTarget = await prisma.content_items.findFirst({
+            where: { editorial_ref: ref, deleted_at: null },
+            select: { id: true, editorial_ref: true, status: true, slug: true },
+          });
+          if (existingTarget) {
+            if (existingTarget.editorial_ref !== ref) {
+              unresolved += 1;
+              line(`  ${asset.editorialRef}: REFUSED cross-week target ${ref} — matched ${existingTarget.editorial_ref}`);
+              continue;
+            }
+            targetId = existingTarget.id;
+            line(
+              `  ${asset.editorialRef}: cross-week target ${ref} resolved to ${existingTarget.id}` +
+                ` (${existingTarget.status}, /resources/${existingTarget.slug})`,
+            );
+          }
+        }
         if (!targetId) {
           unresolved += 1;
-          line(`  ${asset.editorialRef}: cannot resolve content target ${link.targetRef}`);
+          line(`  ${asset.editorialRef}: cannot resolve content target ${ref}`);
           continue;
         }
         resolved.push({

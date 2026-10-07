@@ -1,5 +1,5 @@
 """
-Week 2 workbook extraction — reads the .docx and emits a line-per-paragraph dump that keeps the
+Month 2 Week 4 workbook extraction (recovered verbatim from the Week 2 extractor in git history) — reads the .docx and emits a line-per-paragraph dump that keeps the
 formatting signals the plain-text dump loses.
 
 Each line is prefixed with flags so the mapping can tell a section heading from prose:
