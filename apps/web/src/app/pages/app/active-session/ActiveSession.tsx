@@ -3494,7 +3494,11 @@ export function ActiveSession() {
     void el.play().catch((err) => {
       console.warn("[ActiveSession] camera preview play():", err);
     });
-  }, [stream]);
+    // `isCameraOff` is a dependency because the PiP <video> unmounts while the
+    // camera is off: turning it back on remounts a fresh element with a null
+    // srcObject, and `stream` keeps its identity, so re-running on it is the
+    // only thing that rebinds the preview.
+  }, [stream, isCameraOff]);
 
   useEffect(() => {
     streamCleanupRef.current = stream;
