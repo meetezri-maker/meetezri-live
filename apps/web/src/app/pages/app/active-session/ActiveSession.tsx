@@ -93,6 +93,7 @@ import {
   int16PcmToArrayBuffer,
 } from "./utils/pcmStream";
 import { usePipDrag } from "./hooks/usePipDrag";
+import { useScreenWakeLock } from "./hooks/useScreenWakeLock";
 import {
   attachLateWelcomeAvatarData,
   releasePrePermissionWelcome,
@@ -4171,6 +4172,11 @@ export function ActiveSession() {
   );
   const sessionId = apiSessionId ?? fallbackEzriSessionId;
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
+
+  // Keep the phone screen awake for the whole live conversation (mobile screens
+  // otherwise dim/lock during quiet stretches). Session-level, so it is tied to
+  // neither the avatar runtime nor any single audio clip or mic state.
+  useScreenWakeLock(permissionsGranted && !hasSessionEnded);
 
   // Recover if the WS queue has chunks but playback stalled (e.g. missed onended).
   useEffect(() => {
