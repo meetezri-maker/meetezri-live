@@ -24,11 +24,11 @@ import {
   loadAccessibilitySettings,
 } from '@/app/pages/app/accessibility-settings/applyAccessibilitySettings';
 import { PageLoader } from '@/app/components/PageLoader';
+import { HOMEPAGE_ROUTE_ELEMENTS } from '@/app/routing/homepageRoutes';
+import { PublicRouteMetadata } from '@/app/seo/PublicRouteMetadata';
 
 // ─── Public Pages ────────────────────────────────────────────────────────────
-const Landing              = lazy(() => import('@/app/pages/Landing').then(m => ({ default: m.Landing })));
 const HowItWorks           = lazy(() => import('@/app/pages/HowItWorks').then(m => ({ default: m.HowItWorks })));
-const EarlyAccess          = lazy(() => import('@/app/pages/EarlyAccess').then(m => ({ default: m.EarlyAccess })));
 const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => ({ default: m.Privacy })));
 const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
 const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
@@ -423,6 +423,7 @@ export default function App() {
       <SafetyProvider>
         <BrowserRouter>
         <AnalyticsRouteTracker />
+        <PublicRouteMetadata />
         <ThemeManager />
         <NetworkWatcher />
         <IdleTimeoutEnforcer />
@@ -431,12 +432,10 @@ export default function App() {
         <Routes>
           {/* ── Boundary 1: Public Routes ─────────────────────────────────── */}
           <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
-            <Route path="/" element={<EarlyAccess />} />
-            <Route path="/home" element={<Landing />} />
-            {/*<Route path="/" element={<Landing />} />*/}
+            {HOMEPAGE_ROUTE_ELEMENTS.map(({ path, element }) => (
+              <Route key={path} path={path} element={element} />
+            ))}
             <Route path="/how-it-works" element={<HowItWorks />} />
-            {/* Pre-launch Founding Member campaign landing page (paid ads destination). */}
-            <Route path="/early-access" element={<EarlyAccess />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             {/* <Route path="/accessibility" element={<Accessibility />} /> */}

@@ -555,10 +555,17 @@ describe('sitemap', () => {
     expect(xml.trim().endsWith('</urlset>')).toBe(true);
   });
 
-  it('includes the static public routes and /resources', () => {
-    expect(xml).toContain('<loc>https://meetezri.com/</loc>');
-    expect(xml).toContain('<loc>https://meetezri.com/resources</loc>');
-    expect(xml).toContain('<loc>https://meetezri.com/privacy</loc>');
+  it('contains exactly the approved static routes and supplied published resources', () => {
+    const locations = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
+    expect(locations).toEqual([
+      'https://meetezri.com/',
+      'https://meetezri.com/how-it-works',
+      'https://meetezri.com/pricing',
+      'https://meetezri.com/terms',
+      'https://meetezri.com/resources',
+      'https://meetezri.com/resources/what-to-do-when-you-cannot-sleep',
+      'https://meetezri.com/resources/second',
+    ]);
   });
 
   it('includes every supplied published resource with a lastmod', () => {
@@ -567,8 +574,26 @@ describe('sitemap', () => {
     expect(xml).toContain('<lastmod>2026-01-02</lastmod>');
   });
 
-  it('never lists admin, member, preview or auth routes', () => {
-    for (const path of ['/admin', '/app', '/onboarding', '/preview', '/login']) {
+  it('excludes aliases, campaigns, retired pages, authors and private application routes', () => {
+    for (const path of [
+      '/home',
+      '/early-access',
+      '/privacy',
+      '/about',
+      '/safety',
+      '/talk-it-out',
+      '/contact',
+      '/author',
+      '/authors',
+      '/login',
+      '/signup',
+      '/auth',
+      '/onboarding',
+      '/app',
+      '/admin',
+      '/preview',
+      '/draft',
+    ]) {
       expect({ path, present: xml.includes(`<loc>https://meetezri.com${path}`) }).toEqual({
         path,
         present: false,
@@ -612,7 +637,11 @@ describe('robots.txt', () => {
   it('keeps admin and member areas out of the crawl', () => {
     expect(robots).toContain('Disallow: /admin');
     expect(robots).toContain('Disallow: /app');
+    expect(robots).toContain('Disallow: /profile');
+    expect(robots).toContain('Disallow: /error');
+    expect(robots).toContain('Disallow: /dev');
     expect(robots).toContain('Disallow: /onboarding');
+    expect(robots).toContain('Disallow: /_public');
   });
 });
 

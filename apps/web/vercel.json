@@ -28,6 +28,148 @@
           "value": "no-store, max-age=0"
         }
       ]
+    },
+    {
+      "source": "/login",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/signup",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/verify-email",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/forgot-password",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/reset-password",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/auth/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/invite/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/onboarding",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/onboarding/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/app/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/profile/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/error/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/dev/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/_public/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
     }
   ],
   "rewrites": [
@@ -52,8 +194,88 @@
       "destination": "https://meetezri-live-api.vercel.app/robots.txt"
     },
     {
+      "source": "/",
+      "destination": "/_public/home.html"
+    },
+    {
+      "source": "/how-it-works",
+      "destination": "/_public/how-it-works.html"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/_public/pricing.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/_public/privacy.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/_public/terms.html"
+    },
+    {
+      "source": "/early-access",
+      "destination": "/_public/early-access.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/signup",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/verify-email",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/invite/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/onboarding",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/onboarding/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/profile/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/error/:path*",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/dev/:path*",
+      "destination": "/spa.html"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/spa.html"
     }
   ]
 }

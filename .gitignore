@@ -20,6 +20,7 @@ build/
 dist/
 # Phase 2G.1C: bundled DEV-mode build used only for local diagnostic captures.
 dist-diag/
+.public-ssr/
 out/
 .next/
 .nuxt/

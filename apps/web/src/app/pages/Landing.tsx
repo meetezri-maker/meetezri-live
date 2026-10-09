@@ -1,6 +1,5 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
 import { PublicFooter } from "../components/PublicFooter";
 import { Button } from "../components/ui/button";
@@ -402,7 +401,6 @@ const TESTIMONIALS = [
 ] as const;
 
 export function Landing() {
-  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -436,7 +434,7 @@ export function Landing() {
     ) {
       navigate(`/auth/callback${search}${hash}`);
     }
-  }, [user, isLoading, navigate, location]);
+  }, [navigate, location]);
 
   const isAuthRedirect =
     (location.hash &&

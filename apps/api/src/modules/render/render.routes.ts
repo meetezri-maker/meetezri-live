@@ -92,7 +92,6 @@ function sendHtml(reply: FastifyReply, status: number, html: string, cache: stri
     .header('Cache-Control', cache)
     // The response embeds no per-user state, so it is safe in a shared cache. Saying so
     // explicitly stops a future auth plugin from silently making it private.
-    .header('X-Robots-Tag', 'all')
     .send(html);
 }
 

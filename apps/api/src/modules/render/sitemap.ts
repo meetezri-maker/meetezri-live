@@ -11,7 +11,7 @@
  * reachable from here, so it cannot be listed by mistake.
  */
 
-import { absoluteUrl, toIsoDate } from '@meetezri/public-content';
+import { PUBLIC_SEO_REGISTRY, absoluteUrl, toIsoDate } from '@meetezri/public-content';
 import type { PublicCard } from '../content-hub/content-hub.public.schema';
 
 export interface SitemapEntry {
@@ -21,23 +21,14 @@ export interface SitemapEntry {
   priority?: string;
 }
 
-/**
- * Public marketing routes.
- *
- * Listed explicitly because this project has never had a sitemap — there is no existing generator
- * to extend and no route manifest to derive from. Admin, member-app, onboarding and auth routes
- * are deliberately absent: a sitemap is an invitation, and those are not places to invite a
- * crawler.
- */
-export const STATIC_PUBLIC_ROUTES: SitemapEntry[] = [
-  { path: '/', changeFrequency: 'weekly', priority: '1.0' },
-  { path: '/how-it-works', changeFrequency: 'monthly', priority: '0.8' },
-  { path: '/pricing', changeFrequency: 'monthly', priority: '0.8' },
-  { path: '/about', changeFrequency: 'monthly', priority: '0.6' },
-  { path: '/privacy', changeFrequency: 'monthly', priority: '0.3' },
-  { path: '/terms', changeFrequency: 'monthly', priority: '0.3' },
-  { path: '/safety', changeFrequency: 'monthly', priority: '0.5' },
-];
+/** Static sitemap eligibility comes from the shared public SEO registry. */
+export const STATIC_PUBLIC_ROUTES: SitemapEntry[] = PUBLIC_SEO_REGISTRY
+  .filter((entry) => entry.indexable && entry.sitemap)
+  .map((entry) => ({
+    path: entry.path,
+    changeFrequency: entry.sitemap!.changeFrequency,
+    priority: entry.sitemap!.priority,
+  }));
 
 /** XML text escaping. Applied to every value, including paths — slugs are user-authored. */
 export function escapeXml(value: string): string {
@@ -121,6 +112,13 @@ Disallow: /login
 Disallow: /signup
 Disallow: /auth
 Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /invite
+Disallow: /_public
+Disallow: /profile
+Disallow: /error
+Disallow: /dev
 
 Sitemap: ${absoluteUrl(origin, '/sitemap.xml')}
 `;

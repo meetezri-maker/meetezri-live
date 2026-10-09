@@ -57,8 +57,13 @@ export default defineConfig({
     },
   },
   build: {
+    manifest: true,
     chunkSizeWarningLimit: 500,
     rollupOptions: {
+      input: {
+        app: path.resolve(__dirname, './index.html'),
+        public: path.resolve(__dirname, './src/public-render/entry-client.tsx'),
+      },
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;

@@ -65,6 +65,20 @@ describe('/resources/:slug', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.body).toContain('<h1>What should I do when I cannot sleep?</h1>');
+    expect(response.body).toContain('<meta name="robots" content="index,follow"/>');
+    expect(response.headers['x-robots-tag']).toBeUndefined();
+  });
+
+  it('respects a published resource configured as noindex without a conflicting header', async () => {
+    readSeam.resolvePublishedContent.mockResolvedValue(
+      answerDetail({ robots: 'noindex,follow' }),
+    );
+
+    const response = await app.inject({ method: 'GET', url: '/resources/noindex-resource' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<meta name="robots" content="noindex,follow"/>');
+    expect(response.headers['x-robots-tag']).toBeUndefined();
   });
 
   it('returns a REAL 404 — not a 200 SPA shell and not a 403 — when the seam returns null', async () => {
@@ -78,6 +92,8 @@ describe('/resources/:slug', () => {
     expect(response.statusCode).not.toBe(403);
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.body).toContain('We could not find that page');
+    expect(response.body).toContain('<meta name="robots" content="noindex,nofollow"/>');
+    expect(response.headers['x-robots-tag']).toBeUndefined();
   });
 
   it('caches published HTML in the shared cache only, never the browser', async () => {
@@ -122,6 +138,27 @@ describe('/resources', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<h1>Solace Resources</h1>');
     expect(response.body).toContain('href="/resources/what-to-do-when-you-cannot-sleep"');
+    expect(response.body).toContain('<meta name="robots" content="index,follow"/>');
+    expect(response.headers['x-robots-tag']).toBeUndefined();
+  });
+
+  it.each([
+    '/resources?type=Insight',
+    '/resources?page=2',
+    '/resources?type=Answer&page=2',
+  ])('marks a filtered or paginated view noindex without an HTTP override: %s', async (url) => {
+    readSeam.resolvePublishedList.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: url.includes('page=2') ? 2 : 1,
+      pageSize: 12,
+    });
+
+    const response = await app.inject({ method: 'GET', url });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<meta name="robots" content="noindex,follow"/>');
+    expect(response.headers['x-robots-tag']).toBeUndefined();
   });
 
   it('passes a public label filter to the seam, never an internal type', async () => {

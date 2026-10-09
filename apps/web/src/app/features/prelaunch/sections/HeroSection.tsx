@@ -57,7 +57,7 @@ export function HeroSection() {
             alt=""
             // The hero plate is the one above-the-fold asset worth loading eagerly.
             loading="eager"
-            fetchPriority="high"
+            {...({ fetchpriority: "high" } as Record<string, string>)}
             decoding="async"
             width={1402}
             height={1122}

@@ -68,3 +68,23 @@ export type {
   PublicSiteHeaderProps,
   PublicSiteFooterProps,
 } from './siteShell';
+
+
+export {
+  PUBLIC_ROUTE_PATHS,
+  PUBLIC_SEO_REGISTRY,
+  PUBLIC_SITE_ORIGIN,
+  PUBLIC_SOCIAL_IMAGE_PATH,
+  getPublicSeo,
+  isPublicRoutePath,
+  validatePublicSeoRegistry,
+} from './publicSeo';
+
+export type {
+  PublicRoutePath,
+  PublicRobotsPolicy,
+  PublicSeoDefinition,
+  PublicStructuredDataDescriptor,
+} from './publicSeo';
+
+export { buildPublicStructuredData, serialisePublicJsonLd } from './publicStructuredData';

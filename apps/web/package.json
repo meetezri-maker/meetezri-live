@@ -5,8 +5,9 @@
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && vite build --ssr src/public-render/entry-server.tsx --outDir .public-ssr --emptyOutDir && node scripts/prerender-public.mjs",
     "dev": "vite",
+    "preview:prerender": "node scripts/serve-prerender.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

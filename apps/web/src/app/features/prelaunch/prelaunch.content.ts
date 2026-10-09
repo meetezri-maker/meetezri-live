@@ -12,7 +12,7 @@ export const PRIMARY_CTA_LABEL = "Become a Founding Member";
 /** The locked brand promise. Appears in Section 1 and repeats in Section 11. */
 export const BRAND_PROMISE = "Every conversation brings you closer to yourself.";
 
-export const PRELAUNCH_ROUTE = "/";
+export const PRELAUNCH_ROUTE = "/early-access";
 
 /**
  * There is no public contact route in this app; the public Terms page publishes

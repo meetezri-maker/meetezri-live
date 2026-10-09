@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { EarlyAccessFooter } from "../components/EarlyAccessFooter";
 import { FoundingMemberSignupProvider } from "../features/prelaunch/FoundingMemberSignupContext";
 import { PrelaunchNav } from "../features/prelaunch/PrelaunchNav";
-import { usePrelaunchMeta } from "../features/prelaunch/usePrelaunchMeta";
 import { resolvePrelaunchAttribution } from "../features/prelaunch/prelaunch.attribution";
 import { trackPrelaunchEvent } from "../features/prelaunch/prelaunch.analytics";
 import { HeroSection } from "../features/prelaunch/sections/HeroSection";
@@ -25,8 +24,6 @@ import { FaqSection } from "../features/prelaunch/sections/FaqSection";
  * asserted in `prelaunch.structure.test.tsx`.
  */
 export function EarlyAccess() {
-  usePrelaunchMeta();
-
   useEffect(() => {
     // Captures UTM values once per visit and stores them for the session, so the
     // signup form still has attribution if the visitor converts much later.
