@@ -84,7 +84,7 @@ describe("deployment homepage redirect", () => {
     );
   });
 
-  it("keeps renderer and API rewrites ahead of the SPA fallback without rewriting /", () => {
+  it("keeps renderer and API rewrites while leaving / and unknown paths to the filesystem", () => {
     const sources = deploymentConfig.rewrites.map((rule) => rule.source);
     expect(sources.slice(0, 5)).toEqual([
       "/api/:path*",
@@ -94,9 +94,6 @@ describe("deployment homepage redirect", () => {
       "/robots.txt",
     ]);
     expect(deploymentConfig.rewrites.find((rule) => rule.source === "/")).toBeUndefined();
-    expect(deploymentConfig.rewrites[deploymentConfig.rewrites.length - 1]).toEqual({
-      source: "/(.*)",
-      destination: "/spa.html",
-    });
+    expect(deploymentConfig.rewrites.find((rule) => rule.source === "/(.*)")).toBeUndefined();
   });
 });

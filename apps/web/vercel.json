@@ -270,11 +270,11 @@
       "destination": "/spa.html"
     },
     {
-      "source": "/auth/:path*",
+      "source": "/auth/:action(callback|activate-account)",
       "destination": "/spa.html"
     },
     {
-      "source": "/invite/:path*",
+      "source": "/invite/create-password",
       "destination": "/spa.html"
     },
     {
@@ -286,27 +286,51 @@
       "destination": "/spa.html"
     },
     {
+      "source": "/app",
+      "destination": "/spa.html"
+    },
+    {
       "source": "/app/:path*",
       "destination": "/spa.html"
     },
     {
-      "source": "/admin/:path*",
+      "source": "/admin/:page(login|credentials|two-factor-auth|super-admin-dashboard|org-admin-dashboard|team-admin-dashboard|user-management|user-segmentation|team-role-management|companion-management|ai-avatar-manager|conversation-transcripts|expert-reviews|crisis-dashboard|crisis-monitoring|crisis-event-details|crisis-follow-up-queue|crisis-protocol|analytics|usage-overview|usage-analytics|session-analytics|engagement-metrics|retention-metrics|feature-adoption|onboarding-analytics|reports-analytics|avatar-selection-analytics|content-management|wellness-tools-cms|wellness-content-cms|wellness-content-library|wellness-tool-editor|exercise-library|content-performance|nudge-center|nudge-management|nudge-templates|nudge-scheduler|nudge-performance|gamification|wellness-challenges|badge-manager|communications|notifications-center|manual-notifications|email-templates|push-notifications|support-tickets|community-management|live-sessions-monitor|session-recordings|system-health-enhanced|system-health-dashboard|error-tracking|system-settings|system-settings-enhanced|global-configuration|feature-flags|api-management|integration-settings|branding-customization|ab-testing|billing|billing-subscriptions|package-manager|payg-transactions|security-settings|compliance-dashboard|hipaa-compliance|data-privacy-controls|data-retention-privacy|audit-logs|system-logs|legal-documentation|data-export|backup-recovery)",
       "destination": "/spa.html"
     },
     {
-      "source": "/profile/:path*",
+      "source": "/admin/user-details-enhanced/:userId",
       "destination": "/spa.html"
     },
     {
-      "source": "/error/:path*",
+      "source": "/admin/user-analytics/:section(moods|journals|sleep|habits)",
       "destination": "/spa.html"
     },
     {
-      "source": "/dev/:path*",
+      "source": "/admin/user-analytics/:section(moods|journals|sleep|habits)/:userId",
       "destination": "/spa.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/admin/content-hub",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/admin/content-hub/:id",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/admin/content-hub/:id/preview",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/profile/:userId",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/error/:page(404|500|offline|maintenance|permission-denied|no-device-access|trial-expired)",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/dev/:page(sara-avatar-lab|sara-rfv2-lab)",
       "destination": "/spa.html"
     }
   ]

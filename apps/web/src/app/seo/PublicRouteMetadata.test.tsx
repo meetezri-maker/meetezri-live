@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getPublicSeo } from '@meetezri/public-content';
 import {
+  applyNotFoundMetadata,
   applyPrivateMetadata,
   applyPublicMetadata,
 } from './PublicRouteMetadata';
@@ -43,6 +44,21 @@ describe('public route metadata synchronization', () => {
     applyPrivateMetadata();
 
     expect(document.title).toBe('Solace');
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex,nofollow'
+    );
+    expect(count('link[rel="canonical"]')).toBe(0);
+    expect(count('meta[property^="og:"]')).toBe(0);
+    expect(count('meta[name^="twitter:"]')).toBe(0);
+    expect(count('script[type="application/ld+json"]')).toBe(0);
+  });
+
+  it('clears stale public metadata and applies the not-found title', () => {
+    applyPublicMetadata(getPublicSeo('/')!);
+    applyNotFoundMetadata();
+
+    expect(document.title).toBe('Page Not Found | Solace');
     expect(document.querySelector('meta[name="robots"]')).toHaveAttribute(
       'content',
       'noindex,nofollow'

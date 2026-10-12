@@ -75,3 +75,24 @@ ${styles}
 </html>
 `;
 }
+
+export function renderNotFoundDocument(appMarkup: string): string {
+  return `<!doctype html>
+<html lang="en" data-ezri-theme="dark" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="/favicon/icon.svg" sizes="any">
+<link rel="icon" type="image/png" sizes="954x954" href="/favicon/Black.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&amp;family=DM+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<title>Page Not Found | Solace</title>
+<meta name="robots" content="noindex,nofollow">
+</head>
+<body style="margin:0">
+<div id="root">${appMarkup}</div>
+</body>
+</html>
+`;
+}

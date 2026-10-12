@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 
@@ -14,7 +14,27 @@ const publicArtifacts = new Map([
   ['/terms', '_public/terms.html'],
   ['/early-access', '_public/early-access.html'],
 ]);
-const privateRoute = /^\/(?:login|signup|verify-email|forgot-password|reset-password)(?:\/|$)|^\/(?:auth|invite|onboarding|app|admin|profile|error|dev)(?:\/|$)/;
+const spaRouteManifest = JSON.parse(
+  await readFile(new URL('../src/app/routing/spaRouteManifest.json', import.meta.url), 'utf8'),
+);
+
+function routePattern(route) {
+  const source = route
+    .split('/')
+    .map((segment) => (segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('/');
+  return new RegExp(`^${source}$`);
+}
+
+const exactSpaRoutes = new Set(spaRouteManifest.exactRoutes);
+const dynamicSpaRoutes = spaRouteManifest.dynamicRoutes.map(routePattern);
+export function isSpaRoute(pathname) {
+  return exactSpaRoutes.has(pathname)
+    || spaRouteManifest.prefixRoutes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+    || dynamicSpaRoutes.some((pattern) => pattern.test(pathname));
+}
 const mimeTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -37,7 +57,7 @@ function safeDistPath(relativePath) {
   return resolved;
 }
 
-async function sendFile(request, response, relativePath, extraHeaders = {}) {
+async function sendFile(request, response, relativePath, extraHeaders = {}, status = 200) {
   const filePath = safeDistPath(relativePath);
   const file = await stat(filePath);
   const headers = {
@@ -48,7 +68,7 @@ async function sendFile(request, response, relativePath, extraHeaders = {}) {
       : 'no-store, max-age=0',
     ...extraHeaders,
   };
-  response.writeHead(200, headers);
+  response.writeHead(status, headers);
   if (request.method === 'HEAD') response.end();
   else createReadStream(filePath).pipe(response);
 }
@@ -59,7 +79,7 @@ const server = createServer(async (request, response) => {
     const pathname = decodeURIComponent(url.pathname);
 
     if (pathname === '/home') {
-      response.writeHead(308, { Location: '/' });
+      response.writeHead(308, { Location: `/${url.search}` });
       response.end();
       return;
     }
@@ -78,7 +98,7 @@ const server = createServer(async (request, response) => {
     }
 
     const staticPath = pathname.replace(/^\//, '');
-    if (staticPath && !privateRoute.test(pathname)) {
+    if (staticPath && !isSpaRoute(pathname)) {
       try {
         await sendFile(request, response, staticPath);
         return;
@@ -87,14 +107,25 @@ const server = createServer(async (request, response) => {
       }
     }
 
-    await sendFile(request, response, 'spa.html', privateRoute.test(pathname)
-      ? { 'X-Robots-Tag': 'noindex, nofollow, noarchive' }
-      : {});
+    if (isSpaRoute(pathname)) {
+      await sendFile(request, response, 'spa.html', {
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+      });
+      return;
+    }
+
+    await sendFile(request, response, '404.html', {
+      'X-Robots-Tag': 'noindex, nofollow, noarchive',
+    }, 404);
   } catch (error) {
-    response.writeHead(error?.code === 'ENOENT' ? 404 : 500, {
-      'Content-Type': 'text/plain; charset=utf-8',
-    });
-    response.end(error instanceof Error ? error.message : 'Preview server error');
+    if (error?.code === 'ENOENT' || error?.code === 'EISDIR') {
+      await sendFile(request, response, '404.html', {
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+      }, 404);
+      return;
+    }
+    response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('Preview server error');
   }
 });
 

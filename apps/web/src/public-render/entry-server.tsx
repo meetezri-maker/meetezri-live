@@ -13,8 +13,9 @@ import { Pricing } from '@/app/pages/Pricing';
 import { Privacy } from '@/app/pages/Privacy';
 import { Terms } from '@/app/pages/Terms';
 import { EarlyAccess } from '@/app/pages/EarlyAccess';
+import { NotFoundPage } from '@/app/pages/NotFoundPage';
 import { PublicMarketingApp } from './PublicMarketingApp';
-import { renderPublicDocument, type PublicAssets } from './renderDocument';
+import { renderNotFoundDocument, renderPublicDocument, type PublicAssets } from './renderDocument';
 
 const pages = {
   '/': Landing,
@@ -40,4 +41,8 @@ export function renderPublicHtml(pathname: string, assets: PublicAssets): string
   const definition = getPublicSeo(pathname);
   if (!definition) throw new Error(`Missing public metadata for: ${pathname}`);
   return renderPublicDocument(definition, renderPublicRoute(pathname), assets);
+}
+
+export function renderNotFoundHtml(): string {
+  return renderNotFoundDocument(renderToString(<NotFoundPage />));
 }

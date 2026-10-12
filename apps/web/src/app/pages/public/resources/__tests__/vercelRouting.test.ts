@@ -1,131 +1,133 @@
-/**
- * Deployment routing order.
- *
- * Vercel applies `rewrites` in order and stops at the first match, so the SPA catch-all
- * (`/(.*)` → `/index.html`) swallows anything declared after it. That failure is silent and
- * total: `/resources/x` would return a 200 SPA shell to a crawler, with no H1, no metadata and no
- * content — which is precisely the outcome Phase 5A exists to prevent, and which no unit test of
- * the renderer would catch.
- *
- * These assertions read the real `vercel.json`.
- */
-
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
+import manifest from '@/app/routing/spaRouteManifest.json';
+import { isSpaRoute } from '@/app/routing/spaRouteManifest';
 
 interface Rewrite {
   source: string;
   destination: string;
 }
 
-const config = JSON.parse(
-  readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', 'vercel.json'), 'utf8')
-) as {
+const webRoot = join(__dirname, '..', '..', '..', '..', '..', '..');
+const config = JSON.parse(readFileSync(join(webRoot, 'vercel.json'), 'utf8')) as {
+  redirects: Array<{ source: string; destination: string; permanent: boolean }>;
   rewrites: Rewrite[];
   headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
 };
 
-const rewrites = config.rewrites;
-const catchAllIndex = rewrites.findIndex((rule) => rule.source === '/(.*)');
-
-/** The paths that must be handled by the renderer, not the SPA. */
-const SSR_PATHS = ['/resources', '/resources/:slug', '/sitemap.xml', '/robots.txt'];
-
-describe('vercel rewrite order', () => {
-  it('has an SPA catch-all, and it is last', () => {
-    expect(catchAllIndex).toBeGreaterThan(-1);
-    expect(catchAllIndex).toBe(rewrites.length - 1);
-    expect(rewrites[catchAllIndex].destination).toBe('/spa.html');
+function sourcePattern(source: string): RegExp {
+  const segments = source.split('/').map((segment) => {
+    if (!segment.startsWith(':')) {
+      return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    if (segment.endsWith('*')) return '.*';
+    const custom = segment.match(/^:[^(]+\((.+)\)$/);
+    return custom ? `(?:${custom[1]})` : '[^/]+';
   });
+  return new RegExp(`^${segments.join('/')}$`);
+}
 
-  it.each(SSR_PATHS)('declares %s before the catch-all', (source) => {
-    const index = rewrites.findIndex((rule) => rule.source === source);
-    expect(index).toBeGreaterThan(-1);
-    expect(index).toBeLessThan(catchAllIndex);
-  });
+function destinationFor(pathname: string): string | undefined {
+  return config.rewrites.find((rule) => sourcePattern(rule.source).test(pathname))?.destination;
+}
 
-  it.each(SSR_PATHS)('points %s at the API deployment, not the SPA shell', (source) => {
-    const rule = rewrites.find((entry) => entry.source === source)!;
-    expect(rule.destination).toMatch(/^https:\/\/meetezri-live-api\.vercel\.app\//);
-    expect(rule.destination).not.toBe('/spa.html');
-  });
+const dynamicSample = (route: string) => route.replace(/:[^/]+/g, 'sample-id');
 
-  it('keeps /api/* routing unchanged and still ahead of the catch-all', () => {
-    const index = rewrites.findIndex((rule) => rule.source === '/api/:path*');
-    expect(index).toBeGreaterThan(-1);
-    expect(index).toBeLessThan(catchAllIndex);
-    expect(rewrites[index].destination).toBe('https://meetezri-live-api.vercel.app/api/:path*');
-  });
+describe('Cycle 1C route inventory', () => {
+  it('keeps the shared SPA allowlist synchronized with React Router', () => {
+    const source = readFileSync(join(webRoot, 'src', 'app', 'App.tsx'), 'utf8')
+      .replace(/{\/\*[\s\S]*?\*\/}/g, '');
+    const literalRoutes = [...source.matchAll(/\bpath="(\/[^"*]+)"/g)].map((match) => match[1]);
 
-  it('preserves the slug parameter rather than dropping it', () => {
-    const rule = rewrites.find((entry) => entry.source === '/resources/:slug')!;
-    expect(rule.destination).toBe('https://meetezri-live-api.vercel.app/resources/:slug');
-  });
+    for (const route of [...manifest.exactRoutes, ...manifest.dynamicRoutes]) {
+      expect(source, `missing React route ${route}`).toContain(`path="${route}"`);
+    }
+    expect(source).toContain('path="/onboarding"');
+    expect(source).toContain('path="/app/*"');
 
-  it('maps non-root public routes to protected prerender artifacts', () => {
-    const expected = {
-      '/how-it-works': '/_public/how-it-works.html',
-      '/pricing': '/_public/pricing.html',
-      '/privacy': '/_public/privacy.html',
-      '/terms': '/_public/terms.html',
-      '/early-access': '/_public/early-access.html',
-    };
-    for (const [source, destination] of Object.entries(expected)) {
-      expect(rewrites.find((rule) => rule.source === source)?.destination).toBe(destination);
+    for (const route of literalRoutes) {
+      if (['/how-it-works', '/privacy', '/terms', '/pricing', '/resources', '/resources/:slug'].includes(route)) continue;
+      expect(isSpaRoute(dynamicSample(route)), `unclassified React route ${route}`).toBe(true);
     }
   });
 
-  it('serves the prerendered root index naturally instead of rewriting /', () => {
-    expect(rewrites.find((rule) => rule.source === '/')).toBeUndefined();
-    expect(rewrites[catchAllIndex].destination).toBe('/spa.html');
+  it.each(manifest.exactRoutes)('routes exact SPA deep link %s to spa.html', (pathname) => {
+    expect(destinationFor(pathname)).toBe('/spa.html');
   });
 
-  it('maps confirmed private deep links and the temporary fallback to spa.html', () => {
+  it.each(manifest.dynamicRoutes)('routes dynamic SPA deep link %s to spa.html', (route) => {
+    expect(destinationFor(dynamicSample(route))).toBe('/spa.html');
+  });
+
+  it.each([
+    '/onboarding',
+    '/onboarding/welcome',
+    '/onboarding/a-future-step',
+    '/app',
+    '/app/dashboard',
+    '/app/a-future-member-page',
+  ])('preserves the intentional SPA prefix for %s', (pathname) => {
+    expect(isSpaRoute(pathname)).toBe(true);
+    expect(destinationFor(pathname)).toBe('/spa.html');
+  });
+});
+
+describe('Vercel routing boundaries', () => {
+  it('removes the blanket SPA catch-all', () => {
+    expect(config.rewrites.find((rule) => rule.source === '/(.*)')).toBeUndefined();
+  });
+
+  it.each([
+    '/definitely-not-a-real-solace-page',
+    '/unknown/with/multiple/segments',
+    '/auth/not-a-real-action',
+    '/invite/not-a-real-invitation',
+    '/admin/not-a-real-admin-page',
+    '/admin/content-hub/item/extra',
+    '/profile/person/extra',
+    '/error/not-real',
+    '/dev/not-real',
+  ])('does not rewrite unknown path %s to spa.html', (pathname) => {
+    expect(isSpaRoute(pathname)).toBe(false);
+    expect(destinationFor(pathname)).toBeUndefined();
+  });
+
+  it.each([
+    ['/', undefined],
+    ['/how-it-works', '/_public/how-it-works.html'],
+    ['/pricing', '/_public/pricing.html'],
+    ['/privacy', '/_public/privacy.html'],
+    ['/terms', '/_public/terms.html'],
+    ['/early-access', '/_public/early-access.html'],
+  ])('preserves public routing for %s', (pathname, destination) => {
+    expect(destinationFor(pathname)).toBe(destination);
+  });
+
+  it.each([
+    ['/api/status', 'https://meetezri-live-api.vercel.app/api/:path*'],
+    ['/resources', 'https://meetezri-live-api.vercel.app/resources'],
+    ['/resources/a-published-slug', 'https://meetezri-live-api.vercel.app/resources/:slug'],
+    ['/sitemap.xml', 'https://meetezri-live-api.vercel.app/sitemap.xml'],
+    ['/robots.txt', 'https://meetezri-live-api.vercel.app/robots.txt'],
+  ])('preserves infrastructure routing for %s', (pathname, destination) => {
+    expect(destinationFor(pathname)).toBe(destination);
+  });
+
+  it('keeps the permanent /home redirect; Vercel preserves its query string', () => {
+    expect(config.redirects).toContainEqual({ source: '/home', destination: '/', permanent: true });
+  });
+
+  it('retains private and internal-artifact noindex headers', () => {
     for (const source of [
-      '/login',
-      '/signup',
-      '/auth/:path*',
-      '/onboarding',
-      '/onboarding/:path*',
-      '/app/:path*',
-      '/admin/:path*',
-      '/dev/:path*',
+      '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password',
+      '/auth/(.*)', '/invite/(.*)', '/onboarding', '/onboarding/(.*)', '/app', '/app/(.*)',
+      '/admin/(.*)', '/profile/(.*)', '/error/(.*)', '/dev/(.*)', '/_public/(.*)',
     ]) {
-      expect(rewrites.find((rule) => rule.source === source)?.destination).toBe('/spa.html');
-    }
-    expect(rewrites[catchAllIndex].destination).toBe('/spa.html');
-  });
-
-  it('protects direct internal artifact requests from indexing', () => {
-    const rule = config.headers.find((entry) => entry.source === '/_public/(.*)');
-    expect(rule?.headers).toContainEqual({
-      key: 'X-Robots-Tag',
-      value: 'noindex, nofollow, noarchive',
-    });
-  });
-
-  it('adds noindex headers to confirmed private and development routes', () => {
-    for (const source of [
-      '/login',
-      '/signup',
-      '/verify-email',
-      '/forgot-password',
-      '/reset-password',
-      '/onboarding',
-      '/auth/(.*)',
-      '/invite/(.*)',
-      '/app/(.*)',
-      '/app',
-      '/profile',
-      '/profile/(.*)',
-      '/error',
-      '/error/(.*)',
-      '/dev',
-      '/admin/(.*)',
-      '/dev/(.*)',
-    ]) {
-      expect(config.headers.find((entry) => entry.source === source)?.headers).toContainEqual({
+      const matchingHeaders = config.headers
+        .filter((entry) => entry.source === source)
+        .flatMap((entry) => entry.headers);
+      expect(matchingHeaders).toContainEqual({
         key: 'X-Robots-Tag',
         value: 'noindex, nofollow, noarchive',
       });

@@ -26,6 +26,7 @@ import {
 import { PageLoader } from '@/app/components/PageLoader';
 import { HOMEPAGE_ROUTE_ELEMENTS } from '@/app/routing/homepageRoutes';
 import { PublicRouteMetadata } from '@/app/seo/PublicRouteMetadata';
+import { NotFoundPage } from '@/app/pages/NotFoundPage';
 
 // ─── Public Pages ────────────────────────────────────────────────────────────
 const HowItWorks           = lazy(() => import('@/app/pages/HowItWorks').then(m => ({ default: m.HowItWorks })));
@@ -808,8 +809,8 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Catch-all redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Client-side misses render the same branded experience as the static HTTP 404. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </BrowserRouter>
       </SafetyProvider>

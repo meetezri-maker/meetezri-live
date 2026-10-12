@@ -6,6 +6,7 @@ import {
   serialisePublicJsonLd,
   type PublicSeoDefinition,
 } from '@meetezri/public-content';
+import { isSpaRoute } from '@/app/routing/spaRouteManifest';
 
 const MARKER = 'data-solace-public-seo';
 
@@ -26,6 +27,12 @@ function removePublicHead() {
 export function applyPrivateMetadata() {
   removePublicHead();
   document.title = 'Solace';
+  upsert('meta[name="robots"]', 'meta', { name: 'robots', content: 'noindex,nofollow' });
+}
+
+export function applyNotFoundMetadata() {
+  removePublicHead();
+  document.title = 'Page Not Found | Solace';
   upsert('meta[name="robots"]', 'meta', { name: 'robots', content: 'noindex,nofollow' });
 }
 
@@ -95,8 +102,18 @@ export function PublicRouteMetadata() {
   const { pathname } = useLocation();
   useEffect(() => {
     const definition = getPublicSeo(pathname);
-    if (definition) applyPublicMetadata(definition);
-    else applyPrivateMetadata();
+    if (definition) {
+      applyPublicMetadata(definition);
+    } else if (
+      isSpaRoute(pathname)
+      || pathname === '/home'
+      || pathname === '/resources'
+      || /^\/resources\/[^/]+$/.test(pathname)
+    ) {
+      applyPrivateMetadata();
+    } else {
+      applyNotFoundMetadata();
+    }
   }, [pathname]);
   return null;
 }

@@ -66,6 +66,24 @@ if (spaScripts.length === 0 || spaScripts.includes(assets.script)) {
   throw new Error('spa.html must use the private SPA client entry');
 }
 
+const notFound = renderer.renderNotFoundHtml();
+const notFoundH1Count = (notFound.match(/<h1(?:\s|>)/g) ?? []).length;
+if (!notFound.includes('<title>Page Not Found | Solace</title>')) {
+  throw new Error('404.html must contain the approved title');
+}
+if (!notFound.includes('name="robots" content="noindex,nofollow"')) {
+  throw new Error('404.html must be noindex,nofollow');
+}
+if (notFoundH1Count !== 1 || !notFound.includes('href="/"')) {
+  throw new Error('404.html must contain one H1 and a homepage link');
+}
+for (const forbidden of ['rel="canonical"', 'application/ld+json', 'index,follow']) {
+  if (notFound.includes(forbidden)) {
+    throw new Error(`404.html contains forbidden metadata: ${forbidden}`);
+  }
+}
+await writeFile(path.join(dist, '404.html'), notFound, 'utf8');
+
 await mkdir(path.join(dist, '_public'), { recursive: true });
 for (const pathname of renderer.prerenderRoutes) {
   const definition = renderer.getPublicSeo(pathname);
