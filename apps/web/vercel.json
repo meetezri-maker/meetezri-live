@@ -111,6 +111,15 @@
       ]
     },
     {
+      "source": "/app",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
       "source": "/app/(.*)",
       "headers": [
         {
@@ -129,6 +138,15 @@
       ]
     },
     {
+      "source": "/profile",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
       "source": "/profile/(.*)",
       "headers": [
         {
@@ -138,7 +156,25 @@
       ]
     },
     {
+      "source": "/error",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
       "source": "/error/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/dev",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -192,10 +228,6 @@
     {
       "source": "/robots.txt",
       "destination": "https://meetezri-live-api.vercel.app/robots.txt"
-    },
-    {
-      "source": "/",
-      "destination": "/_public/home.html"
     },
     {
       "source": "/how-it-works",

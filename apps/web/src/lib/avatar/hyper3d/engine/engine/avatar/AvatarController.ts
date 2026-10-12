@@ -17,6 +17,11 @@ import type {
 import { HeadMotionController } from "../behaviour/HeadMotionController";
 import { IdleExpressionController, defaultIdleExpressionSettings, type IdleExpressionSettings } from "../behaviour/IdleExpressionController";
 import { idleExpressionProfiles } from "../../mappings/idleExpressionProfiles";
+import {
+  getMouthTransitionProfile,
+  resolveMouthDeadline,
+  type MouthDeadlineOverride
+} from "../../mappings/avatarBlendshapeConfig";
 import { SpeechGestureController } from "../behaviour/SpeechGestureController";
 import { EmotionEngine } from "../emotion/EmotionEngine";
 import { CoarticulationEngine } from "../lipsync/CoarticulationEngine";
@@ -138,6 +143,22 @@ interface EvaluateOptions {
    * change and no timing change occurs. See `resolveSpeechProfile`.
    */
   phonemeTuningOverrides?: PhonemeTuningOverrides;
+  /**
+   * DEADLINE-AWARE CONVERGENCE — a DEV COMPARISON OVERRIDE, and `null` or absent
+   * is the model's own accepted configuration.
+   *
+   * PRODUCTION PASSES NOTHING HERE. The accepted 34 SOFT values live on the
+   * `hyper3d-usc` `MouthTransitionProfile` as ordinary configuration, so a
+   * production frame reaches them by leaving this option alone — see
+   * `HYPER3D_PRODUCTION_DEADLINE`. What this option does is let the DEV panel
+   * DEPART from that: `"off"` for the pre-deadline follower, or an explicit cap
+   * and landing for `34 BASELINE`, `44` and the rejected landing candidates.
+   *
+   * It can only take effect on a model that already carries a transition
+   * profile, which is `hyper3d-usc` alone, so it cannot reach another avatar
+   * even if a caller passed it. See `resolveMouthDeadline`.
+   */
+  mouthDeadlineOverride?: MouthDeadlineOverride;
 }
 
 const emptyPose: BlendshapePose = {};
@@ -657,7 +678,48 @@ export class AvatarController {
       : emptyPose;
 
     const mixed = this.mixer.combine(this.channels);
-    const outputPose = this.mixer.smooth(mixed.pose, deltaSeconds, ownedChannels);
+    /**
+     * The model's mouth transition character, or `undefined` for every model
+     * that has not been measured for one — which takes the byte-identical
+     * previous path. Resolved here rather than held by the mixer because the
+     * mixer is shared and the profile is a property of the avatar, not of the
+     * smoother.
+     */
+    const mouthTransition = resolveMouthDeadline(
+      getMouthTransitionProfile(modelId),
+      options.mouthDeadlineOverride ?? null
+    );
+    /**
+     * THE SENTENCE-PAUSE GATE, resolved from the boundary timeline this frame
+     * already queried a hundred lines above. `insidePauseKind` is the pause
+     * being OCCUPIED, not the one ahead — reading `kind` here would gate on the
+     * wrong event. Only a sentence pause settles: the 30-200 ms within-phrase
+     * gaps were measured to stay correctly alive today, and
+     * `SENTENCE_PAUSE_SECONDS` already separates the two populations.
+     */
+    const settlingInSentencePause = speechBoundary?.insidePauseKind === "sentence";
+    /**
+     * THE DEADLINE, and the whole of what the convergence layer learns about the
+     * timeline: how long the CURRENT label has left.
+     *
+     * `current` is the SAME `activePhoneme` the coarticulation blend above
+     * consumed and `t` is the SAME audio clock, so there is exactly one answer
+     * per frame and it is the one the rest of the frame already agreed on. The
+     * END of the current label owns the deadline: `next` is deliberately not
+     * consulted, so nothing here can aim at the next phoneme early.
+     *
+     * `null` whenever no phoneme is active, which is silence, a pause and a
+     * stopped payload — all of which must take the accepted follower.
+     */
+    const secondsRemainingInLabel = current ? current.end_time - t : null;
+    const outputPose = this.mixer.smooth(
+      mixed.pose,
+      deltaSeconds,
+      ownedChannels,
+      mouthTransition,
+      settlingInSentencePause,
+      secondsRemainingInLabel
+    );
     const finalHeadMotion = headMotion.diagnosticActive || headMotion.manualActive
       ? headMotion
       : {
@@ -743,7 +805,15 @@ export class AvatarController {
         transformDiagnostic: finalHeadMotion.diagnostic,
         idleExpression: idleExpression.debug,
         speechDeformation: coordinated.debug,
-        speechTransitionIntent: transitionIntent
+        speechTransitionIntent: transitionIntent,
+        /**
+         * What the deadline layer did on THIS frame, straight from the smoother
+         * that did it. `armed: false` in production, where no cap is supplied.
+         */
+        deadlineFollower: {
+          ...this.mixer.deadlineFrame(),
+          labelSeconds: current ? current.end_time - current.start_time : 0
+        }
       }
     };
   }

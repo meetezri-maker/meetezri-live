@@ -7,7 +7,7 @@ const dist = path.resolve(import.meta.dirname, '..', 'dist');
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 4173);
 const publicArtifacts = new Map([
-  ['/', '_public/home.html'],
+  ['/', 'index.html'],
   ['/how-it-works', '_public/how-it-works.html'],
   ['/pricing', '_public/pricing.html'],
   ['/privacy', '_public/privacy.html'],

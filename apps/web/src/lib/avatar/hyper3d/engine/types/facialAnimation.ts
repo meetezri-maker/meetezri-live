@@ -296,6 +296,17 @@ export interface TimelineDebugState {
   transformDiagnostic?: HeadNeckDiagnosticDebugState;
   speechDeformation?: CoordinatedSpeechDebug;
   speechTransitionIntent?: SpeechTransitionIntent;
+  /**
+   * DEADLINE-AWARE CONVERGENCE, as the smoother reports it. `armed: false` on
+   * every production frame, because production supplies no cap.
+   */
+  deadlineFollower?: {
+    armed: boolean;
+    acceleratedChannels: number;
+    peakSpeed: number;
+    secondsRemaining: number;
+    labelSeconds: number;
+  };
   idleExpression?: IdleExpressionDebugState;
   boneTransforms?: BoneTransformDebugState;
 }

@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   HYPER3D_ARTICULATION_TARGETS,
+  HYPER3D_DEADLINE_MODE_LABELS,
+  HYPER3D_DEADLINE_PRIMARY_MODES,
+  HYPER3D_DEADLINE_REGRESSION_MODES,
   HYPER3D_DELIVERY_MS,
   getHyper3dArticulationDelivered,
+  getHyper3dArticulationDeliveryStats,
   getHyper3dArticulationTestDelivery,
   getHyper3dArticulationTestGlide,
+  getHyper3dArticulationTestJawMode,
   getHyper3dArticulationTestIntensity,
   getHyper3dArticulationTestMode,
   getHyper3dArticulationTestState,
@@ -12,16 +17,22 @@ import {
   hyper3dArticulationHasGlide,
   hyper3dArticulationReadout,
   hyper3dArticulationTarget,
+  getHyper3dDeadlineMode,
+  getHyper3dDeadlineReadout,
   hyper3dArticulationTestAvailable,
+  setHyper3dDeadlineMode,
   setHyper3dArticulationTestDelivery,
   setHyper3dArticulationTestGlide,
+  setHyper3dArticulationTestJawMode,
   setHyper3dArticulationTestIntensity,
   setHyper3dArticulationTestMode,
   setHyper3dArticulationTestState,
   subscribeHyper3dArticulationTest,
   type Hyper3dArticulationDelivery,
   type Hyper3dArticulationGlide,
+  type Hyper3dArticulationJawMode,
   type Hyper3dArticulationMode,
+  type Hyper3dDeadlineMode,
 } from "@/lib/avatar/hyper3d/hyper3dArticulationTest";
 
 /**
@@ -49,6 +60,10 @@ export function Hyper3DArticulationTestPanel() {
   const [delivery, setDelivery] = useState<Hyper3dArticulationDelivery>(getHyper3dArticulationTestDelivery);
   const [intensity, setIntensity] = useState<number>(getHyper3dArticulationTestIntensity);
   const [delivered, setDelivered] = useState<Record<string, number>>({});
+  const [stats, setStats] = useState(getHyper3dArticulationDeliveryStats);
+  const [jawMode, setJawMode] = useState<Hyper3dArticulationJawMode>(getHyper3dArticulationTestJawMode);
+  const [deadlineMode, setDeadlineMode] = useState<Hyper3dDeadlineMode>(getHyper3dDeadlineMode);
+  const [deadline, setDeadline] = useState(getHyper3dDeadlineReadout);
 
   useEffect(() => {
     if (!hyper3dArticulationTestAvailable) return;
@@ -57,7 +72,12 @@ export function Hyper3DArticulationTestPanel() {
       setMode(getHyper3dArticulationTestMode());
       setGlide(getHyper3dArticulationTestGlide());
       setDelivery(getHyper3dArticulationTestDelivery());
+      setJawMode(getHyper3dArticulationTestJawMode());
+      setDeadlineMode(getHyper3dDeadlineMode());
       setIntensity(getHyper3dArticulationTestIntensity());
+      // The readout carries the live selection, so a mode change must refresh it
+      // here rather than waiting for the next animation frame to sample it.
+      setDeadline(getHyper3dDeadlineReadout());
     });
   }, []);
 
@@ -68,10 +88,12 @@ export function Hyper3DArticulationTestPanel() {
    * holds still long enough to read.
    */
   useEffect(() => {
-    if (!hyper3dArticulationTestAvailable || delivery === "held") return;
+    if (!hyper3dArticulationTestAvailable) return;
     let raf = 0;
     const tick = () => {
       setDelivered(getHyper3dArticulationDelivered());
+      setStats(getHyper3dArticulationDeliveryStats());
+      setDeadline(getHyper3dDeadlineReadout());
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -96,13 +118,18 @@ export function Hyper3DArticulationTestPanel() {
   if (!hyper3dArticulationTestAvailable) return null;
 
   const active = hyper3dArticulationTarget(state);
-  const showGlide = hyper3dArticulationHasGlide(state) && delivery === "held";
+  const isSequence = Boolean(active?.phonemes);
+  // A connected sequence has no held pose, so it always runs at a length.
+  const effectiveDelivery = isSequence && delivery === "held" ? "d90" : delivery;
+  const showGlide = hyper3dArticulationHasGlide(state) && delivery === "held" && !isSequence;
   const ceiling = readout.pose;
   const rows =
-    delivery === "held"
+    effectiveDelivery === "held"
       ? Object.entries(ceiling).sort((a, b) => b[1] - a[1])
-      : Object.entries(ceiling)
+      : // A sequence has no single ceiling, so every channel it reached is shown.
+        Object.entries(isSequence ? delivered : ceiling)
           .map(([name]) => [name, delivered[name] ?? 0] as [string, number])
+          .filter(([, value]) => value > 0.0005)
           .sort((a, b) => b[1] - a[1]);
 
   return (
@@ -113,6 +140,102 @@ export function Hyper3DArticulationTestPanel() {
       <div className="flex items-baseline justify-between">
         <span className="font-semibold tracking-wide">ARTICULATION TEST</span>
         <span className="text-white/50">DEV</span>
+      </div>
+
+      {/*
+        TARGET CONVERGENCE. First control on the panel and never hidden, because
+        it applies to the RUNTIME target as well as to the connected-speech
+        runner — the comparison is the same utterance in two modes, and the
+        reviewer must be able to switch while live speech is playing.
+
+        THE TWO PRIMARY MODES ARE LARGE AND ALONE. The pre-deadline follower and
+        the three rejected candidates sit behind a disclosure: §16 asks for the
+        two relevant choices to be extremely clear, and a row of six buttons is
+        not that.
+      */}
+      <div className="rounded border border-white/15 px-2 py-1.5">
+        <div className="mb-1 flex items-baseline justify-between">
+          <span className="text-white/40">target convergence</span>
+          <span
+            className={deadlineMode === "production" ? "text-emerald-300" : "text-cyan-300"}
+            data-testid="hyper3d-deadline-active-mode"
+          >
+            {HYPER3D_DEADLINE_MODE_LABELS[deadlineMode]}
+          </span>
+        </div>
+        <div className="flex gap-1">
+          {HYPER3D_DEADLINE_PRIMARY_MODES.map((entry) => (
+            <button
+              key={entry}
+              type="button"
+              data-testid={`hyper3d-deadline-mode-${entry}`}
+              onClick={() => setHyper3dDeadlineMode(entry)}
+              className={
+                "flex-1 rounded px-2 py-2 font-semibold tracking-wide transition-colors " +
+                (entry === deadlineMode
+                  ? entry === "production"
+                    ? "bg-emerald-400 text-black"
+                    : "bg-cyan-400 text-black"
+                  : "bg-white/10 hover:bg-white/20")
+              }
+            >
+              {HYPER3D_DEADLINE_MODE_LABELS[entry]}
+            </button>
+          ))}
+        </div>
+        <details className="mt-1">
+          <summary className="cursor-pointer text-white/30">regression modes</summary>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {HYPER3D_DEADLINE_REGRESSION_MODES.map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                data-testid={`hyper3d-deadline-mode-${entry}`}
+                onClick={() => setHyper3dDeadlineMode(entry)}
+                className={
+                  "rounded px-2 py-1 text-[10px] transition-colors " +
+                  (entry === deadlineMode ? "bg-amber-400 text-black" : "bg-white/10 hover:bg-white/20")
+                }
+              >
+                {HYPER3D_DEADLINE_MODE_LABELS[entry]}
+              </button>
+            ))}
+          </div>
+        </details>
+        <div className="mt-1 grid grid-cols-2 gap-x-2 tabular-nums">
+          <div className="flex justify-between">
+            <span className="text-white/50">phoneme</span>
+            <span>{deadline.phoneme ?? "—"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">cap</span>
+            <span>{deadline.maxSpeed === null ? "—" : deadline.maxSpeed}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">landing</span>
+            <span className={deadline.landing === null ? "text-white/40" : "text-emerald-300"}>
+              {deadline.landing === null ? "OFF" : `^${deadline.landing}`}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">label</span>
+            <span>{deadline.labelMs.toFixed(0)} ms</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">left</span>
+            <span>{deadline.remainingMs.toFixed(0)} ms</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">accel</span>
+            <span className={deadline.accelerating ? "text-cyan-300" : "text-white/40"}>
+              {deadline.accelerating ? `YES ×${deadline.acceleratedChannels}` : "NO"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-white/50">speed</span>
+            <span>{deadline.peakSpeed > 0 ? deadline.peakSpeed.toFixed(1) : "24.0"}</span>
+          </div>
+        </div>
       </div>
 
       {groups.map(([family, targets]) => (
@@ -201,10 +324,113 @@ export function Hyper3DArticulationTestPanel() {
         />
       </label>
 
-      {readout.phoneme && (
+      {readout.phoneme && !isSequence && (
         <div className="text-white/60">
           {readout.phoneme} · viseme {readout.viseme} · defaultIntensity {readout.defaultIntensity.toFixed(2)}
           {readout.sealForced ? " · seal forced" : ""}
+        </div>
+      )}
+
+      {effectiveDelivery !== "held" && (
+        <div className="flex gap-1">
+          {(["asymmetric", "symmetric"] as const).map((entry) => (
+            <button
+              key={entry}
+              type="button"
+              onClick={() => setHyper3dArticulationTestJawMode(entry)}
+              className={
+                "flex-1 rounded px-2 py-1 transition-colors " +
+                (entry === jawMode ? "bg-amber-400 text-black" : "bg-white/10 hover:bg-white/20")
+              }
+            >
+              {entry === "asymmetric" ? "JAW: ASYM (production)" : "JAW: SYMMETRIC (pre-G)"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {effectiveDelivery !== "held" && (
+        <div className="rounded bg-white/5 px-2 py-1">
+          <div className="text-white/40">transition character, last cycle</div>
+          <div className="flex justify-between tabular-nums">
+            <span>peak speed</span>
+            <span className="text-violet-300">{stats.peakVelocityMMPerSecond.toFixed(0)} mm/s</span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span>carried by jaw</span>
+            <span className={stats.jawShare > 0.6 ? "text-rose-400" : "text-violet-300"}>
+              {(stats.jawShare * 100).toFixed(0)}%
+            </span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span>path length</span>
+            <span className="text-white/60">{stats.pathLengthMM.toFixed(1)} mm</span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span>sentence settle</span>
+            <span className={stats.settling ? "text-emerald-300" : "text-white/40"}>
+              {stats.settling ? "ACTIVE" : "—"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/*
+        §9 OF THE BRIEF. The same ruler in all three modes: reach is peak
+        rendered against peak demanded, in the follower's own domain, over the
+        last completed cycle. Drift and closure timing are printed because they
+        must NOT move — they are the evidence the timeline and the seal were left
+        alone, not a tuning readout.
+      */}
+      {effectiveDelivery !== "held" && (
+        <div className="rounded bg-white/5 px-2 py-1" data-testid="hyper3d-deadline-instrumentation">
+          <div className="text-white/40">target reach, last cycle ({stats.reach.samples} samples)</div>
+          <div className="flex justify-between tabular-nums">
+            <span>overall</span>
+            <span className="text-cyan-300">{(stats.reach.overall * 100).toFixed(0)}%</span>
+          </div>
+          {(
+            [
+              ["jaw", stats.reach.byChannelGroup.jaw],
+              ["vertical lip", stats.reach.byChannelGroup.vertical],
+              ["width", stats.reach.byChannelGroup.width],
+              ["rounding", stats.reach.byChannelGroup.rounding],
+              ["OPEN vowels", stats.reach.byPhonemeClass.open],
+              ["FRONT vowels", stats.reach.byPhonemeClass.front],
+              ["ROUNDED vowels", stats.reach.byPhonemeClass.rounded],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="flex justify-between tabular-nums">
+              <span className="text-white/60">{label}</span>
+              <span className={value > 0 ? "text-white/80" : "text-white/30"}>
+                {value > 0 ? `${(value * 100).toFixed(0)}%` : "—"}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 text-white/40">motion</div>
+          <div className="flex justify-between tabular-nums">
+            <span className="text-white/60">path rate</span>
+            <span>{stats.motion.pathRateMMPerSecond.toFixed(1)} mm/s</span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span className="text-white/60">velocity p90</span>
+            <span>{stats.motion.velocityP90MMPerSecond.toFixed(1)} mm/s</span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span className="text-white/60">jaw cycles</span>
+            <span>{stats.motion.jawCyclesPerSecond.toFixed(2)} /s</span>
+          </div>
+          <div className="mt-1 text-white/40">must not move</div>
+          <div className="flex justify-between tabular-nums">
+            <span className="text-white/60">timeline drift</span>
+            <span className={Math.abs(stats.timelineDriftSeconds) > 1e-9 ? "text-rose-400" : "text-emerald-300"}>
+              {(stats.timelineDriftSeconds * 1000).toFixed(3)} ms
+            </span>
+          </div>
+          <div className="flex justify-between tabular-nums">
+            <span className="text-white/60">closure timing</span>
+            <span>{stats.closureTimingErrorMs.toFixed(1)} ms</span>
+          </div>
         </div>
       )}
 

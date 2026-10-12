@@ -61,6 +61,17 @@ export interface SpeechBoundaryProximity {
   kind: "sentence" | "phrase" | null;
   /** True while inside the pause itself. */
   insidePause: boolean;
+  /**
+   * The kind of the pause currently being occupied, or `null` outside one.
+   *
+   * DISTINCT FROM `kind`, and the distinction matters: `kind` describes the
+   * boundary AHEAD, which is what an anticipatory consumer like the brow
+   * emphasis needs. A consumer that reacts to the pause it is INSIDE needs the
+   * one behind, and reading `kind` for that would silently describe the wrong
+   * event. Both come from boundaries the timeline has already resolved — this
+   * adds no detection and no threshold.
+   */
+  insidePauseKind: "sentence" | "phrase" | null;
 }
 
 /** Below this a gap is ordinary articulation, not a pause anyone would read as one. */
@@ -169,12 +180,14 @@ export class SpeechBoundaryTimeline {
     }
     const next = nextIndex >= 0 ? this.boundaries[nextIndex] : undefined;
     const previous = nextIndex === 0 ? undefined : this.boundaries[(nextIndex < 0 ? this.boundaries.length : nextIndex) - 1];
+    const insidePause = Boolean(previous && time < previous.end);
     return {
       secondsToNextStart: next ? next.start - time : Infinity,
       secondsSinceLastStart: previous ? time - previous.start : Infinity,
       nextIndex: nextIndex >= 0 ? nextIndex : this.boundaries.length,
       kind: next?.kind ?? null,
-      insidePause: Boolean(previous && time < previous.end)
+      insidePause,
+      insidePauseKind: insidePause ? previous!.kind : null
     };
   }
 }

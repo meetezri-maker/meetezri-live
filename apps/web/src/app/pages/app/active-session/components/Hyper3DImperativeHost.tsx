@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { Suspense, lazy, useEffect, useRef, type MutableRefObject } from "react";
 import {
   createHyper3dImperativeHost,
   type Hyper3dHostFailure,
@@ -6,8 +6,31 @@ import {
 } from "@/lib/avatar/hyper3d/hyper3dImperativeHost";
 import { getHyper3dPlaybackClock } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
 import { recordHyper3dAssetTimeline } from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
-import { Hyper3DEyelashTestPanel } from "./Hyper3DEyelashTestPanel";
-import { Hyper3DArticulationTestPanel } from "./Hyper3DArticulationTestPanel";
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE DEV REVIEW PANELS, AND WHY THEY ARE A DYNAMIC IMPORT.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `import.meta.env.DEV` is replaced by Vite with a literal `false` in a
+ * production build, so `false ? lazy(...) : null` folds to `null`, the
+ * `import()` below is never emitted, and `Hyper3DDevPanels` — plus both review
+ * panels and everything only they reach — is not in the production graph at all.
+ *
+ * THIS IS THE SECOND OF TWO GATES, not the only one. Each panel still decides
+ * its own visibility from its own `import.meta.env.DEV`-first availability flag,
+ * so a panel cannot render even in DEV until a reviewer opts in with a query
+ * parameter. What changed is that production no longer DOWNLOADS the code it
+ * was already refusing to run.
+ *
+ * `lazy` RATHER THAN A PLAIN `import()`: the panels are React components and the
+ * host renders synchronously. `Suspense` with a `null` fallback means the first
+ * frame of the avatar never waits for a review panel, which is also what keeps
+ * this invisible to the one thing the host exists to do.
+ */
+const Hyper3DDevPanels = import.meta.env.DEV
+  ? lazy(() => import("./Hyper3DDevPanels"))
+  : null;
 
 /**
  * The React shell around the imperative host.
@@ -89,10 +112,15 @@ export function Hyper3DImperativeHost({
   return (
     <>
       <div ref={containerRef} className="absolute inset-0" aria-hidden />
-      {/* DEV eyelash review controls. Renders null unless ?hyper3dEyelashTest=1. */}
-      <Hyper3DEyelashTestPanel />
-      {/* DEV articulation review controls. Renders null unless ?hyper3dArticulationTest=1. */}
-      <Hyper3DArticulationTestPanel />
+      {/*
+        DEV review panels only. `Hyper3DDevPanels` is `null` in a production
+        build, so this subtree does not exist there — see the note above.
+      */}
+      {Hyper3DDevPanels ? (
+        <Suspense fallback={null}>
+          <Hyper3DDevPanels />
+        </Suspense>
+      ) : null}
     </>
   );
 }

@@ -55,8 +55,15 @@ const spa = await readFile(path.join(dist, 'spa.html'), 'utf8');
 if (!spa.includes('name="robots" content="noindex,nofollow"')) {
   throw new Error('spa.html must be noindex,nofollow');
 }
+if (!spa.includes('<div id="root"></div>')) {
+  throw new Error('spa.html must retain an empty React root');
+}
 for (const forbidden of ['rel="canonical"', 'property="og:url"', 'application/ld+json']) {
   if (spa.includes(forbidden)) throw new Error(`spa.html contains forbidden public metadata: ${forbidden}`);
+}
+const spaScripts = [...spa.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((match) => match[1]);
+if (spaScripts.length === 0 || spaScripts.includes(assets.script)) {
+  throw new Error('spa.html must use the private SPA client entry');
 }
 
 await mkdir(path.join(dist, '_public'), { recursive: true });
@@ -82,9 +89,37 @@ for (const pathname of renderer.prerenderRoutes) {
     throw new Error(`${pathname} contains private or session data`);
   }
   await writeFile(path.join(dist, artifact), html, 'utf8');
+  if (pathname === '/') await writeFile(path.join(dist, 'index.html'), html, 'utf8');
 }
 
 for (const artifact of Object.values(renderer.prerenderArtifacts)) {
   await access(path.join(dist, artifact));
+}
+
+const rootIndex = await readFile(path.join(dist, 'index.html'), 'utf8');
+const homepageArtifact = await readFile(path.join(dist, renderer.prerenderArtifacts['/']), 'utf8');
+const homepage = renderer.getPublicSeo('/');
+if (!homepage || rootIndex !== homepageArtifact) {
+  throw new Error('dist/index.html must exactly match the prerendered homepage artifact');
+}
+for (const required of [
+  `<title>${homepage.title}</title>`,
+  `name="description" content="${homepage.description}"`,
+  `rel="canonical" href="${homepage.canonicalUrl}"`,
+  `name="robots" content="${homepage.robots}"`,
+  assets.script,
+  ...assets.styles,
+]) {
+  if (!rootIndex.includes(required)) throw new Error(`dist/index.html is missing ${required}`);
+}
+if ((rootIndex.match(/<h1(?:\s|>)/g) ?? []).length !== 1) {
+  throw new Error('dist/index.html must contain exactly one H1');
+}
+const rootText = rootIndex.replace(/<script[\s\S]*?<\/script>/g, '')
+  .replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ')
+  .replace(/\s+/g, ' ').trim();
+if (rootText.length < 500) throw new Error('dist/index.html lacks meaningful homepage content');
+if (rootIndex.includes('noindex,nofollow') || /access_token|refresh_token|currentUser|billingCustomerId/.test(rootIndex)) {
+  throw new Error('dist/index.html contains private SPA metadata or serialized data');
 }
 console.log(`Prerendered ${renderer.prerenderRoutes.length} public routes with ${assets.styles.length} stylesheet(s).`);

@@ -48,25 +48,69 @@ import type { BlendshapePose } from "../../types/facialAnimation";
  * mechanism `femalePhonemeProfile` already uses.
  */
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LOWER-FACE PARTICIPATION — the "moving up and down, not forming shapes" fix.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE MEASUREMENT. Rendering the whole aligned corpus and attributing every
+ * millimetre of mouth travel to its channel: during the TRANSITIONS — the
+ * moments the eye is drawn to — `jawOpen` carried 63 % of the travel at the
+ * median and 89 % at p90. The aperture was not merely the largest signal, it
+ * was very nearly the only one. Scoring each phoneme by how much travel it
+ * places ABOVE the channel's own `usefulMin`, the open vowels reached the
+ * conversational band on the jaw alone while their lip channels sat under the
+ * visibility threshold: AA's `mouthUpperUp` rendered 0.43 mm against a 7.53 mm
+ * capability, and AH — the most frequent vowel in the language — rendered ONE
+ * visible channel, `jawOpen`.
+ *
+ * THE CORRECTION, and its deliberate constraint: NO JAW VALUE CHANGES. Not one
+ * `jawOpen` in this table is touched, and no global multiplier is introduced —
+ * the rejected 1.25x experiment stays deleted. What rises is the lip
+ * participation the open vowels already declared and could not render, so the
+ * same aperture is accompanied by a visible mouth instead of carrying the
+ * sound by itself.
+ *
+ * WHY THIS COULD NOT SHIP ALONE, measured rather than argued. Stronger shapes
+ * mean greater geometric travel: on their own they raised the rendered path
+ * rate 6 % and peak velocity 5 %, which is the "lips move faster than the
+ * voice" report made worse. Paired with the asymmetric jaw in
+ * `mouthTransitionProfiles` the same shapes land at path rate -1 % and peak
+ * velocity -3 %, with the jaw's share of transition travel falling 62 % -> 53 %.
+ * The two are one change and the regressions pin them together.
+ *
+ * THE ROUNDED FAMILY IS UNTOUCHED — AO, OW, OY, UH, UW and ER keep their
+ * accepted values exactly. They measured as the healthy family, and tuning a
+ * healthy pose for numerical consistency is how a ladder gets flattened.
+ */
 /** Vowel pose overrides. Everything absent here keeps the male table's value. */
 const VOWEL_POSES: Record<string, BlendshapePose> = {
   // ---- open ---------------------------------------------------------------
   // The widest aperture in the language, and the reference's widest frames show
-  // both teeth rows. `mouthUpperUp` lifts the upper lip 7.53 mm to reveal them.
-  AA: { jawOpen: 0.56, mouthLowerDownLeft: 0.2, mouthLowerDownRight: 0.2, mouthUpperUpLeft: 0.1, mouthUpperUpRight: 0.1, mouthFunnel: 0.02 },
+  // both teeth rows. `mouthUpperUp` lifts the upper lip 7.53 mm to reveal them —
+  // at 0.10 it rendered 0.43 mm and revealed nothing, so the lift is real now.
+  // `mouthLowerDown` travels only 4.64 mm, which is why it takes the largest
+  // value in the table and still reads as support rather than a second mouth.
+  AA: { jawOpen: 0.56, mouthLowerDownLeft: 0.36, mouthLowerDownRight: 0.36, mouthUpperUpLeft: 0.3, mouthUpperUpRight: 0.3, mouthFunnel: 0.02 },
   // Open AND spread — the axis that separates it from AA.
-  AE: { jawOpen: 0.48, mouthStretchLeft: 0.3, mouthStretchRight: 0.3, mouthLowerDownLeft: 0.16, mouthLowerDownRight: 0.16, mouthUpperUpLeft: 0.07, mouthUpperUpRight: 0.07 },
-  // The most frequent vowel on the clip (34 occurrences). Pulled DOWN from 0.34
-  // so AA and AE stand clearly above it instead of the three sharing a band.
-  AH: { jawOpen: 0.3, mouthLowerDownLeft: 0.1, mouthLowerDownRight: 0.1 },
+  AE: { jawOpen: 0.48, mouthStretchLeft: 0.4, mouthStretchRight: 0.4, mouthLowerDownLeft: 0.32, mouthLowerDownRight: 0.32, mouthUpperUpLeft: 0.22, mouthUpperUpRight: 0.22 },
+  // The most frequent vowel on the clip (34 occurrences). Its aperture stays
+  // exactly where the vowel pass put it — pulled DOWN to 0.30 so AA and AE
+  // stand above it — and what it gains is the lip participation it never had:
+  // at `mouthLowerDown` 0.10 it rendered 0.062, BELOW that channel's own 0.08
+  // useful minimum, so the most frequent vowel in English was an aperture and
+  // nothing else.
+  AH: { jawOpen: 0.3, mouthLowerDownLeft: 0.24, mouthLowerDownRight: 0.24, mouthUpperUpLeft: 0.14, mouthUpperUpRight: 0.14 },
 
   // ---- open + rounded -----------------------------------------------------
   // Was the weakest of the rounded family at composed pucker 0.150. Open jaw and
   // real rounding together, which is what /ɔ/ is.
   AO: { jawOpen: 0.44, mouthFunnel: 0.34, mouthPucker: 0.34, mouthLowerDownLeft: 0.1, mouthLowerDownRight: 0.1 },
   // /aʊ/ — opens then rounds. At composed pucker 0.080 it read as neither, and
-  // measured closer to AY than to OW.
-  AW: { jawOpen: 0.42, mouthFunnel: 0.26, mouthPucker: 0.26 },
+  // measured closer to AY than to OW. Its rounding is untouched; the lower lip
+  // is added for the OPEN half of the diphthong, and the glide below places it
+  // on the onset rather than spreading it flat across the label.
+  AW: { jawOpen: 0.42, mouthFunnel: 0.26, mouthPucker: 0.26, mouthLowerDownLeft: 0.2, mouthLowerDownRight: 0.2 },
   // /ɔɪ/ — rounded onset, front offglide. Its stretch is removed: a rounded
   // vowel with lateral spread is what blurred it toward the front family.
   OY: { jawOpen: 0.3, mouthFunnel: 0.3, mouthPucker: 0.38 },
@@ -75,14 +119,33 @@ const VOWEL_POSES: Record<string, BlendshapePose> = {
   // /aɪ/ — an OPEN onset gliding front. After the first pass it was still the
   // closest pair in the inventory (AY-EH 0.093), differing on jaw alone. Now it
   // is further open AND less spread, so it separates from EH in both directions.
-  AY: { jawOpen: 0.46, mouthStretchLeft: 0.16, mouthStretchRight: 0.16, mouthLowerDownLeft: 0.12, mouthLowerDownRight: 0.12 },
-  EH: { jawOpen: 0.26, mouthStretchLeft: 0.24, mouthStretchRight: 0.24, mouthLowerDownLeft: 0.08, mouthLowerDownRight: 0.08 },
+  AY: { jawOpen: 0.46, mouthStretchLeft: 0.16, mouthStretchRight: 0.16, mouthLowerDownLeft: 0.28, mouthLowerDownRight: 0.28 },
+  // ---- front / spread, continued ------------------------------------------
+  // The spread ladder IY > EY > AE > EH > IH is preserved throughout: what
+  // changes is its SCALE, because `mouthStretch` travels 10.39 mm and the
+  // family was rendering 1.0-3.0 mm of widening against an aperture worth
+  // three times that. `mouthLowerDown` on EH is deliberately NOT raised — the
+  // front family's identity is lateral, and giving it a lower-lip term as well
+  // would move it toward the open family it is separated from.
+  EH: { jawOpen: 0.26, mouthStretchLeft: 0.4, mouthStretchRight: 0.4, mouthLowerDownLeft: 0.08, mouthLowerDownRight: 0.08 },
   // EY and IH were the closest pair in the whole inventory (0.038). They now
   // differ on jaw AND stretch, in opposite directions.
-  EY: { jawOpen: 0.2, mouthStretchLeft: 0.34, mouthStretchRight: 0.34, mouthSmileLeft: 0.05, mouthSmileRight: 0.05 },
-  IH: { jawOpen: 0.15, mouthStretchLeft: 0.2, mouthStretchRight: 0.2 },
-  // The narrowest aperture and the widest spread — the far end of both ladders.
-  IY: { jawOpen: 0.11, mouthStretchLeft: 0.5, mouthStretchRight: 0.5, mouthSmileLeft: 0.05, mouthSmileRight: 0.05 },
+  //
+  // THE CORNER POCKET, added by the shape-refinement pass. See the note below
+  // `VOWEL_POSES` for the geometry that chose it: the front family was the
+  // worst-separated in the inventory when measured on the mesh rather than on
+  // influences, and `mouthDimple` is the only axis it had no ordering on.
+  EY: { jawOpen: 0.2, mouthStretchLeft: 0.48, mouthStretchRight: 0.48, mouthSmileLeft: 0.05, mouthSmileRight: 0.05, mouthDimpleLeft: 0.14, mouthDimpleRight: 0.14 },
+  // IH GETS NO POCKET, and that is the measured result rather than an omission:
+  // giving it one moved it TOWARD EY and made IH-EY the family's worst pair. See
+  // the depth sweep in the note below `VOWEL_POSES`.
+  IH: { jawOpen: 0.15, mouthStretchLeft: 0.38, mouthStretchRight: 0.38 },
+  // The narrowest aperture and the widest spread — the far end of both ladders,
+  // and now the deepest corner too.
+  // `mouthSmile` rises here and NOWHERE else: it is the one vowel whose real
+  // shape includes a corner lift, and using it more widely would be a strength
+  // multiplier wearing a phoneme's clothes.
+  IY: { jawOpen: 0.11, mouthStretchLeft: 0.58, mouthStretchRight: 0.58, mouthSmileLeft: 0.18, mouthSmileRight: 0.18, mouthDimpleLeft: 0.24, mouthDimpleRight: 0.24 },
 
   // ---- rounded ------------------------------------------------------------
   ER: { jawOpen: 0.2, mouthPucker: 0.22, mouthFunnel: 0.16, mouthShrugUpper: 0.06 },
@@ -94,6 +157,91 @@ const VOWEL_POSES: Record<string, BlendshapePose> = {
 };
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * SHAPE REFINEMENT — the front family's corner pocket.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE MEASUREMENT, and it is the first on this asset taken from the MESH rather
+ * than from influences. `hyper3dLipGeometry` loads the shipped GLB, applies
+ * `pose x defaultIntensity x calibrateHyper3dPose` to the 13,631-vertex face and
+ * measures where the lip vertices actually end up. Pair separation is then an RMS
+ * vertex distance in millimetres, which is a thing a reviewer can see, rather
+ * than a distance between two blendshape vectors, which is not.
+ *
+ * Measured that way the FRONT FAMILY is the worst-separated group in the whole
+ * vowel inventory:
+ *
+ *   front    EY-EH 1.16   IH-EY 1.20   IH-EH 1.59   IY-EY 1.95   mm
+ *   open     AA-AE 2.47   AE-AH 3.98   AA-AH 4.26
+ *   rounded  OW-UH 2.35   UW-OW 2.72   OW-AO 3.52
+ *
+ * THE CAUSE is that the family is ordered on two axes that are not independent.
+ * Aperture (IY 8.96 < IH 9.60 < EY 10.54 < EH 12.13 mm) and spread (IY 62.96 >
+ * EY 59.83 > EH 58.50 > IH 57.95 mm) both come from the same retraction gesture,
+ * so four vowels sit along one line and the gaps between them are small.
+ *
+ * WHAT WAS TRIED FIRST AND REJECTED, measured rather than reasoned away. The
+ * obvious missing cue is the upper-teeth reveal — the family uses NO
+ * `mouthUpperUp` at all and measures an upper-lip lift of 0.44 / 0.20 / 0.17 /
+ * 0.03 mm. Three depths were swept:
+ *
+ *   candidate            worst front pair   aperture ladder
+ *   baseline                   1.16 mm      IY < IH < EY < EH
+ *   reveal, gentle             1.22 mm      intact
+ *   reveal, medium             1.25 mm      BROKEN (IY opens past IH)
+ *   reveal, strong             1.30 mm      BROKEN
+ *
+ * It buys 5-12 % of separation and then breaks the ladder, because
+ * `mouthUpperUp` OPENS the lips by 6.7 mm at influence 1.0: a monotone reveal
+ * ladder slides the family along the very axis it was already ordered on. It is
+ * a correlated axis, which is the thing this family already has too much of.
+ *
+ * WHAT SHIPS. `mouthDimple` — 9.95 mm of travel, "real corner-pocket geometry"
+ * in the calibration's own words, and used by NO phoneme anywhere in the
+ * inventory before this. It is the one axis the family has no ordering on, and
+ * measured at this asset's geometry it changes the aperture by nothing.
+ *
+ * THE DEPTH WAS CHOSEN AGAINST CONNECTED SPEECH, not against the static shape,
+ * because a deeper pocket is also more travel for the follower to cover inside
+ * the same label. Static separation against motion on `15-fast-mixed` — the
+ * fastest corpus, where a shape change costs the most — and reach on the
+ * paragraph:
+ *
+ *   pocket depth            worst pair   vs base   fast path   fast velP90   reach
+ *   none                      1.16 mm         0 %        —           —       86.1 %
+ *   IY .20 EY .12 IH .06      1.38 mm      +19 %      +1.5 %      +2.1 %     85.6 %
+ *   IY .24 EY .14 IH none     1.53 mm      +32 %      +2.1 %      +3.1 %     85.9 %   <- ships
+ *   IY .24 EY .14 IH .07      1.41 mm      +22 %      +2.2 %      +3.1 %     85.7 %
+ *   IY .30 EY .18 IH .09      1.48 mm      +28 %      +3.4 %      +5.1 %     85.6 %
+ *
+ * THE SHIPPED ROW DOMINATES EVERY OTHER ONE: the best separation, at lower
+ * motion cost than the deeper variants, and the least reach given up. The
+ * deepest candidate was implemented first and withdrawn — +3.4 % path and +5.1 %
+ * peak velocity is the band the lower-face strength pass was REJECTED at, and
+ * buying 4 % less separation for it would have been the exact trade that review
+ * refused.
+ *
+ * IH DELIBERATELY GETS NONE, and this is the sweep's real finding. Giving IH a
+ * pocket moved it TOWARD EY — both gain corner depth, so the pair closes — and
+ * made IH-EY the family's worst at 1.41-1.48 mm. Removing it leaves IH its own
+ * identity and the worst pair becomes EY-EH at 1.53 mm. Fewer phonemes touched,
+ * better separation; it is the opposite of what a consistency-driven pass would
+ * have done, and only measurement finds it.
+ *
+ * WHAT WAS TRIED AND IS NOT HERE: the reveal, re-tested ON TOP of the pocket,
+ * added 0.03 mm — inside the noise. A channel added to four phonemes has to earn
+ * more than that.
+ *
+ * IT ALSO REDUCES JAW DEPENDENCE, which is the report this pass exists for. Lip
+ * participation — the lip share of total rendered lip-region deformation — rises
+ * IY 78 -> 80 % and EY 57 -> 60 % with no jaw value touched anywhere.
+ *
+ * LADDER DISCIPLINE. The pocket follows the spread ladder (IY 0.24 > EY 0.14) and
+ * EH gets none: EH is the open end of the family, and a deep corner on an
+ * open-mid vowel is what would make it read as a smile. IY's 0.24 calibrates to
+ * 0.202, comfortably inside `mouthDimple`'s own `naturalMax` of 0.30, so nothing
+ * here is theatrical.
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * AFFRICATES — THE "change" REGRESSION.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -334,6 +482,146 @@ export const CONSONANT_POSES: Record<string, BlendshapePose> = {
     mouthStretchLeft: 0.26,
     mouthStretchRight: 0.26,
     mouthClose: 0.1
+  },
+
+  /**
+   * ───────────────────────────────────────────────────────────────────────────
+   * /r/ — THE CLOSEST CROSS-VISEME PAIR IN THE INVENTORY.
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * THE MEASUREMENT, on the mesh. Over every phoneme pair, the closest two
+   * shapes carrying DIFFERENT visemes are `R` and `ZH` at 0.131 mm of RMS
+   * vertex distance — and then `SH` at 0.260, `JH` at 0.338 and `CH` at 0.339.
+   * `R` carries `viseme: "RR"` and all four of the others carry `"CH"`, so this
+   * is not a shared-viseme family rendering alike on purpose: /r/ is rendering
+   * as a postalveolar fricative.
+   *
+   * THE CAUSE. `R` and `ZH` were authored with almost the same two rounding
+   * values — R pucker 0.18 / funnel 0.12, ZH pucker 0.18 / funnel 0.105 — and
+   * after calibration they protrude 1.65 mm and 1.60 mm. The earlier consonant
+   * pass measured R's pucker at 1.27 mm, judged it above its own visibility
+   * floor and marked it UNTOUCHED. That was the right call on the question it
+   * asked (is it visible) and the wrong one on the question it did not (is it
+   * DISTINCT), which is exactly what measuring influences instead of geometry
+   * cannot tell you.
+   *
+   * THE CORRECTION, one channel. /r/ is the more protruded and less
+   * corner-drawn of the two, so its rounding leads:
+   *
+   *   R   pucker 0.18 -> 0.26
+   *
+   * MEASURED AFTER, as RMS vertex distance:
+   *
+   *   pair     before     after
+   *   R-ZH     0.131  ->  0.662     (5.1x)
+   *   R-SH     0.260  ->  0.447
+   *   R-JH     0.338  ->  0.903
+   *   R-CH     0.339  ->  0.817
+   *   R-W      2.539  ->  1.965     <- deliberately still far
+   *
+   * THE STOPPING POINT IS R-W, not the gain it could reach. A stronger
+   * candidate (pucker 0.32) measured R-ZH at 1.094 mm but pulled R-W down to
+   * 1.537: /r/ would have started reading as /w/, trading one duplicate for
+   * another. At 0.26 the protrusion is 1.60 mm against /w/'s 3.39 mm, which is
+   * the real relationship — /r/ is rounded, /w/ is MORE rounded.
+   *
+   * Jaw, funnel, `mouthShrugUpper`, intensity, attack, release, coarticulation
+   * weights, viseme and category are untouched, and no channel is added or
+   * removed.
+   *
+   * REPORTED AND NOT FIXED: R's `mouthShrugUpper` of 0.05 calibrates to 0.024
+   * against that channel's own 0.05 useful minimum, so it renders as nothing.
+   * It is left exactly as it is — removing it would change the pose for no
+   * visible gain, and raising it would be a second, unmeasured change to a
+   * phoneme this pass is already touching.
+   */
+  R: {
+    jawOpen: 0.09,
+    mouthPucker: 0.26,
+    mouthFunnel: 0.12,
+    mouthShrugUpper: 0.05
+  },
+
+  /**
+   * ───────────────────────────────────────────────────────────────────────────
+   * THE STOPS THAT RENDERED AS JAW AND NOTHING ELSE.
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * THE MEASUREMENT, over the aligned corpus at a 90 ms label. Scoring each
+   * phoneme by travel above the channel's own `usefulMin`, six consonants wrote
+   * exactly ONE visible channel — `jawOpen` — and one wrote none at all:
+   *
+   *   K 1.27 mm   T 1.26 mm   D 1.03 mm   G 0.95 mm   N 0.74 mm   NG 0.00 mm
+   *
+   * Rendered pairwise distance put `D`-`G` at 0.0058 and `T`-`K` at 0.0062,
+   * against the 0.03 floor the accepted vowel pass was built to clear. Six
+   * different sounds were one pose.
+   *
+   * THE CAUSE is specific. Each of these declares its identity on `mouthClose`,
+   * whose gain is 0.11 on this asset — deliberately, because it is the bilabial
+   * seal channel and 34.65 mm of travel would otherwise push the lower lip
+   * through the upper one. `T` asks for 0.16 and renders 0.013, a QUARTER of
+   * `mouthClose`'s own 0.03 useful minimum. No value of that gain can serve both
+   * a bilabial seal and an alveolar cue.
+   *
+   * THE CORRECTION. Each keeps its aperture and its `mouthClose` EXACTLY, and
+   * gains a second cue on a channel with an honest gain:
+   *
+   *   T  D      lip retraction + a lower-lip raise   (alveolar, tongue-fronted)
+   *   N  NG     lateral compression + a lower-lip raise   (nasal, lips relaxed
+   *             but not inert — NG was literally invisible)
+   *   K  G      a lower-lip drop, no retraction   (velar, tongue-backed, so the
+   *             lips must NOT read as front)
+   *
+   * T/D and K/G are deliberately separated on OPPOSITE channels — retraction
+   * versus a lower-lip drop — because a front and a back stop that differ only
+   * in degree is how they collapsed in the first place. Nothing here is
+   * exaggerated: the largest new value renders 1.1-1.4 mm, which is support,
+   * not a gesture. `mouthClose` is not used to manufacture any of it.
+   */
+  T: {
+    jawOpen: 0.1,
+    mouthClose: 0.16,
+    mouthStretchLeft: 0.24,
+    mouthStretchRight: 0.24,
+    mouthShrugLower: 0.22
+  },
+  D: {
+    jawOpen: 0.09,
+    mouthClose: 0.12,
+    mouthStretchLeft: 0.22,
+    mouthStretchRight: 0.22,
+    mouthShrugLower: 0.19
+  },
+  N: {
+    jawOpen: 0.08,
+    mouthClose: 0.12,
+    mouthPressLeft: 0.24,
+    mouthPressRight: 0.24,
+    mouthShrugLower: 0.24
+  },
+  K: {
+    jawOpen: 0.11,
+    mouthClose: 0.08,
+    mouthStretchLeft: 0.14,
+    mouthStretchRight: 0.14,
+    mouthLowerDownLeft: 0.19,
+    mouthLowerDownRight: 0.19
+  },
+  G: {
+    jawOpen: 0.1,
+    mouthClose: 0.06,
+    mouthStretchLeft: 0.11,
+    mouthStretchRight: 0.11,
+    mouthLowerDownLeft: 0.16,
+    mouthLowerDownRight: 0.16
+  },
+  NG: {
+    jawOpen: 0.08,
+    mouthClose: 0.08,
+    mouthPressLeft: 0.22,
+    mouthPressRight: 0.22,
+    mouthShrugLower: 0.22
   }
 };
 
@@ -396,17 +684,50 @@ export interface DiphthongGlide {
 }
 
 export const DIPHTHONG_GLIDES: Record<string, DiphthongGlide> = {
+  /**
+   * THE THREE GLIDES THE LOWER-FACE PASS TOUCHED keep the midpoint identity
+   * exactly: `onset + offglide = 2 x pose` on every channel, so the accepted
+   * pose is still the phoneme's temporal centre and the mean shape over the
+   * label is arithmetically unchanged by the glide. The new lip values are
+   * distributed by PHONETICS rather than split evenly — the lower lip belongs
+   * to the open half of /aɪ/ and /aʊ/, and the spread to the front half of /eɪ/.
+   */
+  /**
+   * RE-CENTRED FOR THE STRENGTH PASS, and the glide DEPTH is preserved rather
+   * than scaled: each channel keeps the same +-excursion it was authored with and
+   * is simply re-centred on the new midpoint. The pass is changing how strong a
+   * shape is, not how far the diphthong travels inside its own label, so
+   * multiplying the excursion as well would be a second, unreviewed change.
+   *
+   *   EY stretch   +-0.10 about 0.48  ->  0.38 / 0.58
+   *   AY lowerDown +-0.04 about 0.28  ->  0.32 / 0.24
+   *   AW lowerDown +-0.06 about 0.20  ->  0.26 / 0.14
+   */
   EY: {
-    onset: { jawOpen: 0.25, mouthStretchLeft: 0.26, mouthStretchRight: 0.26, mouthSmileLeft: 0.05, mouthSmileRight: 0.05 },
-    offglide: { jawOpen: 0.15, mouthStretchLeft: 0.42, mouthStretchRight: 0.42, mouthSmileLeft: 0.05, mouthSmileRight: 0.05 }
+    /**
+     * stretch 0.38 + 0.58 = 2 x 0.48.
+     *
+     * THE CORNER POCKET CARRIES NO GLIDE EXCURSION: it is identical at both
+     * ends, so `onset + offglide = 2 x pose` still holds on `mouthDimple` and
+     * the accepted pose remains the phoneme's exact temporal midpoint. The
+     * pocket is a property of the whole front vowel rather than of one end of
+     * its trajectory, and giving it an excursion would be inventing a second,
+     * unmeasured movement inside the label.
+     */
+    onset: { jawOpen: 0.25, mouthStretchLeft: 0.38, mouthStretchRight: 0.38, mouthSmileLeft: 0.05, mouthSmileRight: 0.05, mouthDimpleLeft: 0.14, mouthDimpleRight: 0.14 },
+    offglide: { jawOpen: 0.15, mouthStretchLeft: 0.58, mouthStretchRight: 0.58, mouthSmileLeft: 0.05, mouthSmileRight: 0.05, mouthDimpleLeft: 0.14, mouthDimpleRight: 0.14 }
   },
   AY: {
-    onset: { jawOpen: 0.54, mouthStretchLeft: 0.08, mouthStretchRight: 0.08, mouthLowerDownLeft: 0.14, mouthLowerDownRight: 0.14 },
-    offglide: { jawOpen: 0.38, mouthStretchLeft: 0.24, mouthStretchRight: 0.24, mouthLowerDownLeft: 0.1, mouthLowerDownRight: 0.1 }
+    // lowerDown 0.32 + 0.24 = 2 x 0.28, weighted to the open onset. 0.32 stays
+    // below AA's 0.36 so AA keeps the top of the lower-lip ladder.
+    onset: { jawOpen: 0.54, mouthStretchLeft: 0.08, mouthStretchRight: 0.08, mouthLowerDownLeft: 0.32, mouthLowerDownRight: 0.32 },
+    offglide: { jawOpen: 0.38, mouthStretchLeft: 0.24, mouthStretchRight: 0.24, mouthLowerDownLeft: 0.24, mouthLowerDownRight: 0.24 }
   },
   AW: {
-    onset: { jawOpen: 0.52, mouthFunnel: 0.18, mouthPucker: 0.14 },
-    offglide: { jawOpen: 0.32, mouthFunnel: 0.34, mouthPucker: 0.38 }
+    // lowerDown 0.26 + 0.14 = 2 x 0.20. /aʊ/ opens then rounds, so the lower
+    // lip is on the open onset and releases as the rounding arrives.
+    onset: { jawOpen: 0.52, mouthFunnel: 0.18, mouthPucker: 0.14, mouthLowerDownLeft: 0.26, mouthLowerDownRight: 0.26 },
+    offglide: { jawOpen: 0.32, mouthFunnel: 0.34, mouthPucker: 0.38, mouthLowerDownLeft: 0.14, mouthLowerDownRight: 0.14 }
   },
   OW: {
     onset: { jawOpen: 0.29, mouthFunnel: 0.34, mouthPucker: 0.4 },

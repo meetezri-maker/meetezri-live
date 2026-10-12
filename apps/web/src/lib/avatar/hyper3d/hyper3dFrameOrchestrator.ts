@@ -81,7 +81,9 @@ import {
   getHyper3dArticulationTestIntensity,
   getHyper3dArticulationTestMode,
   getHyper3dArticulationTestState,
+  getHyper3dDeadlineOverride,
   hyper3dArticulationTestAvailable,
+  publishHyper3dDeadlineFrame,
 } from "./hyper3dArticulationTest";
 
 /**
@@ -379,6 +381,24 @@ export function resolveHyper3dFrame(
     nativeVisemeDebugActive: false,
     audioPlaying: input.isSpeaking,
     paused: false,
+    /**
+     * THE DEV COMPARISON OVERRIDE, and `null` on every production frame.
+     *
+     * `null` DOES NOT MEAN "NO DEADLINE" — it means "no override", and the
+     * controller then runs the `hyper3d-usc` profile's own accepted 34 SOFT
+     * configuration. Production convergence is owned by that profile, not by
+     * anything on this line. What this line can do is let a DEV panel DEPART
+     * from production; it is not what makes production work.
+     *
+     * `DEV` FIRST, AND DELIBERATELY REDUNDANT. `hyper3dArticulationTestAvailable`
+     * is already `import.meta.env.DEV`-first, so this already read `null` in
+     * production. The leading term makes that STATICALLY PROVABLE: `DEV` is
+     * `import.meta.env.DEV === true`, which Vite replaces with `false`, so the
+     * conditional folds at build time and the getter cannot be reached by a
+     * production frame even in principle.
+     */
+    mouthDeadlineOverride:
+      DEV && hyper3dArticulationTestAvailable ? getHyper3dDeadlineOverride() : null,
   });
 
   // 2. model transform — for this asset, the Hyper3D calibration.
@@ -553,11 +573,14 @@ export function resolveHyper3dFrame(
    * underneath — which is exactly what makes the "does Object_2002 follow
    * Head_M" check possible while an eye state stands still.
    *
-   * In production `hyper3dEyelashTestAvailable` is false (it is behind
-   * `import.meta.env.DEV`), the condition short-circuits on a boolean, and the
-   * pose object is neither copied nor touched.
+   * `DEV` FIRST, AND DELIBERATELY REDUNDANT. `hyper3dEyelashTestAvailable` is
+   * already `import.meta.env.DEV`-first, so this branch was already unreachable
+   * in production. The leading term makes that STATICALLY PROVABLE: `DEV` is
+   * `import.meta.env.DEV === true`, which Vite replaces with `false`, so the
+   * whole branch folds at build time and the pose override cannot be reached by
+   * a production frame even in principle.
    */
-  if (hyper3dEyelashTestAvailable) {
+  if (DEV && hyper3dEyelashTestAvailable) {
     const testState = getHyper3dEyelashTestState();
     if (testState !== "runtime") {
       pose = applyHyper3dEyelashTestPose(pose, testState, getHyper3dEyelashTestIntensity());
@@ -575,11 +598,21 @@ export function resolveHyper3dFrame(
    *
    * The two harnesses write disjoint channel sets, so their order is immaterial.
    *
-   * In production `hyper3dArticulationTestAvailable` is false (it is behind
-   * `import.meta.env.DEV`), the condition short-circuits on a boolean, and the
-   * pose object is neither copied nor touched.
+   * `DEV` FIRST, AND DELIBERATELY REDUNDANT, for the same reason as the eyelash
+   * branch above: `hyper3dArticulationTestAvailable` already made this
+   * unreachable in production, and the leading `DEV` makes it fold away at build
+   * time instead of merely evaluating to false at runtime. Nothing in here —
+   * not the pose override, not the deadline publication — exists in a
+   * production bundle.
    */
-  if (hyper3dArticulationTestAvailable) {
+  if (DEV && hyper3dArticulationTestAvailable) {
+    /**
+     * The production smoother's own deadline report, published for the panel.
+     * Done unconditionally inside the DEV guard so the RUNTIME target — real
+     * speech, nothing overridden — is instrumented on exactly the same four
+     * numbers as the connected-speech runner.
+     */
+    publishHyper3dDeadlineFrame(frame.debug.currentPhoneme, frame.debug.deadlineFollower);
     const articulationState = getHyper3dArticulationTestState();
     if (articulationState !== "runtime") {
       pose = applyHyper3dArticulationTestPose(

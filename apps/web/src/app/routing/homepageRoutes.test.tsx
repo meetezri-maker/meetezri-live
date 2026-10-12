@@ -84,7 +84,7 @@ describe("deployment homepage redirect", () => {
     );
   });
 
-  it("keeps renderer and API rewrites ahead of the final SPA fallback", () => {
+  it("keeps renderer and API rewrites ahead of the SPA fallback without rewriting /", () => {
     const sources = deploymentConfig.rewrites.map((rule) => rule.source);
     expect(sources.slice(0, 5)).toEqual([
       "/api/:path*",
@@ -93,10 +93,7 @@ describe("deployment homepage redirect", () => {
       "/sitemap.xml",
       "/robots.txt",
     ]);
-    expect(deploymentConfig.rewrites.find((rule) => rule.source === "/")).toEqual({
-      source: "/",
-      destination: "/_public/home.html",
-    });
+    expect(deploymentConfig.rewrites.find((rule) => rule.source === "/")).toBeUndefined();
     expect(deploymentConfig.rewrites[deploymentConfig.rewrites.length - 1]).toEqual({
       source: "/(.*)",
       destination: "/spa.html",

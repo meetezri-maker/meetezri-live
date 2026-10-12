@@ -63,9 +63,8 @@ describe('vercel rewrite order', () => {
     expect(rule.destination).toBe('https://meetezri-live-api.vercel.app/resources/:slug');
   });
 
-  it('maps the six public routes to protected prerender artifacts', () => {
+  it('maps non-root public routes to protected prerender artifacts', () => {
     const expected = {
-      '/': '/_public/home.html',
       '/how-it-works': '/_public/how-it-works.html',
       '/pricing': '/_public/pricing.html',
       '/privacy': '/_public/privacy.html',
@@ -75,6 +74,11 @@ describe('vercel rewrite order', () => {
     for (const [source, destination] of Object.entries(expected)) {
       expect(rewrites.find((rule) => rule.source === source)?.destination).toBe(destination);
     }
+  });
+
+  it('serves the prerendered root index naturally instead of rewriting /', () => {
+    expect(rewrites.find((rule) => rule.source === '/')).toBeUndefined();
+    expect(rewrites[catchAllIndex].destination).toBe('/spa.html');
   });
 
   it('maps confirmed private deep links and the temporary fallback to spa.html', () => {
@@ -112,6 +116,12 @@ describe('vercel rewrite order', () => {
       '/auth/(.*)',
       '/invite/(.*)',
       '/app/(.*)',
+      '/app',
+      '/profile',
+      '/profile/(.*)',
+      '/error',
+      '/error/(.*)',
+      '/dev',
       '/admin/(.*)',
       '/dev/(.*)',
     ]) {

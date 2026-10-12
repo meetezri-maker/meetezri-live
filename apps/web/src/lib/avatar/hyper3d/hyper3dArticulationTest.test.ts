@@ -5,6 +5,7 @@ import {
   applyHyper3dArticulationTestPose,
   hyper3dArticulationHasGlide,
   hyper3dArticulationReadout,
+  getHyper3dArticulationDeliveryStats,
 } from "./hyper3dArticulationTest";
 import { hyper3dPhonemeToBlendshape } from "./engine/mappings/phonemeToBlendshape";
 import { calibrateHyper3dPose } from "./engine/mappings/avatars/hyper3dCalibration";
@@ -87,6 +88,45 @@ describe("hyper3d articulation test harness", () => {
       const offglide = hyper3dArticulationReadout(target.id, "calibrated", "offglide", 1).pose;
       expect(onset).not.toEqual(mid);
       expect(offglide).not.toEqual(mid);
+    }
+  });
+
+  it("connected sequences run, loop, and report transition character", () => {
+    const sequences = HYPER3D_ARTICULATION_TARGETS.filter((t) => t.phonemes?.length);
+    expect(sequences.length).toBeGreaterThanOrEqual(6);
+    for (const target of sequences) {
+      // Every phoneme named by a sequence must exist in the shipped table.
+      for (const phoneme of target.phonemes ?? []) {
+        expect(hyper3dPhonemeToBlendshape[phoneme as keyof typeof hyper3dPhonemeToBlendshape]).toBeDefined();
+      }
+    }
+    const sequence = sequences[0];
+    // Drive two full cycles at 60 Hz so the runner wraps and publishes.
+    let pose: BlendshapePose = {};
+    let moved = 0;
+    for (let i = 0; i < 400; i += 1) {
+      const next = applyHyper3dArticulationTestPose({}, sequence.id, "calibrated", "mid", 1, "d90", 1 / 60);
+      if (Object.values(next).some((v) => v > 0.01)) moved += 1;
+      pose = next;
+    }
+    expect(moved).toBeGreaterThan(50);
+    expect(Object.keys(pose).length).toBeGreaterThan(0);
+    const stats = getHyper3dArticulationDeliveryStats();
+    expect(stats.peakVelocityMMPerSecond).toBeGreaterThan(0);
+    expect(stats.pathLengthMM).toBeGreaterThan(0);
+    expect(stats.jawShare).toBeGreaterThanOrEqual(0);
+    expect(stats.jawShare).toBeLessThanOrEqual(1);
+  });
+
+  it("a sequence still touches only the channels the harness declares", () => {
+    const owned = new Set(HYPER3D_ARTICULATION_TEST_CHANNELS);
+    const incoming: BlendshapePose = { eyeBlinkLeft: 0.4, browInnerUp: 0.2, cheekSquintLeft: 0.1 };
+    for (let i = 0; i < 120; i += 1) {
+      const next = applyHyper3dArticulationTestPose(incoming, "seqAaNaa", "calibrated", "mid", 1, "d70", 1 / 60);
+      for (const [name, value] of Object.entries(next)) {
+        if (owned.has(name)) continue;
+        expect(value).toBe(incoming[name]);
+      }
     }
   });
 
