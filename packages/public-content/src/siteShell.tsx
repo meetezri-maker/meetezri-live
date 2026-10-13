@@ -44,8 +44,11 @@ const DefaultLink: ShellLink = ({ href, className, children }) => (
 /** Primary navigation, in the order the marketing site shows it. */
 export const SITE_NAV_LINKS = [
   { href: '/how-it-works', label: 'How It Works' },
+  { href: '/talk-it-out', label: 'Talk It Out' },
+  { href: '/about', label: 'About' },
+  { href: '/safety', label: 'Safety' },
+  { href: '/resources', label: 'Resources' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/privacy', label: 'Privacy & Safety' },
 ] as const;
 
 /** Header account actions. */
@@ -60,8 +63,16 @@ export const SITE_FOOTER_COLUMNS = [
     heading: 'Product',
     links: [
       { href: '/how-it-works', label: 'How It Works' },
+      { href: '/talk-it-out', label: 'Talk It Out' },
       { href: '/pricing', label: 'Pricing' },
-      { href: '/privacy', label: 'Privacy & Safety' },
+      { href: '/resources', label: 'Resources' },
+    ],
+  },
+  {
+    heading: 'Company',
+    links: [
+      { href: '/about', label: 'About' },
+      { href: '/safety', label: 'Safety' },
     ],
   },
   {
@@ -76,15 +87,14 @@ export const SITE_FOOTER_COLUMNS = [
     links: [
       { href: '/signup', label: 'Sign Up' },
       { href: '/login', label: 'Log In' },
-      { href: '/admin/login', label: 'Admin Portal', muted: true },
     ],
   },
 ] as const;
 
-export const SITE_FOOTER_TAGLINE = 'Your AI-powered wellness companion, available 24/7';
+export const SITE_FOOTER_TAGLINE = 'A place for conversation and everyday reflection.';
 export const SITE_FOOTER_COPYRIGHT_YEAR = 2026;
 export const SITE_FOOTER_DISCLAIMER =
-  'This is not a replacement for professional medical or mental health services.';
+  'Solace is not a replacement for professional medical or mental-health care and is not emergency support.';
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
@@ -215,14 +225,7 @@ export function PublicSiteFooter({ LinkComponent = DefaultLink, logo, social }: 
               <ul className="sol-site-footer-links">
                 {column.links.map((link) => (
                   <li key={`${column.heading}-${link.href}`}>
-                    <Link
-                      href={link.href}
-                      className={
-                        'muted' in link && link.muted
-                          ? 'sol-site-footer-link sol-site-footer-link-accent'
-                          : 'sol-site-footer-link'
-                      }
-                    >
+                    <Link href={link.href} className="sol-site-footer-link">
                       {link.label}
                     </Link>
                   </li>

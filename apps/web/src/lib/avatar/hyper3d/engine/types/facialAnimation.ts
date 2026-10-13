@@ -307,6 +307,16 @@ export interface TimelineDebugState {
     secondsRemaining: number;
     labelSeconds: number;
   };
+  /**
+   * STAGE 2 EXPERIMENT — the corrective lower-lip morph, as the controller
+   * resolved it this frame. Absent on every production frame, because the
+   * option that produces it is never passed there.
+   */
+  correctiveLowerLip?: {
+    requested: number;
+    suppression: number;
+    nextBilabialInMs: number | null;
+  };
   idleExpression?: IdleExpressionDebugState;
   boneTransforms?: BoneTransformDebugState;
 }

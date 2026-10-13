@@ -26,6 +26,15 @@ import { SpeechGestureController } from "../behaviour/SpeechGestureController";
 import { EmotionEngine } from "../emotion/EmotionEngine";
 import { CoarticulationEngine } from "../lipsync/CoarticulationEngine";
 import { normalizePhoneme } from "../lipsync/PhonemeNormalizer";
+import {
+  BILABIAL_PHONEMES,
+  CORRECTIVE_BILABIAL_LEAD_SECONDS,
+  CORRECTIVE_MORPH,
+  gateCorrectiveOutput,
+  applyCorrectiveTargetGate,
+  correctiveBilabialSuppression,
+  hyper3dCorrectiveProfile
+} from "../../../hyper3dCorrectiveMorph";
 import { SpeechEnvelope } from "../lipsync/SpeechEnvelope";
 import { TimelineCursor } from "../timeline/TimelineCursor";
 import { SpeechBoundaryTimeline } from "../timeline/SpeechBoundaryTimeline";
@@ -159,6 +168,16 @@ interface EvaluateOptions {
    * even if a caller passed it. See `resolveMouthDeadline`.
    */
   mouthDeadlineOverride?: MouthDeadlineOverride;
+  /**
+   * STAGE 2 EXPERIMENT — articulate with the corrective speech profile, which
+   * adds `mouthLowerDownDeep` to AA, AH and AE and to nothing else.
+   *
+   * ONLY A DEV SESSION ON THE EXPERIMENTAL ASSET PASSES THIS. Production passes
+   * nothing, gets the shipped profile, and never writes the channel — which is
+   * also the only honest state for it, because the production GLB has 51 morphs
+   * and no `mouthLowerDownDeep` to write to.
+   */
+  correctiveLowerLip?: boolean;
 }
 
 const emptyPose: BlendshapePose = {};
@@ -393,10 +412,20 @@ export class AvatarController {
 
     // Each model articulates with poses authored for its own face. Calibration-off
     // still bypasses both, so the neutral A/B reference is unchanged.
-    const speechProfile = this.resolveSpeechProfile(
-      options.calibrationEnabled === false ? neutralSpeechProfile : getPhonemeProfile(modelId),
-      options.phonemeTuningOverrides
-    );
+    /**
+     * STAGE 2. The corrective profile is the shipped Hyper3D table plus one
+     * channel on three vowels; handing it to the SAME `resolveSpeechProfile`
+     * means the correction blends through the accepted coarticulation and
+     * envelope with no second path. Calibration-off still bypasses both, so the
+     * neutral A/B reference is unchanged.
+     */
+    const baseProfile =
+      options.calibrationEnabled === false
+        ? neutralSpeechProfile
+        : options.correctiveLowerLip && modelId === "hyper3d-usc"
+          ? hyper3dCorrectiveProfile
+          : getPhonemeProfile(modelId);
+    const speechProfile = this.resolveSpeechProfile(baseProfile, options.phonemeTuningOverrides);
     const t = this.cursor.seek(time);
     const current = playbackActive ? this.cursor.activePhoneme(t) : undefined;
     const previous = playbackActive ? this.cursor.previousPhoneme(t) : undefined;
@@ -407,6 +436,8 @@ export class AvatarController {
       this.unknownPhonemes[current.phoneme] = (this.unknownPhonemes[current.phoneme] ?? 0) + 1;
     const currentDef = normalized ? speechProfile[normalized] : undefined;
     const intensity = current?.intensity ?? 0;
+    let correctiveDebug: { requested: number; suppression: number; nextBilabialInMs: number | null } | undefined;
+    let correctiveSuppression = 1;
     const lip = playbackActive
       ? this.payload.behaviour.coarticulation
         ? this.coarticulation.blend({
@@ -434,6 +465,55 @@ export class AvatarController {
             }
           }
       : { pose: emptyPose, weights: emptyWeights };
+    /**
+     * ───────────────────────────────────────────────────────────────────────
+     * STAGE 2 — BILABIAL SUPPRESSION of the corrective morph.
+     * ───────────────────────────────────────────────────────────────────────
+     *
+     * APPLIED HERE, between coarticulation and the follower, and that position
+     * is the whole design. Suppressing the phoneme POSE would not be enough:
+     * the engine has just blended the PREVIOUS phoneme's pose in across the
+     * 80 ms look-behind window, so an AA before an M contributes its correction
+     * into M's own frames no matter what M's pose says. Scaling the blended
+     * result catches that residue as well as the pose.
+     *
+     * And it is before the mixer, so the one accepted follower then tracks a
+     * target that is ALREADY decaying rather than being asked to jump — which is
+     * what lets the correction reach zero by the closure onset instead of
+     * chasing it afterwards.
+     *
+     * ONE MULTIPLIER ON ONE CHANNEL. Nothing else in the pose is touched, no
+     * other channel is read, and `mouthClose`, `mouthPress*`, the jaw speeds and
+     * the convergence profile are all untouched — the suppression can only ever
+     * REMOVE correction, never add closure.
+     *
+     * The lookahead is `cursor.nextMatchingStart`, which walks the aligned
+     * timeline forward from the cursor's own position and writes nothing. No
+     * second clock and no second writer exist.
+     */
+    if (options.correctiveLowerLip) {
+      const nextBilabial = this.cursor.nextMatchingStart(
+        t,
+        (phoneme) => BILABIAL_PHONEMES.has(normalizePhoneme(phoneme.phoneme) ?? phoneme.phoneme),
+        CORRECTIVE_BILABIAL_LEAD_SECONDS
+      );
+      const suppression = correctiveBilabialSuppression(t, nextBilabial);
+      /**
+       * EVALUATED EVERY FRAME, not only when the pose carries the channel —
+       * because the frames that leaked were exactly the ones whose pose does
+       * not. A bilabial's own pose has no correction to scale, so a guard on
+       * the pose would skip the gate precisely across the closure it protects.
+       */
+      correctiveSuppression = suppression;
+      const requested = lip.pose[CORRECTIVE_MORPH];
+      applyCorrectiveTargetGate(lip.pose, suppression);
+      correctiveDebug = {
+        requested: requested ?? 0,
+        suppression,
+        nextBilabialInMs: nextBilabial === null ? null : (nextBilabial - t) * 1000
+      };
+    }
+
     const envelope = playbackActive
       ? this.envelope.evaluate(lip.pose, Boolean(current), Boolean(pause))
       : neutralEnvelope;
@@ -712,7 +792,7 @@ export class AvatarController {
      * stopped payload — all of which must take the accepted follower.
      */
     const secondsRemainingInLabel = current ? current.end_time - t : null;
-    const outputPose = this.mixer.smooth(
+    const smoothedPose = this.mixer.smooth(
       mixed.pose,
       deltaSeconds,
       ownedChannels,
@@ -720,6 +800,26 @@ export class AvatarController {
       settlingInSentencePause,
       secondsRemainingInLabel
     );
+    /**
+     * THE SECOND HALF OF THE BILABIAL GATE, and the half that makes it exact.
+     *
+     * The follower is geometric: against a target that reached zero it sheds a
+     * fraction per frame and never arrives, so scaling the TARGET alone left a
+     * measured 0.099 of correction inside closure intervals. The same multiplier
+     * applied here cannot be outrun — zero times the follower's state is zero,
+     * whatever that state is.
+     *
+     * STILL ONE WRITER. This is the controller adjusting one channel of its own
+     * return value before anything consumes it; `calibrateHyper3dPose` caps it
+     * and `MorphTargetController` remains the only thing that writes a morph.
+     * Nothing else in the pose is read or touched, and the factor is in [0,1],
+     * so this can only remove correction.
+     *
+     * INERT WITHOUT THE EXPERIMENT. `correctiveSuppression` is 1 unless
+     * `correctiveLowerLip` was passed, and the channel is absent from the
+     * production asset's 51 morphs regardless.
+     */
+    const outputPose = gateCorrectiveOutput(smoothedPose, correctiveSuppression);
     const finalHeadMotion = headMotion.diagnosticActive || headMotion.manualActive
       ? headMotion
       : {
@@ -810,6 +910,7 @@ export class AvatarController {
          * What the deadline layer did on THIS frame, straight from the smoother
          * that did it. `armed: false` in production, where no cap is supplied.
          */
+        correctiveLowerLip: correctiveDebug,
         deadlineFollower: {
           ...this.mixer.deadlineFrame(),
           labelSeconds: current ? current.end_time - current.start_time : 0

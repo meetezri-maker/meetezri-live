@@ -5,6 +5,7 @@ import { BrandLogo } from "./BrandLogo";
 import { motion } from "motion/react";
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { SITE_NAV_ACTIONS, SITE_NAV_LINKS } from "@meetezri/public-content";
 
 function CinematicNavLink({
   to,
@@ -60,38 +61,34 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
           </Link>
 
           <nav
-            className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 text-sm font-normal tracking-wide text-violet-100/78 md:flex"
+            className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-5 text-sm font-normal tracking-wide text-violet-100/78 lg:flex xl:gap-7"
             aria-label="Primary"
           >
-            <CinematicNavLink to="/how-it-works" isActive={pathname === "/how-it-works"}>
-              How It Works
-            </CinematicNavLink>
-            <CinematicNavLink to="/pricing" isActive={pathname === "/pricing"}>
-              Pricing
-            </CinematicNavLink>
-            <CinematicNavLink to="/privacy" isActive={pathname === "/privacy"}>
-              Privacy &amp; Safety
-            </CinematicNavLink>
+            {SITE_NAV_LINKS.map((item) => (
+              <CinematicNavLink key={item.href} to={item.href} isActive={pathname === item.href}>
+                {item.label}
+              </CinematicNavLink>
+            ))}
           </nav>
 
-          <div className="relative z-10 hidden items-center gap-5 sm:flex">
+          <div className="relative z-10 hidden items-center gap-5 lg:flex">
             <Link
               to="/login"
               className="text-sm text-violet-100/78 transition-colors hover:text-white"
             >
-              Log In
+              {SITE_NAV_ACTIONS.logIn.label}
             </Link>
             <Link
               to="/#pricing"
               className="landing-cta-glow rounded-full bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-6 py-2.5 text-[13px] font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
             >
-              Get Started
+              {SITE_NAV_ACTIONS.getStarted.label}
             </Link>
           </div>
 
           <button
             type="button"
-            className="relative z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white/90 sm:hidden"
+            className="relative z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white/90 lg:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-expanded={mobileMenuOpen}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
@@ -101,17 +98,13 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
         </div>
 
         {mobileMenuOpen ? (
-          <div className="border-t border-white/[0.06] bg-[#070812]/90 px-4 py-4 backdrop-blur-xl sm:hidden">
+          <div className="border-t border-white/[0.06] bg-[#070812]/90 px-4 py-4 backdrop-blur-xl lg:hidden">
             <nav className="flex flex-col gap-3 text-sm text-violet-100/85">
-              <Link to="/how-it-works" onClick={() => setMobileMenuOpen(false)}>
-                How It Works
-              </Link>
-              <Link to="/pricing" onClick={() => setMobileMenuOpen(false)}>
-                Pricing
-              </Link>
-              <Link to="/privacy" onClick={() => setMobileMenuOpen(false)}>
-                Privacy &amp; Safety
-              </Link>
+              {SITE_NAV_LINKS.map((item) => (
+                <Link key={item.href} to={item.href} onClick={() => setMobileMenuOpen(false)}>
+                  {item.label}
+                </Link>
+              ))}
               <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
                 Log In
               </Link>
@@ -148,25 +141,16 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
             </motion.div>
           </Link>
 
-          <div className="hidden items-center gap-8 md:flex">
-            <Link
-              to="/how-it-works"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              How It Works
-            </Link>
-            <Link
-              to="/pricing"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Pricing
-            </Link>
-            <Link
-              to="/privacy"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Privacy & Safety
-            </Link>
+          <div className="hidden items-center gap-5 lg:flex xl:gap-7">
+            {SITE_NAV_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
 
           <motion.div className="flex items-center gap-3">
@@ -184,7 +168,7 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 md:hidden"
+              className="p-2 lg:hidden"
               aria-expanded={mobileMenuOpen}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             >
@@ -198,29 +182,18 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="space-y-3 py-4 md:hidden"
+            className="space-y-3 py-4 lg:hidden"
           >
-            <Link
-              to="/how-it-works"
-              className="block py-2 text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              How It Works
-            </Link>
-            <Link
-              to="/pricing"
-              className="block py-2 text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Pricing
-            </Link>
-            <Link
-              to="/privacy"
-              className="block py-2 text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Privacy & Safety
-            </Link>
+            {SITE_NAV_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className="block py-2 text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
             <div className="space-y-2 pt-2">
               <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
                 <Button variant="ghost" className="w-full">

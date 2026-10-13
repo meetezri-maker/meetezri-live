@@ -9,6 +9,9 @@ import {
 import { PUBLIC_ARTIFACT_PATHS } from '@/app/routing/publicRouteManifest';
 import { Landing } from '@/app/pages/Landing';
 import { HowItWorks } from '@/app/pages/HowItWorks';
+import { TalkItOut } from '@/app/pages/TalkItOut';
+import { About } from '@/app/pages/About';
+import { Safety } from '@/app/pages/Safety';
 import { Pricing } from '@/app/pages/Pricing';
 import { Privacy } from '@/app/pages/Privacy';
 import { Terms } from '@/app/pages/Terms';
@@ -20,6 +23,9 @@ import { renderNotFoundDocument, renderPublicDocument, type PublicAssets } from 
 const pages = {
   '/': Landing,
   '/how-it-works': HowItWorks,
+  '/talk-it-out': TalkItOut,
+  '/about': About,
+  '/safety': Safety,
   '/pricing': Pricing,
   '/privacy': Privacy,
   '/terms': Terms,

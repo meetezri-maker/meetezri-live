@@ -3,6 +3,9 @@ import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { EarlyAccess } from '@/app/pages/EarlyAccess';
+import { About } from '@/app/pages/About';
+import { Safety } from '@/app/pages/Safety';
+import { TalkItOut } from '@/app/pages/TalkItOut';
 import { Terms } from '@/app/pages/Terms';
 import { PublicMarketingApp } from './PublicMarketingApp';
 
@@ -46,12 +49,27 @@ window.matchMedia ??= ((query: string) => ({
 Element.prototype.scrollIntoView ??= vi.fn();
 
 interface HydrationCase {
-  pathname: '/' | '/terms' | '/early-access';
+  pathname: '/' | '/terms' | '/early-access' | '/talk-it-out' | '/about' | '/safety';
   Page: typeof Terms;
   expectedH1: string;
 }
 
 const cases: HydrationCase[] = [
+  {
+    pathname: '/talk-it-out',
+    Page: TalkItOut,
+    expectedH1: 'Talk It Out',
+  },
+  {
+    pathname: '/about',
+    Page: About,
+    expectedH1: 'About Solace',
+  },
+  {
+    pathname: '/safety',
+    Page: Safety,
+    expectedH1: 'Safety and Support at Solace',
+  },
   {
     pathname: '/terms',
     Page: Terms,

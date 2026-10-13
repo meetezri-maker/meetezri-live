@@ -47,7 +47,7 @@ describe('Cycle 1C route inventory', () => {
     expect(source).toContain('path="/app/*"');
 
     for (const route of literalRoutes) {
-      if (['/how-it-works', '/privacy', '/terms', '/pricing', '/resources', '/resources/:slug'].includes(route)) continue;
+      if (['/how-it-works', '/talk-it-out', '/about', '/safety', '/privacy', '/terms', '/pricing', '/resources', '/resources/:slug'].includes(route)) continue;
       expect(isSpaRoute(dynamicSample(route)), `unclassified React route ${route}`).toBe(true);
     }
   });
@@ -96,6 +96,9 @@ describe('Vercel routing boundaries', () => {
   it.each([
     ['/', undefined],
     ['/how-it-works', '/_public/how-it-works.html'],
+    ['/talk-it-out', '/_public/talk-it-out.html'],
+    ['/about', '/_public/about.html'],
+    ['/safety', '/_public/safety.html'],
     ['/pricing', '/_public/pricing.html'],
     ['/privacy', '/_public/privacy.html'],
     ['/terms', '/_public/terms.html'],

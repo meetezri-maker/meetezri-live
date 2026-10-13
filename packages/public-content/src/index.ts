@@ -87,4 +87,9 @@ export type {
   PublicStructuredDataDescriptor,
 } from './publicSeo';
 
-export { buildPublicStructuredData, serialisePublicJsonLd } from './publicStructuredData';
+export {
+  PUBLIC_ORGANIZATION_ID,
+  PUBLIC_WEBSITE_ID,
+  buildPublicStructuredData,
+  serialisePublicJsonLd,
+} from './publicStructuredData';

@@ -22,8 +22,8 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-site-logo{position:relative;z-index:10;display:flex;flex-shrink:0;align-items:center;text-decoration:none}
 .sol-site-logo img{height:2.5rem;width:auto;display:block}
 
-.sol-site-nav{position:absolute;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:2rem;font-size:.875rem;letter-spacing:.015em;color:rgba(237,233,254,.78)}
-@media(min-width:768px){.sol-site-nav{display:flex}}
+.sol-site-nav{position:absolute;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:1.5rem;font-size:.875rem;letter-spacing:.015em;color:rgba(237,233,254,.78)}
+@media(min-width:1024px){.sol-site-nav{display:flex}}
 .sol-site-nav-item{position:relative;padding-bottom:.25rem}
 .sol-site-nav-link{color:inherit;text-decoration:none;transition:color .15s}
 .sol-site-nav-link:hover{color:rgba(255,255,255,.95)}
@@ -31,12 +31,12 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-site-nav-underline{position:absolute;bottom:-.125rem;left:0;right:0;height:1px;background:linear-gradient(to right,#E91E63,#e879f9,#9C27B0);box-shadow:0 0 14px rgba(233,30,99,.65)}
 
 .sol-site-actions{position:relative;z-index:10;display:none;align-items:center;gap:1.25rem}
-@media(min-width:640px){.sol-site-actions{display:flex}}
+@media(min-width:1024px){.sol-site-actions{display:flex}}
 .sol-site-login{font-size:.875rem;color:rgba(237,233,254,.78);text-decoration:none;transition:color .15s}
 .sol-site-login:hover{color:#fff}
 
 .sol-site-mobile{position:relative;z-index:10}
-@media(min-width:640px){.sol-site-mobile{display:none}}
+@media(min-width:1024px){.sol-site-mobile{display:none}}
 .sol-site-disclosure summary{display:flex;height:2.25rem;width:2.25rem;cursor:pointer;align-items:center;justify-content:center;border-radius:.5rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);list-style:none}
 .sol-site-disclosure summary::-webkit-details-marker{display:none}
 .sol-site-disclosure summary:focus-visible{outline:2px solid var(--sol-accent,#5eead4);outline-offset:2px}
@@ -51,7 +51,7 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-site-footer-inner{margin:0 auto;max-width:80rem;padding:2.5rem 1rem}
 @media(min-width:768px){.sol-site-footer-inner{padding:3rem 2rem}}
 .sol-site-footer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2rem}
-@media(min-width:768px){.sol-site-footer-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:768px){.sol-site-footer-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
 .sol-site-footer-brand{grid-column:span 2}
 @media(min-width:768px){.sol-site-footer-brand{grid-column:span 1}}
 .sol-site-footer-brand img{height:3.5rem;width:auto;display:block}

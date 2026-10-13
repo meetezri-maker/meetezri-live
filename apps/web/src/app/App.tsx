@@ -30,6 +30,9 @@ import { NotFoundPage } from '@/app/pages/NotFoundPage';
 
 // ─── Public Pages ────────────────────────────────────────────────────────────
 const HowItWorks           = lazy(() => import('@/app/pages/HowItWorks').then(m => ({ default: m.HowItWorks })));
+const TalkItOut            = lazy(() => import('@/app/pages/TalkItOut').then(m => ({ default: m.TalkItOut })));
+const About                = lazy(() => import('@/app/pages/About').then(m => ({ default: m.About })));
+const Safety               = lazy(() => import('@/app/pages/Safety').then(m => ({ default: m.Safety })));
 const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => ({ default: m.Privacy })));
 const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
 const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
@@ -437,6 +440,9 @@ export default function App() {
               <Route key={path} path={path} element={element} />
             ))}
             <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/talk-it-out" element={<TalkItOut />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/safety" element={<Safety />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             {/* <Route path="/accessibility" element={<Accessibility />} /> */}

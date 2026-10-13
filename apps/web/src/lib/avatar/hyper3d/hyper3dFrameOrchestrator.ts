@@ -85,6 +85,7 @@ import {
   hyper3dArticulationTestAvailable,
   publishHyper3dDeadlineFrame,
 } from "./hyper3dArticulationTest";
+import { hyper3dAssetSelection } from "./engine/mappings/avatars/hyper3dAssetSelection";
 
 /**
  * THE ACCEPTED FRAME SEQUENCE, in one place.
@@ -328,6 +329,12 @@ export type Hyper3dFrameReview = {
 };
 
 const DEV = import.meta.env.DEV === true;
+/**
+ * Resolved ONCE at module load, like the asset selection itself. A mid-session
+ * change needs a reload, which is the correct cost for swapping the GLB under a
+ * live scene graph.
+ */
+const hyper3dActiveAssetIsExperimental = DEV && hyper3dAssetSelection.experimental;
 
 function reviewPose(pose: BlendshapePose): BlendshapePose {
   const selected: BlendshapePose = {};
@@ -397,6 +404,13 @@ export function resolveHyper3dFrame(
      * conditional folds at build time and the getter cannot be reached by a
      * production frame even in principle.
      */
+    /**
+     * STAGE 2 EXPERIMENT. True only when a DEV session selected the
+     * corrective-morph asset — `resolveHyper3dAsset` gates that behind
+     * `import.meta.env.DEV` first, so this is false on every production frame
+     * and the controller then uses the shipped profile.
+     */
+    correctiveLowerLip: hyper3dActiveAssetIsExperimental,
     mouthDeadlineOverride:
       DEV && hyper3dArticulationTestAvailable ? getHyper3dDeadlineOverride() : null,
   });

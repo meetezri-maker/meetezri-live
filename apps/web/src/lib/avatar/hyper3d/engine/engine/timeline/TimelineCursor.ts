@@ -118,4 +118,37 @@ export class TimelineCursor {
   }
 
   phonemeProgress(time: number, phoneme?: TimedPhoneme) { return phoneme ? (time - phoneme.start_time) / Math.max(.001, phoneme.end_time - phoneme.start_time) : 0; }
+
+  /**
+   * The START TIME of the next phoneme at or after `time` that `matches`, within
+   * `horizonSeconds`, or `null` if there is none.
+   *
+   * READ-ONLY LOOKAHEAD, and the only thing Stage 2's bilabial suppression needs
+   * from the timeline. It walks forward from the cursor's own position — never
+   * from index 0 — and stops at the horizon, so a long reply costs a few
+   * comparisons rather than a scan. It does not move `index`: `locate` owns
+   * that, and a lookahead that advanced the cursor would corrupt the very
+   * lookup the rest of the frame depends on.
+   *
+   * It cannot write a clock, move a phoneme or reach the audio. "No timing
+   * drift" is therefore a property of this signature rather than something a
+   * test has to establish.
+   */
+  nextMatchingStart(
+    time: number,
+    matches: (phoneme: TimedPhoneme) => boolean,
+    horizonSeconds: number
+  ): number | null {
+    if (!(horizonSeconds > 0)) return null;
+    const phonemes = this.payload.phonemes;
+    const deadline = time + horizonSeconds;
+    for (let i = this.locate(time); i < phonemes.length; i += 1) {
+      const candidate = phonemes[i];
+      if (candidate.start_time > deadline) return null;
+      // A label already underway counts: its closure is in progress, which is
+      // the case the suppression most needs to catch.
+      if (candidate.end_time > time && matches(candidate)) return candidate.start_time;
+    }
+    return null;
+  }
 }

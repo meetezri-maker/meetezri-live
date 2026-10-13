@@ -12,6 +12,9 @@ const loaders: Record<PublicRoutePath, () => Promise<PublicRouteModule>> = {
   '/': () => import('@/app/pages/Landing').then(({ Landing }) => ({ default: Landing })),
   '/how-it-works': () =>
     import('@/app/pages/HowItWorks').then(({ HowItWorks }) => ({ default: HowItWorks })),
+  '/talk-it-out': () => import('@/app/pages/TalkItOut').then(({ TalkItOut }) => ({ default: TalkItOut })),
+  '/about': () => import('@/app/pages/About').then(({ About }) => ({ default: About })),
+  '/safety': () => import('@/app/pages/Safety').then(({ Safety }) => ({ default: Safety })),
   '/pricing': () => import('@/app/pages/Pricing').then(({ Pricing }) => ({ default: Pricing })),
   '/privacy': () => import('@/app/pages/Privacy').then(({ Privacy }) => ({ default: Privacy })),
   '/terms': () => import('@/app/pages/Terms').then(({ Terms }) => ({ default: Terms })),
@@ -22,6 +25,9 @@ const loaders: Record<PublicRoutePath, () => Promise<PublicRouteModule>> = {
 export const PUBLIC_ARTIFACT_PATHS: Record<PublicRoutePath, string> = {
   '/': '_public/home.html',
   '/how-it-works': '_public/how-it-works.html',
+  '/talk-it-out': '_public/talk-it-out.html',
+  '/about': '_public/about.html',
+  '/safety': '_public/safety.html',
   '/pricing': '_public/pricing.html',
   '/privacy': '_public/privacy.html',
   '/terms': '_public/terms.html',

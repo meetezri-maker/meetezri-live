@@ -249,6 +249,7 @@ describe('structured data', () => {
     });
     expect(article.publisher).toEqual({
       '@type': 'Organization',
+      '@id': 'https://meetezri.com/#organization',
       name: 'Solace',
       url: 'https://meetezri.com/',
     });
@@ -560,8 +561,10 @@ describe('sitemap', () => {
     expect(locations).toEqual([
       'https://meetezri.com/',
       'https://meetezri.com/how-it-works',
+      'https://meetezri.com/talk-it-out',
+      'https://meetezri.com/about',
+      'https://meetezri.com/safety',
       'https://meetezri.com/pricing',
-      'https://meetezri.com/terms',
       'https://meetezri.com/resources',
       'https://meetezri.com/resources/what-to-do-when-you-cannot-sleep',
       'https://meetezri.com/resources/second',
@@ -579,9 +582,7 @@ describe('sitemap', () => {
       '/home',
       '/early-access',
       '/privacy',
-      '/about',
-      '/safety',
-      '/talk-it-out',
+      '/terms',
       '/contact',
       '/author',
       '/authors',

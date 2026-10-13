@@ -37,24 +37,51 @@
  * automatic load-failure fallback, which is a runtime override applied over this
  * selection — see `AvatarCanvas`.
  */
-export type Hyper3dAssetId = "female_2291" | "female_229";
+export type Hyper3dAssetId = "female_2291" | "female_229" | "female_2291_lowerlip_v2";
 
 /** How the active asset was chosen. Surfaced in DEV diagnostics only. */
-export type Hyper3dAssetSource = "default" | "query" | "localStorage" | "load-failure";
+export type Hyper3dAssetSource =
+  | "default"
+  | "query"
+  | "localStorage"
+  | "load-failure"
+  | "dev-experimental";
 
 export const HYPER3D_PRODUCTION_ASSET_ID: Hyper3dAssetId = "female_2291";
 export const HYPER3D_LEGACY_ASSET_ID: Hyper3dAssetId = "female_229";
 
+/**
+ * STAGE 2 — THE EXPERIMENTAL CORRECTIVE-MORPH ASSET, DEV ONLY.
+ *
+ * `female_2291.glb` with ONE appended morph target, `mouthLowerDownDeep`. Built
+ * by `apps/web/scripts/hyper3d/buildCorrectiveMorph.mjs`; all 51 original
+ * morphs, the 14 eyelash sparse accessors, the 875-joint skin, every material
+ * and all 18 embedded images are byte-identical to production, which
+ * `verifyCorrectiveMorph.mjs` proves accessor by accessor.
+ *
+ * ITS GATE IS DIFFERENT FROM THE LEGACY FALLBACK'S, and the difference is the
+ * point. `hyper3dLegacyGlb` is deliberately reachable in a production build
+ * because it is an accepted operational rollback to a shipped asset. This is an
+ * EXPERIMENT: it sits behind `import.meta.env.DEV` first, so neither a query
+ * parameter nor a stored flag can select it in production.
+ */
+export const HYPER3D_EXPERIMENTAL_ASSET_ID: Hyper3dAssetId = "female_2291_lowerlip_v2";
+
 export const HYPER3D_GLB_URL = "/avatars/female_2291.glb";
 export const HYPER3D_LEGACY_GLB_URL = "/avatars/female_229.glb";
+export const HYPER3D_EXPERIMENTAL_GLB_URL = "/avatars/experimental/female_2291-lowerlip-v2.glb";
 
 export const HYPER3D_ASSET_URLS: Readonly<Record<Hyper3dAssetId, string>> = {
   female_2291: HYPER3D_GLB_URL,
-  female_229: HYPER3D_LEGACY_GLB_URL
+  female_229: HYPER3D_LEGACY_GLB_URL,
+  female_2291_lowerlip_v2: HYPER3D_EXPERIMENTAL_GLB_URL
 };
 
 /** The flag name, in both the query string and `localStorage`. */
 export const HYPER3D_LEGACY_GLB_FLAG = "hyper3dLegacyGlb";
+
+/** The DEV-only flag that selects the corrective-morph asset. */
+export const HYPER3D_EXPERIMENTAL_GLB_FLAG = "hyper3dLowerLipV2";
 
 export interface Hyper3dAssetSelection {
   assetId: Hyper3dAssetId;
@@ -62,14 +89,54 @@ export interface Hyper3dAssetSelection {
   source: Hyper3dAssetSource;
   /** True when the legacy asset is active, whatever chose it. */
   legacy: boolean;
+  /**
+   * True ONLY when the DEV experimental asset is active. The controller reads
+   * this to decide whether to articulate with the corrective profile, so a
+   * production frame — where it is always false — cannot activate the morph.
+   */
+  experimental: boolean;
 }
 
 const selectionFor = (assetId: Hyper3dAssetId, source: Hyper3dAssetSource): Hyper3dAssetSelection => ({
   assetId,
   url: HYPER3D_ASSET_URLS[assetId],
   source,
-  legacy: assetId === HYPER3D_LEGACY_ASSET_ID
+  legacy: assetId === HYPER3D_LEGACY_ASSET_ID,
+  experimental: assetId === HYPER3D_EXPERIMENTAL_ASSET_ID
 });
+
+/**
+ * Whether a DEV session has asked for the experimental corrective-morph asset.
+ *
+ * `import.meta.env?.DEV` FIRST, exactly as `useLegacyHyper3dFbx` below does and
+ * unlike `resolveHyper3dAsset`'s legacy branch: Vite replaces that expression
+ * with `false` in a production build, so neither the query parameter nor the
+ * stored flag is consulted there at all. The optional chaining is load-bearing
+ * for the reason the note on `readLegacyFlag` gives — this module is reachable
+ * from `avatarModelConfigs`, which the acceptance gate bundles with rolldown and
+ * runs in plain node, where `import.meta.env` is undefined.
+ */
+const readExperimentalFlag = (): boolean => {
+  if (!import.meta.env?.DEV) return false;
+  try {
+    if (typeof window === "undefined") return false;
+    const query = new URLSearchParams(window.location.search).get(HYPER3D_EXPERIMENTAL_GLB_FLAG);
+    if (query !== null) {
+      const wanted = query !== "0" && query !== "false";
+      try {
+        if (wanted) window.localStorage?.setItem(HYPER3D_EXPERIMENTAL_GLB_FLAG, "1");
+        else window.localStorage?.removeItem(HYPER3D_EXPERIMENTAL_GLB_FLAG);
+      } catch {
+        // The query parameter still decides THIS session.
+      }
+      return wanted;
+    }
+    return window.localStorage?.getItem(HYPER3D_EXPERIMENTAL_GLB_FLAG) === "1";
+  } catch {
+    // A blocked storage API or an exotic location must never decide the avatar.
+    return false;
+  }
+};
 
 /**
  * Reads the query parameter, then the stored preference, then falls back to the
@@ -87,6 +154,14 @@ const selectionFor = (assetId: Hyper3dAssetId, source: Hyper3dAssetSource): Hype
 export const resolveHyper3dAsset = (): Hyper3dAssetSelection => {
   try {
     if (typeof window === "undefined") return selectionFor(HYPER3D_PRODUCTION_ASSET_ID, "default");
+    /**
+     * THE DEV EXPERIMENT WINS WHEN IT IS ASKED FOR, and it can only be asked for
+     * in a DEV build. Checked FIRST so a developer who once pinned the legacy
+     * fallback is not silently held on it while trying to review the corrective
+     * morph — the flag is explicit either way, and in production this call is
+     * `false` before it reads anything.
+     */
+    if (readExperimentalFlag()) return selectionFor(HYPER3D_EXPERIMENTAL_ASSET_ID, "dev-experimental");
     const query = new URLSearchParams(window.location.search).get(HYPER3D_LEGACY_GLB_FLAG);
     if (query !== null) {
       const wantsLegacy = query !== "0" && query !== "false";

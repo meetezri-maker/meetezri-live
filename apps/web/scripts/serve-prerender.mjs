@@ -9,6 +9,9 @@ const port = Number(process.env.PORT ?? 4173);
 const publicArtifacts = new Map([
   ['/', 'index.html'],
   ['/how-it-works', '_public/how-it-works.html'],
+  ['/talk-it-out', '_public/talk-it-out.html'],
+  ['/about', '_public/about.html'],
+  ['/safety', '_public/safety.html'],
   ['/pricing', '_public/pricing.html'],
   ['/privacy', '_public/privacy.html'],
   ['/terms', '_public/terms.html'],

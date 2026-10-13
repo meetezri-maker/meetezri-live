@@ -396,17 +396,16 @@ describe('links and related content', () => {
   });
 
   it('renders a route CTA through the shared registry', async () => {
-    // VALID_AEO_BODY carries a CTA targeting `product.talk_it_out`, whose interim mapping is
-    // `/how-it-works`. Phase 5A does not build `/talk-it-out`, so this must still resolve.
+    // VALID_AEO_BODY carries a CTA targeting `product.talk_it_out`, which now resolves to the
+    // dedicated public authority page rather than the previous interim destination.
     const id = await seedDraft('aeo_answer', `Route CTA ${randomUUID().slice(0, 8)}`);
     await publish(id);
     const slug = (await prisma.content_items.findUniqueOrThrow({ where: { id } })).slug;
 
     const { body } = await app.inject({ method: 'GET', url: `/resources/${slug}` });
 
-    expect(body).toContain('href="/how-it-works"');
+    expect(body).toContain('href="/talk-it-out"');
     expect(body).not.toContain('product.talk_it_out');
-    expect(body).not.toContain('/talk-it-out');
   });
 });
 

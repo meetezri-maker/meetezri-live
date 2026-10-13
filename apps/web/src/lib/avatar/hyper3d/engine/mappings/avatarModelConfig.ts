@@ -304,7 +304,19 @@ const femaleMorphMapping: Record<string, MorphTargetBinding[]> = {
  */
 const HYPER3D_EYE_REST_CORRECTIONS: Readonly<Record<Hyper3dAssetId, Hyper3dEyeRestCorrection>> = {
   female_2291: HYPER3D_2291_EYE_REST_CORRECTION,
-  female_229: HYPER3D_GLB_EYE_REST_CORRECTION
+  female_229: HYPER3D_GLB_EYE_REST_CORRECTION,
+  /**
+   * THE SAME OBJECT AS `female_2291`, BY REFERENCE AND NOT BY COPY.
+   *
+   * The Stage 2 experimental asset is `female_2291.glb` with one appended mouth
+   * morph; `verifyCorrectiveMorph.mjs` proves its eye meshes, skin and every
+   * original accessor are byte-identical. So it needs the identical eye-rest
+   * pre-rotation, and sharing the reference is what guarantees that: a future
+   * retune of the production constant cannot leave the experiment behind on a
+   * stale copy, which is exactly how an asset A/B acquires a second difference
+   * nobody intended.
+   */
+  female_2291_lowerlip_v2: HYPER3D_2291_EYE_REST_CORRECTION
 };
 
 export const avatarModelConfigs: Record<AvatarModelId, AvatarModelConfig> = {

@@ -1,7 +1,51 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { existsSync, rmSync } from 'fs';
+import type { Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The experimental Hyper3D avatars are DEV-only, including in the build output.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `public/avatars/experimental/` holds the Stage 1/1B corrective-morph GLBs,
+ * 44.6 MB each. They have to stay exactly there, because DEV selects them by
+ * URL through the normal static path and the whole Stage 2 runtime test is
+ * written against that path — but Vite copies `public/` wholesale, so without
+ * this they would add 89 MB to every production deployment for an asset no
+ * production code path can select.
+ *
+ * WHY A POST-BUILD PRUNE rather than moving the files. Vite has no ignore list
+ * for `publicDir`: the only alternatives are to move the assets out of `public`
+ * and hand-serve them with dev middleware, or to prune after the copy. Moving
+ * them changes how DEV loads the asset, which is the thing under test; pruning
+ * names one directory and cannot touch another file. The production and
+ * fallback GLBs sit in `public/avatars/` itself and are not inside this
+ * directory, so they are unaffected.
+ *
+ * It applies to BUILD ONLY. `vite dev` serves `publicDir` from source and never
+ * runs this, so the experimental assets stay available locally.
+ */
+const EXPERIMENTAL_AVATAR_DIR = 'avatars/experimental';
+
+function excludeExperimentalAvatars(): Plugin {
+  let outDir = '';
+  return {
+    name: 'exclude-experimental-avatars',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const target = path.join(outDir, EXPERIMENTAL_AVATAR_DIR);
+      if (!existsSync(target)) return;
+      rmSync(target, { recursive: true, force: true });
+      this.info(`pruned ${EXPERIMENTAL_AVATAR_DIR} from ${outDir}`);
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
@@ -9,6 +53,7 @@ export default defineConfig({
     // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
+    excludeExperimentalAvatars(),
   ],
   resolve: {
     alias: {

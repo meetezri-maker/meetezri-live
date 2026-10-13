@@ -40,6 +40,7 @@ function compact(input: Json): Json {
 function publisher(origin: string): Json {
   return {
     '@type': 'Organization',
+    '@id': absoluteUrl(origin, '/#organization'),
     name: SITE_NAME,
     url: absoluteUrl(origin, '/'),
   };

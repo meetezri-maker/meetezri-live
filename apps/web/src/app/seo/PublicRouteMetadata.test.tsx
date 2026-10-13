@@ -36,7 +36,29 @@ describe('public route metadata synchronization', () => {
 
     applyPublicMetadata(getPublicSeo('/how-it-works')!);
     expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'index,follow');
-    expect(count('script[type="application/ld+json"]')).toBe(2);
+    expect(count('script[type="application/ld+json"]')).toBe(1);
+  });
+
+  it('switches between Terms noindex and an indexable authority page without stale metadata', () => {
+    applyPublicMetadata(getPublicSeo('/about')!);
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
+      'href', 'https://www.talktosolace2.ai/about'
+    );
+    expect(count('script[type="application/ld+json"]')).toBe(1);
+
+    applyPublicMetadata(getPublicSeo('/terms')!);
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
+      'href', 'https://www.talktosolace2.ai/terms'
+    );
+    expect(count('script[type="application/ld+json"]')).toBe(0);
+
+    applyPublicMetadata(getPublicSeo('/safety')!);
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'index,follow');
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
+      'href', 'https://www.talktosolace2.ai/safety'
+    );
+    expect(count('script[type="application/ld+json"]')).toBe(1);
   });
 
   it('removes public canonicals, social tags and schema at the private boundary', () => {

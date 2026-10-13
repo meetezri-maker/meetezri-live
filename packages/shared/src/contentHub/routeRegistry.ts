@@ -30,13 +30,8 @@ export interface RouteRegistryEntry {
  */
 export const ROUTE_REGISTRY = {
   'product.talk_it_out': {
-    href: '/how-it-works',
+    href: '/talk-it-out',
     label: 'Talk It Out',
-    interim: true,
-    interimNote:
-      'INTERIM. No dedicated Talk It Out marketing page exists yet; /how-it-works is the closest ' +
-      'genuinely public page (it references Talk It Out throughout). Retarget to /talk-it-out ' +
-      'once Product ships it — changing this one value is the entire migration.',
   },
   resource_library: {
     href: '/resources',

@@ -82,6 +82,9 @@ pids
 !BILLING_CONSOLIDATION_IMPLEMENTATION_PLAN.md
 !apps/api/scripts/STEP9-CLEANUP-EXECUTION-REPORT.md
 
+# Public SEO legal/content remediation register.
+!docs/seo-remediation.md
+
 # Python/Pip
 pip-wheel-metadata/
 pip-install-*/

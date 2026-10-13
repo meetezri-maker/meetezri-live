@@ -234,6 +234,18 @@
       "destination": "/_public/how-it-works.html"
     },
     {
+      "source": "/talk-it-out",
+      "destination": "/_public/talk-it-out.html"
+    },
+    {
+      "source": "/about",
+      "destination": "/_public/about.html"
+    },
+    {
+      "source": "/safety",
+      "destination": "/_public/safety.html"
+    },
+    {
       "source": "/pricing",
       "destination": "/_public/pricing.html"
     },
