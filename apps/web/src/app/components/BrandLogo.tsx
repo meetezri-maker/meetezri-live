@@ -5,14 +5,18 @@
  *   `logo white.png` = dark wordmark for light backgrounds (filenames are legacy).
  */
 import { useState, useEffect } from "react";
+import {
+  PUBLIC_BRAND_LOGO_ON_DARK_PATH,
+  PUBLIC_BRAND_LOGO_ON_LIGHT_PATH,
+} from "@meetezri/public-content";
 
 const LS_KEY = "ezri_branding";
 
 /** White/light wordmark — use on dark pages (login, signup, onboarding, app shell). */
-export const BRAND_LOGO_ON_DARK_BG = "/logos/logo black.png";
+export const BRAND_LOGO_ON_DARK_BG = PUBLIC_BRAND_LOGO_ON_DARK_PATH;
 
 /** Dark wordmark — use on light pages (marketing nav on white, admin). */
-export const BRAND_LOGO_ON_LIGHT_BG = "/logos/logo white.png";
+export const BRAND_LOGO_ON_LIGHT_BG = PUBLIC_BRAND_LOGO_ON_LIGHT_PATH;
 
 function readCustomLogoUrl(): string {
   try {

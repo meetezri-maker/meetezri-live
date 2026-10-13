@@ -15,6 +15,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactNode } from 'react';
 import {
   PUBLIC_CONTENT_CSS,
+  PUBLIC_BRAND_LOGO_ON_DARK_PATH,
+  PUBLIC_FAVICON_PNG_PATH,
+  PUBLIC_FAVICON_SVG_PATH,
   PublicSiteFooter,
   PublicSiteHeader,
   SsrMobileMenu,
@@ -49,7 +52,7 @@ export interface DocumentInput {
  * a slot rather than a fork of the shell.
  */
 function StaticLogo({ className }: { className?: string }) {
-  return <img src="/logo.svg" alt="Solace" className={className} />;
+  return <img src={PUBLIC_BRAND_LOGO_ON_DARK_PATH} alt="Solace" className={className} />;
 }
 
 function MetaTags({ metadata }: { metadata: PageMetadata }) {
@@ -81,6 +84,8 @@ export function renderDocument({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" type="image/svg+xml" href={PUBLIC_FAVICON_SVG_PATH} sizes="any" />
+        <link rel="icon" type="image/png" href={PUBLIC_FAVICON_PNG_PATH} sizes="954x954" />
         <title>{metadata.title}</title>
         <MetaTags metadata={metadata} />
 

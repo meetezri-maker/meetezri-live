@@ -73,6 +73,17 @@ describe('the rendered document', () => {
     expect(html).toContain('.sol-page{');
   });
 
+  it('uses the deployed brand logo and explicit favicon assets', () => {
+    expect(html.match(/<img src="\/logos\/logo black\.png" alt="Solace"/g)).toHaveLength(2);
+    expect(html).not.toContain('/logo.svg');
+    expect(html).toContain(
+      '<link rel="icon" type="image/svg+xml" href="/favicon/icon.svg" sizes="any"/>'
+    );
+    expect(html).toContain(
+      '<link rel="icon" type="image/png" href="/favicon/Black.png" sizes="954x954"/>'
+    );
+  });
+
   it('renders no raw HTML from content — every value is escaped', () => {
     const hostile = answerDetail({
       title: '<script>alert(1)</script> Sleep',

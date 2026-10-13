@@ -41,6 +41,12 @@ const DefaultLink: ShellLink = ({ href, className, children }) => (
 
 // ─── Configuration — the single source of truth ──────────────────────────────
 
+/** Brand assets shared by the SPA, prerenderer and runtime Resources renderer. */
+export const PUBLIC_BRAND_LOGO_ON_DARK_PATH = '/logos/logo black.png';
+export const PUBLIC_BRAND_LOGO_ON_LIGHT_PATH = '/logos/logo white.png';
+export const PUBLIC_FAVICON_SVG_PATH = '/favicon/icon.svg';
+export const PUBLIC_FAVICON_PNG_PATH = '/favicon/Black.png';
+
 /** Primary navigation, in the order the marketing site shows it. */
 export const SITE_NAV_LINKS = [
   { href: '/how-it-works', label: 'How It Works' },
