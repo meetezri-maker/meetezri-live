@@ -53,6 +53,18 @@ describe('the SPA Resources page carries the site shell', () => {
     expect(container.querySelector('.sol-site-footer')).toBeInTheDocument();
   });
 
+  it('reserves intrinsic space for both brand logos', async () => {
+    const { container } = renderIndex();
+    await waitFor(() => expect(container.querySelector('.sol-site-header')).toBeInTheDocument());
+
+    const logos = container.querySelectorAll('.sol-site-header img, .sol-site-footer img');
+    expect(logos).toHaveLength(2);
+    for (const logo of logos) {
+      expect(logo).toHaveAttribute('width', '651');
+      expect(logo).toHaveAttribute('height', '262');
+    }
+  });
+
   it('renders exactly one header and one footer — no duplicate shell', async () => {
     const { container } = renderIndex();
     await waitFor(() => expect(container.querySelector('.sol-site-header')).toBeInTheDocument());

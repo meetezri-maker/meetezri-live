@@ -52,7 +52,15 @@ export interface DocumentInput {
  * a slot rather than a fork of the shell.
  */
 function StaticLogo({ className }: { className?: string }) {
-  return <img src={PUBLIC_BRAND_LOGO_ON_DARK_PATH} alt="Solace" className={className} />;
+  return (
+    <img
+      src={PUBLIC_BRAND_LOGO_ON_DARK_PATH}
+      alt="Solace"
+      className={className}
+      width={651}
+      height={262}
+    />
+  );
 }
 
 function MetaTags({ metadata }: { metadata: PageMetadata }) {

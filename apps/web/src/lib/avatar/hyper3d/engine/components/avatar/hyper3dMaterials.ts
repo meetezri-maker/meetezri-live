@@ -889,7 +889,18 @@ interface FaceAlbedoRecord {
   requestedUrl: string | null;
   requestStartedAtMs: number | null;
   requestSettledAtMs: number | null;
-  requestOutcome: "pending" | "succeeded" | "failed" | "not-requested";
+  /**
+   * `skipped-authored-face` is not a failure: the asset carries its own face
+   * texture, so nothing external was requested. It is spelled out rather than
+   * reported as `not-requested` so a reviewer can tell "this asset owns its
+   * face" apart from "the swap has not run yet".
+   */
+  requestOutcome:
+    | "pending"
+    | "succeeded"
+    | "failed"
+    | "not-requested"
+    | "skipped-authored-face";
   failureReason: string | null;
   embeddedBoundAtMs: number | null;
   swapAtMs: number | null;
@@ -1005,7 +1016,25 @@ export const applyHyper3dGlbMaterials = (
    * `undefined` is the production path.
    */
   normalScaleOverride?: number,
-  albedo: Hyper3dSkinAlbedo = "authored"
+  albedo: Hyper3dSkinAlbedo = "authored",
+  /**
+   * WHETHER THIS ASSET'S FACE TAKES THE SHARED USC MAPS AT ALL.
+   *
+   * `true` (the default) is the original behaviour, unchanged: the face
+   * material's base colour is pointed at the USC package's albedo and, if it has
+   * none of its own, its normal map too.
+   *
+   * `false` leaves the GLB's authored face maps exactly as the loader delivered
+   * them. It exists because the swap below selects materials by the NAME STEM
+   * `M_Face` and cannot tell one character's face from another's: on an asset
+   * that is a different person, binding the shared albedo overwrites their
+   * identity. On `jordan.glb` it erased a beard and a head of hair — both of
+   * which live in his head textures, since he has no separate hair mesh.
+   *
+   * Roughness, metalness and normalScale are applied either way, in the
+   * traversal above, so the accepted skin response is retained on every asset.
+   */
+  useSharedFaceMaps = true,
 ): Hyper3dMaterialReport => {
   const look = HYPER3D_FACE_LOOKS[faceLook];
   const skin: Hyper3dFaceLookVariant =
@@ -1088,7 +1117,19 @@ export const applyHyper3dGlbMaterials = (
   faceAlbedo.embeddedBoundAtMs = now();
   installFaceMaterialProbe();
 
-  if (faceMaterials.length) {
+  if (faceMaterials.length && !useSharedFaceMaps) {
+    /**
+     * This asset owns its face. Nothing external is fetched or bound, so the
+     * authored base colour and normal map survive untouched — and the
+     * diagnostic says so explicitly, rather than leaving a reader to wonder why
+     * no swap was recorded.
+     */
+    faceAlbedo.requestOutcome = "skipped-authored-face";
+    report.notes = [
+      ...(report.notes ?? []),
+      `FACE MAPS: authored. This asset carries its own face texture, so the shared USC albedo is not bound — ${faceMaterials.length} material(s) kept as the GLB authored them. Skin roughness and normalScale still come from the face look.`,
+    ];
+  } else if (faceMaterials.length) {
     const diffuseFile = albedo === "evened" ? EVENED_ALBEDO_FILE : "texture_diffuse.png";
     faceAlbedo.requestedUrl = `${textureBaseUrl}/${diffuseFile}`;
     faceAlbedo.requestStartedAtMs = now();

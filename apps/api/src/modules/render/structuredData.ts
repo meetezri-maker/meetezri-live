@@ -46,17 +46,6 @@ function publisher(origin: string): Json {
   };
 }
 
-/**
- * A person node.
- *
- * `jobTitle` appears only when the serializer actually exposes a title. Manufacturing a
- * credential in structured data would be a factual claim about a real person.
- */
-function person(input: { name: string; title: string | null } | null): Json | null {
-  if (!input?.name) return null;
-  return compact({ '@type': 'Person', name: input.name, jobTitle: input.title });
-}
-
 export function breadcrumbList(origin: string, trail: Array<{ name: string; path?: string }>): Json {
   return {
     '@context': 'https://schema.org',
@@ -78,9 +67,6 @@ export function articleTypeFor(label: PublicDetail['label']): 'Article' | 'BlogP
 }
 
 export function articleSchema(origin: string, detail: PublicDetail, canonical: string): Json {
-  const author = person(detail.author);
-  const reviewer = person(detail.reviewer);
-
   return {
     '@context': 'https://schema.org',
     ...compact({
@@ -91,10 +77,7 @@ export function articleSchema(origin: string, detail: PublicDetail, canonical: s
       description: detail.typeFields.snippetAnswer ?? detail.description,
       datePublished: detail.publishedAt,
       dateModified: detail.updatedAt ?? detail.publishedAt,
-      author,
-      // `reviewedBy` only when a reviewer exists AND a review date does — a reviewer with no
-      // review date is an editorial assignment, not a published claim of review.
-      reviewedBy: reviewer && detail.reviewedAt ? reviewer : undefined,
+      author: publisher(origin),
       publisher: publisher(origin),
       mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
       image: detail.featuredImageUrl ?? undefined,

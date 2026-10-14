@@ -6,6 +6,7 @@ import {
 } from "@/lib/avatar/hyper3d/hyper3dImperativeHost";
 import { getHyper3dPlaybackClock } from "@/lib/avatar/hyper3d/hyper3dEngineRegistry";
 import { recordHyper3dAssetTimeline } from "@/lib/avatar/hyper3d/hyper3dPathDiagnostics";
+import type { Hyper3dAssetId } from "@/lib/avatar/hyper3d/engine/mappings/avatars/hyper3dAssetSelection";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,16 @@ const Hyper3DDevPanels = import.meta.env.DEV
  * component renders once per mount and then stays out of the way.
  */
 export interface Hyper3DImperativeHostProps {
+  /**
+   * The companion asset this session renders, resolved at the seam.
+   *
+   * It is in the mount effect's dependency list, which is the whole mechanism
+   * for changing avatar: a different asset tears the host down — aborting any
+   * load still in flight and disposing the renderer, the scene and the engine —
+   * and builds a new one. No state, no scene graph and no morph influence
+   * survives from the previous companion.
+   */
+  assetId?: Hyper3dAssetId;
   /** Response-relative playback seconds, written by the Phase 1 timing adapter. */
   avatarAudioCurrentTimeRef: MutableRefObject<number>;
   /** Mouth drive level (analyser RMS), the same ref ThreeAvatar reads. */
@@ -57,6 +68,7 @@ export interface Hyper3DImperativeHostProps {
 }
 
 export function Hyper3DImperativeHost({
+  assetId,
   avatarAudioCurrentTimeRef,
   mouthAudioLevelRef,
   isSpeaking,
@@ -91,6 +103,7 @@ export function Hyper3DImperativeHost({
     const registeredPlaybackClock = getHyper3dPlaybackClock();
     const host = createHyper3dImperativeHost({
       container,
+      assetId,
       // Hyper3D uses the adapter's continuous response clock. The ref remains
       // the legacy ThreeAvatar's chunk-local clock and is fallback-only here.
       getPlaybackTime:
@@ -106,8 +119,11 @@ export function Hyper3DImperativeHost({
       host.dispose();
     };
     // Mount once per avatar session. The refs above are stable by construction,
-    // and nothing in this list may change without a full reload of the avatar.
-  }, [avatarAudioCurrentTimeRef, mouthAudioLevelRef]);
+    // and nothing in this list may change without a full reload of the avatar —
+    // which is exactly what `assetId` is doing here. Changing companion between
+    // sessions changes the asset, this effect re-runs, and the cleanup above
+    // disposes the previous avatar completely before the next one is built.
+  }, [assetId, avatarAudioCurrentTimeRef, mouthAudioLevelRef]);
 
   return (
     <>

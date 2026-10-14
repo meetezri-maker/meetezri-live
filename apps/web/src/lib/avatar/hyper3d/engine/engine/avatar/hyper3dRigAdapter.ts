@@ -311,3 +311,128 @@ export const HYPER3D_2291_EYE_REST_EVIDENCE = {
   /** Total vergence. Positive = convergent. IDENTICAL to female_229's accepted value. */
   vergenceDegrees: 4.9586
 } as const;
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * NEUTRAL EYE REST — the four per-companion assets, 2026-10-13.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * SAME DERIVATION AS female_2291: a TRANSFER, not a retune. The target was not
+ * re-derived from the camera or from any gaze value. It is female_2291's
+ * accepted neutral, measured with its shipped correction applied, through the
+ * real GLTFLoader, the real skeleton and the real `Hyper3dEyeBoneGaze`
+ * composition — and each constant below is the minimal-arc bone-LOCAL
+ * pre-rotation carrying that asset's own measured rest onto that same
+ * direction. Because every asset is measured by one identical procedure, any
+ * systematic bias in the measure cancels.
+ *
+ * THE MEASURE is the direction from each eye bone's pivot to the PUPIL-RING
+ * centroid: 97 vertices per eye, weighted 1.0 to FACIAL_L/R_Pupil, which are
+ * children of the corresponding EyeParallel. Read through three.js skinning
+ * with the asset's own resolved root transform applied. Yaw is positive toward
+ * the character's left; the character faces world +Z.
+ *
+ * WHY EVERY ASSET NEEDS ITS OWN. Measured: the `Eyes` mesh carries BYTE-IDENTICAL
+ * indices, UVs, joints and weights on all five assets, and a DIFFERENT POSITION
+ * buffer on each — the eyeballs were re-aimed per character, exactly as
+ * female_229's were when female_2291 straightened them. Uncorrected rest yaw
+ * spreads from +4.14 degrees on afr to +8.22 / -7.44 with -6.4 of pitch on
+ * perm. The authored bone-local quaternion is [0, -1, 0, 0] on all five, so
+ * `authored` is shared and only the correction differs.
+ *
+ * RESIDUAL 0.0000000 degrees on both axes, both eyes, all four assets, verified
+ * by re-measuring through the composed rest the runtime actually uses.
+ *
+ * ONE HONEST LIMIT. `scripts/female-2291-eye-rest-solve.mjs`, the harness the
+ * shipped constants were solved with, is NOT PRESENT in this repository. This
+ * derivation therefore reproduces the procedure rather than re-running it. It
+ * reproduces the shipped female_2291 constant to within 1.6e-5 per component —
+ * left [-0.013415, -0.001948, -0.057415, 0.998258] against the shipped
+ * [-0.013423, -0.001434, -0.057431, 0.998258] — but its ABSOLUTE readings sit a
+ * fraction of a degree from the published evidence: this measure puts
+ * female_2291's corrected neutral at left -2.449 / right +1.716 against the
+ * published -2.479 / +2.479. The transfer is unaffected, because target and
+ * asset are read by the same instrument. What remains unverified is the
+ * absolute calibration, and the way to close it is to restore the original
+ * solver. See HYPER3D_COMPANION_EYE_REST_EVIDENCE.
+ */
+const HYPER3D_COMPANION_AUTHORED_EYE_REST = {
+  left: [0, -1, 0, 0],
+  right: [0, -1, 0, 0]
+} as const;
+
+/** `afr.glb` — shown as Sara Mitchell. Uncorrected rest +4.141 / -2.378 yaw. */
+export const HYPER3D_AFR_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  // 6.765 deg. Within 1e-4 of female_2291's, which is this measurement agreeing
+  // with the designer's description of afr as the updated female_2291.
+  left: [-0.013448521, -0.001946699, -0.057415431, 0.99825789],
+  // 4.892 deg.
+  right: [-0.023373826, 0.00078643, 0.035701211, 0.99908882]
+};
+
+/** `sara.glb` — shown as Maya Chen. Uncorrected rest +5.180 / -2.981 yaw. */
+export const HYPER3D_SARA_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  // 7.735 deg.
+  left: [-0.011315704, -0.002434734, -0.066450334, 0.997722597],
+  // 5.444 deg.
+  right: [-0.024023162, 0.000985673, 0.040953026, 0.998871746]
+};
+
+/**
+ * `perm.glb` — shown as Alex. The largest correction of the four, and the one
+ * that most needed solving: its eyes rest at +8.215 / -7.440 of yaw AND
+ * -6.415 / -5.464 of PITCH, looking down and outward. Dropping the correction
+ * would leave Alex glancing at the floor at gaze demand zero.
+ *
+ * RE-MEASURED 2026-10-14 against the hair re-delivery (63.87 MB). The eyeball
+ * geometry is unchanged in that re-export — the re-solve moved each component
+ * by about 1.2e-5, under a thousandth of a degree — so this is the same
+ * correction, taken from the file that is actually on disk.
+ */
+export const HYPER3D_PERM_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  // 11.323 deg.
+  left: [0.034363983, -0.00552383, -0.092306089, 0.995122199],
+  // 9.639 deg.
+  right: [0.027120869, 0.004119553, 0.079414313, 0.996464176]
+};
+
+/** `jordan.glb` — shown as Jordan Taylor. Uncorrected rest +5.180 / -2.981 yaw. */
+export const HYPER3D_JORDAN_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  // 7.735 deg.
+  left: [-0.011312161, -0.002434881, -0.066450498, 0.997722626],
+  // 5.444 deg.
+  right: [-0.024017398, 0.000985854, 0.040953409, 0.998871869]
+};
+
+/**
+ * What the four corrections were measured against, in THIS instrument's own
+ * readings, so a reviewer can check the premise rather than the arithmetic.
+ * Degrees, world frame, at gaze demand zero, each asset under its own resolved
+ * root transform. `acceptedTarget` is female_2291 WITH its shipped correction,
+ * read by this same measure — the direction every row is solved onto.
+ */
+export const HYPER3D_COMPANION_EYE_REST_EVIDENCE = {
+  acceptedTarget: { left: { yaw: -2.4487, pitch: -2.5126 }, right: { yaw: 1.7161, pitch: -2.3835 } },
+  raw: {
+    hyper3d_afr: { left: { yaw: 4.1409, pitch: -0.9684 }, right: { yaw: -2.3784, pitch: 0.2957 } },
+    hyper3d_sara: { left: { yaw: 5.1801, pitch: -1.2097 }, right: { yaw: -2.9809, pitch: 0.3707 } },
+    hyper3d_perm: { left: { yaw: 8.2151, pitch: -6.4159 }, right: { yaw: -7.4401, pitch: -5.4658 } },
+    hyper3d_jordan: { left: { yaw: 5.1801, pitch: -1.2101 }, right: { yaw: -2.981, pitch: 0.37 } }
+  },
+  /** Residual after the correction, every asset, both eyes, both axes. */
+  residualDegrees: 0,
+  /** Positive = convergent. Identical on all five assets by construction. */
+  vergenceDegrees: 4.1648,
+  /**
+   * The published female_2291 figures this instrument does NOT reproduce
+   * exactly. Recorded so the gap is visible rather than implied.
+   */
+  instrumentOffsetVsPublished: {
+    left: { yaw: 0.0307, pitch: -0.5048 },
+    right: { yaw: -0.7631, pitch: -0.3643 }
+  }
+} as const;

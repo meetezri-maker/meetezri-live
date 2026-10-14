@@ -590,6 +590,12 @@ export function HowItWorks() {
                 </LandingGlowCard>
               </motion.div>
             ))}
+          <p className="mt-6 text-center text-sm text-[var(--solace-ds-text-muted)]">
+            Explore a practical guide to{' '}
+            <Link className="text-pink-300 underline-offset-4 hover:underline" to="/resources/how-to-have-an-honest-conversation-with-yourself">
+              honest self-reflection
+            </Link>.
+          </p>
           </div>
         </section>
 

@@ -94,6 +94,14 @@ export {
 } from './routeRegistry';
 
 export {
+  RESOURCE_TOPIC_CLUSTERS,
+  isKnownResourceSlug,
+  relatedClusterSlugs,
+  resourceClusterKeysForSlug,
+  type ResourceTopicClusterKey,
+} from './resourceClusters';
+
+export {
   countBodyWords,
   deriveReadingStats,
   isAbsoluteHttpUrl,

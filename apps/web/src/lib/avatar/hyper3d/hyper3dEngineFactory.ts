@@ -5,10 +5,18 @@ import type { HeadPerformancePlan } from "./engine/engine/avatar/upstream/threej
 import type { PlacedSentencePlan, LiveSentencePlannerStats } from "./liveSentencePlanner";
 import type { BlendshapePose } from "./engine/types/facialAnimation";
 import type { AvatarPayload } from "./engine/types/avatarPayload";
-import { avatarModelConfigs } from "./engine/mappings/avatarModelConfig";
 import {
+  avatarModelConfigs,
+  hyper3dAssetHasHair,
+  hyper3dConfigForAsset,
+  hyper3dUsesSharedFaceMaps,
+} from "./engine/mappings/avatarModelConfig";
+import {
+  HYPER3D_ASSET_URLS,
   HYPER3D_GLB_URL,
   HYPER3D_LEGACY_GLB_URL,
+  isOperatorSelectableHyper3dAsset,
+  type Hyper3dAssetId,
 } from "./engine/mappings/avatars/hyper3dAssetSelection";
 import { HYPER3D_EYELASH_TARGET_NAMES } from "./engine/mappings/avatars/hyper3dEyelashBinding";
 import { AvatarController } from "./engine/engine/avatar/AvatarController";
@@ -83,7 +91,18 @@ import type {
  *   speaking preset          hyper3d-presence
  */
 
-const CONFIG = avatarModelConfigs["hyper3d-usc"];
+/**
+ * The shared, module-level Hyper3D config — still resolved exactly once, still
+ * bound to the single-avatar asset selection, and never mutated.
+ *
+ * It is the BASE a per-companion config is derived from, not the config the
+ * engine uses. Each engine instance resolves its own through
+ * `hyper3dConfigForAsset`, which returns a new object, so two hosts or a
+ * companion change cannot see each other's asset. Everything behavioural —
+ * camera, lighting, morph mapping, rig binding, every tuning constant — is
+ * shared by value from here and is identical on all four.
+ */
+const BASE_CONFIG = avatarModelConfigs["hyper3d-usc"];
 
 /** Live Solace inputs. All read-only; the engine owns none of them. */
 export type Hyper3dLiveInputs = {
@@ -204,16 +223,43 @@ const findMeshByName = (root: THREE.Object3D, name: string): THREE.Mesh | null =
 
 export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngineFactory {
   return async (init: Hyper3dEngineInit): Promise<Hyper3dEngineHandle> => {
-    // ── ASSET FALLBACK CHAIN ────────────────────────────────────────────────
-    // female_2291 → female_229 → (throw, and the Phase 2A host falls back to the
-    // existing Solace avatar). Each attempt is complete: load AND validate.
+    /**
+     * THIS INSTANCE'S CONFIG. A new object per engine, never the shared one.
+     *
+     * With no `assetId` this is the single-avatar config unchanged, which is
+     * what every engine test and every pre-existing caller gets.
+     */
+    const assetId: Hyper3dAssetId | undefined = init.assetId;
+    const CONFIG = assetId ? hyper3dConfigForAsset(BASE_CONFIG, assetId) : BASE_CONFIG;
+
+    /**
+     * ── ASSET FALLBACK CHAIN ──────────────────────────────────────────────
+     *
+     * TWO SHAPES, AND THE DIFFERENCE IS AN IDENTITY RULE, NOT AN OPTIMISATION.
+     *
+     * Single-avatar (no `assetId`, unchanged): female_2291 → female_229 →
+     * throw, and the seam falls back to the existing Solace avatar. Both files
+     * are the same character, so a second attempt cannot change who is on
+     * screen.
+     *
+     * Per-companion: ONE attempt, that companion's own file, then throw. There
+     * is deliberately no second asset to try, because every other Hyper3D file
+     * is a DIFFERENT PERSON. Falling back from Maya Chen's model to Sara
+     * Mitchell's would put the wrong face under the right name and the right
+     * voice — the one failure this integration must not have. A failed load
+     * therefore surfaces as a normal Hyper3D failure and the seam returns that
+     * companion to their existing Solace avatar, identity intact.
+     */
     let scene: THREE.Group | null = null;
     let assetChoice: Hyper3dAssetChoice = "production";
-    let assetUrl = HYPER3D_GLB_URL;
-    const attempts: Array<{ url: string; choice: Hyper3dAssetChoice }> = [
-      { url: HYPER3D_GLB_URL, choice: "production" },
-      { url: HYPER3D_LEGACY_GLB_URL, choice: "legacy" },
-    ];
+    let assetUrl = assetId ? HYPER3D_ASSET_URLS[assetId] : HYPER3D_GLB_URL;
+    const attempts: Array<{ url: string; choice: Hyper3dAssetChoice }> =
+      assetId && !isOperatorSelectableHyper3dAsset(assetId)
+        ? [{ url: HYPER3D_ASSET_URLS[assetId], choice: "production" }]
+        : [
+            { url: HYPER3D_GLB_URL, choice: "production" },
+            { url: HYPER3D_LEGACY_GLB_URL, choice: "legacy" },
+          ];
     let lastError: unknown = null;
     for (const attempt of attempts) {
       try {
@@ -254,8 +300,10 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     }
     if (!scene) {
       throw new Hyper3dBindingError(
-        `Neither Hyper3D asset could be loaded: ${String(lastError)}`,
-        { assetUrl: HYPER3D_GLB_URL },
+        attempts.length === 1
+          ? `The Hyper3D asset for this companion could not be loaded: ${String(lastError)}`
+          : `Neither Hyper3D asset could be loaded: ${String(lastError)}`,
+        { assetUrl: attempts[0]?.url ?? HYPER3D_GLB_URL },
       );
     }
 
@@ -275,12 +323,26 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
 
     // 5. accepted appearance. "evened" is the production albedo
     // (`texture_diffuse_evened.png`); "f228-profile" the accepted face look.
+    /**
+     * The last argument is the fix for the face-identity defect.
+     *
+     * `applyHyper3dGlbMaterials` selects face materials by the name stem
+     * `M_Face` and then binds the USC package's albedo over them. For the
+     * female_2291 family that is the accepted correction — their authored face
+     * map IS that texture. For a DIFFERENT PERSON it is an identity swap: on
+     * `jordan.glb` it overwrote the bearded face map and the short-hair scalp
+     * map, both named `M_Face.*`, and rendered him bald and clean-shaven.
+     *
+     * So the asset now decides. `hyper3dUsesSharedFaceMaps` is true by default,
+     * which is what every pre-existing asset and every engine test gets.
+     */
     const materialReport = applyHyper3dGlbMaterials(
       scene,
       CONFIG.hyper3dMaterials!.textureBaseUrl,
       "f228-profile",
       undefined,
       "evened",
+      hyper3dUsesSharedFaceMaps(CONFIG),
     );
 
     // 6-11. discovery, in the accepted order.
@@ -309,11 +371,37 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     );
 
     // ── VALIDATION GATE ─────────────────────────────────────────────────────
-    const faceMesh = findMeshByName(scene, CONFIG.meshNames.face[0] ?? "");
+    /**
+     * EVERY configured face mesh must resolve, not only the first.
+     *
+     * On the single-primitive assets that is one name and the check is the one
+     * it has always been. On an asset whose head is exported as two primitives
+     * it is two, and requiring BOTH is the point: `blendshapes_2` carries the
+     * back of the head with its own copy of all 51 targets, so an export that
+     * silently dropped it would otherwise pass the gate and then animate half a
+     * face. `faceMesh` stays the first, which is the face proper — the DEV
+     * lip-sync trace and the report both mean that one.
+     */
+    const faceMeshes = CONFIG.meshNames.face
+      .map((name) => findMeshByName(scene!, name))
+      .filter((mesh): mesh is THREE.Mesh => Boolean(mesh));
+    const faceMesh = faceMeshes[0] ?? null;
+    const missingFaceMeshes = CONFIG.meshNames.face.filter((name) => !findMeshByName(scene!, name));
     const teethMesh = findMeshByName(scene, CONFIG.meshNames.teeth[0] ?? "");
     const morphNames = new Set(morph.names());
     const missingMorphs = EXPECTED_MINIFACE_BLENDSHAPES.filter((name) => !morphNames.has(name));
     const hairMeshes = CONFIG.meshNames.hair.filter((name) => findMeshByName(scene!, name));
+    /**
+     * Whether THIS asset is supposed to have hair at all.
+     *
+     * `perm.glb` and `jordan.glb` ship no hair mesh — measured, not assumed:
+     * neither carries `Character.002` nor the `Material.005` hair material, and
+     * their scalp is part of the head mesh's second primitive. Their configs
+     * declare an empty hair list, so the gate below skips the check for them
+     * instead of being removed for everyone. An asset that DOES declare hair and
+     * then fails to deliver it still fails, exactly as today.
+     */
+    const hairExpected = hyper3dAssetHasHair(CONFIG);
 
     /**
      * EYELASHES — resolved ONCE, here, and never gated.
@@ -378,6 +466,11 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
 
     markHyper3dPhase("morph-validation");
     if (!faceMesh) fail("morph-validation", "face mesh did not resolve");
+    if (missingFaceMeshes.length)
+      fail(
+        "morph-validation",
+        `face mesh did not resolve: ${missingFaceMeshes.join(", ")}`,
+      );
     if (missingMorphs.length) fail("morph-validation", `${missingMorphs.length} required face morphs missing: ${missingMorphs.join(", ")}`);
     markHyper3dPhase("bone-validation");
     if (!bones.isSupported() || !report.headBone) fail("bone-validation", "head bone did not resolve");
@@ -388,7 +481,7 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     if (!teethMesh) fail("teeth-jaw", "teeth mesh did not resolve");
     if (!report.teethJawOpenBound) fail("teeth-jaw", "Teeth.JawOpen did not resolve");
     markHyper3dPhase("material-setup");
-    if (!hairMeshes.length) fail("material-setup", "hair meshes did not resolve");
+    if (hairExpected && !hairMeshes.length) fail("material-setup", "hair meshes did not resolve");
     if (!materialReport) fail("material-setup", "face/hair material binding did not resolve");
     recordHyper3dAssetTimeline({ bindingValidatedAtMs: Math.round(globalThis.performance.now()) });
     recordHyper3dPath({ validationPassed: true }, "binding validation passed");

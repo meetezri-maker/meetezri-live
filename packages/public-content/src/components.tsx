@@ -83,7 +83,15 @@ export function Byline({ person, role }: { person: PublicPerson | null; role: st
 
   return (
     <div className="sol-byline">
-      {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="sol-avatar" /> : null}
+      {person.avatarUrl ? (
+        <img
+          src={person.avatarUrl}
+          alt=""
+          className="sol-avatar"
+          width={96}
+          height={96}
+        />
+      ) : null}
       <div>
         <p className="sol-byline-name">
           <span className="sol-byline-role">{role}</span> {person.name}
@@ -111,6 +119,23 @@ export function RelatedResources({ items }: { items: PublicResourceCard[] }) {
   );
 }
 
+export function ContextualResourceLinks({ links }: { links: PublicResource['links'] }) {
+  const contextual = (links ?? []).filter((link) => link.relation === 'contextual').slice(0, 3);
+  if (contextual.length === 0) return null;
+
+  return (
+    <nav className="sol-contextual-links" aria-labelledby="continue-reading-heading">
+      <h2 id="continue-reading-heading">Continue reading</h2>
+      <ul>
+        {contextual.map((link) => (
+          <li key={link.href}>
+            <a href={link.href}>{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
 /**
  * Ordering hint per public label.
  *
@@ -250,6 +275,8 @@ export function ResourceArticle({ resource }: { resource: PublicResource }) {
         {resource.label === 'Insight' ? (
           <KeyStatements statements={resource.typeFields.keyStatements} />
         ) : null}
+
+        <ContextualResourceLinks links={resource.links} />
 
         {resource.author || resource.reviewer ? (
           <footer className="sol-authors">

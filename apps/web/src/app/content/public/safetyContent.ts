@@ -58,6 +58,7 @@ export const SAFETY_CONTENT: PublicAuthorityPageProps = {
         "For everyday reflection, Solace can provide a place to begin a conversation. For professional, medical, or urgent needs, contact a qualified provider, a trusted local service, or emergency services as appropriate.",
         "The in-app support form is available only to authenticated members, so no public support contact is presented on this page.",
       ],
+      links: [{ href: "/resources/manage-everyday-stress-before-overwhelm", label: "Read about managing everyday stress" }],
       glow: "purple",
     },
   ],

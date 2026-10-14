@@ -177,6 +177,15 @@ type SaraLiveAvatarMode = "hybrid" | "rfv2";
 const SARA_LIVE_RFV2_MODEL_URL = "/avatars/sara.glb";
 const isDevSaraLiveRfv2PreviewAllowed = () => import.meta.env.DEV === true;
 
+/**
+ * The active session's own companion, pinned to its session id.
+ *
+ * Separate from `ezri_active_session_id` because it answers a different
+ * question: that key says WHICH session is live, this one says WHO it is with.
+ * Both are cleared together when a session ends.
+ */
+const ACTIVE_SESSION_IDENTITY_KEY = "ezri_active_session_identity";
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -211,8 +220,99 @@ export function ActiveSession() {
     return "Good evening";
   }, [wallNow]);
 
+  /**
+   * WHO THIS SESSION'S COMPANION IS.
+   *
+   * `config` arrives in router state, which a HARD REFRESH discards while the
+   * session id survives one (query string, then `ezri_active_session_id`). The
+   * page therefore reloads into a live session with no companion: 3D gating
+   * sees `undefined` and mounts no avatar, the voice falls back to the global
+   * default, and the on-screen name falls back to a hard-coded `"Maya Chen"`.
+   * That default was inert while Maya Chen could not be selected; she can be
+   * now, so an Alex session would come back relabelled as hers.
+   *
+   * THE RECOVERY SOURCE IS THIS SESSION'S OWN IDENTITY, PINNED TO ITS ID — not
+   * the current profile selection. A profile is what the member will pick NEXT;
+   * reading it here would let a selection made after this session started
+   * rename the session already running, which is the same substitution by a
+   * slower route. `rememberedIdentity` is only trusted when the id it was
+   * stored against matches the session actually being resumed, so it can never
+   * carry one session's companion onto another.
+   *
+   * Identity restoration, not session resume: no transcript, timer, credit or
+   * audio state is recovered here, and an explicit `config` always wins.
+   */
+  /**
+   * MOVED UP from below the Ezri config block so the companion resolution under
+   * it can read it. Unchanged otherwise: same sources, same order — router
+   * state, then the `sessionId` query parameter, then the stored id.
+   */
+  const apiSessionId = useMemo(() => {
+    if (typeof stateSessionId === "string" && stateSessionId.length > 0) return stateSessionId;
+    try {
+      const fromQuery = new URLSearchParams(location.search).get("sessionId");
+      if (fromQuery) return fromQuery;
+    } catch { }
+    try {
+      const fromStorage = window.localStorage.getItem("ezri_active_session_id");
+      if (fromStorage) return fromStorage;
+    } catch { }
+    return null;
+  }, [stateSessionId, location.search]);
+
+  useEffect(() => {
+    if (!apiSessionId) return;
+    try {
+      window.localStorage.setItem("ezri_active_session_id", apiSessionId);
+    } catch { }
+  }, [apiSessionId]);
+
+  const rememberedSessionIdentity = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(ACTIVE_SESSION_IDENTITY_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { id?: unknown; avatar?: unknown };
+      if (typeof parsed?.id !== "string" || typeof parsed?.avatar !== "string") return null;
+      return { id: parsed.id, avatar: parsed.avatar };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const companionAvatarLabel =
-    typeof config?.avatar === "string" ? config.avatar : undefined;
+    typeof config?.avatar === "string" && config.avatar.trim()
+      ? config.avatar
+      : rememberedSessionIdentity &&
+          apiSessionId &&
+          rememberedSessionIdentity.id === apiSessionId &&
+          rememberedSessionIdentity.avatar.trim()
+        ? rememberedSessionIdentity.avatar
+        : undefined;
+
+  /**
+   * Pin this session's companion to this session's id, so a refresh recovers
+   * the identity the session STARTED with.
+   *
+   * Written only from `config`, never from the profile, and only once the id is
+   * known. Overwriting on every session is what keeps it honest: the key holds
+   * the current session's companion or nothing, so it cannot resurrect an older
+   * session's identity on a later one — the id comparison above would reject it
+   * anyway.
+   */
+  useEffect(() => {
+    if (!apiSessionId) return;
+    const avatar = typeof config?.avatar === "string" ? config.avatar.trim() : "";
+    if (!avatar) return;
+    try {
+      window.localStorage.setItem(
+        ACTIVE_SESSION_IDENTITY_KEY,
+        JSON.stringify({ id: apiSessionId, avatar }),
+      );
+    } catch {
+      // Storage is optional. Losing it costs the refresh recovery, nothing else.
+    }
+  }, [apiSessionId, config?.avatar]);
 
   const sessionUsesCompanion3d = useMemo(
     () => companionSessionUses3dModel(companionAvatarLabel),
@@ -406,26 +506,6 @@ export function ActiveSession() {
       return null;
     }
   }, []);
-
-  const apiSessionId = useMemo(() => {
-    if (typeof stateSessionId === "string" && stateSessionId.length > 0) return stateSessionId;
-    try {
-      const fromQuery = new URLSearchParams(location.search).get("sessionId");
-      if (fromQuery) return fromQuery;
-    } catch { }
-    try {
-      const fromStorage = window.localStorage.getItem("ezri_active_session_id");
-      if (fromStorage) return fromStorage;
-    } catch { }
-    return null;
-  }, [stateSessionId, location.search]);
-
-  useEffect(() => {
-    if (!apiSessionId) return;
-    try {
-      window.localStorage.setItem("ezri_active_session_id", apiSessionId);
-    } catch { }
-  }, [apiSessionId]);
 
   const permissionStorageKey = useMemo(() => {
     if (typeof window === "undefined") return "ezri_media_permissions";
@@ -5049,7 +5129,11 @@ export function ActiveSession() {
   ]);
 
   const currentAvatar = {
-    name: config?.avatar || "Maya Chen",
+    // The resolved label, not `config.avatar` — so the name on screen is the
+    // companion the session is actually running, including after a refresh.
+    // The literal stays as the last resort for a session with no identity at
+    // all, which is the only case it was ever reachable for.
+    name: companionAvatarLabel || "Maya Chen",
     status: "listening",
   };
 
@@ -5222,6 +5306,9 @@ export function ActiveSession() {
 
     try {
       window.localStorage.removeItem("ezri_active_session_id");
+      // The session is over, so its pinned companion goes with it. Leaving it
+      // behind would be a stale identity waiting for an id collision.
+      window.localStorage.removeItem(ACTIVE_SESSION_IDENTITY_KEY);
     } catch {
       /* ignore */
     }

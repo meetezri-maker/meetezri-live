@@ -76,12 +76,38 @@ describe('the rendered document', () => {
   it('uses the deployed brand logo and explicit favicon assets', () => {
     expect(html.match(/<img src="\/logos\/logo black\.png" alt="Solace"/g)).toHaveLength(2);
     expect(html).not.toContain('/logo.svg');
+    expect(html.match(/width="651" height="262"/g)).toHaveLength(2);
     expect(html).toContain(
       '<link rel="icon" type="image/svg+xml" href="/favicon/icon.svg" sizes="any"/>'
     );
     expect(html).toContain(
       '<link rel="icon" type="image/png" href="/favicon/Black.png" sizes="954x954"/>'
     );
+  });
+
+  it('renders contextual relationships as crawlable, descriptive links', () => {
+    const output = renderResourceDetail({
+      origin: ORIGIN,
+      detail: answerDetail({
+        links: [{
+          label: 'How thoughts become easier to examine',
+          href: '/resources/honest-reflection',
+          relation: 'contextual',
+        }],
+      }),
+      assets: NO_ASSETS,
+    });
+    expect(output).toContain('Continue reading');
+    expect(output).toContain('href="/resources/honest-reflection"');
+    expect(output).toContain('How thoughts become easier to examine');
+    expect(output.indexOf('sol-contextual-links')).toBeGreaterThan(-1);
+    expect(output.indexOf('sol-authors')).toBeGreaterThan(-1);
+    expect(output.indexOf('sol-contextual-links')).toBeLessThan(
+      output.indexOf('sol-authors'));
+  });
+
+  it('adds intrinsic dimensions to a remaining public avatar', () => {
+    expect(html).toContain('class="sol-avatar" width="96" height="96"');
   });
 
   it('renders no raw HTML from content — every value is escaped', () => {
@@ -254,9 +280,10 @@ describe('structured data', () => {
     expect(article.datePublished).toBe('2026-03-12T09:00:00.000Z');
     expect(article.dateModified).toBe('2026-03-14T09:00:00.000Z');
     expect(article.author).toEqual({
-      '@type': 'Person',
-      name: 'Dr Amara Reid',
-      jobTitle: 'Clinical psychologist',
+      '@type': 'Organization',
+      '@id': 'https://meetezri.com/#organization',
+      name: 'Solace',
+      url: 'https://meetezri.com/',
     });
     expect(article.publisher).toEqual({
       '@type': 'Organization',
@@ -287,10 +314,11 @@ describe('structured data', () => {
     expect(article.reviewedBy).toBeUndefined();
   });
 
-  it('never manufactures a job title for a person without one', () => {
+  it('suppresses reviewer claims even when an unapproved reviewer fixture is present', () => {
     const html = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: NO_ASSETS });
     const article = jsonLdFrom(html).find((document) => document['@type'] === 'Article')!;
-    expect(article.reviewedBy).toEqual({ '@type': 'Person', name: 'Sam Okafor' });
+    expect(article.reviewedBy).toBeUndefined();
+    expect(JSON.stringify(article)).not.toContain('"@type":"Person"');
   });
 
   it('emits FAQPage from a FAQ block', () => {

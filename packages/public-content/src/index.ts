@@ -33,6 +33,7 @@ export { Inline, PublicBlocks, headingAnchorId, inlineText } from './blocks';
 
 export {
   Breadcrumbs,
+  ContextualResourceLinks,
   Byline,
   RelatedResources,
   ResourceArticle,

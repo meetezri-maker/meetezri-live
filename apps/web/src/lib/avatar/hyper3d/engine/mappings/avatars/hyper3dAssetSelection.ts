@@ -37,7 +37,35 @@
  * automatic load-failure fallback, which is a runtime override applied over this
  * selection — see `AvatarCanvas`.
  */
-export type Hyper3dAssetId = "female_2291" | "female_229" | "female_2291_lowerlip_v2";
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE FOUR-COMPANION ASSETS, ADDED 2026-10-13.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The three ids above are the ORIGINAL SINGLE-AVATAR FAMILY and nothing about
+ * them changes: `resolveHyper3dAsset` still resolves within that family alone,
+ * the `?hyper3dLegacyGlb` rollback still swaps `female_2291` for `female_229`,
+ * and the DEV corrective-morph experiment still gates on `import.meta.env.DEV`.
+ *
+ * The four below are the per-companion assets. They are NOT reachable from
+ * `resolveHyper3dAsset` — they are chosen by companion identity at the seam
+ * (`hyper3dCompanionAssets`), which is why an operator flag cannot substitute
+ * one companion's model for another's. See `HYPER3D_OPERATOR_SELECTABLE_ASSETS`.
+ *
+ * ASSET IDS ARE NOT COMPANION IDS. `hyper3d_sara` is the file `sara.glb`, which
+ * the application shows as **Maya Chen**; `hyper3d_afr` is `afr.glb`, which the
+ * application shows as **Sara Mitchell**. The asset ids are named after the
+ * files the designer delivered so that a name here always means a file on disk,
+ * and the companion mapping lives in exactly one other place.
+ */
+export type Hyper3dAssetId =
+  | "female_2291"
+  | "female_229"
+  | "female_2291_lowerlip_v2"
+  | "hyper3d_afr"
+  | "hyper3d_sara"
+  | "hyper3d_perm"
+  | "hyper3d_jordan";
 
 /** How the active asset was chosen. Surfaced in DEV diagnostics only. */
 export type Hyper3dAssetSource =
@@ -71,11 +99,45 @@ export const HYPER3D_GLB_URL = "/avatars/female_2291.glb";
 export const HYPER3D_LEGACY_GLB_URL = "/avatars/female_229.glb";
 export const HYPER3D_EXPERIMENTAL_GLB_URL = "/avatars/experimental/female_2291-lowerlip-v2.glb";
 
+/** The per-companion assets, delivered 2026-10-12 under `public/avatars/hyper3d/`. */
+export const HYPER3D_AFR_GLB_URL = "/avatars/hyper3d/afr.glb";
+export const HYPER3D_SARA_GLB_URL = "/avatars/hyper3d/sara.glb";
+export const HYPER3D_PERM_GLB_URL = "/avatars/hyper3d/perm.glb";
+export const HYPER3D_JORDAN_GLB_URL = "/avatars/hyper3d/jordan.glb";
+
 export const HYPER3D_ASSET_URLS: Readonly<Record<Hyper3dAssetId, string>> = {
   female_2291: HYPER3D_GLB_URL,
   female_229: HYPER3D_LEGACY_GLB_URL,
-  female_2291_lowerlip_v2: HYPER3D_EXPERIMENTAL_GLB_URL
+  female_2291_lowerlip_v2: HYPER3D_EXPERIMENTAL_GLB_URL,
+  hyper3d_afr: HYPER3D_AFR_GLB_URL,
+  hyper3d_sara: HYPER3D_SARA_GLB_URL,
+  hyper3d_perm: HYPER3D_PERM_GLB_URL,
+  hyper3d_jordan: HYPER3D_JORDAN_GLB_URL
 };
+
+/**
+ * THE ASSETS AN OPERATOR FLAG MAY SELECT, and the reason this list exists.
+ *
+ * `?hyper3dLegacyGlb=1` and `?hyper3dLowerLipV2=1` were written when Hyper3D
+ * rendered ONE companion, so "swap the asset" and "swap the avatar" were the
+ * same action. They are no longer: with four companions mapped to four files, a
+ * flag that replaced the loaded asset outright would put another person's face
+ * on the selected companion's session — silently, and with the correct name and
+ * voice still attached.
+ *
+ * So the rollback flags keep their exact meaning and lose their reach. They
+ * resolve only within the single-avatar family below, and the per-companion
+ * resolution ignores them entirely. An operator pinning the legacy asset while
+ * a Maya Chen session is open now gets Maya Chen, not female_229.
+ */
+export const HYPER3D_OPERATOR_SELECTABLE_ASSETS: readonly Hyper3dAssetId[] = [
+  "female_2291",
+  "female_229",
+  "female_2291_lowerlip_v2"
+];
+
+export const isOperatorSelectableHyper3dAsset = (assetId: Hyper3dAssetId): boolean =>
+  HYPER3D_OPERATOR_SELECTABLE_ASSETS.includes(assetId);
 
 /** The flag name, in both the query string and `localStorage`. */
 export const HYPER3D_LEGACY_GLB_FLAG = "hyper3dLegacyGlb";

@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import type { Hyper3dAssetId } from "./engine/mappings/avatars/hyper3dAssetSelection";
 
 /**
  * THE PHASE 2B INSERTION POINT.
@@ -51,6 +52,15 @@ export type Hyper3dEngineInit = {
   renderer: THREE.WebGLRenderer;
   /** Aborts a slow or superseded load; the host signals this on unmount. */
   signal: AbortSignal;
+  /**
+   * WHICH COMPANION'S ASSET THIS ENGINE INSTANCE IS FOR.
+   *
+   * Resolved from companion identity at the seam and carried here, because the
+   * engine must not consult identity itself: it knows about files, not people.
+   * Omitted means the single-avatar default the module config already resolves,
+   * which is what every pre-existing caller and every engine test relies on.
+   */
+  assetId?: Hyper3dAssetId;
 };
 
 export type Hyper3dEngineHandle = {

@@ -50,7 +50,7 @@ export function ResourcesShell({
       <PublicSiteHeader
         pathname={pathname}
         LinkComponent={RouterLink}
-        logo={<BrandLogo heightClass="h-10" variant="onDark" />}
+        logo={<BrandLogo heightClass="h-10" variant="onDark" width={651} height={262} />}
         mobileMenu={<SsrMobileMenu LinkComponent={RouterLink} />}
       />
 
@@ -58,7 +58,7 @@ export function ResourcesShell({
 
       <PublicSiteFooter
         LinkComponent={RouterLink}
-        logo={<BrandLogo heightClass="h-14" themeAware />}
+        logo={<BrandLogo heightClass="h-14" themeAware width={651} height={262} />}
       />
     </>
   );

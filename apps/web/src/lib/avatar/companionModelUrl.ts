@@ -73,14 +73,25 @@ export function portraitUrlFromAvatarsFolderFile(
 }
 
 /**
- * Companions that use a 3D GLB in the live session (`ActiveSession`).
- * Sarah routes to SaraV3 or legacy Sara via config; Jordan/RFv2 uses morph-only GLB mode.
+ * Companions that use a 3D model in the live session (`ActiveSession`).
+ *
+ * ALL FOUR, since the Hyper3D four-avatar integration. Sarah routes to SaraV3
+ * or legacy Sara via config and Jordan/RFv2 uses morph-only GLB mode; Alex and
+ * Maya Chen have a `public/avatars/` GLB of their own (`Alex.glb`,
+ * `maya chen.glb`) which `resolveCompanionModelUrl` has always returned and
+ * which `ThreeAvatar` loads by URL like any other.
+ *
+ * This gate is what mounts `AvatarRuntimeSwitch` at all, so it has to open for
+ * a companion before Hyper3D can reach them. The two are deliberately separate
+ * questions: this one asks "does this companion render in 3D", the seam asks
+ * "which runtime and which asset", and a companion can answer yes here and
+ * still fall back to the existing avatar there.
  */
 export function companionSessionUses3dModel(
   avatarLabel: string | null | undefined
 ): boolean {
   const id = normalizeCompanionId(avatarLabel);
-  return id === "sarah" || id === "jordan";
+  return id === "sarah" || id === "jordan" || id === "alex" || id === "maya";
 }
 
 /** RFv2-style avatars are morph-driven and should not use facial bone mouth fallback. */

@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { queryKeys } from "@/lib/queries";
 import {
   resolveVoiceLabelForCompanion,
+  resolveVoiceSelectionForCompanion,
 } from "@/lib/ezri/voiceForCompanion";
 import {
   modalBadge,
@@ -114,10 +115,31 @@ function environmentLabel(value: string | undefined | null): string {
   return found?.label ?? value;
 }
 
-function isFemaleAvatarName(name: string | null | undefined): boolean {
-  const n = (name ?? "").trim().toLowerCase();
-  return n === "maya chen" || n === "maya" || n === "sara mitchell" || n === "sarah mitchell" || n === "sarah";
-}
+/**
+ * THE VOICE CATALOGUE. Hoisted out of the component so its identity is stable:
+ * the selection effect below depends on it, and a list rebuilt every render
+ * would re-run that effect on every render.
+ *
+ * `gender` is the metadata the filtering reads. Nothing infers a category from
+ * a voice's NAME — `voiceOptionsForCompanion` matches on this field, and the
+ * companion's own category comes from `resolveCompanionVoiceGender`.
+ *
+ * DEMO FILES, renamed with the 2026-10-14 asset delivery. The previous four
+ * `.wav` files were replaced by `.mp3`s numbered WITHIN each gender —
+ * `voice1female`, `voice2female`, `voice1male`, `voice2male` — so the old
+ * globally-numbered `voice2male.wav` / `voice3female.wav` / `voice4male.wav`
+ * names no longer exist.
+ *
+ * Requesting them did not 404: the SPA rewrite answered every one with
+ * `index.html` at HTTP 200 and `text/html`, which the media element cannot
+ * decode, so every preview failed with "Could not play voice preview".
+ */
+const VOICE_CATALOGUE = [
+  { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female", demoFile: "voice1female.mp3" },
+  { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male", demoFile: "voice1male.mp3" },
+  { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female", demoFile: "voice2female.mp3" },
+  { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male", demoFile: "voice2male.mp3" },
+] as const;
 
 declare global {
   interface Window {
@@ -691,20 +713,20 @@ export function SessionLobby() {
     setScheduleIcon("💬");
   };
 
-  const voices = [
-    { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female", demoFile: "voice1female.wav" },
-    { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male", demoFile: "voice2male.wav" },
-    { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female", demoFile: "voice3female.wav" },
-    { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male", demoFile: "voice4male.wav" }
-  ];
-
-  const tempSelectedAvatarIsFemale = isFemaleAvatarName(tempSelectedAvatar);
-
-  const isVoiceDisabledForAvatar = (voiceGender: string): boolean => {
-    const vg = voiceGender.trim().toLowerCase();
-    if (tempSelectedAvatarIsFemale) return vg !== "female";
-    return vg !== "male";
-  };
+  /**
+   * THE VOICES THIS COMPANION MAY BE OFFERED, resolved before render.
+   *
+   * Filtering here rather than disabling in the list is the behaviour change:
+   * the opposite category is never drawn, so it cannot flash into view while
+   * the profile loads and cannot be clicked. `selected` is the voice that
+   * belongs with this companion — the current one when it is still compatible,
+   * otherwise the configured default for the category.
+   *
+   * An unresolved companion yields no options and no selection, which the list
+   * below renders as its loading state instead of guessing a category.
+   */
+  const { options: voiceOptions, selected: resolvedVoiceForAvatar } =
+    resolveVoiceSelectionForCompanion(tempSelectedAvatar, VOICE_CATALOGUE, tempSelectedVoice);
 
   const stopVoicePreview = () => {
     const existing = voicePreviewAudioRef.current;
@@ -716,40 +738,59 @@ export function SessionLobby() {
   };
 
   const playVoicePreview = async (voiceName: string, demoFile: string) => {
-    try {
-      stopVoicePreview();
-      const base = import.meta.env.BASE_URL.endsWith("/")
-        ? import.meta.env.BASE_URL
-        : `${import.meta.env.BASE_URL}/`;
-      const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
-      voicePreviewAudioRef.current = audio;
-      setPlayingVoiceName(voiceName);
-      audio.onended = () => {
-        if (voicePreviewAudioRef.current === audio) {
-          voicePreviewAudioRef.current = null;
-          setPlayingVoiceName(null);
-        }
-      };
-      audio.onerror = () => {
-        if (voicePreviewAudioRef.current === audio) {
-          voicePreviewAudioRef.current = null;
-          setPlayingVoiceName(null);
-        }
-        toast.error("Could not play voice preview");
-      };
-      await audio.play();
-    } catch {
+    stopVoicePreview();
+    const base = import.meta.env.BASE_URL.endsWith("/")
+      ? import.meta.env.BASE_URL
+      : `${import.meta.env.BASE_URL}/`;
+    const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
+    voicePreviewAudioRef.current = audio;
+    setPlayingVoiceName(voiceName);
+
+    /**
+     * Clear the playing state only if THIS preview is still the current one.
+     *
+     * Every path below can arrive late — an `error` event, or a `play()`
+     * promise settling after the member already clicked another voice. Without
+     * the identity check a stale callback blanks the newer preview's label, or
+     * reports the newer one as broken.
+     */
+    const clearIfCurrent = () => {
+      if (voicePreviewAudioRef.current !== audio) return false;
+      voicePreviewAudioRef.current = null;
       setPlayingVoiceName(null);
+      return true;
+    };
+
+    audio.onended = () => {
+      clearIfCurrent();
+    };
+    audio.onerror = () => {
+      // A superseded element's failure is not this preview's failure.
+      if (!clearIfCurrent()) return;
+      toast.error("Could not play voice preview");
+    };
+
+    try {
+      await audio.play();
+    } catch (error) {
+      /**
+       * CANCELLATION IS NOT FAILURE.
+       *
+       * `stopVoicePreview` pauses, and pausing while `play()` is still pending
+       * rejects it with `AbortError`. That happens on every ordinary
+       * interaction — picking another voice, switching companion, closing the
+       * modal — so treating it as an error put "Could not play voice preview"
+       * on screen for actions that worked exactly as intended.
+       */
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      if (aborted || voicePreviewAudioRef.current !== audio) return;
+      clearIfCurrent();
       toast.error("Could not play voice preview");
     }
   };
 
-  const handleVoiceSelect = async (
-    voiceName: string,
-    voiceGender: string,
-    demoFile: string
-  ) => {
-    if (isVoiceDisabledForAvatar(voiceGender)) return;
+  const handleVoiceSelect = async (voiceName: string, demoFile: string) => {
+    // Only compatible voices are rendered, so there is nothing to refuse here.
     setTempSelectedVoice(voiceName);
     await playVoicePreview(voiceName, demoFile);
   };
@@ -760,18 +801,27 @@ export function SessionLobby() {
     };
   }, []);
 
+  /**
+   * KEEP THE PENDING SELECTION INSIDE THE COMPANION'S CATEGORY.
+   *
+   * `resolvedVoiceForAvatar` already answers "what should be selected": it
+   * returns the current voice untouched when it is still on offer, so switching
+   * Sara -> Maya keeps a chosen Voice 3, and only a cross-category switch
+   * replaces it with that category's configured default.
+   *
+   * A replacement also stops any preview that is playing, because the audio
+   * belongs to the voice being replaced — leaving a male demo running while the
+   * UI jumps to Voice 1 is the one moment the two can disagree out loud.
+   *
+   * `null` means the companion is unresolved; nothing is written then, so this
+   * never clears a valid selection while the profile is still loading.
+   */
   useEffect(() => {
-    const selectedVoiceMeta = voices.find((v) => v.name === tempSelectedVoice);
-    if (!selectedVoiceMeta) return;
-    if (!isVoiceDisabledForAvatar(selectedVoiceMeta.gender)) return;
-
-    const fallback = voices.find((v) =>
-      tempSelectedAvatarIsFemale
-        ? v.gender.toLowerCase() === "female"
-        : v.gender.toLowerCase() === "male"
-    );
-    if (fallback) setTempSelectedVoice(fallback.name);
-  }, [tempSelectedAvatar, tempSelectedAvatarIsFemale, tempSelectedVoice]);
+    if (!resolvedVoiceForAvatar) return;
+    if (resolvedVoiceForAvatar === tempSelectedVoice) return;
+    stopVoicePreview();
+    setTempSelectedVoice(resolvedVoiceForAvatar);
+  }, [resolvedVoiceForAvatar, tempSelectedVoice]);
 
   useEffect(() => {
     if (showCustomizeModal) return;
@@ -1290,10 +1340,19 @@ export function SessionLobby() {
                             Voice Selection
                           </h3>
                         </div>
+                        {voiceOptions.length === 0 ? (
+                          /*
+                           * The companion is not resolved yet, so the category
+                           * is not known. Showing one would be a guess, and a
+                           * guess here offers the wrong half of the catalogue.
+                           */
+                          <div className={cn(modalMutedText, "rounded-[1.1rem] px-1 py-2 text-sm")}>
+                            Loading voices for your companion…
+                          </div>
+                        ) : (
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          {voices.map((voice, index) => (
+                          {voiceOptions.map((voice, index) => (
                             (() => {
-                              const isDisabled = isVoiceDisabledForAvatar(voice.gender);
                               const isSelected = tempSelectedVoice === voice.name;
                               return (
                             <motion.button
@@ -1302,17 +1361,12 @@ export function SessionLobby() {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 + index * 0.05 }}
-                              whileHover={isDisabled ? undefined : { scale: 1.01 }}
-                              whileTap={isDisabled ? undefined : { scale: 0.99 }}
-                              onClick={() => void handleVoiceSelect(voice.name, voice.gender, voice.demoFile)}
-                              disabled={isDisabled}
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.99 }}
+                              onClick={() => void handleVoiceSelect(voice.name, voice.demoFile)}
                               className={cn(
                                 "rounded-[1.1rem]",
-                                isDisabled
-                                  ? modalOptionCardDisabled
-                                  : isSelected
-                                    ? modalOptionCardSelected
-                                    : modalOptionCard
+                                isSelected ? modalOptionCardSelected : modalOptionCard
                               )}
                             >
                               {isSelected && (
@@ -1336,9 +1390,7 @@ export function SessionLobby() {
                                 {voice.gender}
                               </div>
                               <div className={modalOptionCardMeta}>
-                                {isDisabled
-                                  ? "Disabled for selected avatar"
-                                  : playingVoiceName === voice.name
+                                {playingVoiceName === voice.name
                                   ? "Playing demo..."
                                   : "Click to preview"}
                               </div>
@@ -1347,6 +1399,7 @@ export function SessionLobby() {
                             })()
                           ))}
                         </div>
+                        )}
                       </div>
 
                       {/* Avatar Selection */}

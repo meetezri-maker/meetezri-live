@@ -50,7 +50,13 @@ export const REVISION_TRIGGERS = ['manual_save', 'transition', 'restore'] as con
 export const LINK_TARGET_KINDS = ['content', 'route'] as const;
 
 /** Editorial intent of a link. */
-export const LINK_RELATIONS = ['related_content', 'product', 'resource_library', 'pricing'] as const;
+export const LINK_RELATIONS = [
+  'related_content',
+  'contextual',
+  'product',
+  'resource_library',
+  'pricing',
+] as const;
 
 /**
  * Internal type -> public label. The ONLY place this mapping exists.

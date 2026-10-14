@@ -5,6 +5,7 @@ import {
   type Hyper3dEngineHandle,
   type Hyper3dFrameContext,
 } from "./hyper3dEngineRegistry";
+import type { Hyper3dAssetId } from "./engine/mappings/avatars/hyper3dAssetSelection";
 import {
   countHyper3dFrame,
   countHyper3dEngineUpdate,
@@ -77,6 +78,12 @@ export type Hyper3dHostFailure = {
 
 export type Hyper3dImperativeHostOptions = {
   container: HTMLElement;
+  /**
+   * This session's companion asset, resolved at the seam from companion
+   * identity. Omitted keeps the original single-avatar behaviour, which is what
+   * the host's own tests and every pre-existing caller rely on.
+   */
+  assetId?: Hyper3dAssetId;
   /** Response-relative playback seconds. Phase 1's `SolaceAudioClock`. */
   getPlaybackTime: () => number;
   getConversationState: () => Hyper3dConversationState;
@@ -465,6 +472,7 @@ export function createHyper3dImperativeHost(
         camera,
         renderer,
         signal: abort.signal,
+        assetId: options.assetId,
       });
       // The host may have been torn down while the GLB was loading.
       if (disposed || abort.signal.aborted) {

@@ -170,6 +170,10 @@ export const PUBLIC_CONTENT_CSS = `
 .sol-key-statements{margin:2.5rem 0}
 .sol-key-statements h2{font-size:1.25rem;margin:0 0 .75rem}
 .sol-inline-related{margin:2.5rem 0}
+.sol-contextual-links{margin:2rem 0;padding:1.25rem 1.5rem;border:1px solid var(--sol-line);border-radius:var(--sol-radius);background:var(--sol-surface)}
+.sol-contextual-links h2{font-size:1.15rem;margin:0 0 .75rem}
+.sol-contextual-links ul{margin:0;padding-left:1.25rem}
+.sol-contextual-links li+li{margin-top:.45rem}
 .sol-inline-related h2{font-size:1.25rem;margin:0 0 .5rem}
 .sol-inline-related ul{list-style:none;margin:0;padding:0}
 .sol-inline-related li{padding:.375rem 0}

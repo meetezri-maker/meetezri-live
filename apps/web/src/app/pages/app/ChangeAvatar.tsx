@@ -138,11 +138,19 @@ function fallbackAiAvatarsFromDefaults(): AIAvatar[] {
   }));
 }
 
+/**
+ * The per-gender demo clip for an avatar card.
+ *
+ * Renamed with the 2026-10-14 asset delivery: the `.wav` files these used to
+ * request no longer exist, and the SPA rewrite answered the dead URLs with
+ * `index.html` at HTTP 200 rather than a 404 — so the media element failed to
+ * decode and every preview reported "Could not play voice preview".
+ */
 function voiceDemoForGender(gender: string): string {
   const g = gender.trim().toLowerCase();
-  if (g === "female") return "voice1female.wav";
-  if (g === "male") return "voice2male.wav";
-  return "voice3female.wav";
+  if (g === "male") return "voice1male.mp3";
+  // Female, and the fallback for an avatar with no gender recorded.
+  return "voice1female.mp3";
 }
 
 interface AvatarPortraitProps {
@@ -366,31 +374,40 @@ export function ChangeAvatar() {
 
   const playVoicePreview = useCallback(
     async (avatar: AIAvatar) => {
-      try {
-        stopVoicePreview();
-        const demoFile = voiceDemoForGender(avatar.gender);
-        const base = import.meta.env.BASE_URL.endsWith("/")
-          ? import.meta.env.BASE_URL
-          : `${import.meta.env.BASE_URL}/`;
-        const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
-        voicePreviewAudioRef.current = audio;
-        setPlayingVoiceFor(avatar.id);
-        audio.onended = () => {
-          if (voicePreviewAudioRef.current === audio) {
-            voicePreviewAudioRef.current = null;
-            setPlayingVoiceFor(null);
-          }
-        };
-        audio.onerror = () => {
-          if (voicePreviewAudioRef.current === audio) {
-            voicePreviewAudioRef.current = null;
-            setPlayingVoiceFor(null);
-          }
-          toast.error("Could not play voice preview");
-        };
-        await audio.play();
-      } catch {
+      stopVoicePreview();
+      const demoFile = voiceDemoForGender(avatar.gender);
+      const base = import.meta.env.BASE_URL.endsWith("/")
+        ? import.meta.env.BASE_URL
+        : `${import.meta.env.BASE_URL}/`;
+      const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
+      voicePreviewAudioRef.current = audio;
+      setPlayingVoiceFor(avatar.id);
+
+      /** Only the preview that is still current may clear or report. */
+      const clearIfCurrent = () => {
+        if (voicePreviewAudioRef.current !== audio) return false;
+        voicePreviewAudioRef.current = null;
         setPlayingVoiceFor(null);
+        return true;
+      };
+
+      audio.onended = () => {
+        clearIfCurrent();
+      };
+      audio.onerror = () => {
+        if (!clearIfCurrent()) return;
+        toast.error("Could not play voice preview");
+      };
+
+      try {
+        await audio.play();
+      } catch (error) {
+        // Pausing a pending `play()` rejects with AbortError. That is what
+        // happens when the member previews another avatar or leaves the page —
+        // a cancellation, not a playback failure.
+        const aborted = error instanceof DOMException && error.name === "AbortError";
+        if (aborted || voicePreviewAudioRef.current !== audio) return;
+        clearIfCurrent();
         toast.error("Could not play voice preview");
       }
     },

@@ -26,11 +26,22 @@ vi.mock("./ThreeAvatar", () => ({
 
 let hostBehaviour: "idle" | "fail-async" | "throw-on-render" = "idle";
 
+/**
+ * Every set of props the host was rendered with, newest last.
+ *
+ * The seam's whole job in the four-avatar contract is choosing WHICH asset the
+ * host is handed, so the assertions read that value rather than inferring it
+ * from what rendered.
+ */
+const hostProps: Array<{ assetId?: string }> = [];
+
 vi.mock("./Hyper3DImperativeHost", () => ({
   Hyper3DImperativeHost: (props: {
+    assetId?: string;
     onFailure: (failure: { stage: string; message: string }) => void;
   }) => {
     hostMounts();
+    hostProps.push(props);
     if (hostBehaviour === "throw-on-render") {
       throw new Error("rig binding exploded");
     }
@@ -89,6 +100,7 @@ beforeEach(() => {
   hostBehaviour = "idle";
   threeAvatarRenders.mockClear();
   hostMounts.mockClear();
+  hostProps.length = 0;
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -178,77 +190,95 @@ describe("avatar runtime switch — fallback", () => {
 });
 
 /**
- * Hyper3D replaces SARA ONLY.
+ * FOUR COMPANIONS, ONE RUNTIME — the contract that replaced "Sara only".
  *
- * `normalizeCompanionId` is deliberately NOT mocked here: the point of these
- * cases is that the real helper is fed a value it can actually resolve.
+ * Hyper3D used to be a migration switch for one companion; it is now the
+ * runtime for four, each on its own asset. What has NOT changed, and is still
+ * asserted below, is the guarantee underneath: a companion with no Hyper3D
+ * asset never mounts the host, so an unmapped id cannot start a WebGL context,
+ * import the engine chunk or fetch a GLB.
+ *
+ * `normalizeCompanionId` and the asset table are deliberately NOT mocked: the
+ * point of these cases is that the real mapping is fed values it must resolve.
  */
-describe("avatar runtime switch — Sara-only eligibility", () => {
-  const jordan = () => ({
+describe("avatar runtime switch — four-avatar eligibility", () => {
+  const companion = (rawAvatarLabel: string, activeAvatarId: string, modelUrl: string) => () => ({
     ...props(),
-    rawAvatarLabel: "Jordan Taylor",
-    activeAvatarId: "jordan",
-    modelUrl: "/avatars/jordanTaylor.glb",
+    rawAvatarLabel,
+    activeAvatarId,
+    modelUrl,
   });
 
-  it("flag on + Jordan renders Jordan's existing avatar, not Hyper3D", async () => {
-    flagState.enabled = true;
-    render(<AvatarRuntimeSwitch {...jordan()} />);
+  const sara = companion("Sara Mitchell", "saraV3", "/avatars/sara-v3.glb");
+  const jordan = companion("Jordan Taylor", "jordan", "/avatars/jordanTaylor.glb");
+  const maya = companion("Maya Chen", "maya", "/avatars/maya%20chen.glb");
+  const alex = companion("Alex", "alex", "/avatars/Alex.glb");
 
+  /**
+   * THE MAPPING, END TO END THROUGH THE SEAM.
+   *
+   * The asset ids cross over — `afr.glb` is Sara Mitchell and `sara.glb` is
+   * Maya Chen — so this asserts the id the host actually receives rather than
+   * trusting that a filename means what it looks like.
+   */
+  it.each([
+    ["Sara Mitchell", sara, "hyper3d_afr"],
+    ["Maya Chen", maya, "hyper3d_sara"],
+    ["Alex", alex, "hyper3d_perm"],
+    ["Jordan Taylor", jordan, "hyper3d_jordan"],
+  ])("flag on + %s renders Hyper3D on %s", async (_name, makeProps, assetId) => {
+    flagState.enabled = true;
+    render(<AvatarRuntimeSwitch {...makeProps()} />);
+
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+    expect(screen.queryByTestId("existing-avatar")).toBeNull();
+    expect(hostMounts).toHaveBeenCalledTimes(1);
+    expect(hostProps.at(-1)?.assetId).toBe(assetId);
+  });
+
+  it.each([
+    ["Sara Mitchell", sara],
+    ["Maya Chen", maya],
+    ["Alex", alex],
+    ["Jordan Taylor", jordan],
+  ])("flag off + %s keeps the existing avatar and never mounts the host", async (_n, makeProps) => {
+    render(<AvatarRuntimeSwitch {...makeProps()} />);
     expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
-    expect(screen.queryByTestId("hyper3d-avatar")).toBeNull();
-    expect(threeAvatarRenders.mock.calls[0][0].modelUrl).toBe("/avatars/jordanTaylor.glb");
+    expect(hostMounts).not.toHaveBeenCalled();
   });
 
-  it("flag on + Jordan never mounts the Hyper3D host — no background init", async () => {
-    flagState.enabled = true;
-    // Would fail loudly if it ever mounted; it must not get the chance.
-    hostBehaviour = "throw-on-render";
-    const { rerender } = render(<AvatarRuntimeSwitch {...jordan()} />);
-    await screen.findByTestId("existing-avatar");
-
-    for (let i = 0; i < 5; i += 1) {
-      rerender(<AvatarRuntimeSwitch {...jordan()} isSpeaking={i % 2 === 0} />);
+  it("flag off forwards each companion's own existing model URL unchanged", async () => {
+    for (const makeProps of [sara, jordan, maya, alex]) {
+      threeAvatarRenders.mockClear();
+      const { unmount } = render(<AvatarRuntimeSwitch {...makeProps()} />);
+      await screen.findByTestId("existing-avatar");
+      expect(threeAvatarRenders.mock.calls[0][0].modelUrl).toBe(makeProps().modelUrl);
+      unmount();
     }
-    await waitFor(() => expect(screen.getByTestId("existing-avatar")).toBeTruthy());
-    expect(hostMounts).not.toHaveBeenCalled();
-  });
-
-  it("flag off + Jordan is unchanged", async () => {
-    render(<AvatarRuntimeSwitch {...jordan()} />);
-    expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
-    expect(hostMounts).not.toHaveBeenCalled();
   });
 
   /**
-   * REGRESSION GUARD. `activeAvatarId` is the RUNTIME key, not the canonical id:
-   * `SessionStage` derives it from `resolveCompanionAvatarRuntime`, so Sara
-   * arrives as `"saraV3"` (the live value, `useSaraV3ForSara === true`) or
-   * `"sara"`. `normalizeCompanionId("saraV3")` is `null`, so a Sara-check keyed
-   * on that prop alone would deny Sara the runtime she is meant to get.
+   * THE PRESERVED GUARANTEE. An unmapped companion must not reach three.js at
+   * all — not a renderer, not the engine chunk, not a GLB fetch. The host is
+   * armed to throw so a single mount would fail the case loudly.
    */
-  it("flag on + Sara on the saraV3 runtime key still renders Hyper3D", async () => {
+  it("flag on + an unmapped companion never mounts the Hyper3D host", async () => {
     flagState.enabled = true;
-    render(
-      <AvatarRuntimeSwitch
-        {...props()}
-        rawAvatarLabel="Sara Mitchell"
-        activeAvatarId="saraV3"
-      />,
-    );
-    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
-  });
+    hostBehaviour = "throw-on-render";
+    const unmapped = () => ({
+      ...props(),
+      rawAvatarLabel: "Someone Else",
+      activeAvatarId: "someone-else",
+      modelUrl: "/avatars/jordanTaylor.glb",
+    });
+    const { rerender } = render(<AvatarRuntimeSwitch {...unmapped()} />);
+    await screen.findByTestId("existing-avatar");
 
-  it("flag on + Sara identified by the runtime key alone still renders Hyper3D", async () => {
-    flagState.enabled = true;
-    render(
-      <AvatarRuntimeSwitch
-        {...props()}
-        rawAvatarLabel={undefined}
-        activeAvatarId="saraV3"
-      />,
-    );
-    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+    for (let i = 0; i < 5; i += 1) {
+      rerender(<AvatarRuntimeSwitch {...unmapped()} isSpeaking={i % 2 === 0} />);
+    }
+    await waitFor(() => expect(screen.getByTestId("existing-avatar")).toBeTruthy());
+    expect(hostMounts).not.toHaveBeenCalled();
   });
 
   it("flag on + an unresolvable companion keeps the existing avatar", async () => {
@@ -258,5 +288,129 @@ describe("avatar runtime switch — Sara-only eligibility", () => {
     );
     expect(await screen.findByTestId("existing-avatar")).toBeTruthy();
     expect(hostMounts).not.toHaveBeenCalled();
+  });
+
+  /**
+   * REGRESSION GUARD, kept from the Sara-only contract. `activeAvatarId` is the
+   * RUNTIME key, not the canonical id: `SessionStage` derives it from
+   * `resolveCompanionAvatarRuntime`, so Sara arrives as `"saraV3"` (the live
+   * value, `useSaraV3ForSara === true`) or `"sara"`. `normalizeCompanionId`
+   * resolves neither, so a lookup keyed on that prop alone would deny Sara the
+   * runtime she is meant to get.
+   */
+  it("flag on + Sara identified by the runtime key alone still renders her asset", async () => {
+    flagState.enabled = true;
+    render(
+      <AvatarRuntimeSwitch
+        {...props()}
+        rawAvatarLabel={undefined}
+        activeAvatarId="saraV3"
+      />,
+    );
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+  });
+
+  it("flag on + the legacy hybrid Sara runtime key resolves to the same asset", async () => {
+    flagState.enabled = true;
+    render(
+      <AvatarRuntimeSwitch {...props()} rawAvatarLabel={undefined} activeAvatarId="sara" />,
+    );
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+  });
+});
+
+/**
+ * CHANGING COMPANION BETWEEN SESSIONS.
+ *
+ * The asset is the host's reload key, and the failure latch belongs to one
+ * asset. Both properties are what stop a second session inheriting the first
+ * one's avatar or the first one's verdict.
+ */
+describe("avatar runtime switch — changing avatar", () => {
+  const withLabel = (rawAvatarLabel: string, activeAvatarId: string) => ({
+    ...props(),
+    rawAvatarLabel,
+    activeAvatarId,
+  });
+
+  it("remounts the host with the new asset when the companion changes", async () => {
+    flagState.enabled = true;
+    const { rerender } = render(
+      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+    );
+    await screen.findByTestId("hyper3d-avatar");
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+
+    rerender(<AvatarRuntimeSwitch {...withLabel("Alex", "alex")} />);
+    await waitFor(() => expect(hostProps.at(-1)?.assetId).toBe("hyper3d_perm"));
+    expect(screen.queryByTestId("hyper3d-avatar")).toBeTruthy();
+  });
+
+  /**
+   * A latch is evidence about ONE asset. Carrying it across would strand every
+   * later companion on the legacy avatar after a single bad file.
+   */
+  it("clears a latched failure when a different companion is selected", async () => {
+    flagState.enabled = true;
+    hostBehaviour = "fail-async";
+    const { rerender } = render(
+      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+    );
+    await screen.findByTestId("existing-avatar");
+    expect(screen.queryByTestId("hyper3d-avatar")).toBeNull();
+
+    hostBehaviour = "idle";
+    rerender(<AvatarRuntimeSwitch {...withLabel("Maya Chen", "maya")} />);
+
+    expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_sara");
+  });
+
+  /**
+   * The other half of the same rule: within ONE companion the latch still holds,
+   * so a failure does not turn into a reload loop.
+   */
+  it("keeps the latch across re-renders of the same companion", async () => {
+    flagState.enabled = true;
+    hostBehaviour = "fail-async";
+    const { rerender } = render(
+      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+    );
+    await screen.findByTestId("existing-avatar");
+    const mountsAfterFailure = hostMounts.mock.calls.length;
+
+    hostBehaviour = "idle";
+    for (let i = 0; i < 5; i += 1) {
+      rerender(
+        <AvatarRuntimeSwitch
+          {...withLabel("Sara Mitchell", "saraV3")}
+          isSpeaking={i % 2 === 0}
+        />,
+      );
+    }
+    await waitFor(() => expect(screen.getByTestId("existing-avatar")).toBeTruthy());
+    expect(hostMounts.mock.calls.length).toBe(mountsAfterFailure);
+  });
+
+  /**
+   * IDENTITY-SAFE FAILURE. When a companion's own asset fails there is no second
+   * Hyper3D asset to try — the seam returns THAT companion to THEIR existing
+   * model, never to another companion's.
+   */
+  it("falls back to the failing companion's own existing model, not another's", async () => {
+    flagState.enabled = true;
+    hostBehaviour = "fail-async";
+    render(
+      <AvatarRuntimeSwitch
+        {...withLabel("Maya Chen", "maya")}
+        modelUrl="/avatars/maya%20chen.glb"
+      />,
+    );
+    await screen.findByTestId("existing-avatar");
+    const forwarded = threeAvatarRenders.mock.calls.at(-1)?.[0];
+    expect(forwarded.modelUrl).toBe("/avatars/maya%20chen.glb");
+    expect(forwarded.rawAvatarLabel).toBe("Maya Chen");
   });
 });

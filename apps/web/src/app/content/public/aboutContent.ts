@@ -17,6 +17,7 @@ export const ABOUT_CONTENT: PublicAuthorityPageProps = {
         "The experience centers conversation and reflection. You can start with what is on your mind, use your own words, and move at your own pace.",
       ],
       glow: "pink",
+      links: [{ href: "/resources/why-talking-through-thoughts-can-make-them-feel-lighter", label: "Why talking thoughts through can help reflection" }],
     },
     {
       title: "Why Solace exists",

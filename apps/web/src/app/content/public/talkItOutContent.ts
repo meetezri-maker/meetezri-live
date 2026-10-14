@@ -36,6 +36,10 @@ export const TALK_IT_OUT_CONTENT: PublicAuthorityPageProps = {
         "Putting a thought into words can create an opportunity to examine it from another angle. Talk It Out keeps the focus on conversation and reflection rather than promising a particular emotional, clinical, or wellness outcome.",
         "The public page explains the experience without exposing the private member interface, account data, session history, or authenticated conversation tools.",
       ],
+      links: [
+        { href: "/resources/why-do-i-keep-replaying-conversations-in-my-head", label: "Why conversations can keep replaying" },
+        { href: "/resources/how-to-have-an-honest-conversation-with-yourself", label: "A practical approach to self-reflection" },
+      ],
       glow: "blue",
     },
     {

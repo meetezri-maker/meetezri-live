@@ -55,6 +55,8 @@ interface BrandLogoProps {
    * light → `/logos/logo white.png`, dark → `/logos/logo black.png`.
    */
   themeAware?: boolean;
+  width?: number;
+  height?: number;
 }
 
 export function BrandLogo({
@@ -62,6 +64,8 @@ export function BrandLogo({
   className = "",
   variant = "onLight",
   themeAware = false,
+  width,
+  height,
 }: BrandLogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
   const [documentTheme, setDocumentTheme] = useState<DocumentTheme>(() =>
@@ -118,6 +122,8 @@ export function BrandLogo({
       className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
     >
       <img
+        width={width}
+        height={height}
         src={logoSrc}
         alt=""
         className="h-[130%] w-auto max-h-none object-contain object-center"
