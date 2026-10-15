@@ -17,6 +17,12 @@ export type EzriRealtimeConnectArgs = {
   crisisRegion?: string;
   /** ISO country code from geo detection (e.g. PK). */
   countryCode?: string | null;
+  /**
+   * Member-facing companion name the agent introduces itself as (e.g. `Romy`).
+   * Resolve with `resolveEzriAvatarName`; when it is null/blank the parameter
+   * is omitted rather than sent empty, so the agent never gets a stand-in name.
+   */
+  avatar_name?: string | null;
 };
 
 export type EzriTimestampedPhoneme = {
@@ -161,6 +167,7 @@ export class EzriRealtimeClient {
     this.setStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
 
     const wsBase = args.wsBase;
+    const avatarName = args.avatar_name?.trim() ?? "";
     const url =
       `${wsBase}?` +
       `brain_provider=${encodeURIComponent(args.brainProvider)}` +
@@ -174,7 +181,8 @@ export class EzriRealtimeClient {
         : "") +
       (args.countryCode
         ? `&country_code=${encodeURIComponent(args.countryCode)}`
-        : "");
+        : "") +
+      (avatarName ? `&avatar_name=${encodeURIComponent(avatarName)}` : "");
 
     traceRealtimeConnect({
       url,

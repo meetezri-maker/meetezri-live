@@ -35,6 +35,7 @@ import {
   type EzriWsStatus,
 } from "@/lib/ezri/realtimeClient";
 import { resolveEzriWsVoiceForCompanion } from "@/lib/ezri/voiceForCompanion";
+import { resolveEzriAvatarName } from "@/lib/ezri/avatarNameForCompanion";
 import {
   type EzriAudioSource,
   normalizeAudioSource,
@@ -495,6 +496,17 @@ export function ActiveSession() {
             : undefined,
       ),
     [companionAvatarLabel, config?.voice, profile?.selected_voice],
+  );
+
+  /**
+   * WebSocket `avatar_name=` — this session's companion as members see it
+   * (`Sara Mitchell` → `Romy`). Same session identity as the voice above, never
+   * the profile's newer pick or the model file; null (param omitted) when the
+   * session has no identity, rather than the "Maya Chen" display fallback.
+   */
+  const ezriAvatarName = useMemo(
+    () => resolveEzriAvatarName(companionAvatarLabel),
+    [companionAvatarLabel],
   );
 
   const ezriConfig = useMemo(() => {
@@ -4941,6 +4953,7 @@ export function ActiveSession() {
       voice: ezriTtsVoiceId,
       crisisRegion: userRegion,
       countryCode: getStoredGeoDetection()?.countryCode ?? undefined,
+      avatar_name: ezriAvatarName,
     });
 
     return () => {
@@ -4958,6 +4971,7 @@ export function ActiveSession() {
     companionAvatarLabel,
     companionCanonicalId,
     ezriTtsVoiceId,
+    ezriAvatarName,
     userRegion,
     updateSaraGreetingDiagnostics,
   ]);
