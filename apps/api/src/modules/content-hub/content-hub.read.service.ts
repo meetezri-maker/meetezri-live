@@ -22,7 +22,11 @@
  * leaked by a downstream mistake.
  */
 
-import { PUBLIC_CONTENT_LABEL, type ContentType } from '@meetezri/shared';
+import {
+  PUBLIC_CONTENT_LABEL,
+  relatedClusterSlugs,
+  type ContentType,
+} from '@meetezri/shared';
 import prisma from '../../lib/prisma';
 import {
   serializeCard,
@@ -30,7 +34,6 @@ import {
   type CardSource,
   type DetailSource,
   type LinkSource,
-  type ProfileLike,
 } from './content-hub.serializer';
 import type { PublicCard, PublicDetail } from './content-hub.public.schema';
 
@@ -60,11 +63,7 @@ const DETAIL_SELECT = {
   canonical_url_override: true,
   robots_directive: true,
   reviewed_at: true,
-  author_id: true,
-  reviewer_id: true,
 } as const;
-
-const PERSON_SELECT = { id: true, full_name: true, bio: true, avatar_url: true } as const;
 
 export interface PublicListQuery {
   page: number;
@@ -123,8 +122,6 @@ export async function resolvePublishedList(query: PublicListQuery): Promise<Publ
 interface LoadedRow {
   id: string;
   pillar: string | null;
-  author_id: string | null;
-  reviewer_id: string | null;
   detail: DetailSource;
 }
 
@@ -151,8 +148,6 @@ async function loadPublishedRow(
   return {
     id: row.id,
     pillar: row.pillar,
-    author_id: row.author_id,
-    reviewer_id: row.reviewer_id,
     detail: row as unknown as DetailSource,
   };
 }
@@ -167,8 +162,6 @@ async function loadRowById(id: string): Promise<LoadedRow | null> {
   return {
     id: row.id,
     pillar: row.pillar,
-    author_id: row.author_id,
-    reviewer_id: row.reviewer_id,
     detail: row as unknown as DetailSource,
   };
 }
@@ -176,18 +169,22 @@ async function loadRowById(id: string): Promise<LoadedRow | null> {
 /**
  * Related resources.
  *
- * Order: manual links -> same pillar -> latest. Always filtered to published, self excluded,
- * deduplicated, capped. Single hop with a visited set, so the intentionally cyclic link graph
- * cannot cause runaway traversal.
+ * Order: manual links -> approved slug cluster -> same pillar for an unclustered legacy item.
+ * There is deliberately no latest-published fallback: fewer recommendations are more useful than
+ * filling a card row with a topically unrelated article.
  */
 export async function resolveRelated(
   contentId: string,
+  slug: string,
   pillar: string | null,
   limit = 3
 ): Promise<PublicCard[]> {
   const cap = Math.min(Math.max(limit, 1), 3);
   const seen = new Set<string>([contentId]);
   const cards: PublicCard[] = [];
+  const isIndexable = (robots: string | null) =>
+    !String(robots ?? 'index,follow').toLowerCase().includes('noindex');
+  const relatedSelect = { ...CARD_SELECT, id: true, robots_directive: true } as const;
 
   const manualLinks = await prisma.content_links.findMany({
     where: { source_id: contentId, target_kind: 'content', relation: 'related_content' },
@@ -202,41 +199,50 @@ export async function resolveRelated(
   if (manualIds.length > 0) {
     const rows = await prisma.content_items.findMany({
       where: { id: { in: manualIds }, ...PUBLIC_WHERE },
-      select: { ...CARD_SELECT, id: true },
-      take: cap,
+      select: relatedSelect,
     });
-    for (const row of rows) {
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const id of manualIds) {
+      const row = byId.get(id);
+      if (!row || !isIndexable(row.robots_directive)) continue;
       if (seen.has(row.id)) continue;
       seen.add(row.id);
       cards.push(serializeCard(row as unknown as CardSource));
+      if (cards.length >= cap) break;
     }
   }
 
-  if (cards.length < cap && pillar) {
+  const clusterSlugs = relatedClusterSlugs(slug);
+  if (cards.length < cap && clusterSlugs.length > 0) {
+    const rows = await prisma.content_items.findMany({
+      where: { slug: { in: clusterSlugs }, id: { notIn: [...seen] }, ...PUBLIC_WHERE },
+      select: relatedSelect,
+    });
+    const bySlug = new Map(rows.map((row) => [row.slug, row]));
+    for (const candidateSlug of clusterSlugs) {
+      const row = bySlug.get(candidateSlug);
+      if (!row || !isIndexable(row.robots_directive)) continue;
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      cards.push(serializeCard(row as unknown as CardSource));
+      if (cards.length >= cap) break;
+    }
+  }
+
+  // Legacy content not yet assigned to a cluster may use its exact pillar as the final relevance
+  // proxy. Clustered items never broaden back out to pillar/latest merely to fill three cards.
+  if (cards.length < cap && clusterSlugs.length === 0 && pillar) {
     const rows = await prisma.content_items.findMany({
       where: { pillar, id: { notIn: [...seen] }, ...PUBLIC_WHERE },
-      select: { ...CARD_SELECT, id: true },
+      select: relatedSelect,
       orderBy: { published_at: 'desc' },
-      take: cap - cards.length,
     });
     for (const row of rows) {
+      if (!isIndexable(row.robots_directive)) continue;
       if (seen.has(row.id)) continue;
       seen.add(row.id);
       cards.push(serializeCard(row as unknown as CardSource));
-    }
-  }
-
-  if (cards.length < cap) {
-    const rows = await prisma.content_items.findMany({
-      where: { id: { notIn: [...seen] }, ...PUBLIC_WHERE },
-      select: { ...CARD_SELECT, id: true },
-      orderBy: { published_at: 'desc' },
-      take: cap - cards.length,
-    });
-    for (const row of rows) {
-      if (seen.has(row.id)) continue;
-      seen.add(row.id);
-      cards.push(serializeCard(row as unknown as CardSource));
+      if (cards.length >= cap) break;
     }
   }
 
@@ -253,21 +259,14 @@ async function loadLinkTargets(links: LinkSource[]) {
 
   const rows = await prisma.content_items.findMany({
     where: { id: { in: ids }, ...PUBLIC_WHERE },
-    select: { id: true, slug: true, title: true },
+    select: { id: true, slug: true, title: true, robots_directive: true },
   });
 
-  return new Map(rows.map((r) => [r.id, { slug: r.slug, title: r.title }]));
-}
-
-async function loadPeople(authorId: string | null, reviewerId: string | null) {
-  const ids = [authorId, reviewerId].filter((id): id is string => !!id);
-  if (ids.length === 0) return new Map<string, ProfileLike>();
-
-  const rows = await prisma.profiles.findMany({
-    where: { id: { in: ids } },
-    select: PERSON_SELECT,
-  });
-  return new Map(rows.map((r) => [r.id, r as ProfileLike]));
+  return new Map(
+    rows
+      .filter((row) => !row.robots_directive.toLowerCase().includes('noindex'))
+      .map((row) => [row.id, { slug: row.slug, title: row.title }])
+  );
 }
 
 async function buildDetail(loaded: LoadedRow, robotsOverride?: string): Promise<PublicDetail> {
@@ -284,16 +283,15 @@ async function buildDetail(loaded: LoadedRow, robotsOverride?: string): Promise<
     },
   })) as LinkSource[];
 
-  const [targets, people, related] = await Promise.all([
+  const [targets, related] = await Promise.all([
     loadLinkTargets(links),
-    loadPeople(loaded.author_id, loaded.reviewer_id),
-    resolveRelated(loaded.id, loaded.pillar, 3),
+    resolveRelated(loaded.id, loaded.detail.slug, loaded.pillar, 3),
   ]);
 
   return serializeDetail({
     row: loaded.detail,
-    author: loaded.author_id ? people.get(loaded.author_id) ?? null : null,
-    reviewer: loaded.reviewer_id ? people.get(loaded.reviewer_id) ?? null : null,
+    author: null,
+    reviewer: null,
     links,
     related,
     resolveSlug: (id) => targets.get(id)?.slug ?? null,
@@ -317,7 +315,7 @@ export async function resolvePublishedContent(slug: string): Promise<PublicDetai
 /** Related-only variant, so the detail payload stays independently cacheable. */
 export async function resolvePublishedRelated(slug: string, limit: number): Promise<PublicCard[] | null> {
   const loaded = await loadPublishedRow(slug);
-  return loaded ? resolveRelated(loaded.id, loaded.pillar, limit) : null;
+  return loaded ? resolveRelated(loaded.id, loaded.detail.slug, loaded.pillar, limit) : null;
 }
 
 /** A sitemap row: a public card plus the stored robots directive that decides inclusion. */

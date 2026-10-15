@@ -1,3 +1,5 @@
+import { companionDisplayName } from "@meetezri/shared";
+import { voiceDisplayLabel } from "@/lib/ezri/voiceForCompanion";
 import { getWellnessGoalLabel } from "@/lib/wellnessGoals";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
@@ -452,8 +454,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                 </div>
                 <div className="space-y-2 p-4 sm:p-5">
                   {[
-                    { icon: Volume2, title: "Voice", value: preferencesData.selected_voice || "Not set", link: "/app/session-lobby?customize=voice", tone: "violet" as const },
-                    { icon: User, title: "Avatar", value: preferencesData.selected_avatar || "Not set", link: "/app/settings/change-avatar", tone: "pink" as const },
+                    { icon: Volume2, title: "Voice", value: voiceDisplayLabel(preferencesData.selected_voice) || "Not set", link: "/app/session-lobby?customize=voice", tone: "violet" as const },
+                    { icon: User, title: "Avatar", value: companionDisplayName(preferencesData.selected_avatar) || "Not set", link: "/app/settings/change-avatar", tone: "pink" as const },
                     { icon: Palette, title: "Environment", value: preferencesData.selected_environment || "Not set", link: "/app/session-lobby?customize=environment", tone: "cyan" as const },
                   ].map((row) => (
                     <Link key={row.title} to={row.link} className={profileRow}>

@@ -491,7 +491,7 @@ const W3_G001: Week3Asset = {
       'Healthy Habits',
     ],
     citation_summary:
-      "This resource explains what honest conversations with yourself are, why they matter, how they differ from self-criticism and overthinking, and how to practice healthy self-reflection through a simple framework. It provides structured, evidence-informed guidance designed for both readers and AI knowledge systems.",
+      "This resource explains what honest conversations with yourself are, why they matter, how they differ from self-criticism and overthinking, and how to practice healthy self-reflection through a simple framework. It provides structured, practical guidance for everyday self-reflection.",
     topics: {
       primary: 'Honest Conversation With Yourself',
       secondary: ['Self-Reflection', 'Self-Awareness'],
@@ -909,7 +909,7 @@ const W3_A001: Week3Asset = {
       { id: "a3-list53", type: 'list', style: 'bullet', items: [t("Why is self-reflection important?"), t("How does self-awareness improve wellbeing?"), t("Can self-awareness be developed?")] },
       { id: "a3-h54", type: 'heading', level: 3, content: t("CLUSTER SUMMARY") },
       { id: "a3-h55", type: 'heading', level: 3, content: t("Definition Questions Answered") },
-      { id: "a3-p56", type: 'paragraph', content: t("This section establishes the core concepts that support the rest of the AEO knowledge base:") },
+      { id: "a3-p56", type: 'paragraph', content: t("This section introduces the core ideas used throughout the questions below:") },
       { id: "a3-list57", type: 'list', style: 'bullet', items: [t("What an honest conversation with yourself is."), t("What self-honesty means."), t("What self-reflection is."), t("What self-awareness is."), t("How self-reflection and self-awareness differ.")] },
       { id: "a3-p58", type: 'paragraph', content: t("These definitions create a shared understanding before exploring the reasons, methods and benefits of honest self-reflection in the following sections.") },
       { id: "a3-h59", type: 'heading', level: 3, content: t("Knowledge Relationships") },

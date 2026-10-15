@@ -1,3 +1,4 @@
+import { companionDisplayName as companionDisplayNameFor } from "@meetezri/shared";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
@@ -489,7 +490,7 @@ export function TalkItOutLobbyLayout({
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-medium text-zinc-100">{session.avatarName}</p>
+                          <p className="truncate text-[13px] font-medium text-zinc-100">{companionDisplayNameFor(session.avatarName)}</p>
                           <p className="text-[11px] text-[var(--solace-muted)]">{session.date}</p>
                           {session.comment ? (
                             <p className="mt-0.5 line-clamp-1 text-[11px] text-zinc-500/75">{session.comment}</p>

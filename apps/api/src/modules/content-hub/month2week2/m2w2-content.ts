@@ -801,7 +801,7 @@ const M2_W2_A001: M2W2Asset = {
       { id: "m2w2a-p83", type: 'paragraph', content: t("Your phone then displays the email.") },
       { id: "m2w2a-p84", type: 'paragraph', content: t("You check it.") },
       { id: "m2w2a-p85", type: 'paragraph', content: t("That's an attention switch.") },
-      { id: "m2w2a-p86", type: 'paragraph', content: t("This distinction is one of the most important knowledge signals in Week 2.") },
+      { id: "m2w2a-p86", type: 'paragraph', content: t("This distinction can make it easier to notice whether your attention has moved or your mental load has grown.") },
       { id: "m2w2a-h87", type: 'heading', level: 2, content: t("How can I create more mental space during a busy day?") },
       { id: "m2w2a-h88", type: 'heading', level: 3, content: t("Mental space does not always require finding a large amount of extra free time. Depending on the situation, it may involve finishing one activity before switching, recording an unfinished thought, taking a short transition between activities, reflecting for a few minutes or protecting part of an existing routine from unnecessary interruptions.") },
       { id: "m2w2a-h89", type: 'heading', level: 3, content: t("Key principle") },

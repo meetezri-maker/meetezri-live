@@ -30,6 +30,7 @@ import {
   resolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
+import { companionDisplayName } from "@meetezri/shared";
 import {
   DEFAULT_SELECTABLE_COMPANION_NAME,
   isCompanionComingSoon,
@@ -45,6 +46,7 @@ import { queryKeys } from "@/lib/queries";
 import {
   resolveVoiceLabelForCompanion,
   resolveVoiceSelectionForCompanion,
+  voiceDisplayLabel,
 } from "@/lib/ezri/voiceForCompanion";
 import {
   modalBadge,
@@ -140,6 +142,17 @@ const VOICE_CATALOGUE = [
   { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female", demoFile: "voice2female.mp3" },
   { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male", demoFile: "voice2male.mp3" },
 ] as const;
+
+/**
+ * Voice descriptions are hidden in the UI (2026-10-15, product copy review).
+ *
+ * The strings stay in `VOICE_CATALOGUE` and the markup stays below, behind
+ * this flag, so restoring them is a one-word change. While it is `false` the
+ * description element is NOT RENDERED AT ALL rather than emptied, so the card
+ * keeps no blank row and no orphaned margin where the text used to be; the
+ * name element carries the description's bottom spacing instead.
+ */
+const SHOW_VOICE_DESCRIPTIONS: boolean = false;
 
 declare global {
   interface Window {
@@ -1007,10 +1020,10 @@ export function SessionLobby() {
   return (
     <>
       <TalkItOutLobbyLayout
-        companionPill={`Your Solace Avatar, ${selectedCompanionPreview.name}`}
+        companionPill={`Your Solace Avatar, ${companionDisplayName(selectedCompanionPreview.name)}`}
         companionPortraitUrl={selectedCompanionPreview.portraitUrl}
-        companionAlt={selectedCompanionPreview.name}
-        companionDisplayName={selectedCompanionPreview.name}
+        companionAlt={companionDisplayName(selectedCompanionPreview.name)}
+        companionDisplayName={companionDisplayName(selectedCompanionPreview.name)}
         companionTraitsLine={companionTraitsLine}
         heroMessageLine1="I'm here to listen"
         heroMessageLine2="and support you."
@@ -1381,10 +1394,19 @@ export function SessionLobby() {
                                   />
                                 </motion.div>
                               )}
-                              <div className={modalEmphasisText}>{voice.name}</div>
-                              <div className={cn(modalMutedText, "mb-2 mt-1 text-sm")}>
-                                {voice.description}
+                              <div
+                                className={cn(
+                                  modalEmphasisText,
+                                  !SHOW_VOICE_DESCRIPTIONS && "mb-2"
+                                )}
+                              >
+                                {voiceDisplayLabel(voice.name)}
                               </div>
+                              {SHOW_VOICE_DESCRIPTIONS ? (
+                                <div className={cn(modalMutedText, "mb-2 mt-1 text-sm")}>
+                                  {voice.description}
+                                </div>
+                              ) : null}
                               <div className={cn(modalOptionCardMeta, "flex items-center gap-1.5")}>
                                 <span className="inline-block h-2 w-2 rounded-full bg-violet-400/80 [html[data-ezri-theme=light]_&]:bg-[#7c3aed]" />
                                 {voice.gender}
@@ -1488,7 +1510,7 @@ export function SessionLobby() {
                                 )}
                               >
                                 <p className={cn(modalEmphasisText, "text-[13px] leading-tight")}>
-                                  {avatar.name}
+                                  {companionDisplayName(avatar.name)}
                                 </p>
                                 <p className={cn(modalMutedText, "mt-1 line-clamp-2 text-[10.5px] leading-snug")}>
                                   {traits}
@@ -1806,7 +1828,7 @@ export function SessionLobby() {
                     <div>
                       <h3 className={modalTitle}>Talking Options</h3>
                       <p className={modalSubtitle}>
-                        {activeUpcomingSession.avatarName} • Choose minutes and action
+                        {companionDisplayName(activeUpcomingSession.avatarName)} • Choose minutes and action
                       </p>
                     </div>
                     <button

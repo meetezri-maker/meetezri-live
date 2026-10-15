@@ -313,7 +313,7 @@ describe('link resolution', () => {
       resolveSlug,
       resolveTitle
     );
-    expect(links).toEqual([{ label: 'Talk It Out', href: '/how-it-works', relation: 'product' }]);
+    expect(links).toEqual([{ label: 'Talk It Out', href: '/talk-it-out', relation: 'product' }]);
   });
 
   it('drops an unmapped route key', () => {
@@ -410,6 +410,13 @@ describe('cards and schema conformance', () => {
       resolveSlug,
       resolveTitle,
     });
+    expect(detail.author).toEqual({
+      name: 'Solace',
+      title: null,
+      bio: null,
+      avatarUrl: null,
+    });
+    expect(detail.reviewer).toBeNull();
     const result = publicDetailSchema.safeParse(detail);
     if (!result.success) throw new Error(JSON.stringify(result.error.issues, null, 2));
     expect(result.success).toBe(true);

@@ -425,9 +425,7 @@ const B001: Week1Asset = {
   // AUTHORED OUTSIDE WORKBOOK — the workbook supplies no URL slug for this asset. This is the
   // slug approved in CONTENT_HUB_IMPLEMENTATION_PLAN.md.
   slug: 'someone-to-talk-to-at-night',
-  // MISSING — the workbook supplies no meta description for this asset. Left null on purpose so
-  // the publish checklist reports a blocking gap rather than accepting invented SEO copy.
-  metaDescription: null,
+  metaDescription: 'Explore why thoughts can feel louder at night and find practical ways to express what you’re carrying, create space to reflect, and seek appropriate support.',
   week: 1,
   pillar: 'Someone To Talk To',
   tags: ['someone-to-talk-to', 'week-1'],
@@ -706,8 +704,11 @@ const B001: Week1Asset = {
     { targetKind: 'route', targetRoute: 'pricing', anchorText: null, relation: 'pricing' },
   ],
 
-  authoredOutsideWorkbook: ['slug (someone-to-talk-to-at-night — from CONTENT_HUB_IMPLEMENTATION_PLAN.md)'],
-  missingFields: ['metaDescription (workbook supplies none — blocking publish gap)'],
+  authoredOutsideWorkbook: [
+    'slug (someone-to-talk-to-at-night — from CONTENT_HUB_IMPLEMENTATION_PLAN.md)',
+    'metaDescription (approved in Cycle 2B)',
+  ],
+  missingFields: [],
 };
 
 export const WEEK1_ASSETS: Week1Asset[] = [A001, G001, B001];

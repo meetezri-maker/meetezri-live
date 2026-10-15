@@ -24,6 +24,7 @@ import {
 } from "@/lib/avatar/companionModelUrl";
 import { findLobbyAvatar, isPlaceholderAvatarName } from "@/lib/avatar/lobbyAvatars";
 import { isCompanionComingSoon } from "@/lib/avatar/companionAvailability";
+import { companionDisplayName } from "@meetezri/shared";
 import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -440,7 +441,7 @@ export function ChangeAvatar() {
         ...switchHistory,
       ]);
       setShowConfirmModal(false);
-      toast.success(`AI companion changed to ${selectedAvatar.name}`);
+      toast.success(`AI companion changed to ${companionDisplayName(selectedAvatar.name)}`);
     } catch (error) {
       console.error(error);
       toast.error("Could not update AI companion");
@@ -519,7 +520,7 @@ export function ChangeAvatar() {
                         sizeClass="h-[88px] w-[88px] sm:h-24 sm:w-24"
                       />
                       <div className="min-w-0">
-                        <h2 className={changeAvatarHeroName}>{currentAvatar.name}</h2>
+                        <h2 className={changeAvatarHeroName}>{companionDisplayName(currentAvatar.name)}</h2>
                         <p className={changeAvatarHeroMeta}>
                           {currentAvatar.gender} • {currentAvatar.ageRange} years
                         </p>
@@ -549,7 +550,7 @@ export function ChangeAvatar() {
                     whileTap={{ scale: 0.98 }}
                     onClick={() => void playVoicePreview(currentAvatar)}
                     className={changeAvatarPreviewBtn}
-                    aria-label={`Preview ${currentAvatar.name}'s voice`}
+                    aria-label={`Preview ${companionDisplayName(currentAvatar.name)}'s voice`}
                   >
                     <Volume2 className="h-4 w-4 text-violet-200/90 [html[data-ezri-theme=light]_&]:text-violet-700 [html[data-theme=light]_&]:text-violet-700" aria-hidden />
                     {playingVoiceFor === currentAvatar.id ? "Playing…" : "Preview Voice"}
@@ -627,7 +628,7 @@ export function ChangeAvatar() {
                             ringClass="ring-2 ring-white/10"
                           />
                           <div className="min-w-0 flex-1">
-                            <h3 className={changeAvatarCompanionName}>{avatar.name}</h3>
+                            <h3 className={changeAvatarCompanionName}>{companionDisplayName(avatar.name)}</h3>
                             <p className={changeAvatarCompanionMuted}>
                               {avatar.gender} • {avatar.ageRange} years
                             </p>
@@ -686,9 +687,9 @@ export function ChangeAvatar() {
                       Switch History
                     </p>
                     <p className="mt-1 text-sm text-[rgba(255,255,255,0.72)]">
-                      <span className="font-medium text-white">{switchHistory[0].from}</span>
+                      <span className="font-medium text-white">{companionDisplayName(switchHistory[0].from)}</span>
                       {" → "}
-                      <span className="font-medium text-white">{switchHistory[0].to}</span>
+                      <span className="font-medium text-white">{companionDisplayName(switchHistory[0].to)}</span>
                     </p>
                     <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.38)]">
                       {new Date(switchHistory[0].date).toLocaleDateString("en-US", {
@@ -717,7 +718,7 @@ export function ChangeAvatar() {
                   className={changeAvatarSwitchCta}
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden />
-                  Switch to {selectedAvatar.name}
+                  Switch to {companionDisplayName(selectedAvatar.name)}
                 </motion.button>
               </motion.div>
             ) : null}
@@ -804,7 +805,7 @@ export function ChangeAvatar() {
                     name={currentAvatar.name}
                     sizeClass="h-20 w-20"
                   />
-                  <p className="mt-3 text-lg font-semibold text-white">{currentAvatar.name}</p>
+                  <p className="mt-3 text-lg font-semibold text-white">{companionDisplayName(currentAvatar.name)}</p>
                   <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/28 bg-emerald-500/12 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200/90">
                     <CheckCircle className="h-3 w-3" aria-hidden />
                     Current
@@ -868,8 +869,8 @@ export function ChangeAvatar() {
               </h3>
               <p className="mt-2 text-sm text-[rgba(255,255,255,0.58)]">
                 Are you sure you want to switch from{" "}
-                <span className="font-medium text-white">{currentAvatar?.name}</span> to{" "}
-                <span className="font-medium text-white">{selectedAvatar?.name}</span>?
+                <span className="font-medium text-white">{companionDisplayName(currentAvatar?.name)}</span> to{" "}
+                <span className="font-medium text-white">{companionDisplayName(selectedAvatar?.name)}</span>?
               </p>
               <p className="mt-3 text-xs text-[rgba(255,255,255,0.42)]">
                 Your session history and progress will be preserved.

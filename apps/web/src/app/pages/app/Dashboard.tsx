@@ -18,6 +18,7 @@ import {
 } from "../../components/ui/dialog";
 import { queryKeys } from "@/lib/queries";
 import { resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
+import { companionDisplayName as companionDisplayNameFor } from "@meetezri/shared";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 import { MEMBERSHIP_COPY, membershipKeyForPlan } from "@/app/utils/membershipCopy";
 import {
@@ -427,7 +428,7 @@ export function Dashboard() {
 
   const portraitUrl = resolveCompanionPortraitUrl(profile?.selected_avatar);
   const companionDisplayName =
-    (profile?.selected_avatar && profile.selected_avatar.trim()) || "Solace";
+    companionDisplayNameFor(profile?.selected_avatar) || "Solace";
   const companionShort = companionDisplayName.split(/\s+/)[0] || "Solace";
   const companionTag = `Your companion, ${companionShort}`;
 

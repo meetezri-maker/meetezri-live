@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useMemo, useEffect, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
+import { DEFAULT_AI_COMPANIONS, companionDisplayName } from "@meetezri/shared";
 import {
   ArrowRight,
   ArrowLeft,
@@ -344,7 +344,7 @@ function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCar
         </motion.div>
 
         <motion.div className="min-w-0 flex-1 text-center sm:text-left sm:pt-1">
-          <h3 className="text-[18px] font-semibold tracking-tight text-white/96">{avatar.name}</h3>
+          <h3 className="text-[18px] font-semibold tracking-tight text-white/96">{companionDisplayName(avatar.name)}</h3>
           <p className="mt-0.5 text-[13px] text-violet-200/58">
             {avatar.gender} • {avatar.ageRange} years
           </p>

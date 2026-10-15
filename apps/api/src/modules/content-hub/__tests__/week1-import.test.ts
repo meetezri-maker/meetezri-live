@@ -154,8 +154,8 @@ describe('the Week 1 cluster', () => {
     }
   });
 
-  it('reports the editorial gaps rather than closing them silently', () => {
-    expect(B001.missingFields.join(' ')).toMatch(/metaDescription/);
+  it('records the approved metadata source explicitly', () => {
+    expect(B001.missingFields).toEqual([]);
     expect(B001.authoredOutsideWorkbook.join(' ')).toMatch(/slug/);
     // The other two assets have complete workbook coverage.
     expect(A001.missingFields).toEqual([]);
@@ -363,11 +363,11 @@ describe('W1-B001 — the Article', () => {
     expect(B001.authoredOutsideWorkbook[0]).toContain('someone-to-talk-to-at-night');
   });
 
-  it('LEAVES the meta description null rather than inventing one', () => {
-    // The whole point: a manufactured meta description would turn the checklist green and hide a
-    // real editorial decision that a human has to make.
-    expect(B001.metaDescription).toBeNull();
-    expect(validateAsset(B001).publishBlockers.join(' ')).toMatch(/meta_description is missing/);
+  it('uses the Cycle 2B approved meta description', () => {
+    expect(B001.metaDescription).toBe(
+      'Explore why thoughts can feel louder at night and find practical ways to express what you’re carrying, create space to reflect, and seek appropriate support.'
+    );
+    expect(validateAsset(B001).publishBlockers).not.toContain('meta_description is missing');
   });
 
   it('still imports cleanly as a draft despite the missing meta description', () => {

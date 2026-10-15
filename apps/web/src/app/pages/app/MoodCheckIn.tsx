@@ -18,6 +18,7 @@ import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { cn } from "@/lib/utils";
 import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
+import { companionDisplayName } from "@meetezri/shared";
 import { TalkItOutBottomDock } from "./talk-it-out/TalkItOutBottomDock";
 import {
   MOOD_CHECKIN_CARDS,
@@ -503,7 +504,7 @@ export function MoodCheckIn() {
                         ) : null}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[14px] font-medium leading-snug text-zinc-50">{companionPreview.name}</p>
+                        <p className="text-[14px] font-medium leading-snug text-zinc-50">{companionDisplayName(companionPreview.name)}</p>
                         <p className="mt-2 text-[13px] leading-relaxed text-zinc-300/88">
                           Thanks for checking in today.
                           <br />

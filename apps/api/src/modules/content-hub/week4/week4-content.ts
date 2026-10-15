@@ -366,7 +366,7 @@ const W4_B001: Week4Asset = {
       { id: "b4-p269", type: 'paragraph', content: t("Trust isn't built through big speeches.") },
       { id: "b4-p270", type: 'paragraph', content: t("It's built through small moments of follow-through.") },
       { id: "b4-p271", type: 'paragraph', content: t("And over time, those moments quietly become part of who you are.") },
-      { id: "b4-h272", type: 'heading', level: 2, content: t("SOLACE MONTH 1 • WEEK 4 OPERATIONAL WORKBOOK") },
+      { id: "b4-h272", type: 'heading', level: 2, content: t("Put Small Habits Into Practice") },
       { id: 'b4-cta-talk', type: 'cta', label: 'Talk It Out', target: { kind: 'route', value: 'product.talk_it_out' } },
     ],
   } as ContentBody,

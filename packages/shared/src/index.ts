@@ -8,6 +8,7 @@ export {
 
 export {
   canonicalCompanionDisplayName,
+  companionDisplayName,
   companionAnalyticsChartLabel,
   mergeCompanionAvatarCounts,
 } from './companions';

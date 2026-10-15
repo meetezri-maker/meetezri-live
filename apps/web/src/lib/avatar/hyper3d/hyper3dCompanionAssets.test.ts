@@ -379,26 +379,18 @@ describe("split head primitives", () => {
  */
 describe("companion identity is unchanged by the integration", () => {
   /**
-   * THE EXPECTED VOICE IS READ FROM CONFIGURATION, NOT FROM THE FUNCTION UNDER
-   * TEST.
+   * THE CATEGORY DEFAULTS, as the explicit per-option mapping defines them.
    *
-   * `resolveEzriWsVoiceForCompanion` returns `VITE_EZRI_VOICE_FEMALE` /
-   * `VITE_EZRI_VOICE_MALE`, which differ per environment — this repo's dev env
-   * overrides both — so a literal `"af_sky"` here would fail on a voice-preset
-   * change that has nothing to do with avatars. Resolving the two presets the
-   * same way the implementation documents keeps the assertion exact AND
-   * environment-independent, and deriving them from `import.meta.env` rather
-   * than from a call keeps it non-circular: a function that returned one
-   * constant for everybody would fail every row below.
+   * A companion with no saved voice falls to its category default — Voice 1 for
+   * female, Voice 2 for male — which map to `marin` and `echo`. These are the
+   * ids the mapping pins, not environment presets: the two `VITE_EZRI_VOICE_*`
+   * variables are no longer consulted, precisely so Voice 3 and Voice 4 cannot
+   * collapse back onto them.
    */
-  const femaleVoice =
-    (import.meta.env.VITE_EZRI_VOICE_FEMALE as string | undefined)?.trim() || "af_sky";
-  const maleVoice =
-    (import.meta.env.VITE_EZRI_VOICE_MALE as string | undefined)?.trim() || "am_echo";
+  const femaleVoice = "marin";
+  const maleVoice = "echo";
 
-  it("resolves two distinct configured voice presets", () => {
-    expect(femaleVoice).toBeTruthy();
-    expect(maleVoice).toBeTruthy();
+  it("keeps the two category defaults distinct", () => {
     expect(femaleVoice).not.toBe(maleVoice);
   });
 

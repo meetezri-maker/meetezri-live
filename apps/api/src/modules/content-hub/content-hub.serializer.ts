@@ -336,6 +336,12 @@ export function serializePerson(profile: ProfileLike | null | undefined) {
   };
 }
 
+
+/** Public resource attribution is the Solace organization, never an unapproved profile. */
+export function serializeResourceAuthor() {
+  return { name: 'Solace', title: null, bio: null, avatarUrl: null };
+}
+
 // ─── Cards ───────────────────────────────────────────────────────────────────
 
 export interface CardSource {
@@ -448,9 +454,11 @@ export function serializeDetail(input: SerializeDetailInput): PublicDetail {
     featuredImageAlt: row.featured_image_alt,
     body: serializeBody(row.body, { resolveSlug, relatedCards: input.related }),
     typeFields: serializeTypeFields(contentType, row.type_fields),
-    author: serializePerson(input.author),
-    reviewer: serializePerson(input.reviewer),
-    reviewedAt: row.reviewed_at ? row.reviewed_at.toISOString() : null,
+    author: serializeResourceAuthor(),
+    // Reviewer assignments and dates are editorial workflow data until an identity and credential
+    // claim has been explicitly approved for publication.
+    reviewer: null,
+    reviewedAt: null,
     publishedAt: row.first_published_at ? row.first_published_at.toISOString() : null,
     updatedAt: row.published_at ? row.published_at.toISOString() : null,
     readingTimeMinutes: row.reading_time_minutes,

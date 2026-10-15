@@ -80,15 +80,9 @@ export function canonicalCompanionDisplayName(raw: string): string {
  * Internal keys stay canonical for merging; this is display-only.
  */
 export function companionAnalyticsChartLabel(canonical: string): string {
-  const map: Record<string, string> = {
-    Alex: 'Alex Rivera',
-    'Jordan Taylor': 'Jordan Taylor',
-    'Maya Chen': 'Maya Chen',
-    'Sara Mitchell': 'Sara Mitchell',
-    'Not set': 'Not set',
-    Other: 'Unrecognized avatar',
-  };
-  return map[canonical] ?? canonical;
+  if (canonical === 'Not set') return 'Not set';
+  if (canonical === 'Other') return 'Unrecognized avatar';
+  return companionDisplayName(canonical) || canonical;
 }
 
 export function mergeCompanionAvatarCounts(
@@ -103,4 +97,40 @@ export function mergeCompanionAvatarCounts(
   return [...merged.entries()]
     .map(([name, c]) => ({ name, c: BigInt(Math.round(c)) }))
     .sort((a, b) => Number(b.c) - Number(a.c));
+}
+
+/**
+ * Canonical internal companion id/name → the name members see in the UI.
+ *
+ * DISPLAY ONLY. The keys are the canonical values that live in
+ * `DEFAULT_AI_COMPANIONS`, `profiles.selected_avatar`, `ai_avatars.name`,
+ * session configs, API payloads, voice mappings and GLB/PNG asset lookups —
+ * none of those change when a label here changes. Never feed a value from this
+ * map back into avatar resolution, a profile save or a session config: resolve
+ * with `canonicalCompanionDisplayName` / `matchDefaultCompanionByAvatarName`
+ * and render with `companionDisplayName`.
+ */
+const COMPANION_DISPLAY_NAME: Record<string, string> = {
+  Alex: 'Frankie',
+  'Jordan Taylor': 'Andre',
+  'Maya Chen': 'Tessa',
+  'Sara Mitchell': 'Romy',
+};
+
+/**
+ * The member-facing name for any stored/raw companion label.
+ *
+ * Accepts anything `canonicalCompanionDisplayName` accepts (canonical names,
+ * ids, legacy full names such as `"Alex Rivera"`, short codes, `*.png` stems).
+ * Unrecognized labels and custom companions are returned trimmed and unchanged,
+ * so admin-created avatars keep their own names.
+ */
+export function companionDisplayName(raw: string | null | undefined): string {
+  const trimmed = normalizeAvatarRaw(raw ?? '');
+  if (!trimmed) return '';
+
+  const canonical = findLobbyCompanionName(trimmed);
+  if (canonical) return COMPANION_DISPLAY_NAME[canonical] ?? canonical;
+
+  return COMPANION_DISPLAY_NAME[trimmed] ?? trimmed;
 }

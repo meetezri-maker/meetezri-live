@@ -6,6 +6,7 @@
   useCallback,
   type MutableRefObject,
 } from "react";
+import { companionDisplayName } from "@meetezri/shared";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSafety } from "@/app/contexts/SafetyContext";
@@ -5663,7 +5664,7 @@ export function ActiveSession() {
       transcript={transcript}
       liveUserSpeech={liveUserSpeechStore}
       isMuted={isMuted}
-      companionName={currentAvatar.name}
+      companionName={companionDisplayName(currentAvatar.name)}
       sttProvider={ezriConfig?.defaults.sttProvider}
       ezriWsStatus={ezriWsStatus}
       ezriWarmupStatus={ezriWarmupStatus}

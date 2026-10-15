@@ -59,6 +59,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SolacePanel } from "@/app/solace/SolacePanel";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
+import { companionDisplayName } from "@meetezri/shared";
 import { MOOD_CHECKIN_IMAGES, moodCheckInImageForValue } from "@/lib/solace/moodCheckInImages";
 import {
   getMoodDisplayInfo,
@@ -676,7 +677,7 @@ export function MoodHistory() {
                   <Heart className="h-3.5 w-3.5 text-rose-400" />
                   <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Your Companion</h3>
                 </div>
-                <p className="mb-1 text-sm font-medium text-zinc-200">{companionPreview.name}</p>
+                <p className="mb-1 text-sm font-medium text-zinc-200">{companionDisplayName(companionPreview.name)}</p>
                 <p className="text-[10px] leading-relaxed text-zinc-500">
                   Here to support your emotional wellbeing with care and understanding.
                 </p>
