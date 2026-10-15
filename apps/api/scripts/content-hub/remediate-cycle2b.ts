@@ -6,6 +6,7 @@ import { captureRevision } from '../../src/modules/content-hub/content-hub.revis
 import {
   CYCLE_2B_CONTEXTUAL_LINKS,
   CYCLE_2B_REPLACEMENTS,
+  CYCLE_2B_TRANSACTION_OPTIONS,
   planExactReplacements,
 } from '../../src/modules/content-hub/cycle2b-remediation';
 
@@ -182,7 +183,11 @@ async function main() {
         },
       }, { tx });
     }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    maxWait: CYCLE_2B_TRANSACTION_OPTIONS.maxWait,
+    timeout: CYCLE_2B_TRANSACTION_OPTIONS.timeout,
+  });
 }
 
 main()

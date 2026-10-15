@@ -131,6 +131,21 @@ export const CYCLE_2B_CONTEXTUAL_LINKS: Readonly<Record<string, readonly Context
   'why-do-we-keep-things-to-ourselves': links('why-do-people-keep-things-to-themselves', 'reasons people keep things inside', 'questions-about-everyday-conversations', 'everyday conversation questions'),
 };
 
+/** Bounded for the finite one-off plan; measured production reads averaged well under 1s/query. */
+export const CYCLE_2B_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 120_000,
+} as const;
+
+/**
+ * Two validation reads, five statements per changed Resource, and three statements per link source.
+ * Kept explicit so the timeout budget cannot silently drift below the approved plan's workload.
+ */
+export const CYCLE_2B_TRANSACTION_QUERY_BUDGET =
+  2
+  + new Set(CYCLE_2B_REPLACEMENTS.map(({ slug }) => slug)).size * 5
+  + Object.keys(CYCLE_2B_CONTEXTUAL_LINKS).length * 3;
+
 export const FAQ_AUTHORITY_REPORT = [
   ['Does talking about problems actually help?', 'why-talking-through-thoughts-can-make-them-feel-lighter'],
   ['What is self-awareness?', 'questions-about-honest-conversations-with-yourself'],

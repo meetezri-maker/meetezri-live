@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>arfv2 trial</title>
+    <style>
+      body { margin: 0; background: #16181d; color: #e8e8ea; font: 13px/1.4 ui-monospace, monospace; }
+      .row { display: flex; gap: 8px; padding: 8px; }
+      figure { margin: 0; }
+      figcaption { padding: 4px 0; color: #9aa0aa; }
+      canvas { background: #0f1115; display: block; }
+      pre { white-space: pre-wrap; padding: 8px; margin: 0; max-height: 40vh; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <figure>
+        <figcaption id="capA">A — authored materials</figcaption>
+        <canvas id="a" width="520" height="640"></canvas>
+      </figure>
+      <figure>
+        <figcaption id="capB">B — production material + appearance passes</figcaption>
+        <canvas id="b" width="520" height="640"></canvas>
+      </figure>
+    </div>
+    <pre id="log">loading…</pre>
+    <script type="module">
+      const log = document.getElementById("log");
+      const say = (x) => { log.textContent = typeof x === "string" ? x : JSON.stringify(x, null, 1); };
+      const params = new URLSearchParams(location.search);
+      const url = params.get("url") || "/avatars/hyper3d/arfv2.glb";
+      const asset = params.get("asset") || "hyper3d_afr";
+      const camera = params.get("cam")
+        ? (() => { const n = params.get("cam").split(",").map(Number);
+                   return { position: [n[0], n[1], n[2]], target: [n[3], n[4], n[5]], fov: n[6] }; })()
+        : undefined;
+      try {
+        const m = await import("/src/__arfv2Trial.ts");
+        window.__arfv2 = m;
+        if (params.get("inspect") === "1") {
+          const info = await m.inspect(url);
+          window.__arfv2Inspect = info;
+          say(info);
+        } else {
+          const a = await m.render(document.getElementById("a"), url, "authored", asset, camera);
+          const b = await m.render(document.getElementById("b"), url, "production", asset, camera);
+          window.__arfv2Render = { a, b };
+          say({ a, b });
+        }
+        document.title = "arfv2 trial ready";
+      } catch (e) {
+        document.title = "arfv2 trial ERROR";
+        say("ERROR: " + (e && e.stack ? e.stack : String(e)));
+      }
+    </script>
+  </body>
+</html>

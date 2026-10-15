@@ -37,8 +37,15 @@ import type { Hyper3dAssetId } from "./engine/mappings/avatars/hyper3dAssetSelec
 export const HYPER3D_COMPANION_ASSETS: Readonly<
   Record<CompanionCanonicalId, Hyper3dAssetId>
 > = {
-  /** Sara Mitchell — `afr.glb`, the updated female_2291. */
-  sarah: "hyper3d_afr",
+  /**
+   * Sara Mitchell — TEMPORARY MODEL TRIAL on `arfv2.glb` (2026-10-16).
+   *
+   * Her canonical id, display label, voice and personality are untouched; only
+   * the file behind her changes. RESTORE: put `"hyper3d_afr"` back here. That
+   * one word is the whole switch — `hyper3d_afr` and its adapter are still
+   * present and unmodified.
+   */
+  sarah: "hyper3d_arfv2",
   /** Maya Chen — `sara.glb`. The filename is the designer's label, not the companion. */
   maya: "hyper3d_sara",
   /** Alex — `perm.glb`. */

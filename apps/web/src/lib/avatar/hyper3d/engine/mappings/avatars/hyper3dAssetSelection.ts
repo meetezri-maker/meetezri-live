@@ -63,6 +63,7 @@ export type Hyper3dAssetId =
   | "female_229"
   | "female_2291_lowerlip_v2"
   | "hyper3d_afr"
+  | "hyper3d_arfv2"
   | "hyper3d_sara"
   | "hyper3d_perm"
   | "hyper3d_jordan";
@@ -101,6 +102,17 @@ export const HYPER3D_EXPERIMENTAL_GLB_URL = "/avatars/experimental/female_2291-l
 
 /** The per-companion assets, delivered 2026-10-12 under `public/avatars/hyper3d/`. */
 export const HYPER3D_AFR_GLB_URL = "/avatars/hyper3d/afr.glb";
+/**
+ * TEMPORARY MODEL TRIAL, 2026-10-16 — `arfv2.glb`, the designer's re-export.
+ *
+ * A SEPARATE ASSET ID RATHER THAN A NEW URL ON `hyper3d_afr`, because the two
+ * files are not interchangeable: `arfv2.glb` renames the hair mesh
+ * (`Character.002` -> `Character.001`, so three.js names it `Character001` /
+ * `Character001_1`) and its hair material (`Material.005` -> `Hair`). Pointing
+ * the existing id at it would leave `hyper3d_afr`'s adapter describing a file
+ * it no longer matches, and the restore would be more than one line.
+ */
+export const HYPER3D_ARFV2_GLB_URL = "/avatars/hyper3d/arfv2.glb";
 export const HYPER3D_SARA_GLB_URL = "/avatars/hyper3d/sara.glb";
 export const HYPER3D_PERM_GLB_URL = "/avatars/hyper3d/perm.glb";
 export const HYPER3D_JORDAN_GLB_URL = "/avatars/hyper3d/jordan.glb";
@@ -110,6 +122,7 @@ export const HYPER3D_ASSET_URLS: Readonly<Record<Hyper3dAssetId, string>> = {
   female_229: HYPER3D_LEGACY_GLB_URL,
   female_2291_lowerlip_v2: HYPER3D_EXPERIMENTAL_GLB_URL,
   hyper3d_afr: HYPER3D_AFR_GLB_URL,
+  hyper3d_arfv2: HYPER3D_ARFV2_GLB_URL,
   hyper3d_sara: HYPER3D_SARA_GLB_URL,
   hyper3d_perm: HYPER3D_PERM_GLB_URL,
   hyper3d_jordan: HYPER3D_JORDAN_GLB_URL

@@ -352,6 +352,17 @@ const HYPER3D_EYE_REST_CORRECTIONS: Readonly<Record<Hyper3dAssetId, Hyper3dEyeRe
    * above `HYPER3D_AFR_EYE_REST_CORRECTION` in `hyper3dRigAdapter`.
    */
   hyper3d_afr: HYPER3D_AFR_EYE_REST_CORRECTION,
+  /**
+   * TRIAL ASSET `arfv2.glb` — THE SAME OBJECT AS `hyper3d_afr`, BY REFERENCE.
+   *
+   * MEASURED against the shipped `afr.glb`: the `Eyes` mesh (`Face.003`, 772
+   * vertices) carries the same indices and the same UVs, and its POSITION
+   * buffer differs by at most 3.6e-7 model units — float noise from the
+   * re-export, not a re-aim. Both `Eyeball_*` morph deltas agree to 1.2e-7.
+   * So this asset's authored eye rest IS afr's, and it takes afr's correction
+   * unchanged; sharing the reference is what stops the two drifting apart.
+   */
+  hyper3d_arfv2: HYPER3D_AFR_EYE_REST_CORRECTION,
   hyper3d_sara: HYPER3D_SARA_EYE_REST_CORRECTION,
   hyper3d_perm: HYPER3D_PERM_EYE_REST_CORRECTION,
   hyper3d_jordan: HYPER3D_JORDAN_EYE_REST_CORRECTION
@@ -832,6 +843,48 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
      * USC `texture_diffuse`, and `texture_diffuse_evened.png` is the accepted
      * correction of that same texture.
      */
+    faceMaps: "usc-shared"
+  },
+  /**
+   * `arfv2.glb` — TEMPORARY TRIAL of the designer's re-export for Sara Mitchell.
+   *
+   * MEASURED against the shipped `afr.glb`, through the real GLTFLoader:
+   *
+   *   same   875-joint `Skel`, every joint name, every scene-root node name,
+   *          `blendshapes` POSITION byte-identical with all 51 morph targets
+   *          byte-identical, `Lashes` byte-identical with all 14 targets,
+   *          `Eyes` and `Teeth` to within 5e-7, the outfit byte-identical,
+   *          and the `blendshapes` authoring scale 0.00789611 — so it inherits
+   *          the shipped transform, the morph bindings and afr's eye-rest.
+   *   differs ONE region: the hair. `Character.002` (1,161 + hair primitive,
+   *          materials `Material.004` / `Material.005`) is replaced by
+   *          `Character.001` (805 + 57,180 vertices, materials `Material.003` /
+   *          `Hair`), and the face texture and its UVs were re-authored.
+   *
+   * THE HAIR RENAME IS WHY THIS ENTRY EXISTS. three.js names the two hair
+   * primitives `Character001` and `Character001_1`; afr's `Character002*` names
+   * match nothing in this file. Left inherited, `hairExpected && !hairMeshes`
+   * fails `material-setup` in `hyper3dEngineFactory`, init throws
+   * `Hyper3dBindingError`, and the seam returns Sara to the legacy avatar —
+   * verified by running the real engine against this asset before this entry
+   * was written.
+   *
+   * `faceMaps` IS DELIBERATELY LEFT AT afr's `usc-shared`, so this trial changes
+   * the MODEL and nothing else. The asset does ship a re-authored
+   * `texture_diffuse`, which that setting replaces with the USC evened albedo;
+   * changing this one word to `"authored"` is what keeps the designer's face
+   * texture instead.
+   *
+   * SIZE NOTE, reported not acted on: the hair sculpt is 57,180 vertices
+   * against afr's 1,161-vertex hair, and it is unskinned, which is why both its
+   * primitives are listed in `headAttachedMeshes`.
+   */
+  hyper3d_arfv2: {
+    label: "Hyper3D (arfv2 — Sara Mitchell, model trial)",
+    eyelashes: ["Lashes"],
+    hair: ["Character001", "Character001_1"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Character001", "Character001_1", "Lashes"],
+    hiddenMeshNames: [],
     faceMaps: "usc-shared"
   },
   /** `sara.glb`, shown as Maya Chen. Split head, own authoring scale, has hair. */

@@ -2,6 +2,8 @@ import { relatedClusterSlugs, resourceClusterKeysForSlug } from '@meetezri/share
 import {
   CYCLE_2B_CONTEXTUAL_LINKS,
   CYCLE_2B_REPLACEMENTS,
+  CYCLE_2B_TRANSACTION_OPTIONS,
+  CYCLE_2B_TRANSACTION_QUERY_BUDGET,
   FAQ_AUTHORITY_REPORT,
   applyExactReplacement,
   planExactReplacements,
@@ -201,8 +203,66 @@ describe('Cycle 2B publishing safeguards', () => {
     ) as string;
     expect(source).toContain("const apply = args.has('--apply')");
     expect(source).toContain('if (!apply) return');
+    expect(source).toContain('if (apply && (!confirmed || !actorId))');
     expect(source).toContain('--confirm-production');
+    expect(source).toContain('--actor=<approved-super-admin-profile-id>');
   });
+
+  it('bounds the single transaction for the complete approved query budget', () => {
+    const source = require('fs').readFileSync(
+      require('path').join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        'scripts',
+        'content-hub',
+        'remediate-cycle2b.ts'
+      ),
+      'utf8'
+    ) as string;
+
+    expect(CYCLE_2B_TRANSACTION_QUERY_BUDGET).toBe(114);
+    expect(CYCLE_2B_TRANSACTION_OPTIONS).toEqual({ maxWait: 10_000, timeout: 120_000 });
+    expect(CYCLE_2B_TRANSACTION_OPTIONS.timeout).toBeGreaterThanOrEqual(
+      CYCLE_2B_TRANSACTION_QUERY_BUDGET * 1_000
+    );
+    expect(source.match(/prisma\.\$transaction\(/g)).toHaveLength(1);
+    expect(source).toContain('maxWait: CYCLE_2B_TRANSACTION_OPTIONS.maxWait');
+    expect(source).toContain('timeout: CYCLE_2B_TRANSACTION_OPTIONS.timeout');
+  });
+
+  it('keeps content, links, revisions and audits inside the same transaction client', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', 'scripts', 'content-hub', 'remediate-cycle2b.ts'),
+      'utf8'
+    );
+    const transactionStart = source.indexOf('await prisma.$transaction');
+    const beforeTransaction = source.slice(0, transactionStart);
+    const transaction = source.slice(transactionStart);
+    const revision = fs.readFileSync(path.join(__dirname, '..', 'content-hub.revision.ts'), 'utf8');
+    const audit = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'lib', 'auditLog.ts'), 'utf8');
+
+    expect(beforeTransaction).not.toMatch(/prisma\.(content_items|content_links|content_revisions|audit_logs)\.(update|create|delete)/);
+    expect(transaction).toContain('loadBaseline(tx as typeof prisma)');
+    expect(transaction).toContain('validateContextualState(tx as typeof prisma');
+    expect(transaction).toContain('await tx.content_items.update');
+    expect(transaction).toContain('await captureRevision(tx');
+    expect(transaction).toContain('await tx.content_links.deleteMany');
+    expect(transaction).toContain('await tx.content_links.createMany');
+    expect(transaction.match(/writeAuditLog\([\s\S]*?\{ tx \}\);/g)).toHaveLength(2);
+    expect(transaction).not.toContain('Promise.all');
+    expect(transaction).not.toContain('fetch(');
+    expect(source.match(/prisma\.\$transaction\(/g)).toHaveLength(1);
+    expect(revision).toContain('await tx.content_items.update');
+    expect(revision).toContain('await tx.content_revisions.create');
+    expect(audit).toContain('const client: PrismaClientLike = tx ?? prisma');
+    expect(audit).toContain('const swallowErrors = tx ? false');
+  });
+
   it('keeps cluster recommendations deterministic and excludes the current page', () => {
     const slug = 'small-daily-habits-vs-motivation';
     expect(resourceClusterKeysForSlug(slug)).toEqual(['habits_and_consistency']);
