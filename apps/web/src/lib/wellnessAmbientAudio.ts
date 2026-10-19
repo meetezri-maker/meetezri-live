@@ -13,7 +13,8 @@ export type WellnessAmbientKind =
   | "sleephealth_music"
   | "stress_management_music"
   | "anxiety_management_music"
-  | "depression_support_music";
+  | "depression_support_music"
+  | "exercise_music";
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -35,6 +36,7 @@ const SLEEPHEALTH_MUSIC_PATHS = ["/music/sleephealth.mp3"];
 const STRESS_MANAGEMENT_MUSIC_PATHS = ["/music/stress management.mp3"];
 const ANXIETY_MANAGEMENT_MUSIC_PATHS = ["/music/Anxietymanagement.mp3"];
 const DEPRESSION_SUPPORT_MUSIC_PATHS = ["/music/depression-support.mp3"];
+const EXERCISE_MUSIC_PATHS = ["/music/gentle-movement.mp3"];
 const RAIN_MUSIC_PATHS = ["/music/rain.mp3"];
 
 function getOrCreateContext(): AudioContext {
@@ -210,6 +212,13 @@ export async function startWellnessAmbient(kind: WellnessAmbientKind): Promise<v
     return;
   }
 
+  if (kind === "exercise_music") {
+    await startMediaLoop(EXERCISE_MUSIC_PATHS, 0.45);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
   if (kind === "rain") {
     await startMediaLoop(RAIN_MUSIC_PATHS, 0.42);
     if (token !== ambientSessionToken) return;
@@ -287,6 +296,7 @@ export function ambientKindForExerciseId(exerciseId: string): WellnessAmbientKin
   if (exerciseId === "body-scan") return "meditation_music";
   if (exerciseId === "sleep-meditation") return "sleephealth_music";
   if (exerciseId === "gratitude") return "selfcare_music";
+  if (exerciseId === "gentle-movement") return "exercise_music";
   return null;
 }
 
@@ -325,6 +335,7 @@ export function ambientKindForExercise(exercise: AmbientExerciseLike | null | un
   if (key === "body scan meditation|meditation") return "meditation_music";
   if (key === "sleep meditation|sleep health") return "sleephealth_music";
   if (key === "gratitude reflection|self-care") return "selfcare_music";
+  if (key === "gentle movement|exercise") return "exercise_music";
   if (title === "rain & thunder") return "rain";
   if (title === "box breathing") return "relaxation_music";
   if (title === "tension release scan") return "stress_management_music";
@@ -334,6 +345,7 @@ export function ambientKindForExercise(exercise: AmbientExerciseLike | null | un
   if (title === "body scan meditation") return "meditation_music";
   if (title === "sleep meditation") return "sleephealth_music";
   if (title === "gratitude reflection") return "selfcare_music";
+  if (title === "gentle movement") return "exercise_music";
 
   return null;
 }
