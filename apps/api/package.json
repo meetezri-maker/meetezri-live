@@ -19,7 +19,8 @@
     "db:seed-wellness": "ts-node-dev --transpile-only --no-notify scripts/seed-wellness-tools.ts",
     "db:seed-avatars": "ts-node-dev --transpile-only --no-notify scripts/seed_avatars.ts",
     "db:seed-crisis-hotlines": "ts-node-dev --transpile-only --no-notify scripts/seed-crisis-hotlines.ts",
-    "db:remove-placeholder-avatars": "ts-node-dev --transpile-only --no-notify scripts/remove-placeholder-ai-avatars.ts"
+    "db:remove-placeholder-avatars": "ts-node-dev --transpile-only --no-notify scripts/remove-placeholder-ai-avatars.ts",
+    "account-cleanup": "ts-node-dev --transpile-only --no-notify --exit-child scripts/account-cleanup/delete-allowlisted-accounts.ts"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",
