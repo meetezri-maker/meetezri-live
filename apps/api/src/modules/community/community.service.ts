@@ -6,6 +6,7 @@ import {
 } from '@meetezri/shared';
 import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import { invalidateCommunityCaches } from '../admin/admin.service';
+import { deletedCommunityAuthor } from './community-author';
 import { calculateStreak } from '../users/user.service';
 
 let communityOverviewCacheValue: { data: any; timestamp: number } | null = null;
@@ -188,7 +189,7 @@ export async function getCommunityOverview(viewerUserId?: string) {
       distinct: ['user_id'],
     }),
     prisma.community_posts.findMany({
-      where: { deleted_at: null },
+      where: { deleted_at: null, user_id: { not: null } },
       select: { user_id: true },
       distinct: ['user_id'],
     }),
@@ -329,8 +330,8 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
   });
 
   const membershipKeys = posts
-    .filter((p) => p.group_id)
-    .map((p) => ({ group_id: p.group_id as string, user_id: p.user_id }));
+    .filter((p) => p.group_id && p.user_id)
+    .map((p) => ({ group_id: p.group_id as string, user_id: p.user_id as string }));
 
   let roleByPair = new Map<string, string>();
   if (membershipKeys.length > 0) {
@@ -422,9 +423,10 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
 
   return posts.map((p) => {
     const profile = p.profiles;
+    const deletedAuthor = deletedCommunityAuthor(p.user_id);
     const fallbackDisplayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
     let authorRole: 'member' | 'moderator' | 'companion' = 'member';
-    if (profile?.role === 'therapist') authorRole = 'companion';
+    if (!deletedAuthor && profile?.role === 'therapist') authorRole = 'companion';
     else if (p.group_id) {
       const r = roleByPair.get(`${p.group_id}:${p.user_id}`);
       if (r === 'moderator' || r === 'admin') authorRole = 'moderator';
@@ -437,22 +439,28 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       'General Discussion';
 
     const snap = snapshotByPostId.get(p.id);
-    const displayName = snap?.author_name ?? fallbackDisplayName;
-    const avatarUrl =
-      snap?.author_avatar_url !== undefined
-        ? snap.author_avatar_url
-        : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
+    const displayName = deletedAuthor?.name ?? snap?.author_name ?? fallbackDisplayName;
+    const avatarUrl = deletedAuthor
+      ? null
+      : snap?.author_avatar_url !== undefined
+          ? snap.author_avatar_url
+          : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
     const authorPrivacy = profile?.privacy_settings as PrivacyJson;
     const showDisplayName = authorPrivacy?.showDisplayNameInCommunity;
     const profilePrivateForOthers = isCommunityProfilePrivateForOthers(authorPrivacy);
     const authorUserId =
-      p.user_id === userId
-        ? p.user_id
-        : showDisplayName !== false && !profilePrivateForOthers
+      p.user_id === null
+        ? null
+        : p.user_id === userId
           ? p.user_id
-          : null;
+          : showDisplayName !== false && !profilePrivateForOthers
+            ? p.user_id
+            : null;
     const authorProfilePrivate =
-      p.user_id !== userId && profilePrivateForOthers && showDisplayName !== false;
+      p.user_id !== null &&
+      p.user_id !== userId &&
+      profilePrivateForOthers &&
+      showDisplayName !== false;
 
     return {
       id: p.id,

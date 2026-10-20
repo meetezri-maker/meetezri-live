@@ -127,7 +127,7 @@ export function CommunityManagement() {
       const mappedPosts: ForumPost[] = (postsData || []).map((p: any) => {
         const authorName =
           p.profiles?.full_name?.trim() ||
-          (p.profiles?.email ? p.profiles.email.split("@")[0] : "User");
+          (p.profiles?.email ? p.profiles.email.split("@")[0] : "Deleted user");
         const authorEmail = p.profiles?.email || null;
         const locked = Boolean(p.locked_at);
         return {
