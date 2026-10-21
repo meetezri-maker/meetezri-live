@@ -119,7 +119,8 @@ export function CommunitySharePostModal({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#030308]/80 p-4 backdrop-blur-xl"
+      // z-[55]: above MobileBottomNav (z-50, rendered later in AppLayout) so it can't cover the Post button.
+      className="fixed inset-0 z-[55] flex items-center justify-center bg-[#030308]/80 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] backdrop-blur-xl"
       onClick={() => !posting && onClose()}
     >
       <motion.div
@@ -127,7 +128,7 @@ export function CommunitySharePostModal({
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
-        className="max-h-[min(92vh,880px)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#0e0e18]/95 p-6 shadow-[0_0_80px_-20px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl sm:p-8"
+        className="max-h-[min(100%,92vh,880px)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-[28px] supports-[height:100dvh]:max-h-[min(100%,92dvh,880px)] border border-white/10 bg-[#0e0e18]/95 p-6 shadow-[0_0_80px_-20px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl sm:p-8"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
