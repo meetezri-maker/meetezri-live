@@ -214,14 +214,15 @@ export function TalkItOutLobbyLayout({
             </p>
           </header>
 
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_308px] xl:items-start xl:gap-x-10">
+          {/* Below xl both columns use display: contents so the Customize card can be ordered after the hero (visual only; DOM order unchanged). */}
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_308px] xl:items-start xl:gap-8 xl:gap-x-10">
             {/* Center column */}
-            <div className="min-w-0 space-y-9">
+            <div className="min-w-0 space-y-9 max-xl:contents">
               {showCarveoutBanner && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={mattePanelClass("relative overflow-hidden p-5")}
+                  className={mattePanelClass("relative overflow-hidden p-5 max-xl:order-first")}
                 >
                   <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-500/15 blur-3xl" />
                   <div className="relative flex gap-3">
@@ -240,7 +241,7 @@ export function TalkItOutLobbyLayout({
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
                   solaceHeroMediaShell,
-                  "talk-it-out-hero rounded-[1.75rem] border border-white/[0.07]",
+                  "talk-it-out-hero rounded-[1.75rem] border border-white/[0.07] max-xl:order-first",
                   "shadow-[0_56px_120px_-58px_rgba(0,0,0,0.92),0_0_0_1px_rgba(139,92,246,0.1)]",
                   "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
                   "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
@@ -446,7 +447,7 @@ export function TalkItOutLobbyLayout({
                 ) : null}
               </div>
 
-              <section aria-label="Upcoming sessions" className={mattePanelClass("p-5 sm:p-6")}>
+              <section aria-label="Upcoming sessions" className={mattePanelClass("p-5 sm:p-6 max-xl:mb-8")}>
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="font-medium text-zinc-100">Upcoming</h3>
                   <Link
@@ -506,7 +507,7 @@ export function TalkItOutLobbyLayout({
             </div>
 
             {/* Right rail */}
-            <aside className="min-w-0 space-y-5 xl:sticky xl:top-[5.5rem] xl:self-start">
+            <aside className="min-w-0 space-y-5 max-xl:contents xl:sticky xl:top-[5.5rem] xl:self-start">
               <div className={mattePanelClass("p-5")}>
                 <p className="talk-it-out-rail-label text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Session mode
@@ -537,7 +538,7 @@ export function TalkItOutLobbyLayout({
                 </div>
               </div>
 
-              <div className={cn(mattePanelClass("p-5"))}>
+              <div className={cn(mattePanelClass("p-5 max-xl:order-first max-xl:mb-9"))}>
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Customize Solace Voice & Avatar
                 </p>
