@@ -162,6 +162,29 @@ function GlowRing({
   );
 }
 
+const MEMBERSHIP_PLANS_SECTION_ID = "membership-plans";
+const MEMBERSHIP_PLANS_HEADING_ID = "manage-plan-heading";
+
+/**
+ * In-page jump to the membership plan cards. Pure navigation: no billing request. Honours the OS
+ * reduced-motion preference and the app's own reduced-motion / no-animation classes (the CSS
+ * `scroll-behavior` override does not apply to a JS `behavior: "smooth"`), then moves focus to the
+ * section heading so keyboard and screen-reader users continue from the plans.
+ */
+function scrollToMembershipPlans(): void {
+  const section = document.getElementById(MEMBERSHIP_PLANS_SECTION_ID);
+  if (!section) return;
+
+  const root = document.documentElement;
+  const prefersReducedMotion =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+    root.classList.contains("reduced-motion") ||
+    root.classList.contains("appearance-no-animations");
+
+  section.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  document.getElementById(MEMBERSHIP_PLANS_HEADING_ID)?.focus({ preventScroll: true });
+}
+
 function formatBillingCycle(raw: unknown): string {
   const s = String(raw ?? "monthly").toLowerCase();
   if (s === "yearly" || s === "annual") return "Yearly";
@@ -243,6 +266,12 @@ export function Billing() {
   const [invoices, setInvoices] = useState<any[]>([]);
   /** Raw GET /billing payload — billing_cycle, payment_method, etc. (no fabricated card digits) */
   const [subscriptionSource, setSubscriptionSource] = useState<Record<string, unknown> | null>(null);
+  /**
+   * Membership as confirmed by a successful GET /billing with a recognised `plan_type`. Stays null
+   * while loading, on fetch failure, or for an unknown plan — `userSubscription.planId` defaults to
+   * "trial" in all of those cases, so it cannot gate membership actions on its own.
+   */
+  const [confirmedPlanType, setConfirmedPlanType] = useState<PlanTier | null>(null);
   const [userSubscription, setUserSubscription] = useState<UserSubscription>({
     userId: "",
     planId: "trial",
@@ -299,6 +328,9 @@ export function Billing() {
         const rawPlanId = subData.plan_type;
         const planId = (SUBSCRIPTION_PLANS[rawPlanId as PlanTier] ? rawPlanId : "trial") as PlanTier;
         const plan = SUBSCRIPTION_PLANS[planId];
+        setConfirmedPlanType(
+          Object.keys(SUBSCRIPTION_PLANS).includes(String(rawPlanId)) ? (rawPlanId as PlanTier) : null
+        );
 
         const creditsView = buildCreditsMinutesView(creditsData);
         const creditsRemaining = creditsView.subscriptionRemainingMinutes;
@@ -354,6 +386,7 @@ export function Billing() {
       } catch (error) {
         console.error("Failed to fetch billing data:", error);
         setSubscriptionSource(null);
+        setConfirmedPlanType(null);
       } finally {
         setIsLoading(false);
       }
@@ -399,9 +432,14 @@ export function Billing() {
 
   const isCancelled = ["canceled", "cancelled"].includes(String(userSubscription.status || "").toLowerCase());
   const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId] ?? SUBSCRIPTION_PLANS.trial;
-  const canCancelSubscription = ["active", "trialing", "past_due"].includes(
-    String(userSubscription.status || "").toLowerCase()
-  );
+  // Discover is identified by `plan_type`, never by status ("trialing" is a Stripe status a paid
+  // plan can carry) or by a Stripe customer id. Discover has no Stripe subscription or portal
+  // account, so it gets no portal or cancellation controls.
+  const isConfirmedDiscover = confirmedPlanType === "trial";
+  const isConfirmedPaid = confirmedPlanType === "core" || confirmedPlanType === "pro";
+  const canCancelSubscription =
+    isConfirmedPaid &&
+    ["active", "trialing", "past_due"].includes(String(userSubscription.status || "").toLowerCase());
 
   const billingDateModel = useMemo(
     () =>
@@ -764,28 +802,40 @@ export function Billing() {
                         {billingDateModel.fullLabel}
                       </p>
                     ) : null}
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      <Button
-                        type="button"
-                        onClick={handleManageBilling}
-                        isLoading={processingAction === "manage_billing"}
-                        disabled={isActionLocked}
-                        className={billingHeroBtnPrimary}
-                      >
-                        Manage Plan
-                      </Button>
-                      {canCancelSubscription ? (
+                    {isConfirmedDiscover ? (
+                      <div className="flex flex-wrap gap-3 pt-1">
                         <Button
                           type="button"
-                          variant="outline"
-                          onClick={handleCancelSubscription}
-                          disabled={isActionLocked}
-                          className={billingHeroBtnSecondary}
+                          onClick={scrollToMembershipPlans}
+                          className={billingHeroBtnPrimary}
                         >
-                          Cancel plan
+                          Select Plan
                         </Button>
-                      ) : null}
-                    </div>
+                      </div>
+                    ) : isConfirmedPaid ? (
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        <Button
+                          type="button"
+                          onClick={handleManageBilling}
+                          isLoading={processingAction === "manage_billing"}
+                          disabled={isActionLocked}
+                          className={billingHeroBtnPrimary}
+                        >
+                          Manage Plan
+                        </Button>
+                        {canCancelSubscription ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleCancelSubscription}
+                            disabled={isActionLocked}
+                            className={billingHeroBtnSecondary}
+                          >
+                            Cancel plan
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <dl className="grid w-full max-w-md shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-lg">
@@ -811,8 +861,12 @@ export function Billing() {
               <div className="lg:hidden">{minutesRailBlock}</div>
 
               {/* 3 Manage your membership */}
-              <section aria-labelledby="manage-plan-heading" className="space-y-5">
-                <h2 id="manage-plan-heading" className={billingSectionHeading}>
+              <section
+                id={MEMBERSHIP_PLANS_SECTION_ID}
+                aria-labelledby={MEMBERSHIP_PLANS_HEADING_ID}
+                className="scroll-mt-6 space-y-5"
+              >
+                <h2 id={MEMBERSHIP_PLANS_HEADING_ID} tabIndex={-1} className={billingSectionHeading}>
                   Manage your plan
                 </h2>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -976,11 +1030,7 @@ export function Billing() {
                     </div>
                     <Button
                       type="button"
-                      onClick={() =>
-                        document
-                          .getElementById("manage-plan-heading")
-                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                      }
+                      onClick={scrollToMembershipPlans}
                       className="h-11 min-h-[44px] shrink-0 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 text-white lg:self-center"
                     >
                       {PAYG_RESTRICTION.cta}
@@ -1199,21 +1249,28 @@ export function Billing() {
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-zinc-100">
-                      {paymentMethodLabel ?? "Card on file"}
+                      {paymentMethodLabel ??
+                        (isConfirmedDiscover
+                          ? "No payment method on file"
+                          : isConfirmedPaid
+                            ? "Managed in Stripe"
+                            : "Unavailable")}
                     </p>
                     <p className="text-xs text-zinc-500">Full card details are managed securely in Stripe.</p>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleManageBilling}
-                  isLoading={processingAction === "manage_billing"}
-                  disabled={isActionLocked}
-                  className="mt-4 h-11 min-h-[44px] w-full rounded-full text-sm text-violet-300/90 hover:bg-white/[0.05] hover:text-violet-100"
-                >
-                  Update payment method
-                </Button>
+                {isConfirmedPaid ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleManageBilling}
+                    isLoading={processingAction === "manage_billing"}
+                    disabled={isActionLocked}
+                    className="mt-4 h-11 min-h-[44px] w-full rounded-full text-sm text-violet-300/90 hover:bg-white/[0.05] hover:text-violet-100"
+                  >
+                    Update payment method
+                  </Button>
+                ) : null}
               </div>
 
               {/* 3 Upcoming renewal */}
@@ -1261,15 +1318,17 @@ export function Billing() {
                     </span>
                   </li>
                 </ul>
-                <Button
-                  type="button"
-                  onClick={handleManageBilling}
-                  isLoading={processingAction === "manage_billing"}
-                  disabled={isActionLocked}
-                  className="mt-4 h-11 min-h-[44px] w-full rounded-full border border-white/12 bg-white/[0.04] text-sm text-zinc-100 hover:bg-white/[0.07]"
-                >
-                  Update preferences
-                </Button>
+                {isConfirmedPaid ? (
+                  <Button
+                    type="button"
+                    onClick={handleManageBilling}
+                    isLoading={processingAction === "manage_billing"}
+                    disabled={isActionLocked}
+                    className="mt-4 h-11 min-h-[44px] w-full rounded-full border border-white/12 bg-white/[0.04] text-sm text-zinc-100 hover:bg-white/[0.07]"
+                  >
+                    Update preferences
+                  </Button>
+                ) : null}
               </div>
 
               {/* 5 Need help */}
