@@ -18,6 +18,7 @@ import {
 } from "../../components/ui/dialog";
 import { queryKeys } from "@/lib/queries";
 import { resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
+import { DEFAULT_SELECTABLE_COMPANION_NAME } from "@/lib/avatar/companionAvailability";
 import { companionDisplayName as companionDisplayNameFor } from "@meetezri/shared";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 import { MEMBERSHIP_COPY, membershipKeyForPlan } from "@/app/utils/membershipCopy";
@@ -426,9 +427,12 @@ export function Dashboard() {
     return "Good evening";
   }, []);
 
-  const portraitUrl = resolveCompanionPortraitUrl(profile?.selected_avatar);
+  // Same default as the session lobby when no companion has been saved yet.
+  const effectiveCompanion =
+    profile?.selected_avatar?.trim() || DEFAULT_SELECTABLE_COMPANION_NAME;
+  const portraitUrl = resolveCompanionPortraitUrl(effectiveCompanion);
   const companionDisplayName =
-    companionDisplayNameFor(profile?.selected_avatar) || "Solace";
+    companionDisplayNameFor(effectiveCompanion) || "Solace";
   const companionShort = companionDisplayName.split(/\s+/)[0] || "Solace";
   const companionTag = `Your companion, ${companionShort}`;
 
