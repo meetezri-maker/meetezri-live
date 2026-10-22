@@ -88,6 +88,17 @@ import {
 import { getConnectionQualityColor } from "./utils/sessionFormat";
 import { usesBrowserStt, usesServerPcmStt } from "./utils/sttMode";
 import {
+  isPersistedSessionClosed,
+  isRetryableEndError,
+  persistedSelectedMinutes,
+  rememberEndedSession,
+  runCleanupSteps,
+  sendWithRetry,
+  wasSessionEndedInThisTab,
+  type SessionExpiryReason,
+} from "./utils/sessionExpiry";
+import { useActiveSessionTimer, useSessionExpiry } from "./hooks/useSessionTimeLimit";
+import {
   createPcmCaptureAudioContext,
   downsampleFloat32To16k,
   EZRI_PCM_SAMPLE_RATE,
@@ -268,6 +279,59 @@ export function ActiveSession() {
       window.localStorage.setItem("ezri_active_session_id", apiSessionId);
     } catch { }
   }, [apiSessionId]);
+
+  /**
+   * Whether the persisted session may still run. Mic capture and the conversation connection wait
+   * for "open", so an ended session is never reopened by a reload, stale link or stored id. A lookup
+   * that fails for any reason other than a missing session keeps the existing recovery behaviour.
+   * The row also supplies the selected length when router state did not survive a reload.
+   */
+  const [persistedSessionAccess, setPersistedSessionAccess] = useState<
+    "checking" | "open" | "closed"
+  >(() =>
+    !apiSessionId ? "open" : wasSessionEndedInThisTab(apiSessionId) ? "closed" : "checking",
+  );
+  const persistedSessionAccessRef = useRef(persistedSessionAccess);
+  persistedSessionAccessRef.current = persistedSessionAccess;
+  const [persistedDurationMinutes, setPersistedDurationMinutes] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!apiSessionId) {
+      setPersistedSessionAccess("open");
+      return;
+    }
+    if (wasSessionEndedInThisTab(apiSessionId)) {
+      setPersistedSessionAccess("closed");
+      return;
+    }
+    let cancelled = false;
+    setPersistedSessionAccess("checking");
+    api.sessions
+      .get(apiSessionId)
+      .then((row: { status?: unknown; ended_at?: unknown; duration_minutes?: unknown }) => {
+        if (cancelled) return;
+        if (isPersistedSessionClosed(row)) {
+          setPersistedSessionAccess("closed");
+          return;
+        }
+        setPersistedDurationMinutes(persistedSelectedMinutes(row));
+        setPersistedSessionAccess("open");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status = (err as { status?: unknown } | null)?.status;
+        setPersistedSessionAccess(status === 404 ? "closed" : "open");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiSessionId]);
+
+  useEffect(() => {
+    if (persistedSessionAccess !== "closed") return;
+    toast.info("This session has already ended.");
+    navigate("/app/session-lobby", { replace: true });
+  }, [persistedSessionAccess, navigate]);
 
   const rememberedSessionIdentity = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -540,6 +604,10 @@ export function ActiveSession() {
 
   const requestMediaAccess = useCallback(async () => {
     type DOMErr = { name?: string; message?: string; constraint?: string };
+    /** A device prompt can resolve after the session ended or was found closed; never attach it then. */
+    const sessionCannotStart = () =>
+      isSessionEndingRef.current || persistedSessionAccessRef.current !== "open";
+    if (sessionCannotStart()) return;
 
     // â”€â”€ Step 1: microphone (required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let audioStream: MediaStream;
@@ -614,6 +682,11 @@ export function ActiveSession() {
     }
 
     // â”€â”€ Step 3: combine tracks and attach â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if (sessionCannotStart()) {
+      audioStream.getTracks().forEach((track) => track.stop());
+      videoStream?.getTracks().forEach((track) => track.stop());
+      return;
+    }
     const tracks = [
       ...audioStream.getAudioTracks(),
       ...(videoStream ? videoStream.getVideoTracks() : []),
@@ -689,6 +762,7 @@ export function ActiveSession() {
   }, [permissionStorageKey]);
 
   useEffect(() => {
+    if (persistedSessionAccess !== "open") return;
     const restoreMediaPermissions = async () => {
       try {
         const saved = localStorage.getItem(permissionStorageKey);
@@ -706,7 +780,7 @@ export function ActiveSession() {
     };
 
     restoreMediaPermissions();
-  }, [permissionStorageKey, requestMediaAccess]);
+  }, [permissionStorageKey, requestMediaAccess, persistedSessionAccess]);
 
   const { currentState, updateState, userRegion } = useSafety();
   const [isMuted, setIsMuted] = useState(false);
@@ -1618,6 +1692,8 @@ export function ActiveSession() {
     }
   ) => {
     if (typeof window === "undefined") return;
+    // An ended session never starts audio again (late responses, retries, fallback timers).
+    if (isSessionEndingRef.current) return;
     if (isSoundOffRef.current) {
       opts?.onDone?.();
       return;
@@ -3013,7 +3089,7 @@ export function ActiveSession() {
   }
 
   const scheduleWsChunk = (item: WsAudioQueueItem) => {
-    if (suppressIncomingAudioRef.current) return;
+    if (suppressIncomingAudioRef.current || isSessionEndingRef.current) return;
     if (isSoundOffRef.current) {
       wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
       return;
@@ -3061,7 +3137,7 @@ export function ActiveSession() {
   };
 
   const flushWsAudioQueue = () => {
-    if (suppressIncomingAudioRef.current) {
+    if (suppressIncomingAudioRef.current || isSessionEndingRef.current) {
       wsAudioQueueRef.current = [];
       return;
     }
@@ -3338,6 +3414,8 @@ export function ActiveSession() {
   };
 
   const handleUserText = async (text: string) => {
+    // Nothing is sent once the session has ended (late recognizer results, merge timers, REST fallback).
+    if (isSessionEndingRef.current) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -4237,14 +4315,21 @@ export function ActiveSession() {
   const [isBuyingMoreMinutes, setIsBuyingMoreMinutes] = useState(false);
   const previousConnectionQuality = useRef(connectionQuality);
 
+  // Selected session length: router state from the lobby, else the persisted session row (reload).
+  const routerDurationMinutes =
+    typeof duration === "number" && duration > 0 ? duration : null;
+  const selectedDurationMinutes = routerDurationMinutes ?? persistedDurationMinutes;
+  const selectedLimitResolved =
+    routerDurationMinutes !== null || persistedSessionAccess !== "checking";
+  const selectedLimitSeconds =
+    selectedDurationMinutes !== null ? selectedDurationMinutes * 60 : null;
+
   useEffect(() => {
+    if (!selectedLimitResolved) return;
     const loadCredits = async () => {
       try {
         const { credits_seconds, credits } = await api.getCredits();
-        const sessionLimitSeconds =
-          typeof duration === "number" && duration > 0
-            ? duration * 60
-            : Number.POSITIVE_INFINITY;
+        const sessionLimitSeconds = selectedLimitSeconds ?? Number.POSITIVE_INFINITY;
         const userCreditsSeconds =
           typeof credits_seconds === "number"
             ? Math.max(0, credits_seconds)
@@ -4262,7 +4347,7 @@ export function ActiveSession() {
       }
     };
     loadCredits();
-  }, [duration]);
+  }, [selectedLimitResolved, selectedLimitSeconds]);
 
   const [fallbackEzriSessionId] = useState(
     () => `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -4357,7 +4442,9 @@ export function ActiveSession() {
   // â”€â”€ Ezri WebSocket (primary realtime) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!ezriConfig) return;
-    if (hasSessionEnded) return;
+    if (hasSessionEnded || isSessionEndingRef.current) return;
+    // Never open the conversation for a session that is still being checked or has ended.
+    if (persistedSessionAccess !== "open") return;
     // Connect + warmup while the permission modal is visible (Ezri Avatar app.js parity).
 
     const client =
@@ -4968,6 +5055,7 @@ export function ActiveSession() {
     ezriUserid,
     sessionId,
     hasSessionEnded,
+    persistedSessionAccess,
     companionAvatarLabel,
     companionCanonicalId,
     ezriTtsVoiceId,
@@ -5166,20 +5254,12 @@ export function ActiveSession() {
   // Safety analysis should be driven by real conversation content (see `handleUserText`),
   // not synthetic mock phrases.
 
-  useEffect(() => {
-    if (isSessionPaused || hasSessionEnded) return;
-    if (!permissionsGranted) return;
-
-    const timer = setInterval(() => {
-      // Keep accurate time in a ref (no React render).
-      sessionTimeRef.current += 1;
-      const next = sessionTimeRef.current;
-      // Keep UI timer in sync (show every second).
-      setSessionTime(next);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isSessionPaused, hasSessionEnded, permissionsGranted]);
+  useActiveSessionTimer(
+    !isSessionPaused && !hasSessionEnded && permissionsGranted,
+    sessionTimeRef,
+    isSessionEndingRef,
+    setSessionTime,
+  );
 
   // Heartbeat: deduct credits during the live session (server-side).
   useEffect(() => {
@@ -5249,8 +5329,6 @@ export function ActiveSession() {
       if (lowCreditsWarningDismissed) setLowCreditsWarningDismissed(false);
     }
     if (remainingWholeMinutes === null) return;
-    if (remainingWholeMinutes === 0 && !showOutOfCredits)
-      setShowOutOfCredits(true);
     if (
       remainingWholeMinutes > 0 &&
       remainingWholeMinutes <= 3 &&
@@ -5264,7 +5342,6 @@ export function ActiveSession() {
     projectedAccountRemainingWholeMinutes,
     showLowCreditsWarning,
     lowCreditsWarningDismissed,
-    showOutOfCredits,
     hasShownLowMinutesModal,
   ]);
 
@@ -5296,37 +5373,63 @@ export function ActiveSession() {
   const teardownLocalResources = () => {
     if (sessionFullyCleanedRef.current) return;
     sessionFullyCleanedRef.current = true;
-    setHasSessionEnded(true);
+    // Synchronous guards first: every input, send and playback path checks these, so nothing
+    // that resolves later (responses, timers, device prompts) can restart the session.
     isSessionEndingRef.current = true;
+    suppressIncomingAudioRef.current = true;
+    setHasSessionEnded(true);
+    rememberEndedSession(apiSessionIdRef.current);
 
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
-      } catch {
-        /* ignore */
-      }
-      isRecognitionActiveRef.current = false;
-      setIsListening(false);
-    }
-
-    stopAudioAndSpeechDriver();
-    wsTimelineScheduleRef.current = []; // B1.1b: session reset/unmount
-
-    try {
-      wsClientRef.current?.disconnect();
-    } catch {
-      /* ignore */
-    }
-
-    try {
-      window.localStorage.removeItem("ezri_active_session_id");
-      // The session is over, so its pinned companion goes with it. Leaving it
-      // behind would be a stale identity waiting for an id collision.
-      window.localStorage.removeItem(ACTIVE_SESSION_IDENTITY_KEY);
-    } catch {
-      /* ignore */
-    }
+    runCleanupSteps([
+      [
+        "speech recognition",
+        () => {
+          if (!recognitionRef.current) return;
+          try {
+            recognitionRef.current.onend = null;
+            recognitionRef.current.stop();
+          } catch {
+            /* ignore */
+          }
+          isRecognitionActiveRef.current = false;
+          setIsListening(false);
+        },
+      ],
+      [
+        "speech recorder",
+        () => {
+          const recorder = mediaRecorderRef.current;
+          if (recorder && recorder.state !== "inactive") recorder.stop();
+        },
+      ],
+      [
+        "pending reply request",
+        () => {
+          restAbortControllerRef.current?.abort();
+          restAbortControllerRef.current = null;
+        },
+      ],
+      // Current and scheduled audio, queues, lip-sync and in-flight playback.
+      ["playback", () => stopPlaybackAndCooldown({ sendPlaybackDone: false })],
+      [
+        "timeline",
+        () => {
+          wsTimelineScheduleRef.current = []; // B1.1b: session reset/unmount
+        },
+      ],
+      // `disconnect()` marks the client manually closed, which cancels any pending reconnect.
+      ["conversation connection", () => wsClientRef.current?.disconnect()],
+      ["microphone", () => streamCleanupRef.current?.getTracks().forEach((track) => track.stop())],
+      [
+        "stored session",
+        () => {
+          window.localStorage.removeItem("ezri_active_session_id");
+          // The session is over, so its pinned companion goes with it. Leaving it
+          // behind would be a stale identity waiting for an id collision.
+          window.localStorage.removeItem(ACTIVE_SESSION_IDENTITY_KEY);
+        },
+      ],
+    ]);
   };
 
   const notifyServerSessionEndedKeepalive = () => {
@@ -5405,20 +5508,54 @@ export function ActiveSession() {
 
     try {
       const transcriptToSend = Array.isArray(transcript) ? transcript.slice(-120) : undefined;
-      await api.sessions.end(apiSessionId, durationSeconds, undefined, transcriptToSend as any);
+      // Retrying is safe: the server finalizes and bills a session once.
+      const saved = await sendWithRetry(
+        () => api.sessions.end(apiSessionId, durationSeconds, undefined, transcriptToSend as any),
+        undefined,
+        undefined,
+        isRetryableEndError,
+      );
+      if (!saved) {
+        // Leave the route-exit keepalive one more attempt.
+        remoteEndAttemptedRef.current = false;
+        toast.error("Failed to save session data");
+        return;
+      }
       try {
         await refreshProfile();
       } catch (e) {
         console.error("Failed to refresh profile after session end:", e);
       }
       toast.success("Talking ended successfully");
-    } catch (error) {
-      console.error("Failed to End Talking:", error);
-      toast.error("Failed to save session data");
     } finally {
       setIsUploading(false);
     }
   };
+
+  /**
+   * The selected time, or the account balance, ran out. Everything stops locally at once and the
+   * popup opens without waiting for the end request, which continues in the background.
+   */
+  const [expiryReason, setExpiryReason] = useState<SessionExpiryReason>("credits");
+  const expireSession = (reason: SessionExpiryReason) => {
+    // Manual End or leaving the page already ended the session.
+    if (sessionFullyCleanedRef.current) return;
+    // Tears down synchronously, before its first await.
+    void endSessionAndCleanup();
+    setShowEndConfirm(false);
+    setShowLowMinutesModal(false);
+    setExpiryReason(reason);
+    setShowOutOfCredits(true);
+  };
+
+  useSessionExpiry({
+    elapsedSeconds: sessionTime,
+    selectedLimitSeconds,
+    accountCreditsSeconds,
+    selectedLimitResolved,
+    ended: hasSessionEnded,
+    onExpire: expireSession,
+  });
 
   const handleEndSession = async () => {
     // Show full-screen ending state immediately so the confirm dialog is not
@@ -5728,6 +5865,7 @@ export function ActiveSession() {
       onBuyMoreMinutes={handleBuyMoreMinutes}
       onDismissLowCredits={handleDismissLowCredits}
       showOutOfCredits={showOutOfCredits}
+      outOfCreditsReason={expiryReason}
       onOutOfCreditsBuyMore={handleOutOfCreditsBuyMore}
       onOutOfCreditsUpgrade={handleOutOfCreditsUpgrade}
       showLowMinutesModal={showLowMinutesModal}

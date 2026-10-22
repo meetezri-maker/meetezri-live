@@ -270,6 +270,67 @@ export async function getSessions(userId: string, status?: string, limit?: numbe
   return data;
 }
 
+type LockedSessionRow = {
+  id: string;
+  status: string;
+  started_at: Date | null;
+  ended_at: Date | null;
+  duration_minutes: number | null;
+  billed_seconds: number | null;
+};
+
+/**
+ * Row-locks the session for the rest of the transaction. Heartbeat and end both bill against
+ * `billed_seconds`, so they must serialize on this lock: the second caller waits, then reads the
+ * first caller's committed `billed_seconds` / `status` instead of a stale copy.
+ */
+async function lockSessionRow(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  sessionId: string
+): Promise<LockedSessionRow | null> {
+  const rows = await tx.$queryRaw<LockedSessionRow[]>(Prisma.sql`
+    SELECT id, status, started_at, ended_at, duration_minutes, billed_seconds
+    FROM public.app_sessions
+    WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
+    FOR UPDATE
+  `);
+  return rows[0] ?? null;
+}
+
+/**
+ * The selected session length, as the most usage this session may bill.
+ *
+ * While a session is `active`, `duration_minutes` holds the length chosen at start: only
+ * `createSession` / `beginScheduledSession` write it, scheduled edits are rejected for non-scheduled
+ * rows, and `endSession` overwrites it with actual usage in the same update that completes the row.
+ * Any other status, or no selected length, means there is no verified limit to apply.
+ */
+function selectedLimitSeconds(session: LockedSessionRow): number | null {
+  if (session.status !== 'active') return null;
+  const minutes = session.duration_minutes;
+  return typeof minutes === 'number' && minutes > 0 ? minutes * 60 : null;
+}
+
+function isRetryableTransactionError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  return code === 'P2034' || code === 'P2028';
+}
+
+/** Retries write conflicts / dropped transactions. Safe because a failed attempt rolls back. */
+async function runBillingTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+  maxAttempts = 3
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await prisma.$transaction(work);
+    } catch (error) {
+      if (attempt >= maxAttempts || !isRetryableTransactionError(error)) throw error;
+    }
+  }
+}
+
 export async function endSession(
   userId: string,
   sessionId: string,
@@ -282,62 +343,63 @@ export async function endSession(
     throw new Error('Session not found');
   }
 
-  // Wall-clock elapsed — used when client omits duration or sends 0 (refresh / keepalive / race with React state).
-  let serverElapsedSeconds = 0;
-  if (session.started_at) {
-    const durationMs = Date.now() - new Date(session.started_at).getTime();
-    serverElapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
-  }
-
-  let secondsUsed: number;
-  if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-    secondsUsed = durationSeconds;
-  } else {
-    secondsUsed = serverElapsedSeconds;
-  }
-
-  // Deduct credits
-  // If heartbeat already billed some seconds, only bill the remainder.
-  const alreadyBilled = typeof (session as any).billed_seconds === 'number' ? Math.max(0, (session as any).billed_seconds) : 0;
-  const billNow = Math.max(0, secondsUsed - alreadyBilled);
-  if (billNow > 0) {
-    try {
-      await deductCreditsSeconds(prisma, userId, billNow);
-    } catch (error) {
-      console.error('Error deducting credits:', error);
+  // Billing, transcript and completion commit together, once. A repeated or concurrent end waits
+  // on the row lock, then sees the session already completed and changes nothing.
+  const updated = await runBillingTransaction(async (tx) => {
+    const locked = await lockSessionRow(tx, userId, sessionId);
+    if (!locked) throw new Error('Session not found');
+    if (locked.ended_at || locked.status === 'completed') {
+      return tx.app_sessions.findUniqueOrThrow({ where: { id: sessionId } });
     }
-  }
 
-  // Save transcript if available
-  if (transcript && transcript.length > 0) {
-    try {
-      // Best-effort: do not block session end on transcript persistence.
-      void prisma.session_messages
-        .createMany({
-          data: transcript.map((msg) => ({
-            session_id: sessionId,
-            role: msg.role,
-            content: msg.content,
-            created_at: msg.timestamp ? new Date(msg.timestamp) : undefined,
-          })),
-        })
-        .catch((error) => {
-          console.error("Failed to save transcript:", error);
-        });
-    } catch (error) {
-      console.error('Failed to save transcript:', error);
+    // Wall-clock elapsed — used when client omits duration or sends 0 (refresh / keepalive / race with React state).
+    let serverElapsedSeconds = 0;
+    if (locked.started_at) {
+      const durationMs = Date.now() - new Date(locked.started_at).getTime();
+      serverElapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
     }
-  }
 
-  const updated = await prisma.app_sessions.update({
-    where: { id: sessionId },
-    data: {
-      ended_at: new Date(),
-      duration_minutes: Math.floor(secondsUsed / 60),
-      recording_url: recordingUrl,
-      status: 'completed',
-      billed_seconds: secondsUsed,
-    },
+    let secondsUsed: number;
+    if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      secondsUsed = durationSeconds;
+    } else {
+      secondsUsed = serverElapsedSeconds;
+    }
+
+    // Never bill past the selected session length; shorter sessions bill what they used.
+    const limit = selectedLimitSeconds(locked);
+    if (limit !== null) secondsUsed = Math.min(secondsUsed, limit);
+
+    // Deduct credits
+    // If heartbeat already billed some seconds, only bill the remainder.
+    const alreadyBilled = typeof locked.billed_seconds === 'number' ? Math.max(0, locked.billed_seconds) : 0;
+    const billNow = Math.max(0, secondsUsed - alreadyBilled);
+    if (billNow > 0) {
+      await deductCreditsSeconds(tx, userId, billNow);
+    }
+
+    // Save transcript if available
+    if (transcript && transcript.length > 0) {
+      await tx.session_messages.createMany({
+        data: transcript.map((msg) => ({
+          session_id: sessionId,
+          role: msg.role,
+          content: msg.content,
+          created_at: msg.timestamp ? new Date(msg.timestamp) : undefined,
+        })),
+      });
+    }
+
+    return tx.app_sessions.update({
+      where: { id: sessionId },
+      data: {
+        ended_at: new Date(),
+        duration_minutes: Math.floor(secondsUsed / 60),
+        recording_url: recordingUrl,
+        status: 'completed',
+        billed_seconds: secondsUsed,
+      },
+    });
   });
   invalidateSessionsCache(userId);
   invalidateUserProfileCache(userId); // credits + profile totals
@@ -348,18 +410,16 @@ export async function endSession(
 export async function heartbeatSession(userId: string, sessionId: string, elapsedSeconds: number) {
   if (elapsedSeconds < 0) return { ok: true, billed_delta_seconds: 0 };
 
-  return prisma.$transaction(async (tx) => {
-    const session = await tx.app_sessions.findFirst({
-      where: { id: sessionId, user_id: userId },
-      select: { id: true, status: true, ended_at: true, billed_seconds: true }
-    });
+  return runBillingTransaction(async (tx) => {
+    const session = await lockSessionRow(tx, userId, sessionId);
     if (!session) throw new Error('Session not found');
     if (session.ended_at || session.status === 'completed') {
       return { ok: true, billed_delta_seconds: 0 };
     }
 
     const alreadyBilled = typeof session.billed_seconds === 'number' ? Math.max(0, session.billed_seconds) : 0;
-    const desired = Math.max(0, elapsedSeconds);
+    const limit = selectedLimitSeconds(session);
+    const desired = limit === null ? Math.max(0, elapsedSeconds) : Math.min(Math.max(0, elapsedSeconds), limit);
     const delta = desired - alreadyBilled;
     if (delta <= 0) {
       return { ok: true, billed_delta_seconds: 0 };

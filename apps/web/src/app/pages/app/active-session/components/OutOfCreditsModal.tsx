@@ -23,8 +23,12 @@ import {
 } from "@/lib/modalTheme";
 import { formatSessionTime } from "../utils/sessionFormat";
 
+/** "duration": the length selected for this session ran out; "credits": the account balance did. */
+export type OutOfCreditsReason = "duration" | "credits";
+
 export interface OutOfCreditsModalProps {
   open: boolean;
+  reason?: OutOfCreditsReason;
   sessionTime: number;
   onBuyMoreMinutes: () => void;
   onUpgradePlan: () => void;
@@ -52,11 +56,13 @@ const upgradeActionButton = cn(
 
 function OutOfCreditsModalComponent({
   open,
+  reason = "credits",
   sessionTime,
   onBuyMoreMinutes,
   onUpgradePlan,
   onReturnToDashboard,
 }: OutOfCreditsModalProps) {
+  const isSelectedTimeUp = reason === "duration";
   return (
     <AnimatePresence>
       {open && (
@@ -85,10 +91,12 @@ function OutOfCreditsModalComponent({
                 <Clock className="h-10 w-10 text-white" aria-hidden />
               </motion.div>
               <h3 id="out-of-credits-title" className={cn(modalTitle, "mb-2 text-3xl")}>
-                Talking Paused
+                {isSelectedTimeUp ? "Your session time is up" : "Talking Paused"}
               </h3>
               <p className={cn(modalSubtitle, "text-lg")}>
-                You&apos;ve used all your included minutes for this month.
+                {isSelectedTimeUp
+                  ? "You’ve reached the time you selected for this session."
+                  : "You've used all your included minutes for this month."}
               </p>
             </div>
 
@@ -99,89 +107,93 @@ function OutOfCreditsModalComponent({
                   {formatSessionTime(sessionTime)}
                 </p>
               </div>
-              <div
-                className={cn(
-                  "flex items-center justify-center gap-2 text-amber-400",
-                  "[html[data-ezri-theme=light]_&]:text-[#b45309]",
-                  "[html[data-theme=light]_&]:text-[#b45309]"
-                )}
-              >
-                <AlertCircle className="h-5 w-5" aria-hidden />
-                <span className="text-sm font-medium">0 minutes remaining</span>
+              {!isSelectedTimeUp && (
+                <div
+                  className={cn(
+                    "flex items-center justify-center gap-2 text-amber-400",
+                    "[html[data-ezri-theme=light]_&]:text-[#b45309]",
+                    "[html[data-theme=light]_&]:text-[#b45309]"
+                  )}
+                >
+                  <AlertCircle className="h-5 w-5" aria-hidden />
+                  <span className="text-sm font-medium">0 minutes remaining</span>
+                </div>
+              )}
+            </div>
+
+            {!isSelectedTimeUp && (
+              <div className="mb-6 space-y-3">
+                <h4 className={cn(modalSectionTitle, "mb-3 text-center")}>
+                  Continue Your Wellness Journey:
+                </h4>
+                <button type="button" onClick={onBuyMoreMinutes} className={creditsActionButton}>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
+                        "[html[data-ezri-theme=light]_&]:bg-white/25",
+                        "[html[data-theme=light]_&]:bg-white/25"
+                      )}
+                    >
+                      <Zap className="h-5 w-5" aria-hidden />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold">Buy More Minutes</p>
+                      <p
+                        className={cn(
+                          "text-xs text-green-100",
+                          "[html[data-ezri-theme=light]_&]:text-emerald-50",
+                          "[html[data-theme=light]_&]:text-emerald-50"
+                        )}
+                      >
+                        Pay-as-you-go available
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight
+                    className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                    aria-hidden
+                  />
+                </button>
+  
+                <button type="button" onClick={onUpgradePlan} className={upgradeActionButton}>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
+                        "[html[data-ezri-theme=light]_&]:bg-white/25",
+                        "[html[data-theme=light]_&]:bg-white/25"
+                      )}
+                    >
+                      <Crown className="h-5 w-5" aria-hidden />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold">Upgrade Your Plan</p>
+                      <p
+                        className={cn(
+                          "text-xs text-purple-100",
+                          "[html[data-ezri-theme=light]_&]:text-fuchsia-50",
+                          "[html[data-theme=light]_&]:text-fuchsia-50"
+                        )}
+                      >
+                        Get more minutes & better rates
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight
+                    className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                    aria-hidden
+                  />
+                </button>
               </div>
-            </div>
-
-            <div className="mb-6 space-y-3">
-              <h4 className={cn(modalSectionTitle, "mb-3 text-center")}>
-                Continue Your Wellness Journey:
-              </h4>
-              <button type="button" onClick={onBuyMoreMinutes} className={creditsActionButton}>
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
-                      "[html[data-ezri-theme=light]_&]:bg-white/25",
-                      "[html[data-theme=light]_&]:bg-white/25"
-                    )}
-                  >
-                    <Zap className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Buy More Minutes</p>
-                    <p
-                      className={cn(
-                        "text-xs text-green-100",
-                        "[html[data-ezri-theme=light]_&]:text-emerald-50",
-                        "[html[data-theme=light]_&]:text-emerald-50"
-                      )}
-                    >
-                      Pay-as-you-go available
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight
-                  className="h-5 w-5 transition-transform group-hover:translate-x-1"
-                  aria-hidden
-                />
-              </button>
-
-              <button type="button" onClick={onUpgradePlan} className={upgradeActionButton}>
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-lg bg-white/20",
-                      "[html[data-ezri-theme=light]_&]:bg-white/25",
-                      "[html[data-theme=light]_&]:bg-white/25"
-                    )}
-                  >
-                    <Crown className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Upgrade Your Plan</p>
-                    <p
-                      className={cn(
-                        "text-xs text-purple-100",
-                        "[html[data-ezri-theme=light]_&]:text-fuchsia-50",
-                        "[html[data-theme=light]_&]:text-fuchsia-50"
-                      )}
-                    >
-                      Get more minutes & better rates
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight
-                  className="h-5 w-5 transition-transform group-hover:translate-x-1"
-                  aria-hidden
-                />
-              </button>
-            </div>
+            )}
 
             <button
               type="button"
               onClick={onReturnToDashboard}
               className={cn(modalSecondaryButton, "w-full py-3")}
             >
-              End Talking & Return to Dashboard
+              {isSelectedTimeUp ? "Return to Dashboard" : "End Talking & Return to Dashboard"}
             </button>
           </motion.div>
         </motion.div>

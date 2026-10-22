@@ -17,7 +17,7 @@ import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { CrisisKeywordModal } from "./CrisisKeywordModal";
 import { EndSessionConfirmModal } from "./EndSessionConfirmModal";
 import { LowCreditsBanner } from "./LowCreditsBanner";
-import { OutOfCreditsModal } from "./OutOfCreditsModal";
+import { OutOfCreditsModal, type OutOfCreditsReason } from "./OutOfCreditsModal";
 import { PermissionModal } from "./PermissionModal";
 import { SafetyBoundaryBanner } from "./SafetyBoundaryBanner";
 import { SafetyResourcesModal } from "./SafetyResourcesModal";
@@ -128,6 +128,7 @@ export interface ActiveSessionViewProps {
   onBuyMoreMinutes: () => void;
   onDismissLowCredits: () => void;
   showOutOfCredits: boolean;
+  outOfCreditsReason: OutOfCreditsReason;
   onOutOfCreditsBuyMore: () => void;
   onOutOfCreditsUpgrade: () => void;
   showLowMinutesModal: boolean;
@@ -253,6 +254,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     onBuyMoreMinutes,
     onDismissLowCredits,
     showOutOfCredits,
+    outOfCreditsReason,
     onOutOfCreditsBuyMore,
     onOutOfCreditsUpgrade,
     showLowMinutesModal,
@@ -458,6 +460,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
 
       <OutOfCreditsModal
         open={showOutOfCredits}
+        reason={outOfCreditsReason}
         sessionTime={sessionTime}
         onBuyMoreMinutes={onOutOfCreditsBuyMore}
         onUpgradePlan={onOutOfCreditsUpgrade}
