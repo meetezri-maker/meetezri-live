@@ -448,18 +448,23 @@ export function WellnessTools() {
   // Feature Gate for Trial Users
   if (profile?.subscription_plan === 'trial') {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-          <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Wellness tools are part of Grow</h2>
-            <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-8">
-              Upgrade to Grow or Thrive to unlock the full library of wellness exercises and tools.
-            </p>
-            <Button onClick={() => navigate('/app/billing')}>Upgrade membership</Button>
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
+        <div className="max-w-md rounded-3xl border border-white/[0.08] bg-[#0f0f1a]/80 p-8 text-center shadow-[0_0_48px_-16px_rgba(139,92,246,0.35)] backdrop-blur-md">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/15 to-fuchsia-500/10">
+            <Lock className="h-9 w-9 text-violet-300" />
           </div>
+          <h2 className="mb-3 text-2xl font-semibold tracking-tight text-slate-100">Wellness tools are part of Grow</h2>
+          <p className="mb-8 text-sm leading-relaxed text-slate-400">
+            Upgrade to Grow or Thrive to unlock the full library of wellness exercises and tools.
+          </p>
+          <Button
+            onClick={() => navigate('/app/billing')}
+            className="min-h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 text-white shadow-[0_0_24px_rgba(139,92,246,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
+          >
+            Upgrade membership
+          </Button>
         </div>
+      </div>
     );
   }
 
