@@ -99,23 +99,6 @@ export function SolaceSidebar() {
             </div>
           </div>
         </div>
-
-        {location.pathname === "/app/wellness-tools" && (
-          <motion.div
-            className="rounded-xl border border-white/[0.07] bg-black/28 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_24px_rgba(139,92,246,0.08)]"
-            aria-label="Gentle reminder"
-          >
-            <p className="text-xs font-medium tracking-tight text-zinc-100">Take a breath</p>
-            <p className="mt-0.5 text-[10px] leading-snug text-zinc-500">You&apos;ve got this.</p>
-            <div
-              className="mt-2.5 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]"
-              aria-hidden
-            >
-              <div className="h-full w-[42%] rounded-full bg-gradient-to-r from-fuchsia-500/90 via-violet-500 to-cyan-400/80 shadow-[0_0_14px_rgba(236,72,153,0.45)]" />
-            </div>
-          </motion.div>
-        )}
-
       </div>
     </div>
   );
