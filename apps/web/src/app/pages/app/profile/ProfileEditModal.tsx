@@ -579,12 +579,12 @@ export function ProfileEditModal({
                                     )
                                   }
                                   className={cn(
-                                    "flex items-center gap-2 text-left transition-all",
+                                    "flex items-center gap-2 px-2.5 py-2 text-left transition-all",
                                     selected ? profileChipSelected("emerald") : profileChipUnselected
                                   )}
                                 >
                                   <FluentEmoji emoji={g.emoji} size={16} className="shrink-0" />{" "}
-                                  {g.label}
+                                  <span className="min-w-0 break-words">{g.label}</span>
                                 </button>
                               );
                             })}
