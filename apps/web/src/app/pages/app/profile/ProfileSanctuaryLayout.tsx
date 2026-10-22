@@ -262,7 +262,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
       <div className={profilePageVignette} aria-hidden />
       <div className={profilePageNoise} aria-hidden />
 
-      <div className="relative z-10 w-full max-w-[1600px] space-y-6 px-1 sm:px-2">
+      <div className="relative z-10 w-full space-y-6 px-1 sm:px-2 lg:px-6 xl:px-8">
         {effectiveNeedsVerification && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}

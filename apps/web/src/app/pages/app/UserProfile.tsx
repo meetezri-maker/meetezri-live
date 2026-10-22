@@ -451,7 +451,7 @@ export function UserProfile() {
   if (isLoading) {
     return (
       <motion.div className="relative min-h-full overflow-hidden pb-10">
-        <div className="relative z-10 w-full max-w-[1600px] space-y-6 px-1 sm:px-2">
+        <div className="relative z-10 w-full space-y-6 px-1 sm:px-2 lg:px-6 xl:px-8">
           <Skeleton className="h-[320px] rounded-[1.25rem] bg-white/5" />
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[68%_32%]">
             <div className="space-y-4">
