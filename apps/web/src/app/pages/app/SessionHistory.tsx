@@ -21,6 +21,7 @@ import { cn } from "../../components/ui/utils";
 import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import {
   companionCardImageUrl,
+  NEUTRAL_COMPANION_PORTRAIT_URL,
   tryResolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { findLobbyAvatar } from "@/lib/avatar/lobbyAvatars";
@@ -120,7 +121,9 @@ function resolveHistoryAvatar(name: string | undefined | null) {
   }
   const img = tryResolveCompanionPortraitUrl(raw);
   if (img) return { name: raw, image: img };
-  return DEFAULT_HISTORY_AVATAR;
+  // A companion this build does not recognise keeps its own name and a neutral
+  // portrait — never Frankie's. (An empty value above is unchanged.)
+  return { name: raw, image: NEUTRAL_COMPANION_PORTRAIT_URL };
 }
 
 const SESSION_ENVIRONMENT_LABELS: Record<string, string> = {

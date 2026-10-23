@@ -62,11 +62,12 @@ const { companionSessionUses3dModel, resolveCompanionModelUrl } = await import(
 const ref = <T,>(value: T): MutableRefObject<T> => ({ current: value });
 
 /** Exactly what `SessionStage` passes, built the way `ActiveSession` builds it. */
-const propsForCompanion = (avatarLabel: string) => ({
+const propsForCompanion = (avatarLabel: string, portraitUrl = "/avatars/Sara Mitchell.png") => ({
   sessionRoomThemeKey: "calm" as never,
   rawAvatarLabel: avatarLabel,
   activeAvatarId: null,
   modelUrl: resolveCompanionModelUrl(avatarLabel),
+  portraitUrl,
   viewTuning: { mouthDriveMultiplier: 1 } as never,
   fixedViewportConfig: null,
   useRfv2Morphs: false,
@@ -113,9 +114,9 @@ describe("the selected companion reaches the production host", () => {
   );
 
   it.each([
-    ["Sara Mitchell", "hyper3d_afr"],
+    ["Sara Mitchell", "hyper3d_arfv2"],
     ["Maya Chen", "hyper3d_sara"],
-    ["Alex", "hyper3d_perm"],
+    ["Alex", "hyper3d_frankie"],
     ["Jordan Taylor", "hyper3d_jordan"],
   ])("%s reaches createHyper3dImperativeHost as %s", async (label, assetId) => {
     render(<AvatarRuntimeSwitch {...propsForCompanion(label)} />);
@@ -132,13 +133,13 @@ describe("the selected companion reaches the production host", () => {
   it("disposes the previous avatar before creating the next", async () => {
     const { rerender } = render(<AvatarRuntimeSwitch {...propsForCompanion("Sara Mitchell")} />);
     await waitFor(() => expect(hostCalls.length).toBe(1));
-    expect(hostCalls[0].assetId).toBe("hyper3d_afr");
+    expect(hostCalls[0].assetId).toBe("hyper3d_arfv2");
 
     rerender(<AvatarRuntimeSwitch {...propsForCompanion("Alex")} />);
     await waitFor(() => expect(hostCalls.length).toBe(2));
 
-    expect(disposes).toContain("hyper3d_afr");
-    expect(hostCalls[1].assetId).toBe("hyper3d_perm");
+    expect(disposes).toContain("hyper3d_arfv2");
+    expect(hostCalls[1].assetId).toBe("hyper3d_frankie");
   });
 
   it("does not rebuild the host when only conversation state changes", async () => {
@@ -166,15 +167,47 @@ describe("the selected companion reaches the production host", () => {
    * their OWN legacy model URL, never another companion's.
    */
   it.each([
-    ["Sara Mitchell", "/avatars/sara-v3.glb"],
     ["Maya Chen", "/avatars/maya%20chen.glb"],
-    ["Alex", "/avatars/Alex.glb"],
     ["Jordan Taylor", "/avatars/jordanTaylor.glb"],
   ])("flag off: %s falls back to its own model", async (label, modelUrl) => {
     flagState.enabled = false;
     render(<AvatarRuntimeSwitch {...propsForCompanion(label)} />);
     const el = await screen.findByTestId("existing-avatar");
     expect(el.getAttribute("data-model")).toBe(modelUrl);
+    expect(hostCalls).toHaveLength(0);
+  });
+
+  /**
+   * Romy is excluded from the list above on purpose. `sara-v3.glb` is retired,
+   * so with the flag off she has no legacy model to fall back to and shows her
+   * portrait instead — asserted here so the exclusion is a stated contract
+   * rather than a gap in the table.
+   */
+  it("flag off: Sara Mitchell shows a portrait and requests no GLB", async () => {
+    flagState.enabled = false;
+    render(<AvatarRuntimeSwitch {...propsForCompanion("Sara Mitchell")} />);
+
+    await waitFor(() =>
+      expect(document.querySelector("img")?.getAttribute("src")).toContain(
+        "Sara Mitchell.png",
+      ),
+    );
+    expect(screen.queryByTestId("existing-avatar")).toBeNull();
+    expect(hostCalls).toHaveLength(0);
+  });
+
+  /**
+   * Frankie joined Romy here on 2026-10-23. `Alex.glb` still exists on disk,
+   * but it is no longer his fallback, with or without Hyper3D.
+   */
+  it("flag off: Alex shows Frankie's portrait, never Alex.glb, and starts no host", async () => {
+    flagState.enabled = false;
+    render(<AvatarRuntimeSwitch {...propsForCompanion("Alex", "/avatars/Alex.png")} />);
+
+    await waitFor(() =>
+      expect(document.querySelector("img")?.getAttribute("src")).toBe("/avatars/Alex.png"),
+    );
+    expect(screen.queryByTestId("existing-avatar")).toBeNull();
     expect(hostCalls).toHaveLength(0);
   });
 });

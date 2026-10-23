@@ -1,6 +1,8 @@
 /**
- * Inserts the four canonical companions into `public.ai_avatars`.
+ * Inserts the canonical companions (`DEFAULT_AI_COMPANIONS`) into `public.ai_avatars`.
  * Replaces all existing rows (deleteMany) — use only when that is acceptable.
+ * To ADD Bianca, Damian and Sasha to a live database use
+ * `add-companions-bianca-damian-sasha.sql` instead, which is additive.
  *
  * Run from repo root or `apps/api` (DATABASE_URL must point at your Postgres):
  *   pnpm --filter @meetezri/api run db:seed-avatars
@@ -29,7 +31,8 @@ async function main() {
         image_url: null,
         voice_type: c.voice_type,
         accent_type: c.accent_type,
-        rating: c.rating,
+        // No approved rating -> NULL, not the column's 5.0 default.
+        rating: c.rating ?? null,
         is_active: true,
       },
     });

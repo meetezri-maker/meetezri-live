@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +25,7 @@ function NavigationHarness() {
     <div>
       <button type="button" onClick={() => navigate("/pricing?session_id=one#access_token=secret")}>pricing one</button>
       <button type="button" onClick={() => navigate("/pricing?session_id=two#refresh_token=secret")}>pricing two</button>
+      <button type="button" onClick={() => navigate("/about")}>about</button>
       <button type="button" onClick={() => navigate("/signup")}>signup</button>
       <button type="button" onClick={() => navigate("/app/active-session?sessionId=secret")}>app</button>
     </div>
@@ -46,6 +48,19 @@ describe("AnalyticsRouteTracker", () => {
     expect(trackGa4PageView).toHaveBeenCalledWith("/pricing", "Pricing");
     expect(trackMetaPageView).toHaveBeenCalledWith("/pricing");
     expect(JSON.stringify(vi.mocked(trackGa4PageView).mock.calls)).not.toContain("secret");
+  });
+
+  it("emits one initial page view when Strict Mode replays effects", async () => {
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={["/about"]}>
+          <AnalyticsRouteTracker />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(trackGa4PageView).toHaveBeenCalledTimes(1));
+    expect(trackGa4PageView).toHaveBeenCalledWith("/about", "About Solace");
   });
 
   it("dedupes rerenders and query/hash-only changes that sanitize to the same path", async () => {
@@ -80,9 +95,9 @@ describe("AnalyticsRouteTracker", () => {
     );
 
     await waitFor(() => expect(trackGa4PageView).toHaveBeenCalledTimes(1));
-    await user.click(getByRole("button", { name: "signup" }));
+    await user.click(getByRole("button", { name: "about" }));
     await waitFor(() => expect(trackGa4PageView).toHaveBeenCalledTimes(2));
-    expect(trackGa4PageView).toHaveBeenLastCalledWith("/signup", "Signup");
+    expect(trackGa4PageView).toHaveBeenLastCalledWith("/about", "About Solace");
 
     await user.click(getByRole("button", { name: "app" }));
     expect(trackGa4PageView).toHaveBeenCalledTimes(2);

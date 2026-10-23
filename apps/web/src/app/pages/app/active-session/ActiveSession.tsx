@@ -86,6 +86,7 @@ import {
   USER_SAME_SPEECH_BURST_MS,
 } from "./utils/transcript";
 import { getConnectionQualityColor } from "./utils/sessionFormat";
+import { resolveSessionCompanionLabel } from "./utils/sessionCompanionIdentity";
 import { usesBrowserStt, usesServerPcmStt } from "./utils/sttMode";
 import {
   isPersistedSessionClosed,
@@ -346,15 +347,11 @@ export function ActiveSession() {
     }
   }, []);
 
-  const companionAvatarLabel =
-    typeof config?.avatar === "string" && config.avatar.trim()
-      ? config.avatar
-      : rememberedSessionIdentity &&
-          apiSessionId &&
-          rememberedSessionIdentity.id === apiSessionId &&
-          rememberedSessionIdentity.avatar.trim()
-        ? rememberedSessionIdentity.avatar
-        : undefined;
+  const companionAvatarLabel = resolveSessionCompanionLabel(
+    config?.avatar,
+    rememberedSessionIdentity,
+    apiSessionId,
+  );
 
   /**
    * Pin this session's companion to this session's id, so a refresh recovers

@@ -1,6 +1,9 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getPublicSeo } from '@meetezri/public-content';
+import { PUBLIC_ROUTE_PATHS, getPublicSeo } from '@meetezri/public-content';
 import {
+  PublicRouteMetadata,
   applyNotFoundMetadata,
   applyPrivateMetadata,
   applyPublicMetadata,
@@ -89,5 +92,43 @@ describe('public route metadata synchronization', () => {
     expect(count('meta[property^="og:"]')).toBe(0);
     expect(count('meta[name^="twitter:"]')).toBe(0);
     expect(count('script[type="application/ld+json"]')).toBe(0);
+  });
+});
+
+describe('designer homepage review route', () => {
+  beforeEach(() => {
+    document.head.innerHTML = '<title>Solace</title><meta name="robots" content="noindex,nofollow">';
+  });
+
+  it('is not a public, sitemap-eligible route', () => {
+    expect(getPublicSeo('/landing-page')).toBeUndefined();
+    expect(PUBLIC_ROUTE_PATHS).not.toContain('/landing-page');
+  });
+
+  it('is noindex, and the noindex does not leak onto / after navigating', async () => {
+    render(
+      <MemoryRouter initialEntries={['/landing-page']}>
+        <PublicRouteMetadata />
+        <Routes>
+          <Route path="/landing-page" element={<Link to="/">Previous homepage</Link>} />
+          <Route path="/" element={<Link to="/landing-page">Designer homepage</Link>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const robots = () => document.querySelector('meta[name="robots"]');
+
+    await waitFor(() => expect(robots()).toHaveAttribute('content', 'noindex,nofollow'));
+    expect(count('link[rel="canonical"]')).toBe(0);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Previous homepage' }));
+    const home = getPublicSeo('/')!;
+    await waitFor(() => expect(robots()).toHaveAttribute('content', home.robots));
+    expect(home.robots).toBe('index,follow');
+    expect(document.title).toBe(home.title);
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', home.canonicalUrl);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Designer homepage' }));
+    await waitFor(() => expect(robots()).toHaveAttribute('content', 'noindex,nofollow'));
+    expect(count('link[rel="canonical"]')).toBe(0);
   });
 });

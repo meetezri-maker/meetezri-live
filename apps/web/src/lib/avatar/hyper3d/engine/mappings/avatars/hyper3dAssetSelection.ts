@@ -64,9 +64,14 @@ export type Hyper3dAssetId =
   | "female_2291_lowerlip_v2"
   | "hyper3d_afr"
   | "hyper3d_arfv2"
+  | "hyper3d_romy_backup"
   | "hyper3d_sara"
   | "hyper3d_perm"
-  | "hyper3d_jordan";
+  | "hyper3d_frankie"
+  | "hyper3d_jordan"
+  | "hyper3d_bianca"
+  | "hyper3d_damian"
+  | "hyper3d_sasha";
 
 /** How the active asset was chosen. Surfaced in DEV diagnostics only. */
 export type Hyper3dAssetSource =
@@ -113,9 +118,55 @@ export const HYPER3D_AFR_GLB_URL = "/avatars/hyper3d/afr.glb";
  * it no longer matches, and the restore would be more than one line.
  */
 export const HYPER3D_ARFV2_GLB_URL = "/avatars/hyper3d/arfv2.glb";
+/**
+ * ROMY'S BACKUP SNAPSHOT — a frozen copy of a KNOWN-GOOD Romy export.
+ *
+ * It is deliberately a separate asset id with its own URL, its own adapter and
+ * its own eye-rest entry, all held BY VALUE. Nothing about it is derived from
+ * `hyper3d_arfv2` at build time or at runtime, so replacing `arfv2.glb` with a
+ * new export cannot change, re-point or invalidate this one. That independence
+ * is the whole purpose: the backup is what the member sees when a future
+ * primary export is broken.
+ *
+ * It is NEVER synchronised or overwritten automatically. When the backup is
+ * deliberately refreshed, its adapter must be re-verified against the new file
+ * — the contract test over `meshNames` / `headAttachedMeshes` is what catches a
+ * backup whose adapter has gone stale.
+ *
+ * TODAY the two files are byte-identical (43,260,712 bytes, md5 3ef519c8…), so
+ * a DETERMINISTIC primary failure reproduces here and the chain reaches its
+ * terminal state. The backup earns its keep from the next primary update on.
+ */
+export const HYPER3D_ROMY_BACKUP_GLB_URL = "/avatars/hyper3d/romy-fallback.glb";
 export const HYPER3D_SARA_GLB_URL = "/avatars/hyper3d/sara.glb";
+/**
+ * `perm.glb` — Frankie's PREVIOUS export, kept as his frozen Hyper3D backup.
+ *
+ * No longer any companion's primary. It keeps its own id, URL, adapter and
+ * eye-rest constant exactly as verified on 2026-10-14, so it is reachable only
+ * through `HYPER3D_ASSET_BACKUPS` after `hyper3d_frankie` fails.
+ */
 export const HYPER3D_PERM_GLB_URL = "/avatars/hyper3d/perm.glb";
+/**
+ * `frankie.glb` — Frankie's current export (2026-10-23, 62,416,392 bytes,
+ * sha256 2d894b3d…). A SEPARATE ASSET ID rather than a new URL on
+ * `hyper3d_perm`: the head primitives, authoring scale and eyeball aim all
+ * changed, so perm's adapter does not describe this file, and perm has to stay
+ * intact to serve as the backup.
+ */
+export const HYPER3D_FRANKIE_GLB_URL = "/avatars/hyper3d/frankie.glb";
 export const HYPER3D_JORDAN_GLB_URL = "/avatars/hyper3d/jordan.glb";
+/**
+ * The three companions added 2026-10-23. Each is its own person with its own
+ * file and NO backup: a failure goes straight to that companion's portrait.
+ * Checksums the adapters were measured against:
+ *   bianca.glb  44,211,828 B   sha256 b3ea362d…
+ *   damian.glb  54,048,776 B   sha256 14703d56…
+ *   sasha.glb  103,255,600 B   sha256 a2349824…
+ */
+export const HYPER3D_BIANCA_GLB_URL = "/avatars/hyper3d/bianca.glb";
+export const HYPER3D_DAMIAN_GLB_URL = "/avatars/hyper3d/damian.glb";
+export const HYPER3D_SASHA_GLB_URL = "/avatars/hyper3d/sasha.glb";
 
 export const HYPER3D_ASSET_URLS: Readonly<Record<Hyper3dAssetId, string>> = {
   female_2291: HYPER3D_GLB_URL,
@@ -123,9 +174,14 @@ export const HYPER3D_ASSET_URLS: Readonly<Record<Hyper3dAssetId, string>> = {
   female_2291_lowerlip_v2: HYPER3D_EXPERIMENTAL_GLB_URL,
   hyper3d_afr: HYPER3D_AFR_GLB_URL,
   hyper3d_arfv2: HYPER3D_ARFV2_GLB_URL,
+  hyper3d_romy_backup: HYPER3D_ROMY_BACKUP_GLB_URL,
   hyper3d_sara: HYPER3D_SARA_GLB_URL,
   hyper3d_perm: HYPER3D_PERM_GLB_URL,
-  hyper3d_jordan: HYPER3D_JORDAN_GLB_URL
+  hyper3d_frankie: HYPER3D_FRANKIE_GLB_URL,
+  hyper3d_jordan: HYPER3D_JORDAN_GLB_URL,
+  hyper3d_bianca: HYPER3D_BIANCA_GLB_URL,
+  hyper3d_damian: HYPER3D_DAMIAN_GLB_URL,
+  hyper3d_sasha: HYPER3D_SASHA_GLB_URL
 };
 
 /**
@@ -151,6 +207,42 @@ export const HYPER3D_OPERATOR_SELECTABLE_ASSETS: readonly Hyper3dAssetId[] = [
 
 export const isOperatorSelectableHyper3dAsset = (assetId: Hyper3dAssetId): boolean =>
   HYPER3D_OPERATOR_SELECTABLE_ASSETS.includes(assetId);
+
+/**
+ * THE DECLARED BACKUPS, AND WHY THIS IS NOT THE LOADER'S FALLBACK CHAIN.
+ *
+ * `hyper3dEngineFactory` gives a per-companion asset exactly ONE load attempt,
+ * on purpose: every other Hyper3D file is a different person, and a second
+ * attempt there would put the wrong face under the right name and voice. That
+ * rule is unchanged and this table does not reach it.
+ *
+ * This is a different question, asked one level up at the seam: "is there a
+ * second file OF THE SAME PERSON to try?" For Romy there is — a frozen
+ * snapshot of a known-good export — and for Frankie there is — his previous
+ * export, `perm.glb`, under its own unchanged adapter. The seam, not the
+ * loader, consults this, because the loader's retry loop only wraps the GLB
+ * fetch: a binding failure throws straight past it, and a render-phase fault
+ * never reaches it at all. The seam sees all three channels.
+ *
+ * ONE ENTRY PER COMPANION, AND ONLY THEIR OWN FILE. Exclusivity is structural,
+ * not conventional: each key is one companion's primary and each value is a
+ * file of that same companion. Maya, Jordan, Bianca, Damian and Sasha have no
+ * key, so `hyper3dBackupAssetFor` returns `null` for them and the backup chain
+ * cannot engage. A mapped companion is never reachable from another companion's
+ * failure.
+ */
+export const HYPER3D_ASSET_BACKUPS: Readonly<
+  Partial<Record<Hyper3dAssetId, Hyper3dAssetId>>
+> = {
+  hyper3d_arfv2: "hyper3d_romy_backup",
+  hyper3d_frankie: "hyper3d_perm",
+};
+
+/** The backup for this asset, or `null` when it has none. */
+export const hyper3dBackupAssetFor = (
+  assetId: Hyper3dAssetId | null | undefined,
+): Hyper3dAssetId | null =>
+  (assetId && HYPER3D_ASSET_BACKUPS[assetId]) || null;
 
 /** The flag name, in both the query string and `localStorage`. */
 export const HYPER3D_LEGACY_GLB_FLAG = "hyper3dLegacyGlb";

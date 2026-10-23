@@ -4,6 +4,7 @@ import { canInitializeAnalytics } from "./config";
 import { trackGa4PageView } from "./ga4";
 import { trackMetaPageView } from "./meta";
 import { getSafePageTitle, sanitizeAnalyticsPath } from "./urlSanitizer";
+import type { AnalyticsLocationLike } from "./urlSanitizer";
 
 export function emitAnalyticsPageViewForLocation(location: {
   pathname: string;
@@ -20,8 +21,11 @@ export function emitAnalyticsPageViewForLocation(location: {
   return safePath;
 }
 
-export function AnalyticsRouteTracker() {
-  const location = useLocation();
+interface AnalyticsRouteTrackerProps {
+  location?: AnalyticsLocationLike;
+}
+
+function AnalyticsLocationTracker({ location }: { location: AnalyticsLocationLike }) {
   const lastTrackedPathRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -36,5 +40,16 @@ export function AnalyticsRouteTracker() {
   }, [location]);
 
   return null;
+}
+
+function RouterAnalyticsRouteTracker() {
+  const location = useLocation();
+  return <AnalyticsLocationTracker location={location} />;
+}
+
+export function AnalyticsRouteTracker({ location }: AnalyticsRouteTrackerProps = {}) {
+  return location
+    ? <AnalyticsLocationTracker location={location} />
+    : <RouterAnalyticsRouteTracker />;
 }
 

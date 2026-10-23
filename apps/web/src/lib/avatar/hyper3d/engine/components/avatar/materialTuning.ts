@@ -113,7 +113,8 @@ export const applyMaterialTuning = (
     if (eyeNames.has(material.name) || eyeNames.has(lookup)) {
       // Colour is owned by the eye block above; do not overwrite it here.
       material.metalness = authored.metalness;
-    } else if (material.name === materialTuning.hairMaterialName) {
+    } else if (materialTuning.hairMaterialName && material.name === materialTuning.hairMaterialName) {
+      // An empty name means "no hair material" (an asset that keeps its authored hair).
       material.metalness = materialTuning.hairMetalness;
       material.color?.set(new Color(materialTuning.hairColor));
       // Absent leaves the authored roughness, which is Female.228's behaviour.

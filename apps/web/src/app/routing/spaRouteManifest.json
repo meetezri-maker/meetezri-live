@@ -8,6 +8,7 @@
     "/forgot-password",
     "/reset-password",
     "/invite/create-password",
+    "/landing-page",
     "/admin/login",
     "/admin/credentials",
     "/admin/two-factor-auth",

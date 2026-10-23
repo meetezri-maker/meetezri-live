@@ -93,6 +93,15 @@
       ]
     },
     {
+      "source": "/landing-page",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
       "source": "/onboarding",
       "headers": [
         {
@@ -287,6 +296,10 @@
     },
     {
       "source": "/invite/create-password",
+      "destination": "/spa.html"
+    },
+    {
+      "source": "/landing-page",
       "destination": "/spa.html"
     },
     {

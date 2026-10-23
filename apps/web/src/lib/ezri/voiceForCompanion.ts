@@ -1,9 +1,9 @@
 import { normalizeCompanionId } from "@/lib/avatar/companionModelUrl";
 
-/** Alex, Jordan — male-presenting companions in the product. */
-const MALE_COMPANION_IDS = new Set(["alex", "jordan"]);
-/** Maya, Sarah — female-presenting companions. */
-const FEMALE_COMPANION_IDS = new Set(["maya", "sarah"]);
+/** Alex, Jordan, Damian — the male voice category (Damian approved 2026-10-23). */
+const MALE_COMPANION_IDS = new Set(["alex", "jordan", "damian"]);
+/** Maya, Sarah, Bianca, Sasha — the female voice category (Bianca, Sasha approved 2026-10-23). */
+const FEMALE_COMPANION_IDS = new Set(["maya", "sarah", "bianca", "sasha"]);
 
 export type CompanionVoiceGender = "male" | "female";
 

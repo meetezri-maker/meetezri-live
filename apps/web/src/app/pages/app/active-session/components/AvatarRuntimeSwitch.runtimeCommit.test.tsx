@@ -40,9 +40,12 @@ const { AvatarRuntimeSwitch } = await import("./AvatarRuntimeSwitch");
 const ref = <T,>(value: T): MutableRefObject<T> => ({ current: value });
 const props = () => ({
   sessionRoomThemeKey: "calm" as never,
-  rawAvatarLabel: "Sara Mitchell",
-  activeAvatarId: "sarah",
-  modelUrl: "/avatars/Sara Mitchell.glb",
+  // Maya, not Romy: this file asserts the GENERIC commit signal, and Romy no
+  // longer has a legacy avatar to commit to — she shows a portrait instead.
+  rawAvatarLabel: "Maya Chen",
+  activeAvatarId: "maya",
+  modelUrl: "/avatars/maya%20chen.glb",
+  portraitUrl: "/avatars/maya%20chen.png",
   viewTuning: { mouthDriveMultiplier: 1 } as never,
   fixedViewportConfig: null,
   useRfv2Morphs: false,

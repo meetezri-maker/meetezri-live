@@ -123,7 +123,7 @@ describe('Vercel routing boundaries', () => {
 
   it('retains private and internal-artifact noindex headers', () => {
     for (const source of [
-      '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password',
+      '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password', '/landing-page',
       '/auth/(.*)', '/invite/(.*)', '/onboarding', '/onboarding/(.*)', '/app', '/app/(.*)',
       '/admin/(.*)', '/profile/(.*)', '/error/(.*)', '/dev/(.*)', '/_public/(.*)',
     ]) {

@@ -11,6 +11,14 @@ describe("sanitizeAnalyticsPath", () => {
     expect(sanitizeAnalyticsPath({ pathname: "/home" })).toBe("/home");
     expect(sanitizeAnalyticsPath({ pathname: "/how-it-works" })).toBe("/how-it-works");
     expect(sanitizeAnalyticsPath({ pathname: "/early-access" })).toBe("/early-access");
+    expect(sanitizeAnalyticsPath({ pathname: "/talk-it-out" })).toBe("/talk-it-out");
+    expect(sanitizeAnalyticsPath({ pathname: "/about" })).toBe("/about");
+    expect(sanitizeAnalyticsPath({ pathname: "/safety" })).toBe("/safety");
+    expect(sanitizeAnalyticsPath({ pathname: "/resources" })).toBe("/resources");
+    expect(sanitizeAnalyticsPath({ pathname: "/resources/managing-difficult-days" })).toBe(
+      "/resources/managing-difficult-days",
+    );
+
     expect(sanitizeAnalyticsPath({ pathname: "/pricing" })).toBe("/pricing");
     expect(sanitizeAnalyticsPath({ pathname: "/login" })).toBe("/login");
     expect(sanitizeAnalyticsPath({ pathname: "/signup" })).toBe("/signup");
@@ -22,6 +30,13 @@ describe("sanitizeAnalyticsPath", () => {
     expect(sanitizeAnalyticsPath({ pathname: "/signup", hash: "#refresh_token=secret" })).toBe("/signup");
     expect(sanitizeAnalyticsPath({ pathname: "/", hash: "#access_token=secret" })).toBe("/");
     expect(sanitizeAnalyticsPath({ pathname: "/login", search: "?error_description=secret" })).toBe("/login");
+    expect(
+      sanitizeAnalyticsPath({
+        pathname: "/resources/managing-difficult-days",
+        search: "?email=person@example.com&user_id=private",
+        hash: "#conversation_id=private",
+      }),
+    ).toBe("/resources/managing-difficult-days");
   });
 
   it("normalizes harmless path formatting without preserving raw href data", () => {
@@ -39,10 +54,18 @@ describe("sanitizeAnalyticsPath", () => {
     expect(sanitizeAnalyticsPath({ pathname: "/admin/crisis-event-details", search: "?id=abc" })).toBeNull();
     expect(sanitizeAnalyticsPath({ pathname: "/app/journal", search: "?query=private" })).toBeNull();
     expect(isAnalyticsRouteAllowed({ pathname: "/forgot-password" })).toBe(false);
+    expect(sanitizeAnalyticsPath({ pathname: "/resources/person@example.com" })).toBeNull();
+    expect(sanitizeAnalyticsPath({ pathname: "/resources/access-token-secret" })).toBeNull();
+    expect(
+      sanitizeAnalyticsPath({
+        pathname: "/resources/123e4567-e89b-12d3-a456-426614174000",
+      }),
+    ).toBeNull();
   });
 
   it("returns safe non-identifying titles for approved page views", () => {
     expect(getSafePageTitle("/pricing")).toBe("Pricing");
     expect(getSafePageTitle("/app/active-session")).toBeUndefined();
+    expect(getSafePageTitle("/resources/managing-difficult-days")).toBe("Resource");
   });
 });

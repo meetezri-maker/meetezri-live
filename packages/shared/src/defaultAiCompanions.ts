@@ -1,6 +1,12 @@
 /**
  * Canonical default AI companions — must match `apps/web/public/avatars/*.png` filenames.
- * Order: Alex, Jordan Taylor, Maya Chen, Sara Mitchell (same as product defaults everywhere).
+ * Order: Alex, Jordan Taylor, Maya Chen, Sara Mitchell (same as product defaults everywhere),
+ * then Bianca, Damian, Sasha (added 2026-10-23, appended so the original order is unchanged).
+ *
+ * BIANCA, DAMIAN AND SASHA CARRY NO PERSONA COPY. No approved personality, specialties, age,
+ * accent, voice description or rating exists for them, so those fields are empty / omitted
+ * rather than invented, and the UI hides an empty field. Their voice CATEGORY is approved and
+ * lives in `apps/web/src/lib/ezri/voiceForCompanion.ts`, not in `gender` here.
  */
 export type DefaultAiCompanionDefinition = {
   /** Stable id for UI keys (usually same as display name) */
@@ -17,7 +23,8 @@ export type DefaultAiCompanionDefinition = {
   description: string;
   voice_type: string;
   accent_type: string;
-  rating: number;
+  /** Omitted when no approved rating exists — never filled with a placeholder number. */
+  rating?: number;
 };
 
 export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
@@ -81,6 +88,45 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
     accent_type: "British",
     rating: 4.9,
   },
+  {
+    id: "Bianca",
+    name: "Bianca",
+    portraitPng: "Bianca.png",
+    lobbyTagline: "Solace companion",
+    gender: "",
+    age_range: "",
+    personality: "",
+    specialties: [],
+    description: "Solace companion",
+    voice_type: "",
+    accent_type: "",
+  },
+  {
+    id: "Damian",
+    name: "Damian",
+    portraitPng: "Damian.png",
+    lobbyTagline: "Solace companion",
+    gender: "",
+    age_range: "",
+    personality: "",
+    specialties: [],
+    description: "Solace companion",
+    voice_type: "",
+    accent_type: "",
+  },
+  {
+    id: "Sasha",
+    name: "Sasha",
+    portraitPng: "Sasha.png",
+    lobbyTagline: "Solace companion",
+    gender: "",
+    age_range: "",
+    personality: "",
+    specialties: [],
+    description: "Solace companion",
+    voice_type: "",
+    accent_type: "",
+  },
 ];
 
 /** Lowercased trimmed `ai_avatars.name` → canonical default `name` / `id` in DEFAULT_AI_COMPANIONS. */
@@ -95,6 +141,9 @@ const AVATAR_NAME_ALIASES: Record<string, string> = {
   "sarah mitchell": "Sara Mitchell",
   sara: "Sara Mitchell",
   sarah: "Sara Mitchell",
+  bianca: "Bianca",
+  damian: "Damian",
+  sasha: "Sasha",
 };
 
 /**

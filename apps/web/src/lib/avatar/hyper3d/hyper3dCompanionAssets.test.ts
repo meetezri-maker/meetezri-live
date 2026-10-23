@@ -13,9 +13,17 @@ import {
   avatarModelConfigs,
   hyper3dAssetHasHair,
   hyper3dConfigForAsset,
+  hyper3dPreservesAuthoredHair,
   hyper3dUsesSharedFaceMaps,
 } from "./engine/mappings/avatarModelConfig";
 import { MorphTargetController } from "./engine/engine/avatar/MorphTargetController";
+import {
+  HYPER3D_BIANCA_EYE_REST_CORRECTION,
+  HYPER3D_DAMIAN_EYE_REST_CORRECTION,
+  HYPER3D_FRANKIE_EYE_REST_CORRECTION,
+  HYPER3D_PERM_EYE_REST_CORRECTION,
+  HYPER3D_SASHA_EYE_REST_CORRECTION,
+} from "./engine/engine/avatar/hyper3dRigAdapter";
 import { resolveEzriWsVoiceForCompanion } from "@/lib/ezri/voiceForCompanion";
 import { companionSessionUses3dModel } from "@/lib/avatar/companionModelUrl";
 import { isCompanionComingSoon } from "@/lib/avatar/companionAvailability";
@@ -39,21 +47,25 @@ describe("companion to Hyper3D asset mapping", () => {
    * authority and the test exists to keep anyone from "fixing" it by filename.
    */
   it.each([
-    ["Sara Mitchell", "hyper3d_afr", "/avatars/hyper3d/afr.glb"],
+    ["Sara Mitchell", "hyper3d_arfv2", "/avatars/hyper3d/arfv2.glb"],
     ["Maya Chen", "hyper3d_sara", "/avatars/hyper3d/sara.glb"],
-    ["Alex", "hyper3d_perm", "/avatars/hyper3d/perm.glb"],
+    ["Alex", "hyper3d_frankie", "/avatars/hyper3d/frankie.glb"],
     ["Jordan Taylor", "hyper3d_jordan", "/avatars/hyper3d/jordan.glb"],
+    ["Bianca", "hyper3d_bianca", "/avatars/hyper3d/bianca.glb"],
+    ["Damian", "hyper3d_damian", "/avatars/hyper3d/damian.glb"],
+    ["Sasha", "hyper3d_sasha", "/avatars/hyper3d/sasha.glb"],
   ])("%s resolves to %s", (displayName, assetId, url) => {
     expect(resolveHyper3dCompanionAsset(displayName)).toBe(assetId);
     expect(HYPER3D_ASSET_URLS[assetId as Hyper3dAssetId]).toBe(url);
   });
 
   it.each([
-    ["sara", "hyper3d_afr"],
-    ["sarah", "hyper3d_afr"],
-    ["Sarah Mitchell", "hyper3d_afr"],
+    ["sara", "hyper3d_arfv2"],
+    ["sarah", "hyper3d_arfv2"],
+    ["Sarah Mitchell", "hyper3d_arfv2"],
     ["maya", "hyper3d_sara"],
-    ["Alex Rivera", "hyper3d_perm"],
+    ["Alex Rivera", "hyper3d_frankie"],
+    ["alex", "hyper3d_frankie"],
     ["jordan", "hyper3d_jordan"],
   ])("resolves the existing alias %s", (alias, assetId) => {
     expect(resolveHyper3dCompanionAsset(alias)).toBe(assetId);
@@ -61,9 +73,9 @@ describe("companion to Hyper3D asset mapping", () => {
 
   /** `activeAvatarId` carries runtime keys the canonical normaliser rejects. */
   it.each([
-    ["saraV3", "hyper3d_afr"],
-    ["sara", "hyper3d_afr"],
-    ["legacyHybridSara", "hyper3d_afr"],
+    ["saraV3", "hyper3d_arfv2"],
+    ["sara", "hyper3d_arfv2"],
+    ["legacyHybridSara", "hyper3d_arfv2"],
     ["jordan", "hyper3d_jordan"],
   ])("resolves the runtime key %s when no label is supplied", (key, assetId) => {
     expect(resolveHyper3dCompanionAsset(undefined, key)).toBe(assetId);
@@ -85,12 +97,20 @@ describe("companion to Hyper3D asset mapping", () => {
     expect(new Set(assets).size).toBe(assets.length);
   });
 
+  /** `perm.glb` is Frankie's backup now, never anyone's primary. */
+  it("maps no companion to perm.glb as a primary", () => {
+    expect(Object.values(HYPER3D_COMPANION_ASSETS)).not.toContain("hyper3d_perm");
+  });
+
   it("maps every companion the product can select", () => {
     expect([...HYPER3D_MAPPED_COMPANION_IDS].sort()).toEqual([
       "alex",
+      "bianca",
+      "damian",
       "jordan",
       "maya",
       "sarah",
+      "sasha",
     ]);
   });
 });
@@ -144,7 +164,14 @@ describe("per-model adapters", () => {
     ["hyper3d_afr", ["blendshapes"]],
     ["hyper3d_sara", ["blendshapes_1", "blendshapes_2"]],
     ["hyper3d_perm", ["blendshapes_1", "blendshapes_2"]],
+    // frankie.glb names the head mesh `blendshapes.001`, so the loader names
+    // its primitives after the mesh. Perm's names do not exist in this file.
+    ["hyper3d_frankie", ["blendshapes001", "blendshapes001_1"]],
     ["hyper3d_jordan", ["blendshapes_1", "blendshapes_2"]],
+    ["hyper3d_bianca", ["blendshapes_1", "blendshapes_2"]],
+    ["hyper3d_damian", ["blendshapes_1", "blendshapes_2"]],
+    // Mesh named `blendshapes.001`, like frankie.glb.
+    ["hyper3d_sasha", ["blendshapes001", "blendshapes001_1"]],
   ])("%s binds the face meshes the loader actually produces", (assetId, face) => {
     expect(hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId).meshNames.face).toEqual(face);
   });
@@ -159,7 +186,12 @@ describe("per-model adapters", () => {
     ["hyper3d_afr", ["Character002", "Character002_1"]],
     ["hyper3d_sara", ["Character002", "Character002_1"]],
     ["hyper3d_perm", ["Object_7"]],
+    ["hyper3d_frankie", ["Object_7"]],
     ["hyper3d_jordan", []],
+    // The `Hair` node is itself the mesh; it also resolves structurally.
+    ["hyper3d_bianca", ["Hair"]],
+    ["hyper3d_damian", ["Hair"]],
+    ["hyper3d_sasha", ["Hair"]],
   ])("%s declares the hair meshes it actually has", (assetId, hair) => {
     const config = hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId);
     expect(config.meshNames.hair).toEqual(hair);
@@ -170,8 +202,8 @@ describe("per-model adapters", () => {
     expect(hyper3dAssetHasHair(BASE)).toBe(true);
   });
 
-  /** All four renamed the lash node from `Object_2.002` to `Lashes`. */
-  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_jordan"])(
+  /** All of them renamed the lash node from `Object_2.002` to `Lashes`. */
+  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_frankie", "hyper3d_jordan", "hyper3d_bianca", "hyper3d_damian", "hyper3d_sasha"])(
     "%s names the renamed eyelash mesh",
     (assetId) => {
       expect(
@@ -190,7 +222,12 @@ describe("per-model adapters", () => {
     ["hyper3d_afr", 1.266446, [0, -0.24607, -0.05247]],
     ["hyper3d_sara", 1.275206, [0, -0.25805, -0.05324]],
     ["hyper3d_perm", 1.174981, [0, -0.12097, -0.04438]],
+    ["hyper3d_frankie", 1.163023, [0, -0.10462, -0.04332]],
     ["hyper3d_jordan", 1.182122, [0, -0.13074, -0.04501]],
+    ["hyper3d_bianca", 1.272596, [0, -0.25448, -0.05302]],
+    // Same face node as perm, byte for byte, so the same transform.
+    ["hyper3d_damian", 1.174981, [0, -0.12097, -0.04438]],
+    ["hyper3d_sasha", 1.274839, [0, -0.25755, -0.05322]],
   ])("%s carries its measured transform", (assetId, scale, position) => {
     const config = hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId);
     expect(config.scale).toEqual([scale, scale, scale]);
@@ -222,16 +259,56 @@ describe("per-model adapters", () => {
       ["hyper3d_sara", "hyper3d_perm"],
       ["hyper3d_perm", "hyper3d_jordan"],
       ["hyper3d_afr", "female_2291"],
+      ["hyper3d_frankie", "hyper3d_perm"],
     ]) {
       expect(corrections.get(a)).not.toBe(corrections.get(b));
     }
   });
 
   /**
+   * frankie.glb's eyes were re-aimed: perm's correction on this file leaves him
+   * about seven degrees off neutral. Pinned to the constant solved for it, and
+   * perm's own constant stays on perm, unchanged, for the backup.
+   */
+  it("solves Frankie's eye rest for frankie.glb and leaves perm's on perm", () => {
+    expect(hyper3dConfigForAsset(BASE, "hyper3d_frankie").eyeBoneGaze?.restCorrection).toBe(
+      HYPER3D_FRANKIE_EYE_REST_CORRECTION,
+    );
+    expect(hyper3dConfigForAsset(BASE, "hyper3d_perm").eyeBoneGaze?.restCorrection).toBe(
+      HYPER3D_PERM_EYE_REST_CORRECTION,
+    );
+    expect(HYPER3D_FRANKIE_EYE_REST_CORRECTION.left).toEqual([
+      -0.014194775, -0.001783689, -0.054286761, 0.998422894,
+    ]);
+    expect(HYPER3D_FRANKIE_EYE_REST_CORRECTION.right).toEqual([
+      -0.023153115, 0.000697662, 0.033944703, 0.999155245,
+    ]);
+    expect(HYPER3D_PERM_EYE_REST_CORRECTION.left).toEqual([
+      0.034363983, -0.00552383, -0.092306089, 0.995122199,
+    ]);
+  });
+
+  /**
+   * The 2026-10-23 three are solved on the eyeball's own aim. Damian's eye
+   * geometry is perm's, but perm's constant is NOT shared: by that measure it
+   * leaves these eyeballs ~8 degrees off neutral.
+   */
+  it.each([
+    ["hyper3d_bianca", HYPER3D_BIANCA_EYE_REST_CORRECTION],
+    ["hyper3d_damian", HYPER3D_DAMIAN_EYE_REST_CORRECTION],
+    ["hyper3d_sasha", HYPER3D_SASHA_EYE_REST_CORRECTION],
+  ] as const)("%s uses the eye-rest constant solved for its own file", (assetId, constant) => {
+    const correction = hyper3dConfigForAsset(BASE, assetId).eyeBoneGaze?.restCorrection;
+    expect(correction).toBe(constant);
+    expect(correction).not.toBe(HYPER3D_PERM_EYE_REST_CORRECTION);
+    expect(correction?.left).not.toEqual(HYPER3D_PERM_EYE_REST_CORRECTION.left);
+  });
+
+  /**
    * NOTHING BEHAVIOURAL VARIES. If a per-model adapter ever reached one of
    * these, four avatars would stop being one runtime.
    */
-  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_jordan"])(
+  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_frankie", "hyper3d_jordan", "hyper3d_bianca", "hyper3d_damian", "hyper3d_sasha"])(
     "%s shares the camera, lighting, morph mapping and rig with the shipped asset",
     (assetId) => {
       const config = hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId);
@@ -260,7 +337,12 @@ describe("per-model adapters", () => {
     // `Object_7` is perm's hair sculpt, and it is UNSKINNED: without this entry
     // the head would turn inside a stationary wig.
     ["hyper3d_perm", ["blendshapes", "Teeth", "Lashes", "Object_7"]],
+    // Same unskinned `Object_7` sculpt as perm, byte for byte.
+    ["hyper3d_frankie", ["blendshapes", "Teeth", "Lashes", "Object_7"]],
     ["hyper3d_jordan", ["blendshapes", "Teeth", "Lashes"]],
+    ["hyper3d_bianca", ["blendshapes", "Teeth", "Lashes", "Hair"]],
+    ["hyper3d_damian", ["blendshapes", "Teeth", "Lashes", "Hair"]],
+    ["hyper3d_sasha", ["blendshapes", "Teeth", "Lashes", "Hair"]],
   ])("%s attaches the head-borne objects it actually has", (assetId, attached) => {
     expect(
       hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId).headAttachedMeshes,
@@ -282,7 +364,13 @@ describe("per-model adapters", () => {
     ["hyper3d_afr", true],
     ["hyper3d_sara", false],
     ["hyper3d_perm", false],
+    ["hyper3d_frankie", false],
     ["hyper3d_jordan", false],
+    ["hyper3d_bianca", false],
+    // Both of Damian's head materials are `M_Face.*`: shared maps would also
+    // overwrite his scalp with a face texture.
+    ["hyper3d_damian", false],
+    ["hyper3d_sasha", false],
   ])("%s uses the shared USC face maps: %s", (assetId, shared) => {
     expect(hyper3dUsesSharedFaceMaps(hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId))).toBe(
       shared,
@@ -306,11 +394,43 @@ describe("per-model adapters", () => {
     ["hyper3d_afr", []],
     ["hyper3d_sara", ["Face002_4"]],
     ["hyper3d_perm", []],
+    ["hyper3d_frankie", []],
     ["hyper3d_jordan", []],
+    ["hyper3d_bianca", []],
+    ["hyper3d_damian", []],
+    // Sasha's outfit loads as Face002..Face002_3 — no `Face002_4` stub exists.
+    ["hyper3d_sasha", []],
   ])("%s hides only the stubs it has", (assetId, hidden) => {
     expect(
       hyper3dConfigForAsset(BASE, assetId as Hyper3dAssetId).hiddenMeshNames,
     ).toEqual(hidden);
+  });
+
+  /**
+   * HAIR POLICY. Only Sasha opts out of the shared hair passes; every asset
+   * that existed before keeps the shared correction it always had.
+   */
+  it.each([
+    ["female_2291", false],
+    ["female_229", false],
+    ["hyper3d_afr", false],
+    ["hyper3d_arfv2", false],
+    ["hyper3d_romy_backup", false],
+    ["hyper3d_sara", false],
+    ["hyper3d_perm", false],
+    ["hyper3d_frankie", false],
+    ["hyper3d_jordan", false],
+    ["hyper3d_bianca", false],
+    ["hyper3d_damian", false],
+    ["hyper3d_sasha", true],
+  ] as const)("%s preserves its authored hair: %s", (assetId, preserved) => {
+    expect(hyper3dPreservesAuthoredHair(hyper3dConfigForAsset(BASE, assetId))).toBe(preserved);
+  });
+
+  it("keeps every pre-existing asset's material config unchanged by the hair field", () => {
+    for (const assetId of ["hyper3d_afr", "hyper3d_arfv2", "hyper3d_romy_backup", "hyper3d_sara", "hyper3d_perm", "hyper3d_frankie", "hyper3d_jordan"] as const) {
+      expect(hyper3dConfigForAsset(BASE, assetId).hyper3dMaterials).not.toHaveProperty("hairAppearance");
+    }
   });
 });
 
@@ -451,7 +571,7 @@ describe("operator asset controls stay inside the single-avatar family", () => {
     },
   );
 
-  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_jordan"] as const)(
+  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_frankie", "hyper3d_jordan", "hyper3d_bianca", "hyper3d_damian", "hyper3d_sasha"] as const)(
     "%s is not reachable from an operator flag",
     (assetId) => {
       expect(isOperatorSelectableHyper3dAsset(assetId)).toBe(false);

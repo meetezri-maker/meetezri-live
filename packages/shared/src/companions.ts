@@ -17,6 +17,9 @@ const LEGACY_AVATAR_LABEL: Record<string, string> = {
   jordan: 'Jordan Taylor',
   sarah: 'Sara Mitchell',
   sara: 'Sara Mitchell',
+  bianca: 'Bianca',
+  damian: 'Damian',
+  sasha: 'Sasha',
 };
 
 function normalizeAvatarRaw(raw: string): string {
@@ -60,7 +63,7 @@ function findLobbyCompanionName(raw: string): string | undefined {
 
 /**
  * Map stored profile `selected_avatar` to a single label for analytics/admin UI.
- * Returns one of the four lobby companions, "Not set", or "Other".
+ * Returns one of the lobby companions in DEFAULT_AI_COMPANIONS, "Not set", or "Other".
  */
 export function canonicalCompanionDisplayName(raw: string): string {
   const trimmed = normalizeAvatarRaw(raw);

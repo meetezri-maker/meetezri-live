@@ -5,7 +5,11 @@ import {
   HYPER3D_AFR_EYE_REST_CORRECTION,
   HYPER3D_FBX_RIG,
   HYPER3D_GLB_EYE_REST_CORRECTION,
+  HYPER3D_BIANCA_EYE_REST_CORRECTION,
+  HYPER3D_DAMIAN_EYE_REST_CORRECTION,
+  HYPER3D_FRANKIE_EYE_REST_CORRECTION,
   HYPER3D_GLB_RIG,
+  HYPER3D_SASHA_EYE_REST_CORRECTION,
   HYPER3D_JORDAN_EYE_REST_CORRECTION,
   HYPER3D_PERM_EYE_REST_CORRECTION,
   HYPER3D_SARA_EYE_REST_CORRECTION,
@@ -147,6 +151,21 @@ export interface AvatarModelConfig {
      * through the accepted pipeline — only the identity texture is preserved.
      */
     faceMaps?: "usc-shared" | "authored";
+    /**
+     * WHETHER THE SHARED HAIR PASSES MAY TOUCH THIS ASSET'S HAIR.
+     *
+     * `shared-tuning` (the default, and every asset before 2026-10-23): the
+     * appearance pass applies female_2291's accepted hair correction to any
+     * material named `Material.005` — base colour, metalness, roughness and
+     * envMapIntensity in `applyMaterialTuning`, sorted blending in
+     * `applyHairAlpha`, and the `hair_o_dense` map swap in `applyHairMap`.
+     *
+     * `authored`: none of those three passes runs, and the hair keeps exactly
+     * what the GLB authored. Needed by `sasha.glb`, whose hair material happens
+     * to share the name `Material.005` and whose approved look is the designer's
+     * black hair — the shared passes turn it dark brown and swap its texture.
+     */
+    hairAppearance?: "shared-tuning" | "authored";
   };
   /**
    * Mount the external Beatrice curly-hair FBX onto this asset's head bone.
@@ -363,9 +382,45 @@ const HYPER3D_EYE_REST_CORRECTIONS: Readonly<Record<Hyper3dAssetId, Hyper3dEyeRe
    * unchanged; sharing the reference is what stops the two drifting apart.
    */
   hyper3d_arfv2: HYPER3D_AFR_EYE_REST_CORRECTION,
+  /**
+   * ROMY'S BACKUP — A VALUE COPY, NOT A SHARED REFERENCE. THAT IS THE POINT.
+   *
+   * `female_2291_lowerlip_v2` above shares its correction BY REFERENCE so a
+   * retune cannot leave the experiment behind. Here the requirement is the
+   * exact opposite: the backup is a frozen snapshot of a different file, and
+   * retuning the primary must NOT silently retune it. So the numbers are
+   * written out, and they describe `romy-fallback.glb` alone.
+   *
+   * The values equal afr's today because the backup is currently a byte copy
+   * of the same export, measured the same way: `Eyes` POSITION within 3.6e-7
+   * of afr's, same indices, same UVs.
+   */
+  hyper3d_romy_backup: {
+    authored: { left: [0, -1, 0, 0], right: [0, -1, 0, 0] },
+    left: [-0.013448521, -0.001946699, -0.057415431, 0.99825789],
+    right: [-0.023373826, 0.00078643, 0.035701211, 0.99908882],
+  },
   hyper3d_sara: HYPER3D_SARA_EYE_REST_CORRECTION,
+  /**
+   * Frankie's backup snapshot since 2026-10-23. Unchanged: still measured
+   * against `perm.glb`, which is unchanged.
+   */
   hyper3d_perm: HYPER3D_PERM_EYE_REST_CORRECTION,
-  hyper3d_jordan: HYPER3D_JORDAN_EYE_REST_CORRECTION
+  /**
+   * `frankie.glb` — SOLVED FOR THIS FILE. Deliberately not perm's constant:
+   * the eyeballs were re-aimed in this export, and perm's correction would
+   * leave Frankie about seven degrees off neutral.
+   */
+  hyper3d_frankie: HYPER3D_FRANKIE_EYE_REST_CORRECTION,
+  hyper3d_jordan: HYPER3D_JORDAN_EYE_REST_CORRECTION,
+  /**
+   * The 2026-10-23 companions, each solved for its own file on the eyeball's
+   * own aim — see the block above `HYPER3D_BIANCA_EYE_REST_CORRECTION`. Damian
+   * deliberately does NOT share perm's constant despite identical eye geometry.
+   */
+  hyper3d_bianca: HYPER3D_BIANCA_EYE_REST_CORRECTION,
+  hyper3d_damian: HYPER3D_DAMIAN_EYE_REST_CORRECTION,
+  hyper3d_sasha: HYPER3D_SASHA_EYE_REST_CORRECTION
 };
 
 export const avatarModelConfigs: Record<AvatarModelId, AvatarModelConfig> = {
@@ -821,6 +876,8 @@ type Hyper3dAssetAdapter = {
   hiddenMeshNames?: string[];
   /** See `AvatarModelConfig.hyper3dMaterials.faceMaps`. */
   faceMaps?: "usc-shared" | "authored";
+  /** See `AvatarModelConfig.hyper3dMaterials.hairAppearance`. */
+  hairAppearance?: "shared-tuning" | "authored";
 };
 
 const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAssetAdapter>>> = {
@@ -846,9 +903,10 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
     faceMaps: "usc-shared"
   },
   /**
-   * `arfv2.glb` — TEMPORARY TRIAL of the designer's re-export for Sara Mitchell.
+   * `arfv2.glb` — the designer re-export shown as Sara Mitchell / Romy.
    *
-   * MEASURED against the shipped `afr.glb`, through the real GLTFLoader:
+   * MEASURED against the shipped `afr.glb`, through the real GLTFLoader, on the
+   * 19 Oct export (43,260,712 bytes, exporter Blender I/O v5.0.21):
    *
    *   same   875-joint `Skel`, every joint name, every scene-root node name,
    *          `blendshapes` POSITION byte-identical with all 51 morph targets
@@ -856,34 +914,58 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    *          `Eyes` and `Teeth` to within 5e-7, the outfit byte-identical,
    *          and the `blendshapes` authoring scale 0.00789611 — so it inherits
    *          the shipped transform, the morph bindings and afr's eye-rest.
-   *   differs ONE region: the hair. `Character.002` (1,161 + hair primitive,
-   *          materials `Material.004` / `Material.005`) is replaced by
-   *          `Character.001` (805 + 57,180 vertices, materials `Material.003` /
-   *          `Hair`), and the face texture and its UVs were re-authored.
+   *   differs the face mesh — 13,637 vertices against 11,517, with a
+   *          re-authored face texture — and re-sculpted lashes. The hair mesh,
+   *          `Eyes`, `Teeth` and the outfit are byte-identical to afr's.
    *
-   * THE HAIR RENAME IS WHY THIS ENTRY EXISTS. three.js names the two hair
-   * primitives `Character001` and `Character001_1`; afr's `Character002*` names
-   * match nothing in this file. Left inherited, `hairExpected && !hairMeshes`
-   * fails `material-setup` in `hyper3dEngineFactory`, init throws
-   * `Hyper3dBindingError`, and the seam returns Sara to the legacy avatar —
-   * verified by running the real engine against this asset before this entry
-   * was written.
+   * THE HAIR NAMES BELOW ARE A COMPATIBILITY LIST, NOT THE LOOKUP. Successive
+   * exports of this character have named the hair mesh `Character.002`, then
+   * `Character.001`, then `Character.002` again — Blender datablock suffixes,
+   * carrying no meaning. Each flip broke the `material-setup` gate and head
+   * attachment in one stroke and dropped Romy onto the legacy avatar.
+   * `resolveHyper3dHairMeshes` now finds the hair under the stable `Hair` node
+   * and these names are only the fallback, so the next re-export cannot repeat
+   * it. They record what the CURRENT file holds, verified with the real loader.
    *
-   * `faceMaps` IS DELIBERATELY LEFT AT afr's `usc-shared`, so this trial changes
-   * the MODEL and nothing else. The asset does ship a re-authored
-   * `texture_diffuse`, which that setting replaces with the USC evened albedo;
-   * changing this one word to `"authored"` is what keeps the designer's face
-   * texture instead.
-   *
-   * SIZE NOTE, reported not acted on: the hair sculpt is 57,180 vertices
-   * against afr's 1,161-vertex hair, and it is unskinned, which is why both its
-   * primitives are listed in `headAttachedMeshes`.
+   * `faceMaps` IS DELIBERATELY afr's `usc-shared`, so this entry changes the
+   * MODEL and nothing about the face look. The asset does ship a re-authored
+   * face texture, which that setting replaces with the USC evened albedo;
+   * changing this one word to `"authored"` is what keeps the designer's texture
+   * instead.
    */
   hyper3d_arfv2: {
-    label: "Hyper3D (arfv2 — Sara Mitchell, model trial)",
+    label: "Hyper3D (arfv2 — Sara Mitchell)",
     eyelashes: ["Lashes"],
-    hair: ["Character001", "Character001_1"],
-    headAttachedMeshes: ["blendshapes", "Teeth", "Character001", "Character001_1", "Lashes"],
+    hair: ["Character002", "Character002_1"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"],
+    hiddenMeshNames: [],
+    faceMaps: "usc-shared"
+  },
+  /**
+   * `romy-fallback.glb` — ROMY'S FROZEN BACKUP SNAPSHOT.
+   *
+   * Reached only after `hyper3d_arfv2` has failed, via `HYPER3D_ASSET_BACKUPS`.
+   * Same companion, same canonical id, same voice and persona — only the file
+   * differs, which is what makes a second attempt identity-safe here.
+   *
+   * EVERY FIELD IS A VALUE COPY. Nothing is spread from the `hyper3d_arfv2`
+   * entry and nothing is computed from it, so a future primary re-export and
+   * any adapter change it needs cannot reach this entry. When the backup is
+   * deliberately refreshed, re-verify these names against the new file: the
+   * hair spelling is exactly what has flipped between exports before.
+   *
+   * VERIFIED against the file on disk with the real GLTFLoader: 875-joint
+   * `Skel`, `blendshapes` carrying the 51 ARKit targets, `Eyes` and `Teeth`
+   * skinned, `Lashes` with 14 targets, and the hair under the `Hair` node as
+   * `Character002` / `Character002_1`. `resolveHyper3dHairMeshes` finds the
+   * hair structurally, so these two arrays are the compatibility fallback
+   * rather than the lookup — the same arrangement as the primary.
+   */
+  hyper3d_romy_backup: {
+    label: "Hyper3D (romy-fallback — Sara Mitchell, backup snapshot)",
+    eyelashes: ["Lashes"],
+    hair: ["Character002", "Character002_1"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"],
     hiddenMeshNames: [],
     faceMaps: "usc-shared"
   },
@@ -930,6 +1012,43 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
     faceMaps: "authored"
   },
   /**
+   * `frankie.glb`, shown as Frankie — his current export, with `hyper3d_perm`
+   * above as its backup. EVERY FIELD IS WRITTEN OUT; nothing is inherited from
+   * perm, because perm must stay exactly as verified to serve as the backup.
+   *
+   * MEASURED through the real GLTFLoader and the real engine factory:
+   *
+   *   face   the head mesh is named `blendshapes.001` in this export, so
+   *          three.js names its two primitives `blendshapes001` (9,251 v,
+   *          `M_Face.003`) and `blendshapes001_1` (2,053 v, `M_BackHead.003`)
+   *          under the `blendshapes` group. Perm's `blendshapes_1/_2` do not
+   *          exist here — with them the binding gate throws "face mesh did not
+   *          resolve" and Frankie would leave Hyper3D entirely.
+   *   scale  0.01 / 0.00859828573, this file's own face-node authoring scale.
+   *   position  solved so the eye-bone pivot midpoint lands on the accepted
+   *          anchor (0, 1.48604, 0.05960); the same solve reproduces perm's
+   *          shipped position to 1e-5.
+   *   hair   `Object_7`, byte-identical to perm's sculpt (322,688 v,
+   *          `GoZMesh_Import_Material`), UNSKINNED and not under a `Hair`
+   *          node, so it resolves by this name and must be head-attached.
+   *   morphs all 51 face targets on both primitives, `Teeth.JawOpen`, and 14
+   *          lash targets on `Lashes` — identical names to perm.
+   *
+   * `faceMaps: "authored"`: his face is "Realistic Male Face UV Texture Map".
+   * The shared USC albedo would replace it with the female_2291 face.
+   */
+  hyper3d_frankie: {
+    label: "Hyper3D (frankie — Frankie)",
+    scale: [1.163023, 1.163023, 1.163023],
+    position: [0, -0.10462, -0.04332],
+    face: ["blendshapes001", "blendshapes001_1"],
+    hair: ["Object_7"],
+    eyelashes: ["Lashes"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Lashes", "Object_7"],
+    hiddenMeshNames: [],
+    faceMaps: "authored"
+  },
+  /**
    * `jordan.glb`, shown as Jordan Taylor. Split head, no separate hair mesh, no
    * stub — his short hair and beard live in the HEAD TEXTURES, which is exactly
    * why the shared face albedo erased both and rendered him bald and
@@ -948,6 +1067,88 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
     // His beard, eyebrows and short hair are in "Photorealistic Bearded Face
     // UV Texture Map" and the scalp map beside it. Both must survive.
     faceMaps: "authored"
+  },
+  /**
+   * ─────────────────────────────────────────────────────────────────────────
+   * BIANCA, DAMIAN, SASHA — 2026-10-23. EVERY FIELD WRITTEN OUT.
+   * ─────────────────────────────────────────────────────────────────────────
+   *
+   * Each measured through the real GLTFLoader and the real engine factory on
+   * the file whose checksum `hyper3dAssetSelection` records. Common to all
+   * three: the 875-joint `Skel`, all 51 face targets on BOTH head primitives,
+   * `Teeth.JawOpen`, 14 lash targets on an unskinned `Lashes`, and an
+   * unskinned hair mesh that IS the `Hair` node — found structurally by
+   * `resolveHyper3dHairMeshes` and head-attached. `scale` is 0.01 / the face
+   * node's authoring scale; `position` puts the eye-bone pivot midpoint on the
+   * accepted anchor (the same solve that reproduces perm's shipped position).
+   *
+   * `hiddenMeshNames: []` and `faceMaps: "authored"` are explicit on all three:
+   * none carries the `Face002_4` stub, and each face/scalp map is that person's
+   * own. Left unset they would inherit female_2291's defaults — the shared USC
+   * albedo, which replaces every one of these faces with female_2291's.
+   */
+  /** `bianca.glb`. Head primitives 9,251 + 2,053 v; hair 54,183 v on `Material.002`. */
+  hyper3d_bianca: {
+    label: "Hyper3D (bianca — Bianca)",
+    scale: [1.272596, 1.272596, 1.272596],
+    position: [0, -0.25448, -0.05302],
+    face: ["blendshapes_1", "blendshapes_2"],
+    hair: ["Hair"],
+    eyelashes: ["Lashes"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Lashes", "Hair"],
+    hiddenMeshNames: [],
+    // Her own "Surreal Flattened Face Texture Map". It ships no face normal map,
+    // so under `authored` the face keeps none (the shared USC normal is not bound).
+    faceMaps: "authored",
+    // A no-op today: her hair material is `Material.002`, which no shared hair
+    // pass targets. Stated so the decision is visible rather than inherited.
+    hairAppearance: "shared-tuning"
+  },
+  /**
+   * `damian.glb`. Head primitives, eyes, teeth, lashes and outfit are
+   * byte-for-byte perm's (same names `blendshapes_1/_2`, same authoring scale
+   * 0.00851077400), so the transform equals perm's. Hair is 7,920 v of cards on
+   * `hair-cards.001`. BOTH head materials are `M_Face.*` (`M_Face.003` face,
+   * `M_Face.001` back of head) — the Jordan pattern — so `authored` is what
+   * keeps his scalp from being overwritten by a face texture.
+   */
+  hyper3d_damian: {
+    label: "Hyper3D (damian — Damian)",
+    scale: [1.174981, 1.174981, 1.174981],
+    position: [0, -0.12097, -0.04438],
+    face: ["blendshapes_1", "blendshapes_2"],
+    hair: ["Hair"],
+    eyelashes: ["Lashes"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Lashes", "Hair"],
+    hiddenMeshNames: [],
+    faceMaps: "authored",
+    // A no-op today: `hair-cards.001` is not a shared-pass target.
+    hairAppearance: "shared-tuning"
+  },
+  /**
+   * `sasha.glb`. The head mesh is named `blendshapes.001`, so its primitives
+   * load as `blendshapes001` / `blendshapes001_1`. Her outfit mesh is named
+   * `Face.002` (loads as `Face002`..`Face002_3`) with FOUR primitives, so the
+   * female_2291 stub `Face002_4` does not exist here and nothing is hidden.
+   *
+   * HAIR: 1,102,572 v / 1,449,024 tri on `Material.005` with `hair_o` —
+   * the exact material name the shared hair passes target.
+   * `hairAppearance: "authored"` keeps the approved designer black hair: without it, the passes recolour it
+   * to #241a14, drop its metalness, change its roughness and envMap, switch it
+   * to sorted blending and swap its texture for `hair_o_dense.png`.
+   */
+  hyper3d_sasha: {
+    label: "Hyper3D (sasha — Sasha)",
+    scale: [1.274839, 1.274839, 1.274839],
+    position: [0, -0.25755, -0.05322],
+    face: ["blendshapes001", "blendshapes001_1"],
+    hair: ["Hair"],
+    eyelashes: ["Lashes"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Lashes", "Hair"],
+    hiddenMeshNames: [],
+    // Her own "Hyper-Realistic Facial UV Texture Atlas".
+    faceMaps: "authored",
+    hairAppearance: "authored"
   }
 };
 
@@ -1001,8 +1202,12 @@ export const hyper3dConfigForAsset = (config: AvatarModelConfig, assetId: Hyper3
     headAttachedMeshes: adapter?.headAttachedMeshes ?? config.headAttachedMeshes,
     hiddenMeshNames: adapter?.hiddenMeshNames ?? config.hiddenMeshNames,
     hyper3dMaterials:
-      adapter?.faceMaps && config.hyper3dMaterials
-        ? { ...config.hyper3dMaterials, faceMaps: adapter.faceMaps }
+      (adapter?.faceMaps || adapter?.hairAppearance) && config.hyper3dMaterials
+        ? {
+            ...config.hyper3dMaterials,
+            ...(adapter.faceMaps ? { faceMaps: adapter.faceMaps } : {}),
+            ...(adapter.hairAppearance ? { hairAppearance: adapter.hairAppearance } : {})
+          }
         : config.hyper3dMaterials,
     eyeBoneGaze: config.eyeBoneGaze ? { ...config.eyeBoneGaze, restCorrection } : config.eyeBoneGaze
   };
@@ -1016,6 +1221,14 @@ export const hyper3dConfigForAsset = (config: AvatarModelConfig, assetId: Hyper3
  */
 export const hyper3dUsesSharedFaceMaps = (config: AvatarModelConfig): boolean =>
   (config.hyper3dMaterials?.faceMaps ?? "usc-shared") === "usc-shared";
+
+/**
+ * Whether this asset's hair must stay exactly as the GLB authored it, so the
+ * shared hair passes are skipped. Absent means `shared-tuning` — every asset
+ * that existed before this field keeps its hair behaviour unchanged.
+ */
+export const hyper3dPreservesAuthoredHair = (config: AvatarModelConfig): boolean =>
+  config.hyper3dMaterials?.hairAppearance === "authored";
 export const avatarModelOptions = Object.values(avatarModelConfigs).map(({ id, label }) => ({ id, label }));
 
 export const resolveMorphBindings = (config: AvatarModelConfig, canonicalName: string) => {

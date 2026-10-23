@@ -34,6 +34,7 @@ import {
   companionCardImageUrl,
   companionRoundPortraitImgClass,
 } from "@/lib/avatar/companionModelUrl";
+import { companionMetaLine } from "@/lib/avatar/lobbyAvatars";
 import { ONBOARDING_COMPANION_SELECTION_BG } from "@/lib/solace/referenceImagery";
 import { TALK_IT_OUT_ENVIRONMENT_THUMBS } from "@/lib/solace/talkItOutImages";
 import {
@@ -67,6 +68,9 @@ function normalizeOnboardingAvatarName(raw: string | undefined): string {
     alex: "Alex",
     jordan: "Jordan Taylor",
     sarah: "Sara Mitchell",
+    bianca: "Bianca",
+    damian: "Damian",
+    sasha: "Sasha",
   };
   return legacy[t.toLowerCase()] ?? t;
 }
@@ -257,6 +261,7 @@ interface CompanionCardProps {
 
 function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCardProps) {
   const comingSoon = isCompanionComingSoon(avatar.name);
+  const metaLine = companionMetaLine(avatar.gender, avatar.ageRange);
   return (
     <motion.button
       type="button"
@@ -345,52 +350,66 @@ function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCar
 
         <motion.div className="min-w-0 flex-1 text-center sm:text-left sm:pt-1">
           <h3 className="text-[18px] font-semibold tracking-tight text-white/96">{companionDisplayName(avatar.name)}</h3>
-          <p className="mt-0.5 text-[13px] text-violet-200/58">
-            {avatar.gender} • {avatar.ageRange} years
-          </p>
+          {metaLine ? (
+            <p className="mt-0.5 text-[13px] text-violet-200/58">{metaLine}</p>
+          ) : null}
         </motion.div>
       </motion.div>
 
       <motion.div className="relative mt-5 space-y-4">
-        <motion.div>
-          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200/55">
-            <Heart className="h-3 w-3 text-[#FF4FD8]/80" aria-hidden />
-            Personality
-          </p>
-          <p className="text-[14px] leading-relaxed text-violet-100/80">{avatar.personality}</p>
-        </motion.div>
-
-        <motion.div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200/55">
-            Specializes In
-          </p>
-          <motion.div className="flex flex-wrap gap-2">
-          {avatar.specialty.map((spec) => (
-            <span
-              key={spec}
-              className="inline-flex rounded-full border border-[#8A4FFF]/35 bg-[#8A4FFF]/14 px-3 py-1 text-[11px] font-medium text-violet-100/90 shadow-[0_0_14px_-8px_rgba(138,79,255,0.5)]"
-            >
-              {spec}
-            </span>
-          ))}
+        {avatar.personality ? (
+          <motion.div>
+            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200/55">
+              <Heart className="h-3 w-3 text-[#FF4FD8]/80" aria-hidden />
+              Personality
+            </p>
+            <p className="text-[14px] leading-relaxed text-violet-100/80">{avatar.personality}</p>
           </motion.div>
-        </motion.div>
+        ) : null}
 
-        <p className="text-[13px] leading-relaxed text-violet-200/65">{avatar.description}</p>
+        {avatar.specialty.length > 0 ? (
+          <motion.div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200/55">
+              Specializes In
+            </p>
+            <motion.div className="flex flex-wrap gap-2">
+            {avatar.specialty.map((spec) => (
+              <span
+                key={spec}
+                className="inline-flex rounded-full border border-[#8A4FFF]/35 bg-[#8A4FFF]/14 px-3 py-1 text-[11px] font-medium text-violet-100/90 shadow-[0_0_14px_-8px_rgba(138,79,255,0.5)]"
+              >
+                {spec}
+              </span>
+            ))}
+            </motion.div>
+          </motion.div>
+        ) : null}
 
-        <motion.div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.06] pt-4 text-[12px] text-violet-200/55">
-          <span className="inline-flex items-center gap-1.5">
-            <Volume2 className="h-3.5 w-3.5 text-[#FF4FD8]/75" aria-hidden />
-            {avatar.voiceType}
-          </span>
-          <span className="text-violet-400/40" aria-hidden>
-            •
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Mic className="h-3.5 w-3.5 text-[#69E7FF]/70" aria-hidden />
-            {avatar.accentType}
-          </span>
-        </motion.div>
+        {avatar.description ? (
+          <p className="text-[13px] leading-relaxed text-violet-200/65">{avatar.description}</p>
+        ) : null}
+
+        {avatar.voiceType || avatar.accentType ? (
+          <motion.div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.06] pt-4 text-[12px] text-violet-200/55">
+            {avatar.voiceType ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Volume2 className="h-3.5 w-3.5 text-[#FF4FD8]/75" aria-hidden />
+                {avatar.voiceType}
+              </span>
+            ) : null}
+            {avatar.voiceType && avatar.accentType ? (
+              <span className="text-violet-400/40" aria-hidden>
+                •
+              </span>
+            ) : null}
+            {avatar.accentType ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Mic className="h-3.5 w-3.5 text-[#69E7FF]/70" aria-hidden />
+                {avatar.accentType}
+              </span>
+            ) : null}
+          </motion.div>
+        ) : null}
       </motion.div>
     </motion.button>
   );

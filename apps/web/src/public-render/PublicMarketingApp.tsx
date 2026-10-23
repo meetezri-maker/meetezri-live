@@ -5,9 +5,11 @@ import {
   StaticRouter,
   createPath,
   parsePath,
+  useLocation,
   type Navigator,
   type To,
 } from 'react-router';
+import { AnalyticsRouteTracker } from '@/app/analytics';
 import { PublicRouteMetadata } from '@/app/seo/PublicRouteMetadata';
 
 function href(to: To): string {
@@ -42,6 +44,11 @@ function DocumentRouter({ children }: { children: ReactNode }) {
   );
 }
 
+function PublicAnalyticsRouteTracker() {
+  const location = useLocation();
+  return <AnalyticsRouteTracker location={location} />;
+}
+
 export interface PublicMarketingAppProps {
   Page: ComponentType;
   pathname: string;
@@ -51,6 +58,7 @@ export interface PublicMarketingAppProps {
 export function PublicMarketingApp({ Page, pathname, mode }: PublicMarketingAppProps) {
   const content = (
     <>
+      <PublicAnalyticsRouteTracker />
       <PublicRouteMetadata />
       <Page />
     </>

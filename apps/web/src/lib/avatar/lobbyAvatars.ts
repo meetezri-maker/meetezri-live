@@ -1,5 +1,7 @@
 import { DEFAULT_AI_COMPANIONS, matchDefaultCompanionByAvatarName } from "@meetezri/shared";
 
+import { DEFAULT_SELECTABLE_COMPANION_NAME } from "./companionAvailability";
+
 import {
   companionCardImageUrl,
   effectiveAvatarImageUrlFromDb,
@@ -15,6 +17,17 @@ export type LobbyAvatar = {
   description: string;
   cardImage?: string;
 };
+
+/**
+ * The "Male • 30-35 years" line on companion cards, or `null` when neither part
+ * exists. Identical output to the old inline template whenever both parts are
+ * present (the original four); companions with no approved gender or age range
+ * (Bianca, Damian, Sasha) render no line instead of " •  years".
+ */
+export function companionMetaLine(gender: string, ageRange: string): string | null {
+  const parts = [gender.trim(), ageRange.trim() ? `${ageRange.trim()} years` : ""].filter(Boolean);
+  return parts.length ? parts.join(" • ") : null;
+}
 
 /** Hide junk rows from admin / lobby (manual "test" avatars, etc.). */
 export function isPlaceholderAvatarName(name: string): boolean {
@@ -75,7 +88,7 @@ export function lobbyAvatarsFromApiRows(
   });
 }
 
-/** Default lobby list — same four companions as DB seed and `DEFAULT_AI_COMPANIONS` in `@meetezri/shared`. */
+/** Default lobby list — the companions in `DEFAULT_AI_COMPANIONS` (`@meetezri/shared`), in that order. */
 export const LOBBY_AVATARS: LobbyAvatar[] = DEFAULT_AI_COMPANIONS.map((c) => ({
   id: c.id,
   name: c.name,
@@ -97,6 +110,9 @@ const LEGACY_LOBBY_NAME: Record<string, string> = {
   jordan: "Jordan Taylor",
   sarah: "Sara Mitchell",
   sara: "Sara Mitchell",
+  bianca: "Bianca",
+  damian: "Damian",
+  sasha: "Sasha",
 };
 
 /** Match DB / profile name to a lobby companion (exact id/name, then legacy full names). */
@@ -123,7 +139,21 @@ export function findLobbyAvatar(name: string | null | undefined): LobbyAvatar | 
   return undefined;
 }
 
-/** Same resolution as Session Lobby — unknown labels map to first companion for preview. */
+/**
+ * Same resolution as Session Lobby, with the two misses kept apart:
+ *
+ *   absent (empty) name   the default companion, `DEFAULT_SELECTABLE_COMPANION_NAME`
+ *                         (Andre) — the approved default for "nothing chosen yet".
+ *   unrecognised name     a NEUTRAL card carrying that name and no portrait. Before
+ *                         2026-10-23 this returned `LOBBY_AVATARS[0]`, which put
+ *                         Frankie's card under any name this build did not know.
+ */
 export function lobbyAvatarByName(name: string): LobbyAvatar {
-  return findLobbyAvatar(name) ?? LOBBY_AVATARS[0];
+  const found = findLobbyAvatar(name);
+  if (found) return found;
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) {
+    return findLobbyAvatar(DEFAULT_SELECTABLE_COMPANION_NAME) ?? LOBBY_AVATARS[0];
+  }
+  return { id: "", name: trimmed, emoji: "", description: "", personality: "", cardImage: undefined };
 }

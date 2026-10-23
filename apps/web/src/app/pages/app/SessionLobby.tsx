@@ -29,6 +29,7 @@ import {
   companionCardPortraitImgClass,
   resolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
+import { companionHasNoLegacyModel } from "@/lib/avatar/hyper3d/hyper3dCompanionAssets";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
 import { companionDisplayName } from "@meetezri/shared";
 import {
@@ -259,6 +260,10 @@ export function SessionLobby() {
 
   useEffect(() => {
     if (!companionSessionUses3dModel(profile?.selected_avatar)) return;
+    // The URL warmed here is the LEGACY model. A companion with none left
+    // (Romy, Frankie) never loads it in session, so warming it only fetches a
+    // file of a different-looking character.
+    if (companionHasNoLegacyModel(profile?.selected_avatar)) return;
     void preloadAvatarModel(resolveCompanionModelUrl(profile?.selected_avatar));
   }, [profile?.selected_avatar]);
 
@@ -889,7 +894,9 @@ export function SessionLobby() {
 
   const companionTraitsLine = useMemo(() => {
     const pty = selectedCompanionPreview.personality?.trim();
-    if (!pty) return "Calm • Empathetic • Supportive";
+    // No approved personality (Bianca, Damian, Sasha): show the card's own neutral
+    // tagline rather than attributing traits nobody approved.
+    if (!pty) return selectedCompanionPreview.description?.trim() || "Solace companion";
     const parts = pty
       .split(/[,•|]/)
       .map((s) => s.trim())

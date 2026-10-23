@@ -19,13 +19,48 @@ export function effectiveAvatarImageUrlFromDb(
 }
 
 /** Canonical companion id for URLs, tuning, and assets (keep in sync with view tuning). */
-export type CompanionCanonicalId = "alex" | "sarah" | "maya" | "jordan";
+export type CompanionCanonicalId =
+  | "alex"
+  | "sarah"
+  | "maya"
+  | "jordan"
+  | "bianca"
+  | "damian"
+  | "sasha";
 export type CompanionAvatarRuntime =
   | "alex"
   | "maya"
   | "jordan"
   | "legacyHybridSara"
-  | "saraV3";
+  | "saraV3"
+  | "bianca"
+  | "damian"
+  | "sasha";
+
+/**
+ * The legacy-model URL for a companion that HAS no legacy model (Bianca,
+ * Damian, Sasha). Empty on purpose: it can never load a file, so a gap in the
+ * routing cannot quietly put another companion's GLB on screen. Nothing should
+ * reach it — those companions are in `COMPANIONS_WITHOUT_LEGACY_MODEL`.
+ */
+export const NO_LEGACY_MODEL_URL = "";
+
+/**
+ * NEUTRAL PORTRAIT for a non-empty companion label this build does not
+ * recognise. Faceless on purpose: before 2026-10-23 an unknown label fell back
+ * to `Alex.png`, which put Frankie's face on someone else's card. An ABSENT
+ * selection is a different case and still resolves to the default companion
+ * at the call sites (`DEFAULT_SELECTABLE_COMPANION_NAME`).
+ */
+export const NEUTRAL_COMPANION_PORTRAIT_URL =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 419">' +
+      '<defs><radialGradient id="g" cx="50%" cy="38%" r="70%">' +
+      '<stop offset="0" stop-color="#3b2a63"/><stop offset="1" stop-color="#120f24"/>' +
+      "</radialGradient></defs>" +
+      '<rect width="375" height="419" fill="url(#g)"/></svg>',
+  );
 
 /** GLB/PNG filenames under `public/avatars/` (spaces encoded for URLs). */
 function avatarAssetFile(fileName: string): string {
@@ -43,6 +78,9 @@ const FALLBACK_AVATAR_PORTRAIT_PNG_FILES = [
   "jordan Taylor.png",
   "maya chen.png",
   "Sara Mitchell.png",
+  "Bianca.png",
+  "Damian.png",
+  "Sasha.png",
 ] as const;
 
 function pngBasenamesFromPublicFolder(): string[] {
@@ -75,7 +113,9 @@ export function portraitUrlFromAvatarsFolderFile(
 /**
  * Companions that use a 3D model in the live session (`ActiveSession`).
  *
- * ALL FOUR, since the Hyper3D four-avatar integration. Sarah routes to SaraV3
+ * EVERY RECOGNISED COMPANION — the original four since the Hyper3D four-avatar
+ * integration, and Bianca, Damian and Sasha since 2026-10-23 (Hyper3D only, no
+ * legacy model; see `COMPANIONS_WITHOUT_LEGACY_MODEL`). Sarah routes to SaraV3
  * or legacy Sara via config and Jordan/RFv2 uses morph-only GLB mode; Alex and
  * Maya Chen have a `public/avatars/` GLB of their own (`Alex.glb`,
  * `maya chen.glb`) which `resolveCompanionModelUrl` has always returned and
@@ -90,8 +130,7 @@ export function portraitUrlFromAvatarsFolderFile(
 export function companionSessionUses3dModel(
   avatarLabel: string | null | undefined
 ): boolean {
-  const id = normalizeCompanionId(avatarLabel);
-  return id === "sarah" || id === "jordan" || id === "alex" || id === "maya";
+  return normalizeCompanionId(avatarLabel) !== null;
 }
 
 /** RFv2-style avatars are morph-driven and should not use facial bone mouth fallback. */
@@ -122,18 +161,36 @@ export function tryResolveCompanionPortraitUrl(
       return companionCardImageUrl("maya chen.png");
     case "jordan":
       return companionCardImageUrl("jordan Taylor.png");
+    case "bianca":
+      return companionCardImageUrl("Bianca.png");
+    case "damian":
+      return companionCardImageUrl("Damian.png");
+    case "sasha":
+      return companionCardImageUrl("Sasha.png");
     default:
       return null;
   }
 }
 
-/** Static portrait (PNG under `public/avatars/`) for lobby + 2D-only session view. */
+/**
+ * Static portrait (PNG under `public/avatars/`) for lobby + 2D-only session view.
+ *
+ * A NON-EMPTY label this build does not recognise gets
+ * `NEUTRAL_COMPANION_PORTRAIT_URL`, never another companion's face.
+ *
+ * An EMPTY label keeps its previous result, `Alex.png`, unchanged. Its only
+ * caller is a live session that has lost its companion identity — a known gap
+ * tracked separately (see HYPER3D_SEVEN_COMPANION_AUDIT.md §6) and deliberately
+ * not changed here. Profile-level callers never pass an empty label: they
+ * resolve an absent selection to `DEFAULT_SELECTABLE_COMPANION_NAME` first.
+ */
 export function resolveCompanionPortraitUrl(
   avatarLabel: string | null | undefined
 ): string {
-  return (
-    tryResolveCompanionPortraitUrl(avatarLabel) ?? companionCardImageUrl("Alex.png")
-  );
+  const known = tryResolveCompanionPortraitUrl(avatarLabel);
+  if (known) return known;
+  if (!(avatarLabel ?? "").trim()) return companionCardImageUrl("Alex.png");
+  return NEUTRAL_COMPANION_PORTRAIT_URL;
 }
 
 export function normalizeCompanionId(
@@ -151,6 +208,9 @@ export function normalizeCompanionId(
   }
   if (k === "maya chen" || k === "maya") return "maya";
   if (k === "jordan taylor" || k === "jordan") return "jordan";
+  if (k === "bianca") return "bianca";
+  if (k === "damian") return "damian";
+  if (k === "sasha") return "sasha";
   return null;
 }
 
@@ -185,6 +245,10 @@ export function resolveCompanionModelUrl(
       return avatarAssetFile("maya chen.glb");
     case "jordan":
       return "/avatars/jordanTaylor.glb";
+    case "bianca":
+    case "damian":
+    case "sasha":
+      return NO_LEGACY_MODEL_URL;
     default:
       return DEFAULT_AVATAR_MODEL_URL;
   }

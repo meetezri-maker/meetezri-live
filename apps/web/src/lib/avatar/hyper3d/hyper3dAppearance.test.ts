@@ -69,6 +69,95 @@ describe("accepted Hyper3D appearance migration", () => {
     expect(handle.lights.every((light) => light.parent === null)).toBe(true);
   });
 
+  /**
+   * SASHA'S AUTHORED HAIR (2026-10-23). Her hair material shares the name
+   * `Material.005` with female_2291's, so only the explicit option keeps the
+   * shared passes off it. Authored values are her GLB's.
+   */
+  describe("preserveAuthoredHair", () => {
+    const fakeRenderer = () =>
+      ({
+        autoClear: false,
+        outputColorSpace: THREE.NoColorSpace,
+        isWebGLRenderer: true,
+        toneMapping: THREE.NoToneMapping,
+        toneMappingExposure: 1,
+      }) as unknown as THREE.WebGLRenderer;
+
+    const authoredHair = () => {
+      const hair = meshWith("Material.005");
+      const m = hair.material as THREE.MeshStandardMaterial;
+      m.color.setHex(0x000000);
+      m.metalness = 0.5454545617103577;
+      m.roughness = 0.6727272868156433;
+      m.envMapIntensity = 1;
+      m.transparent = true;
+      m.depthWrite = true;
+      m.map = new THREE.Texture();
+      m.map.name = "hair_o";
+      return { hair, m, map: m.map };
+    };
+
+    it("leaves every authored hair property alone, on apply and on dispose", () => {
+      vi.spyOn(THREE.CubeCamera.prototype, "update").mockImplementation(() => undefined);
+      const { hair, m, map } = authoredHair();
+      const face = meshWith("M_Face.002");
+      const avatar = new THREE.Group();
+      avatar.add(hair, face);
+
+      const handle = applyAcceptedHyper3dAppearance(avatar, new THREE.Scene(), fakeRenderer(), {
+        preserveAuthoredHair: true,
+      });
+      const check = () => {
+        expect(m.color.getHexString()).toBe("000000");
+        expect(m.metalness).toBe(0.5454545617103577);
+        expect(m.roughness).toBe(0.6727272868156433);
+        expect(m.envMapIntensity).toBe(1);
+        expect(m.transparent).toBe(true);
+        expect(m.depthWrite).toBe(true);
+        expect(m.map).toBe(map);
+        expect(m.userData).toEqual({});
+      };
+      check();
+      // Everything else is still tuned: the face keeps the accepted envMap value.
+      expect((face.material as THREE.MeshStandardMaterial).envMapIntensity).toBe(0.42);
+      handle.dispose();
+      check();
+    });
+
+    it("still applies the shared hair correction by default", () => {
+      vi.spyOn(THREE.CubeCamera.prototype, "update").mockImplementation(() => undefined);
+      const { hair, m } = authoredHair();
+      const avatar = new THREE.Group();
+      avatar.add(hair);
+
+      applyAcceptedHyper3dAppearance(avatar, new THREE.Scene(), fakeRenderer());
+
+      expect(m.color.getHexString()).toBe("241a14");
+      expect(m.metalness).toBe(0);
+      expect(m.roughness).toBe(0.55);
+      expect(m.envMapIntensity).toBe(0.75);
+      expect(m.depthWrite).toBe(false);
+    });
+
+    it("never treats an unnamed material as hair when hair tuning is off", () => {
+      vi.spyOn(THREE.CubeCamera.prototype, "update").mockImplementation(() => undefined);
+      const unnamed = meshWith("");
+      const m = unnamed.material as THREE.MeshStandardMaterial;
+      m.color.setHex(0x336699);
+      m.metalness = 0.3;
+      const avatar = new THREE.Group();
+      avatar.add(unnamed);
+
+      applyAcceptedHyper3dAppearance(avatar, new THREE.Scene(), fakeRenderer(), {
+        preserveAuthoredHair: true,
+      });
+
+      expect(m.color.getHexString()).toBe("336699");
+      expect(m.metalness).toBe(0.3);
+    });
+  });
+
   it("uses the accepted profile without changing its values", () => {
     expect(HYPER3D_F228_APPEARANCE.environment).toEqual({
       enabled: true,

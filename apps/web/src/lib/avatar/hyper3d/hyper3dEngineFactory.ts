@@ -9,6 +9,7 @@ import {
   avatarModelConfigs,
   hyper3dAssetHasHair,
   hyper3dConfigForAsset,
+  hyper3dPreservesAuthoredHair,
   hyper3dUsesSharedFaceMaps,
 } from "./engine/mappings/avatarModelConfig";
 import {
@@ -26,6 +27,10 @@ import { EyeGeometryController } from "./engine/engine/avatar/EyeGeometryControl
 import { Hyper3dEyeBoneGaze } from "./engine/engine/avatar/Hyper3dEyeBoneGaze";
 import { HybridLowerFaceController } from "./engine/engine/avatar/HybridLowerFaceController";
 import { attachHeadMeshes } from "./engine/engine/avatar/attachHeadMeshes";
+import {
+  resolveHyper3dHairMeshes,
+  type Hyper3dHairResolution,
+} from "./engine/engine/avatar/resolveHairMeshes";
 import { applyHyper3dGlbMaterials } from "./engine/components/avatar/hyper3dMaterials";
 import { applyAcceptedHyper3dAppearance } from "./hyper3dAppearance";
 import {
@@ -211,6 +216,15 @@ const readMeshMorph = (mesh: THREE.Mesh | null, ...names: string[]): number | nu
   return null;
 };
 
+/** What an asset that declares no hair resolves to. Shared so it is allocated once. */
+const EMPTY_HAIR_RESOLUTION: Hyper3dHairResolution = {
+  meshNames: [],
+  source: "none",
+  hairNodeName: null,
+  configuredResolved: [],
+  configuredMissing: [],
+};
+
 const findMeshByName = (root: THREE.Object3D, name: string): THREE.Mesh | null => {
   let found: THREE.Mesh | null = null;
   root.traverse((object) => {
@@ -354,11 +368,57 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
 
     morph.discover(scene, CONFIG);
     bones.discover(scene, CONFIG);
+
+    /**
+     * HAIR, RESOLVED ONCE — by structure first, by configured name second.
+     *
+     * Resolved HERE, before attachment, because the same answer has to drive
+     * both the head-attachment pass below and the `material-setup` gate further
+     * down. They used to read the configured names independently, which is how
+     * one re-export could break the gate and the attachment in the same stroke.
+     *
+     * Skipped entirely for an asset that declares no hair (`jordan.glb`), so a
+     * structural lookup cannot invent hair the config says is not there.
+     */
+    const hairExpected = hyper3dAssetHasHair(CONFIG);
+    const hairResolution = hairExpected
+      ? resolveHyper3dHairMeshes(scene, CONFIG.meshNames.hair)
+      : EMPTY_HAIR_RESOLUTION;
+    const hairMeshes = hairResolution.meshNames;
+
+    /**
+     * A configured hair name that no longer resolves is dropped from the
+     * attachment list rather than left to report as `missing`: after a rename
+     * the stale spelling is not a missing mesh, it is a mesh that changed its
+     * name, and the resolved one directly below replaces it.
+     */
+    const unresolvedConfiguredHair = new Set(hairResolution.configuredMissing);
+    const headAttachedMeshNames = [
+      ...new Set([
+        ...(CONFIG.headAttachedMeshes ?? []).filter(
+          (name) => !unresolvedConfiguredHair.has(name),
+        ),
+        ...hairMeshes,
+      ]),
+    ];
+
     // Must follow bone discovery: the head bone has to exist to attach to.
+    // `attachHeadMeshes` is idempotent and refuses skinned meshes, so adding the
+    // resolved hair here cannot attach anything twice or double-transform it.
+    if (hairExpected) {
+      recordHyper3dPath(
+        {},
+        `hair resolved via ${hairResolution.source}` +
+          `${hairResolution.hairNodeName ? ` ("${hairResolution.hairNodeName}")` : ""}` +
+          `: [${hairMeshes.join(", ")}]` +
+          `${hairResolution.configuredMissing.length ? ` — configured names no longer in this asset: [${hairResolution.configuredMissing.join(", ")}]` : ""}`,
+      );
+    }
+
     const attachment = attachHeadMeshes(
       scene,
       bones.getHeadBone(),
-      CONFIG.headAttachedMeshes ?? [],
+      headAttachedMeshNames,
     );
     lowerFace.discover(scene, CONFIG.id === "female");
     eyes.discover(scene, CONFIG.eyeGeometry);
@@ -390,18 +450,17 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     const teethMesh = findMeshByName(scene, CONFIG.meshNames.teeth[0] ?? "");
     const morphNames = new Set(morph.names());
     const missingMorphs = EXPECTED_MINIFACE_BLENDSHAPES.filter((name) => !morphNames.has(name));
-    const hairMeshes = CONFIG.meshNames.hair.filter((name) => findMeshByName(scene!, name));
     /**
-     * Whether THIS asset is supposed to have hair at all.
+     * `hairExpected` and `hairMeshes` are resolved further up, before head
+     * attachment, so the gate below and the attachment pass agree on one answer.
      *
-     * `perm.glb` and `jordan.glb` ship no hair mesh — measured, not assumed:
-     * neither carries `Character.002` nor the `Material.005` hair material, and
-     * their scalp is part of the head mesh's second primitive. Their configs
-     * declare an empty hair list, so the gate below skips the check for them
-     * instead of being removed for everyone. An asset that DOES declare hair and
-     * then fails to deliver it still fails, exactly as today.
+     * Whether THIS asset is supposed to have hair at all is still the config's
+     * call: `perm.glb` and `jordan.glb` ship no hair mesh — measured, not
+     * assumed — and `jordan.glb` declares an empty hair list, so the gate below
+     * skips the check for it instead of being removed for everyone. An asset
+     * that DOES declare hair and then fails to deliver it still fails, exactly
+     * as before.
      */
-    const hairExpected = hyper3dAssetHasHair(CONFIG);
 
     /**
      * EYELASHES — resolved ONCE, here, and never gated.
@@ -496,7 +555,11 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     camera.lookAt(new THREE.Vector3(...CONFIG.camera.target));
     camera.updateProjectionMatrix();
 
-    const appearance = applyAcceptedHyper3dAppearance(scene, init.scene, init.renderer);
+    // Per asset: `sasha.glb` keeps her authored hair; every other asset gets the
+    // accepted shared hair correction exactly as before.
+    const appearance = applyAcceptedHyper3dAppearance(scene, init.scene, init.renderer, {
+      preserveAuthoredHair: hyper3dPreservesAuthoredHair(CONFIG),
+    });
 
     // ── ONE RUNTIME PER MOUNT ───────────────────────────────────────────────
     markHyper3dPhase("controller-init");

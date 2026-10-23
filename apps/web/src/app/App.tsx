@@ -37,6 +37,8 @@ const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => 
 const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
 const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
 const Pricing              = lazy(() => import('@/app/pages/Pricing').then(m => ({ default: m.Pricing })));
+// Designer homepage under review; noindex SPA route, not linked from public navigation.
+const DesignerHomepage     = lazy(() => import('@/app/features/home/HomePage').then(m => ({ default: m.HomePage })));
 const SaraAvatarLab        = lazy(() => import('@/app/pages/dev/SaraAvatarLab').then(m => ({ default: m.SaraAvatarLab })));
 const SaraRfv2Lab          = import.meta.env.DEV
   ? lazy(() => import('@/app/pages/dev/SaraRfv2Lab').then(m => ({ default: m.SaraRfv2Lab })))
@@ -447,6 +449,7 @@ export default function App() {
             <Route path="/terms" element={<Terms />} />
             {/* <Route path="/accessibility" element={<Accessibility />} /> */}
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/landing-page" element={<DesignerHomepage />} />
 
             {/*
               Public Content Hub. Anonymous — deliberately NOT inside ProtectedRoute.

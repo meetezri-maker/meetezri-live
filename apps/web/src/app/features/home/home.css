@@ -1,0 +1,266 @@
+/*
+ * Public homepage ("Talk to Solace" design) — scoped to `.solace-home`.
+ *
+ * The rest of the app runs on the dark Solace theme, whose `@layer base` rules give every
+ * h1–h4, p, label and button a font size, weight and line height, and every element a themed
+ * border colour. The homepage design was authored against plain Tailwind preflight, so these
+ * rules restore preflight behaviour inside `.solace-home` only. They stay in `@layer base` so
+ * Tailwind utilities on the page still win, exactly as they did in the design source.
+ */
+@layer base {
+  .solace-home {
+    font-family: 'Inter', sans-serif;
+    color: #000;
+    background-color: #fff;
+  }
+
+  .solace-home :where(h1, h2, h3, h4, h5, h6, p, label, button) {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    word-spacing: inherit;
+  }
+
+  .solace-home :where(*, ::before, ::after) {
+    border-color: currentColor;
+  }
+}
+
+/* Keyboard focus stays visible even where the design suppresses the default outline. */
+.solace-home :where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid #e91e63;
+  outline-offset: 3px;
+}
+
+.solace-home-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 12px;
+  /* The app's "calm transitions" setting would otherwise slide it in from off-screen. */
+  transition: none !important;
+}
+
+.solace-home-skip-link:focus {
+  position: fixed;
+  left: 12px;
+  z-index: 60;
+  border-radius: 9999px;
+  background-color: #fff;
+  color: #1d1d1d;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(29, 29, 29, 0.16);
+}
+
+/*
+ * Scroll-pinned sections.
+ *
+ * Normal document flow is the default: the section is as tall as its content, the stage is not
+ * sticky, and `.home-pinned-only` content is hidden. A section pins only when its media query
+ * (kept identical to `PIN_QUERIES` in layoutModes.ts) says the stage fits below the floating
+ * header. Pinned, the section takes the design's scroll length, the stage sticks to the top at
+ * full viewport height, and content starts below the header. `revert-layer` hands display back
+ * to the element's own Tailwind classes.
+ */
+.solace-home {
+  --home-header-clearance: 76px;
+}
+
+@media (min-width: 640px) {
+  .solace-home {
+    --home-header-clearance: 96px;
+  }
+}
+
+.solace-home .home-pin-stage {
+  position: relative;
+  padding-block: 80px;
+}
+
+.solace-home .home-pinned-only {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 1045px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (max-width: 1279px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 1280px) and (min-height: 970px) {
+  .solace-home .home-pin--features {
+    height: 650vh;
+  }
+  .solace-home .home-pin--features > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--features .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--features .home-flow-only {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 840px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 945px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 1000px) {
+  .solace-home .home-pin--how-it-works {
+    height: 400vh;
+  }
+  .solace-home .home-pin--how-it-works > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--how-it-works .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--how-it-works .home-flow-only {
+    display: none;
+  }
+  @media (max-width: 1023px) {
+    .solace-home .home-pin--how-it-works .home-hiw-text {
+      display: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 1023px) and (min-height: 780px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 700px) {
+  .solace-home .home-pin--moments {
+    height: 440vh;
+  }
+  .solace-home .home-pin--moments > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--moments .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--moments .home-flow-only {
+    display: none;
+  }
+}
+
+/* Journey in flow: the three step cards in a column instead of a stacked deck. */
+.solace-home .home-journey-stack {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.solace-home .home-journey-card {
+  position: relative;
+  inset: auto;
+}
+
+/* Carousel in flow: one native horizontal scroller (no vertical scrolling inside it). */
+.solace-home .home-carousel-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 767px) and (min-height: 855px), (prefers-reduced-motion: no-preference) and (min-width: 768px) and (min-height: 820px) {
+  .solace-home .home-pin--carousel {
+    height: 300vh;
+  }
+  .solace-home .home-pin--carousel .home-carousel-viewport {
+    overflow: visible;
+  }
+  .solace-home .home-pin--carousel > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--carousel .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--carousel .home-flow-only {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 1023px) and (min-height: 885px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 640px) {
+  .solace-home .home-pin--journey {
+    height: 400vh;
+  }
+  .solace-home .home-pin--journey > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--journey .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--journey .home-flow-only {
+    display: none;
+  }
+  .solace-home .home-pin--journey .home-journey-stack {
+    height: revert-layer;
+    display: revert-layer;
+    flex-direction: revert-layer;
+    gap: revert-layer;
+  }
+  .solace-home .home-pin--journey .home-journey-card {
+    position: revert-layer;
+    inset: revert-layer;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 700px) {
+  .solace-home .home-pin--conversation {
+    height: 400vh;
+  }
+  .solace-home .home-pin--conversation > .home-pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    padding-block: var(--home-header-clearance) 16px;
+  }
+  .solace-home .home-pin--conversation .home-pinned-only {
+    display: revert-layer;
+  }
+  .solace-home .home-pin--conversation .home-flow-only {
+    display: none;
+  }
+  /* Pinned: each message pair takes its corner of the stage. */
+  .solace-home .home-pin--conversation .home-chat-list {
+    position: static;
+    margin: 0;
+    max-width: none;
+  }
+  .solace-home .home-pin--conversation .home-chat-pair {
+    position: absolute;
+    top: var(--pair-top);
+    left: var(--pair-left);
+    right: var(--pair-right);
+    bottom: var(--pair-bottom);
+    width: min(360px, 28vw);
+  }
+}
+
+/* Replaces the design's global `arrowBounce` keyframes under a page-specific name. */
+@keyframes solace-home-arrow-bounce {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solace-home [data-home-arrow] {
+    animation: none !important;
+  }
+}

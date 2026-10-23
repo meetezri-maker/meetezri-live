@@ -69,9 +69,13 @@ const ref = <T,>(value: T): MutableRefObject<T> => ({ current: value });
 
 const props = () => ({
   sessionRoomThemeKey: "calm" as never,
-  rawAvatarLabel: "Sara Mitchell",
-  activeAvatarId: "sarah",
-  modelUrl: "/avatars/Sara Mitchell.glb",
+  // Maya, not Romy: these cases assert the GENERIC seam behaviour, and Romy is
+  // now the special case (no legacy model, so she gets a portrait instead).
+  // Her own chain is covered end to end in `avatarBackupChain.test.tsx`.
+  rawAvatarLabel: "Maya Chen",
+  activeAvatarId: "maya",
+  modelUrl: "/avatars/maya%20chen.glb",
+  portraitUrl: "/avatars/maya%20chen.png",
   viewTuning: { mouthDriveMultiplier: 1 } as never,
   fixedViewportConfig: null,
   useRfv2Morphs: false,
@@ -222,9 +226,9 @@ describe("avatar runtime switch — four-avatar eligibility", () => {
    * trusting that a filename means what it looks like.
    */
   it.each([
-    ["Sara Mitchell", sara, "hyper3d_afr"],
+    ["Sara Mitchell", sara, "hyper3d_arfv2"],
     ["Maya Chen", maya, "hyper3d_sara"],
-    ["Alex", alex, "hyper3d_perm"],
+    ["Alex", alex, "hyper3d_frankie"],
     ["Jordan Taylor", jordan, "hyper3d_jordan"],
   ])("flag on + %s renders Hyper3D on %s", async (_name, makeProps, assetId) => {
     flagState.enabled = true;
@@ -237,9 +241,7 @@ describe("avatar runtime switch — four-avatar eligibility", () => {
   });
 
   it.each([
-    ["Sara Mitchell", sara],
     ["Maya Chen", maya],
-    ["Alex", alex],
     ["Jordan Taylor", jordan],
   ])("flag off + %s keeps the existing avatar and never mounts the host", async (_n, makeProps) => {
     render(<AvatarRuntimeSwitch {...makeProps()} />);
@@ -247,8 +249,40 @@ describe("avatar runtime switch — four-avatar eligibility", () => {
     expect(hostMounts).not.toHaveBeenCalled();
   });
 
+  /**
+   * Romy is deliberately NOT in the list above. `sara-v3.glb` is retired and
+   * her models are Hyper3D-authored, so there is no legacy avatar to keep —
+   * showing one would put a different character under her name.
+   */
+  it("flag off + Sara Mitchell shows her portrait, not the retired legacy avatar", async () => {
+    render(
+      <AvatarRuntimeSwitch
+        {...sara()}
+        portraitUrl="/avatars/Sara Mitchell.png"
+      />,
+    );
+    await waitFor(() =>
+      expect(document.querySelector("img")?.getAttribute("src")).toContain(
+        "Sara Mitchell.png",
+      ),
+    );
+    expect(screen.queryByTestId("existing-avatar")).toBeNull();
+    expect(hostMounts).not.toHaveBeenCalled();
+  });
+
+  /** Frankie joined Romy on 2026-10-23: `Alex.glb` is no longer his fallback. */
+  it("flag off + Alex shows Frankie's portrait, not the legacy Alex.glb", async () => {
+    render(<AvatarRuntimeSwitch {...alex()} portraitUrl="/avatars/Alex.png" />);
+    await waitFor(() =>
+      expect(document.querySelector("img")?.getAttribute("src")).toBe("/avatars/Alex.png"),
+    );
+    expect(screen.queryByTestId("existing-avatar")).toBeNull();
+    expect(threeAvatarRenders).not.toHaveBeenCalled();
+    expect(hostMounts).not.toHaveBeenCalled();
+  });
+
   it("flag off forwards each companion's own existing model URL unchanged", async () => {
-    for (const makeProps of [sara, jordan, maya, alex]) {
+    for (const makeProps of [jordan, maya]) {
       threeAvatarRenders.mockClear();
       const { unmount } = render(<AvatarRuntimeSwitch {...makeProps()} />);
       await screen.findByTestId("existing-avatar");
@@ -308,7 +342,7 @@ describe("avatar runtime switch — four-avatar eligibility", () => {
       />,
     );
     expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
-    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_arfv2");
   });
 
   it("flag on + the legacy hybrid Sara runtime key resolves to the same asset", async () => {
@@ -317,7 +351,7 @@ describe("avatar runtime switch — four-avatar eligibility", () => {
       <AvatarRuntimeSwitch {...props()} rawAvatarLabel={undefined} activeAvatarId="sara" />,
     );
     expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
-    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_arfv2");
   });
 });
 
@@ -338,13 +372,13 @@ describe("avatar runtime switch — changing avatar", () => {
   it("remounts the host with the new asset when the companion changes", async () => {
     flagState.enabled = true;
     const { rerender } = render(
-      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+      <AvatarRuntimeSwitch {...withLabel("Maya Chen", "maya")} />,
     );
     await screen.findByTestId("hyper3d-avatar");
-    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_afr");
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_sara");
 
     rerender(<AvatarRuntimeSwitch {...withLabel("Alex", "alex")} />);
-    await waitFor(() => expect(hostProps.at(-1)?.assetId).toBe("hyper3d_perm"));
+    await waitFor(() => expect(hostProps.at(-1)?.assetId).toBe("hyper3d_frankie"));
     expect(screen.queryByTestId("hyper3d-avatar")).toBeTruthy();
   });
 
@@ -356,16 +390,16 @@ describe("avatar runtime switch — changing avatar", () => {
     flagState.enabled = true;
     hostBehaviour = "fail-async";
     const { rerender } = render(
-      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+      <AvatarRuntimeSwitch {...withLabel("Maya Chen", "maya")} />,
     );
     await screen.findByTestId("existing-avatar");
     expect(screen.queryByTestId("hyper3d-avatar")).toBeNull();
 
     hostBehaviour = "idle";
-    rerender(<AvatarRuntimeSwitch {...withLabel("Maya Chen", "maya")} />);
+    rerender(<AvatarRuntimeSwitch {...withLabel("Alex", "alex")} />);
 
     expect(await screen.findByTestId("hyper3d-avatar")).toBeTruthy();
-    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_sara");
+    expect(hostProps.at(-1)?.assetId).toBe("hyper3d_frankie");
   });
 
   /**
@@ -376,7 +410,7 @@ describe("avatar runtime switch — changing avatar", () => {
     flagState.enabled = true;
     hostBehaviour = "fail-async";
     const { rerender } = render(
-      <AvatarRuntimeSwitch {...withLabel("Sara Mitchell", "saraV3")} />,
+      <AvatarRuntimeSwitch {...withLabel("Maya Chen", "maya")} />,
     );
     await screen.findByTestId("existing-avatar");
     const mountsAfterFailure = hostMounts.mock.calls.length;
@@ -385,7 +419,7 @@ describe("avatar runtime switch — changing avatar", () => {
     for (let i = 0; i < 5; i += 1) {
       rerender(
         <AvatarRuntimeSwitch
-          {...withLabel("Sara Mitchell", "saraV3")}
+          {...withLabel("Maya Chen", "maya")}
           isSpeaking={i % 2 === 0}
         />,
       );

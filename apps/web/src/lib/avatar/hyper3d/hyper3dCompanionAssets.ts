@@ -48,10 +48,22 @@ export const HYPER3D_COMPANION_ASSETS: Readonly<
   sarah: "hyper3d_arfv2",
   /** Maya Chen — `sara.glb`. The filename is the designer's label, not the companion. */
   maya: "hyper3d_sara",
-  /** Alex — `perm.glb`. */
-  alex: "hyper3d_perm",
+  /**
+   * Alex, shown as Frankie — `frankie.glb` since 2026-10-23.
+   *
+   * His previous file, `perm.glb` (`hyper3d_perm`), is no longer a primary: it
+   * is his declared backup in `HYPER3D_ASSET_BACKUPS`, reached only after this
+   * one fails.
+   */
+  alex: "hyper3d_frankie",
   /** Jordan Taylor — `jordan.glb`. */
   jordan: "hyper3d_jordan",
+  /** Bianca — `bianca.glb`. Added 2026-10-23; no backup. */
+  bianca: "hyper3d_bianca",
+  /** Damian — `damian.glb`. Added 2026-10-23; no backup. */
+  damian: "hyper3d_damian",
+  /** Sasha — `sasha.glb`. Added 2026-10-23; no backup. */
+  sasha: "hyper3d_sasha",
 };
 
 /**
@@ -93,6 +105,48 @@ export function resolveHyper3dCompanionAsset(
 
   const fromId = normalizeCompanionId(key);
   return fromId ? HYPER3D_COMPANION_ASSETS[fromId] : null;
+}
+
+/**
+ * COMPANIONS WITH NO LEGACY MODEL LEFT, so "fall back to the existing Solace
+ * avatar" is not an option for them.
+ *
+ * `sara-v3.glb` is RETIRED. Romy's models are Hyper3D-authored and carry the
+ * 51 ARKit morph targets; the legacy runtimes read a different vocabulary
+ * entirely (`saraV3` and `jordan` want `viseme_*`, `maya` and `alex` ship two
+ * morphs apiece), so pointing `ThreeAvatar` at one of her files renders a face
+ * that never moves — silently, because `saraV3MorphDiscovery` degrades rather
+ * than throwing. Showing her the retired sara-v3 instead is the thing this
+ * declaration exists to prevent.
+ *
+ * So when Hyper3D cannot run for one of these companions — the flag is off, or
+ * both her assets failed — the seam shows her PORTRAIT, the same
+ * `StaticSessionPortrait` the 2D companions already use. Everyone else keeps
+ * their existing GLB fallback untouched.
+ *
+ * FRANKIE (`alex`) JOINED ON 2026-10-23, by decision rather than by necessity.
+ * `Alex.glb` still exists, but it is an older, visibly different character
+ * with two morph targets, and falling back to it put the wrong-looking man
+ * under Frankie's name. His chain is now `frankie.glb` -> `perm.glb` -> his
+ * portrait, and with the flag off, his portrait directly.
+ *
+ * BIANCA, DAMIAN AND SASHA (2026-10-23) never had a legacy model. Their chain
+ * is their own Hyper3D file -> their own portrait; with the flag off, their
+ * portrait. Without this entry the seam would hand them to `ThreeAvatar`.
+ */
+export const COMPANIONS_WITHOUT_LEGACY_MODEL: ReadonlySet<CompanionCanonicalId> =
+  new Set<CompanionCanonicalId>(["sarah", "alex", "bianca", "damian", "sasha"]);
+
+/** True when this companion has no legacy GLB to fall back to. */
+export function companionHasNoLegacyModel(
+  rawAvatarLabel: string | undefined | null,
+  activeAvatarId?: string | null,
+): boolean {
+  const id =
+    normalizeCompanionId(rawAvatarLabel) ??
+    RUNTIME_KEY_TO_COMPANION[(activeAvatarId ?? "").trim()] ??
+    normalizeCompanionId(activeAvatarId);
+  return id !== null && COMPANIONS_WITHOUT_LEGACY_MODEL.has(id);
 }
 
 /** Companions this build can render with Hyper3D. Used by tests and diagnostics. */

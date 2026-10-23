@@ -399,6 +399,104 @@ export const HYPER3D_PERM_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
   right: [0.027120869, 0.004119553, 0.079414313, 0.996464176]
 };
 
+/**
+ * `frankie.glb` — Frankie's current export (2026-10-23, sha256 2d894b3d…).
+ *
+ * SOLVED FOR THIS FILE, NOT COPIED FROM `perm.glb`. Its `Eyes` POSITION buffer
+ * differs from perm's and the eyeballs are re-aimed: uncorrected rest is
+ * +3.796 / -2.116 yaw and -0.887 / +0.266 pitch, close to afr's and nothing
+ * like perm's look-down-and-out. Perm's 11.3 / 9.6 degree correction applied
+ * to this file leaves the eyes 7.1 / 7.8 degrees off the accepted neutral,
+ * looking up and inward.
+ *
+ * Same transfer as the four above: the minimal-arc bone-local pre-rotation
+ * carrying this asset's measured rest onto female_2291's accepted neutral (with
+ * its shipped correction), every reading taken by one instrument through the
+ * real skinning and the real `Hyper3dEyeBoneGaze` composition. Residual after
+ * re-measuring through that composition: 9e-7 / 2.3e-6 degrees. See
+ * `HYPER3D_FRANKIE_EYE_REST_EVIDENCE` for the instrument and its validation.
+ */
+export const HYPER3D_FRANKIE_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  // 6.437 deg.
+  left: [-0.014194775, -0.001783689, -0.054286761, 0.998422894],
+  // 4.710 deg.
+  right: [-0.023153115, 0.000697662, 0.033944703, 0.999155245]
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BIANCA, DAMIAN, SASHA (2026-10-23) — SOLVED ON THE EYEBALL'S OWN AIM.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * WHY NOT THE PIVOT MEASURE USED ABOVE. That measure reads the direction from
+ * the eye BONE pivot to the pupil, which equals the gaze only while the eyeball
+ * is centred on its pivot. In these exports it is not: the eyeballs are the
+ * same mesh TRANSLATED by up to 5.3 mm (UVs, indices and skin weights
+ * identical). On bianca.glb the pivot measure read a 28-degree downward rest
+ * and "corrected" it by 30 degrees, which rendered her eyes rolled up into her
+ * head; on sasha.glb it asked for 22 degrees and left her 14-16 off neutral.
+ *
+ * THE MEASURE USED HERE is translation-invariant: the direction from each
+ * eyeball shell's own bbox centre to its pupil-weighted centroid, through real
+ * skinning. Read that way, every Hyper3D companion asset's eyeballs aim
+ * IDENTICALLY at rest (+3.83 / -0.87 and -2.27 / +0.29 degrees), and the
+ * correction is solved — iterated to a residual under 1e-6 degrees through the
+ * real `Hyper3dEyeBoneGaze` composition — onto female_2291's accepted neutral
+ * read by the same measure. CONTROL: the same solve re-derives afr's shipped
+ * constant to within 0.02 degrees.
+ *
+ * NOT APPLIED TO ANY EXISTING COMPANION. Read by this measure the shipped
+ * constants land on the accepted neutral for afr/arfv2 (0.00), within 1.1 of
+ * it for sara and jordan, within 0.4 for frankie — and 7.1 / 8.0 degrees off it
+ * for perm. That last finding is reported, not acted on.
+ */
+
+/** `bianca.glb`. 6.764 / 4.891 deg. */
+export const HYPER3D_BIANCA_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  left: [-0.013428928, -0.001768179, -0.05742117, 0.998258156],
+  right: [-0.023351656, 0.000741103, 0.035700931, 0.999089383]
+};
+
+/**
+ * `damian.glb`. 6.765 / 4.886 deg.
+ *
+ * Damian's eyes, teeth, lashes and both head primitives are byte-for-byte
+ * perm's (eye POSITION within 1.2e-7, identical UVs, indices and skin), so
+ * perm's constant was the instructed candidate. It was NOT copied: by the
+ * measure above perm's constant leaves these exact eyeballs 7.1 / 8.0 degrees
+ * off neutral, looking up and inward. Damian gets the solved value instead;
+ * perm's own constant is untouched.
+ */
+export const HYPER3D_DAMIAN_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  left: [-0.013433456, -0.001767947, -0.057421015, 0.998258105],
+  right: [-0.023272628, 0.000740735, 0.035701156, 0.999091219]
+};
+
+/** `sasha.glb`. 6.765 / 4.890 deg. */
+export const HYPER3D_SASHA_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
+  authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
+  left: [-0.013435354, -0.001767837, -0.057421093, 0.998258075],
+  right: [-0.023348331, 0.000741224, 0.035701134, 0.999089453]
+};
+
+/** The readings behind the three constants above, in that measure's own terms. */
+export const HYPER3D_SHELL_AIM_EYE_REST_EVIDENCE = {
+  acceptedTarget: { left: { yaw: -2.9686, pitch: -2.4541 }, right: { yaw: 1.9734, pitch: -2.4773 } },
+  raw: { left: { yaw: 3.83, pitch: -0.87 }, right: { yaw: -2.27, pitch: 0.29 } },
+  residualDegrees: { bianca: 8.5e-7, damian: 1.2e-6, sasha: 0 },
+  afrControlDegrees: 0.021,
+  /** Where each SHIPPED constant puts the gaze, by this measure. Not changed. */
+  shippedOffNeutralDegrees: {
+    hyper3d_afr: 0, hyper3d_arfv2: 0, hyper3d_sara: 1.1, hyper3d_jordan: 1.1,
+    hyper3d_frankie: 0.38, hyper3d_perm: 8.0
+  },
+  /** What the pivot measure would have shipped, and how far off it would be. */
+  pivotSolveOffNeutralDegrees: { bianca: 30.4, sasha: 16.5 }
+} as const;
+
 /** `jordan.glb` — shown as Jordan Taylor. Uncorrected rest +5.180 / -2.981 yaw. */
 export const HYPER3D_JORDAN_EYE_REST_CORRECTION: Hyper3dEyeRestCorrection = {
   authored: HYPER3D_COMPANION_AUTHORED_EYE_REST,
@@ -435,4 +533,27 @@ export const HYPER3D_COMPANION_EYE_REST_EVIDENCE = {
     left: { yaw: 0.0307, pitch: -0.5048 },
     right: { yaw: -0.7631, pitch: -0.3643 }
   }
+} as const;
+
+/**
+ * How `HYPER3D_FRANKIE_EYE_REST_CORRECTION` was solved, 2026-10-23.
+ *
+ * THE INSTRUMENT: direction from each `FACIAL_*_EyeParallel` pivot to the
+ * centroid of the `Eyes` vertices skinned to `FACIAL_*_Pupil`, weighted by that
+ * pupil weight (73 vertices per eye; none reach 1.0 in these exports), read
+ * through `bone.matrixWorld x boneInverse` with the asset's own root transform.
+ * Not identical to the instrument behind the table above, so it was VALIDATED
+ * BEFORE USE by re-solving the shipped constants from their own files: afr
+ * within 0.004 degrees, sara and jordan within 0.065, perm within 0.32 (perm's
+ * large pitch amplifies the difference between pupil-vertex selections).
+ * Frankie rests near afr's direction, where the agreement is tightest.
+ */
+export const HYPER3D_FRANKIE_EYE_REST_EVIDENCE = {
+  acceptedTarget: { left: { yaw: -2.4345, pitch: -2.5156 }, right: { yaw: 1.7769, pitch: -2.3874 } },
+  raw: { left: { yaw: 3.7955, pitch: -0.8867 }, right: { yaw: -2.116, pitch: 0.2662 } },
+  corrected: { left: { yaw: -2.4345, pitch: -2.5156 }, right: { yaw: 1.7769, pitch: -2.3874 } },
+  residualDegrees: { left: 8.5e-7, right: 2.3e-6 },
+  /** What perm's constant would leave on this file, and why it is not used. */
+  withPermCorrectionDegreesOff: { left: 7.082, right: 7.779 },
+  validationAgainstShippedDegrees: { afr: 0.0038, sara: 0.0649, jordan: 0.0649, perm: 0.3172 }
 } as const;

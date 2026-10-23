@@ -63,7 +63,11 @@ describe("per-companion asset loading", () => {
     ["hyper3d_afr", "/avatars/hyper3d/afr.glb"],
     ["hyper3d_sara", "/avatars/hyper3d/sara.glb"],
     ["hyper3d_perm", "/avatars/hyper3d/perm.glb"],
+    ["hyper3d_frankie", "/avatars/hyper3d/frankie.glb"],
     ["hyper3d_jordan", "/avatars/hyper3d/jordan.glb"],
+    ["hyper3d_bianca", "/avatars/hyper3d/bianca.glb"],
+    ["hyper3d_damian", "/avatars/hyper3d/damian.glb"],
+    ["hyper3d_sasha", "/avatars/hyper3d/sasha.glb"],
   ])("%s requests exactly its own file", async (assetId, url) => {
     const urls = captureRequestedUrls();
     const factory = createHyper3dEngineFactory(liveStub as never);
@@ -82,7 +86,7 @@ describe("per-companion asset loading", () => {
    * DIFFERENT PERSON. One attempt, then throw — and the seam above returns that
    * companion to their own legacy avatar.
    */
-  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_jordan"])(
+  it.each(["hyper3d_afr", "hyper3d_sara", "hyper3d_perm", "hyper3d_frankie", "hyper3d_jordan", "hyper3d_bianca", "hyper3d_damian", "hyper3d_sasha"])(
     "%s never falls back to another companion's model",
     async (assetId) => {
       const urls = captureRequestedUrls();
@@ -96,6 +100,21 @@ describe("per-companion asset loading", () => {
       vi.restoreAllMocks();
     },
   );
+
+  /**
+   * FRANKIE'S BACKUP IS THE SEAM'S DECISION, NOT THE LOADER'S. A failed
+   * frankie.glb load must not reach for perm.glb inside the same attempt — the
+   * seam starts perm.glb as a SEPARATE attempt with its own host and token.
+   */
+  it("frankie.glb's own attempt never requests perm.glb or the legacy Alex.glb", async () => {
+    const urls = captureRequestedUrls();
+    const factory = createHyper3dEngineFactory(liveStub as never);
+
+    await factory(initFor("hyper3d_frankie")).catch(() => undefined);
+
+    expect(urls).toEqual(["/avatars/hyper3d/frankie.glb"]);
+    vi.restoreAllMocks();
+  });
 
   /**
    * THE SINGLE-AVATAR PATH IS UNCHANGED. With no `assetId` the factory still

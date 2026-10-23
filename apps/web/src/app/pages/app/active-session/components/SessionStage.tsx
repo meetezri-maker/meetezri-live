@@ -112,6 +112,7 @@ export const SessionStage = memo(function SessionStage({
               rawAvatarLabel={companionAvatarLabel}
               activeAvatarId={resolvedAvatarKey ?? companionFixedViewportConfig?.avatarId ?? companionCanonicalId}
               modelUrl={companionModelUrl}
+              portraitUrl={companionPortraitUrl}
               viewTuning={companionViewTuning}
               fixedViewportConfig={companionFixedViewportConfig}
               useRfv2Morphs={sessionUsesRfv2Morphs}

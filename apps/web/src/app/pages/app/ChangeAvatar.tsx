@@ -22,8 +22,9 @@ import {
   companionRoundPortraitImgClass,
   tryResolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
-import { findLobbyAvatar, isPlaceholderAvatarName } from "@/lib/avatar/lobbyAvatars";
+import { companionMetaLine, findLobbyAvatar, isPlaceholderAvatarName } from "@/lib/avatar/lobbyAvatars";
 import { isCompanionComingSoon } from "@/lib/avatar/companionAvailability";
+import { resolveCompanionVoiceGender } from "@/lib/ezri/voiceForCompanion";
 import { companionDisplayName } from "@meetezri/shared";
 import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -134,7 +135,7 @@ function fallbackAiAvatarsFromDefaults(): AIAvatar[] {
     imageUrl: companionCardImageUrl(c.portraitPng),
     voiceType: c.voice_type,
     accentType: c.accent_type,
-    rating: c.rating,
+    rating: c.rating ?? 0,
     totalUsers: 0,
   }));
 }
@@ -376,7 +377,12 @@ export function ChangeAvatar() {
   const playVoicePreview = useCallback(
     async (avatar: AIAvatar) => {
       stopVoicePreview();
-      const demoFile = voiceDemoForGender(avatar.gender);
+      // `gender` decides, as before, whenever the row has one. A companion with
+      // none recorded (Bianca, Damian, Sasha) previews its approved voice
+      // CATEGORY instead of defaulting to the female clip.
+      const demoFile = voiceDemoForGender(
+        avatar.gender.trim() || (resolveCompanionVoiceGender(avatar.name) ?? ""),
+      );
       const base = import.meta.env.BASE_URL.endsWith("/")
         ? import.meta.env.BASE_URL
         : `${import.meta.env.BASE_URL}/`;
@@ -521,10 +527,14 @@ export function ChangeAvatar() {
                       />
                       <div className="min-w-0">
                         <h2 className={changeAvatarHeroName}>{companionDisplayName(currentAvatar.name)}</h2>
-                        <p className={changeAvatarHeroMeta}>
-                          {currentAvatar.gender} • {currentAvatar.ageRange} years
-                        </p>
-                        <p className={changeAvatarHeroDesc}>{currentAvatar.description}</p>
+                        {companionMetaLine(currentAvatar.gender, currentAvatar.ageRange) ? (
+                          <p className={changeAvatarHeroMeta}>
+                            {companionMetaLine(currentAvatar.gender, currentAvatar.ageRange)}
+                          </p>
+                        ) : null}
+                        {currentAvatar.description ? (
+                          <p className={changeAvatarHeroDesc}>{currentAvatar.description}</p>
+                        ) : null}
                         {currentAvatar.specialty[0] ? (
                           <div className="mt-3">
                             <span className={changeAvatarTagPill}>{currentAvatar.specialty[0]}</span>
@@ -535,10 +545,12 @@ export function ChangeAvatar() {
                             <Users className="h-3.5 w-3.5" aria-hidden />
                             {currentAvatar.totalUsers.toLocaleString()} users
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <Volume2 className="h-3.5 w-3.5" aria-hidden />
-                            {currentAvatar.voiceType}
-                          </span>
+                          {currentAvatar.voiceType ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                              {currentAvatar.voiceType}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -629,9 +641,11 @@ export function ChangeAvatar() {
                           />
                           <div className="min-w-0 flex-1">
                             <h3 className={changeAvatarCompanionName}>{companionDisplayName(avatar.name)}</h3>
-                            <p className={changeAvatarCompanionMuted}>
-                              {avatar.gender} • {avatar.ageRange} years
-                            </p>
+                            {companionMetaLine(avatar.gender, avatar.ageRange) ? (
+                              <p className={changeAvatarCompanionMuted}>
+                                {companionMetaLine(avatar.gender, avatar.ageRange)}
+                              </p>
+                            ) : null}
                             <motion.div className={cn(changeAvatarCompanionMuted, "mt-2 flex flex-wrap items-center gap-3 text-xs")}>
                               <span className="inline-flex items-center gap-1">
                                 <Users className="h-3.5 w-3.5" aria-hidden />
@@ -641,10 +655,12 @@ export function ChangeAvatar() {
                           </div>
                         </div>
 
-                        <div className="mt-4">
-                          <p className={changeAvatarCompanionLabel}>Personality</p>
-                          <p className={changeAvatarCompanionBody}>{avatar.personality}</p>
-                        </div>
+                        {avatar.personality ? (
+                          <div className="mt-4">
+                            <p className={changeAvatarCompanionLabel}>Personality</p>
+                            <p className={changeAvatarCompanionBody}>{avatar.personality}</p>
+                          </div>
+                        ) : null}
 
                         {avatar.specialty.length > 0 ? (
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -656,20 +672,26 @@ export function ChangeAvatar() {
                           </div>
                         ) : null}
 
-                        <p className={cn(changeAvatarCompanionBody, "mt-3 leading-relaxed")}>
-                          {avatar.description}
-                        </p>
+                        {avatar.description ? (
+                          <p className={cn(changeAvatarCompanionBody, "mt-3 leading-relaxed")}>
+                            {avatar.description}
+                          </p>
+                        ) : null}
 
-                        <div className={changeAvatarCompanionDivider}>
-                          <div className={cn(changeAvatarCompanionMuted, "flex flex-wrap items-center gap-3 text-xs")}>
-                            <span className="inline-flex items-center gap-1">
-                              <Volume2 className="h-3 w-3" aria-hidden />
-                              {avatar.voiceType}
-                            </span>
-                            <span aria-hidden>•</span>
-                            <span>{avatar.accentType}</span>
+                        {avatar.voiceType || avatar.accentType ? (
+                          <div className={changeAvatarCompanionDivider}>
+                            <div className={cn(changeAvatarCompanionMuted, "flex flex-wrap items-center gap-3 text-xs")}>
+                              {avatar.voiceType ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Volume2 className="h-3 w-3" aria-hidden />
+                                  {avatar.voiceType}
+                                </span>
+                              ) : null}
+                              {avatar.voiceType && avatar.accentType ? <span aria-hidden>•</span> : null}
+                              {avatar.accentType ? <span>{avatar.accentType}</span> : null}
+                            </div>
                           </div>
-                        </div>
+                        ) : null}
                       </motion.div>
                     </motion.button>
                   );

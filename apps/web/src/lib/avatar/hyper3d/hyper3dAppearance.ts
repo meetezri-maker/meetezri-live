@@ -15,6 +15,23 @@ import {
   normaliseTextureColorSpaces,
 } from "./engine/render/pipeline/colorPipeline";
 
+/**
+ * The accepted material tuning with its hair branch removed: no hair material
+ * name (so `applyMaterialTuning` restores the authored colour and metalness)
+ * and no envMapIntensity entry for it (so the authored value is kept).
+ */
+const withoutHairTuning = (
+  materials: typeof HYPER3D_F228_APPEARANCE.materials,
+): typeof HYPER3D_F228_APPEARANCE.materials => ({
+  ...materials,
+  hairMaterialName: "",
+  envMapIntensityByMaterial: Object.fromEntries(
+    Object.entries(materials.envMapIntensityByMaterial).filter(
+      ([name]) => name !== materials.hairMaterialName,
+    ),
+  ),
+});
+
 export type Hyper3dAppearanceHandle = {
   lights: THREE.Light[];
   environmentTarget: THREE.WebGLCubeRenderTarget | null;
@@ -77,19 +94,39 @@ const createAcceptedEnvironment = (
   return { target, texture: target.texture };
 };
 
+export interface Hyper3dAppearanceOptions {
+  /**
+   * Leave the hair exactly as the GLB authored it. Skips the hair branch of
+   * `applyMaterialTuning` (base colour, metalness, roughness, envMapIntensity),
+   * `applyHairAlpha` and `applyHairMap` — on apply AND on dispose. Set from the
+   * asset's `hyper3dMaterials.hairAppearance`; absent or false is the accepted
+   * shared hair correction, unchanged.
+   */
+  preserveAuthoredHair?: boolean;
+}
+
 export const applyAcceptedHyper3dAppearance = (
   scene: THREE.Object3D,
   hostScene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
+  options: Hyper3dAppearanceOptions = {},
 ): Hyper3dAppearanceHandle => {
   const profile = HYPER3D_F228_APPEARANCE;
   const previousBackground = hostScene.background;
   const authored = new Map<string, AuthoredMaterialSnapshot>();
   const eyes = new Map<string, EyeMaterialPair>();
-  applyMaterialTuning(scene, profile.materials, authored, eyes);
+  const tuneHair = !options.preserveAuthoredHair;
+  applyMaterialTuning(
+    scene,
+    tuneHair ? profile.materials : withoutHairTuning(profile.materials),
+    authored,
+    eyes,
+  );
   normaliseTextureColorSpaces(scene);
-  applyHairAlpha(scene, FEMALE_229_HAIR_MATERIAL_NAMES, hairAlphaMode("corrected"));
-  applyHairMap(scene, FEMALE_229_HAIR_MATERIAL_NAMES, "dense");
+  if (tuneHair) {
+    applyHairAlpha(scene, FEMALE_229_HAIR_MATERIAL_NAMES, hairAlphaMode("corrected"));
+    applyHairMap(scene, FEMALE_229_HAIR_MATERIAL_NAMES, "dense");
+  }
 
   const lighting = profile.lighting;
   const ambient = new THREE.AmbientLight("#ffffff", lighting.ambientIntensity);
@@ -134,8 +171,10 @@ export const applyAcceptedHyper3dAppearance = (
       if (hostScene.environment === environmentTarget?.texture) hostScene.environment = null;
       if (hostScene.background === null) hostScene.background = previousBackground;
       environmentTarget?.dispose();
-      applyHairMap(scene, FEMALE_229_HAIR_MATERIAL_NAMES, "authored");
-      applyHairAlpha(scene, FEMALE_229_HAIR_MATERIAL_NAMES, hairAlphaMode("current"));
+      if (tuneHair) {
+        applyHairMap(scene, FEMALE_229_HAIR_MATERIAL_NAMES, "authored");
+        applyHairAlpha(scene, FEMALE_229_HAIR_MATERIAL_NAMES, hairAlphaMode("current"));
+      }
       for (const [meshUuid, pair] of eyes) {
         const eyeMesh = scene.getObjectByProperty("uuid", meshUuid) as THREE.Mesh | undefined;
         if (eyeMesh) eyeMesh.material = pair.authored;

@@ -68,6 +68,12 @@ describe("resolveEzriAvatarName", () => {
     ["Alex Rivera", "Frankie"],
     ["jordan", "Andre"],
     ["Jordan Taylor", "Andre"],
+    ["Bianca", "Bianca"],
+    ["bianca", "Bianca"],
+    ["Damian", "Damian"],
+    ["damian", "Damian"],
+    ["Sasha", "Sasha"],
+    ["sasha", "Sasha"],
   ])("%s -> %s", (stored, display) => {
     expect(resolveEzriAvatarName(stored)).toBe(display);
   });
@@ -90,6 +96,9 @@ describe("WebSocket avatar_name query parameter", () => {
     ["Maya Chen", "Tessa"],
     ["Alex", "Frankie"],
     ["Jordan Taylor", "Andre"],
+    ["Bianca", "Bianca"],
+    ["Damian", "Damian"],
+    ["Sasha", "Sasha"],
   ])("%s session connects with avatar_name=%s", (stored, display) => {
     connectWith(resolveEzriAvatarName(stored));
     expect(openSockets).toHaveLength(1);
@@ -129,6 +138,37 @@ describe("WebSocket avatar_name query parameter", () => {
 });
 
 describe("reconnection", () => {
+  it.each([
+    ["Bianca", "marin"],
+    ["Damian", "cedar"],
+    ["Sasha", "nova"],
+  ])("a %s session reconnects with the same avatar_name and voice=%s", (stored, voice) => {
+    vi.useFakeTimers();
+    const client = new EzriRealtimeClient();
+    client.connect({
+      wsBase: "wss://example.invalid/ws",
+      userid: "user-1",
+      sessionId: "session-1",
+      brainProvider: "brain",
+      ttsProvider: "tts",
+      sttProvider: "stt",
+      voice,
+      avatar_name: resolveEzriAvatarName(stored),
+    });
+
+    const first = openSockets[0];
+    first.readyState = StubSocket.OPEN;
+    first.onopen?.();
+    first.onclose?.({ code: 1006, reason: "network", wasClean: false });
+    vi.advanceTimersByTime(60_000);
+
+    expect(openSockets.length).toBeGreaterThan(1);
+    for (const socket of openSockets) {
+      expect(params(socket.url).get("avatar_name")).toBe(stored);
+      expect(params(socket.url).get("voice")).toBe(voice);
+    }
+  });
+
   it("reuses avatar_name, session and voice on a reconnect", () => {
     vi.useFakeTimers();
     connectWith(resolveEzriAvatarName("Jordan Taylor"));
