@@ -1,7 +1,12 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { supabaseAdmin } from '../../config/supabase';
-import { OnboardingInput, UpdateProfileInput } from './user.schema';
+import {
+  OnboardingInput,
+  UpdateProfileInput,
+  isDobShapedSignupAge,
+  isEligibleSignupDob,
+} from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing';
 import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
@@ -789,6 +794,53 @@ export async function getFullNameFromAuthMeta(authUserId: string): Promise<strin
   }
 }
 
+export const INVALID_SIGNUP_DOB_CODE = 'INVALID_SIGNUP_DOB';
+
+/**
+ * The date of birth entered at email signup, read from the server-side auth row.
+ *
+ * Returns null when no DOB was supplied (absent metadata, a legacy numeric age, Google), so
+ * those accounts keep their existing behavior. Throws a 400 when a DOB was supplied but is
+ * malformed, impossible, in the future, or under 18 — it is never silently dropped. This
+ * validates app profile persistence only; it does not stop direct Supabase account creation.
+ */
+export async function getSignupDobFromAuthMeta(authUserId: string): Promise<string | null> {
+  const authUser = await prisma.users.findUnique({
+    where: { id: authUserId },
+    select: { raw_user_meta_data: true },
+  });
+  const meta = authUser?.raw_user_meta_data as Record<string, unknown> | null | undefined;
+  const raw = meta && typeof meta === 'object' ? meta.age : undefined;
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (!value || !isDobShapedSignupAge(value)) return null;
+  if (isEligibleSignupDob(value)) return value;
+
+  const error = new Error(
+    'The date of birth entered at signup is not valid. You must be at least 18 years old.'
+  ) as Error & { statusCode: number; code: string };
+  error.statusCode = 400;
+  error.code = INVALID_SIGNUP_DOB_CODE;
+  throw error;
+}
+
+export function isInvalidSignupDobError(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === INVALID_SIGNUP_DOB_CODE;
+}
+
+/**
+ * Stores a signup DOB on a profile whose `age` is still NULL or empty. One conditional UPDATE,
+ * so a stored numeric age or DOB is never replaced and repeating it is a no-op.
+ */
+export async function fillEmptyProfileAge(userId: string, isoDob: string): Promise<boolean> {
+  const { count } = await prisma.profiles.updateMany({
+    where: { id: userId, OR: [{ age: null }, { age: '' }] },
+    data: { age: isoDob },
+  });
+  if (count > 0) invalidateUserProfileCache(userId);
+  return count > 0;
+}
+
 function isEmailLocalPartDisplayName(
   fullName: string | null | undefined,
   email: string
@@ -870,6 +922,8 @@ export async function createProfile(
   if (!resolvedSignupType) {
     console.warn('[signup_type] creating profile without resolvable intent', { userId });
   }
+  // Create-only: an existing row's age is never touched here.
+  const signupDob = await getSignupDobFromAuthMeta(userId);
   let profile: any;
   try {
     profile = await prisma.profiles.upsert({
@@ -885,6 +939,7 @@ export async function createProfile(
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
         ...(signupSource != null ? { signup_source: signupSource } : {}),
+        ...(signupDob ? { age: signupDob } : {}),
       },
       update: {
         email,
@@ -906,6 +961,7 @@ export async function createProfile(
         role: 'user',
         credits: 30,
         credits_seconds: 30 * 60,
+        ...(signupDob ? { age: signupDob } : {}),
       },
       update: {
         email,
@@ -930,6 +986,8 @@ export async function createProfileForPaidSignup(
   signupSource: SignupSource = 'app'
 ) {
   const resolvedSignupType = normalizeSignupType(signupType) ?? 'plan';
+  // Create-only: an existing row's age is never touched here.
+  const signupDob = await getSignupDobFromAuthMeta(userId);
   try {
     return await prisma.profiles.upsert({
       where: { id: userId },
@@ -944,6 +1002,7 @@ export async function createProfileForPaidSignup(
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
         signup_source: signupSource,
+        ...(signupDob ? { age: signupDob } : {}),
       },
       update: {
         email,
@@ -965,6 +1024,7 @@ export async function createProfileForPaidSignup(
         role: 'user',
         credits: 0,
         credits_seconds: 0,
+        ...(signupDob ? { age: signupDob } : {}),
       },
       update: {
         email,

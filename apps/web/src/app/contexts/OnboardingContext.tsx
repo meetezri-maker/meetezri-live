@@ -12,6 +12,7 @@ import {
   resolveCompanionForProfileSave,
   resolveEnvironmentForProfileSave,
 } from '@/lib/avatar/companionAvailability';
+import { preferStoredDob } from '@/lib/profileAge';
 
 interface OnboardingData {
   storageVersion?: number;
@@ -180,7 +181,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         role: finalData.role,
         pronouns: finalData.pronouns,
         ...(finalData.phone?.trim() ? { phone: finalData.phone.trim() } : {}),
-        age: finalData.age,
+        // A saved DOB is never replaced by a stale numeric age from local onboarding data.
+        age: preferStoredDob(finalData.age, (profile as { age?: string } | null)?.age),
         timezone: finalData.timezone,
         current_mood: finalData.currentMood,
         selected_goals: finalData.selectedGoals,

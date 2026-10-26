@@ -1394,15 +1394,51 @@ function subscriptionSomePlan(planType: string): Prisma.subscriptionsWhereInput 
   };
 }
 
+function clampAgeRange(minAge: number, maxAge: number): { lo: number; hi: number } {
+  return {
+    lo: Math.max(13, Math.min(minAge, maxAge)),
+    hi: Math.min(120, Math.max(minAge, maxAge)),
+  };
+}
+
 /** `profiles.age` is stored as a string (e.g. "24"); expand numeric ranges for Prisma `in` filters. */
 function expandNumericAgeStrings(minAge: number, maxAge: number): string[] {
-  const lo = Math.max(13, Math.min(minAge, maxAge));
-  const hi = Math.min(120, Math.max(minAge, maxAge));
+  const { lo, hi } = clampAgeRange(minAge, maxAge);
   const out: string[] = [];
   for (let n = lo; n <= hi; n++) {
     out.push(String(n));
   }
   return out;
+}
+
+/** Latest birth date (`YYYY-MM-DD`) that is `years` old today, on the server-local calendar like `ageFromIsoDob`. */
+export function dobCutoffForAge(years: number, today: Date = new Date()): string {
+  const y = String(today.getFullYear() - years).padStart(4, '0');
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * `profiles.age` may also hold an ISO date of birth. Fixed-width ISO dates order as strings, so
+ * completed age in [minYears, maxYears] stays a DB-side range; requiring "-" keeps numeric ages out.
+ */
+function isoDobAgeRangeWhere(minYears: number, maxYears: number): Prisma.profilesWhereInput {
+  return {
+    AND: [
+      { age: { contains: '-' } },
+      { age: { lte: dobCutoffForAge(minYears) } },
+      { age: { gt: dobCutoffForAge(maxYears + 1) } },
+    ],
+  };
+}
+
+/** Numeric ages exactly as before, plus ISO DOBs whose completed age falls in the same bounds. */
+function ageRangeWhere(minAge: number, maxAge: number): Prisma.profilesWhereInput {
+  const { lo, hi } = clampAgeRange(minAge, maxAge);
+  return {
+    OR: [{ age: { in: expandNumericAgeStrings(minAge, maxAge) } }, isoDobAgeRangeWhere(lo, hi)],
+  };
 }
 
 function extractSegmentRules(criteria: unknown): SegmentRule[] {
@@ -1514,22 +1550,22 @@ function buildProfileWhereFromRules(rules: SegmentRule[]): Prisma.profilesWhereI
     } else if (r.type === 'age' && r.operator === 'equals') {
       const n = parseInt(v, 10);
       if (!Number.isNaN(n)) {
-        parts.push({ age: String(n) });
+        parts.push({ OR: [{ age: String(n) }, isoDobAgeRangeWhere(n, n)] });
       }
     } else if (r.type === 'age' && r.operator === 'gte') {
       const n = parseInt(v, 10);
       if (!Number.isNaN(n)) {
-        parts.push({ age: { in: expandNumericAgeStrings(n, 120) } });
+        parts.push(ageRangeWhere(n, 120));
       }
     } else if (r.type === 'age' && r.operator === 'lte') {
       const n = parseInt(v, 10);
       if (!Number.isNaN(n)) {
-        parts.push({ age: { in: expandNumericAgeStrings(13, n) } });
+        parts.push(ageRangeWhere(13, n));
       }
     } else if (r.type === 'age' && r.operator === 'between') {
       const [a, b] = v.split(',').map((x) => parseInt(x.trim(), 10));
       if (!Number.isNaN(a) && !Number.isNaN(b)) {
-        parts.push({ age: { in: expandNumericAgeStrings(a, b) } });
+        parts.push(ageRangeWhere(a, b));
       }
     }
   }

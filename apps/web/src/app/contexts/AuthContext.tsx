@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { api } from '@/lib/api';
+import { api, isApiError } from '@/lib/api';
 import { toast } from 'sonner';
 import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
 import { isSupabaseSessionExpiredLocally } from '@/lib/jwtUtils';
@@ -232,6 +232,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 return newProfile;
               } catch (initError) {
                 console.error('Failed to initialize profile:', initError);
+                // A rejected signup date of birth is a validation failure, not a missing profile:
+                // show the server's message. The `break` below already stops any retry.
+                if (isApiError(initError) && initError.code === 'INVALID_SIGNUP_DOB') {
+                  toast.error(initError.message, { id: 'invalid-signup-dob' });
+                }
                 break;
               }
             }

@@ -24,6 +24,34 @@ function ageFromIsoDob(val: string): number | null {
 
 const MIN_ACCOUNT_AGE_YEARS = 18;
 
+/** `YYYY-MM-DD` naming a real calendar day. `Date` rolls `2001-02-30` over to March, so check the parts. */
+export function isStrictIsoDob(val: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val.trim());
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return false;
+  const lastDay = new Date(0);
+  lastDay.setUTCFullYear(year, month, 0);
+  return day <= lastDay.getUTCDate();
+}
+
+/** Signup DOB rule: a real calendar date meeting the existing 18+ rule (`ageFromIsoDob`). */
+export function isEligibleSignupDob(val: string): boolean {
+  if (!isStrictIsoDob(val)) return false;
+  const years = ageFromIsoDob(val);
+  return years !== null && years >= MIN_ACCOUNT_AGE_YEARS;
+}
+
+/**
+ * Signup's `age` carries a date of birth when it has a date separator. Plain numbers are the
+ * legacy numeric age, which keeps its existing rule and is never read as a date.
+ */
+export function isDobShapedSignupAge(val: string): boolean {
+  return /[-/]/.test(val.trim());
+}
+
 const ageOrIsoDobSchema = z
   .string()
   .refine((val) => {
@@ -213,7 +241,10 @@ export const signupSchema = z.object({
   lastName: z.string().min(1),
   age: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? undefined : String(val)),
-    ageOrIsoDobSchema
+    ageOrIsoDobSchema.refine(
+      (val) => !isDobShapedSignupAge(val) || isEligibleSignupDob(val),
+      `Enter a valid date of birth. You must be at least ${MIN_ACCOUNT_AGE_YEARS} years old.`
+    )
   ),
   stripe_session_id: z.string().optional(),
 });

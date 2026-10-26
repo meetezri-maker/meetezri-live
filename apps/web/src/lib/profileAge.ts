@@ -60,6 +60,35 @@ export function isIsoDobString(value: string): boolean {
   return ISO_DOB.test(value.trim());
 }
 
+/** `YYYY-MM-DD` naming a real calendar day (rejects e.g. 2001-02-30). */
+export function isRealIsoDob(value: string): boolean {
+  const trimmed = value?.trim() ?? "";
+  if (!ISO_DOB.test(trimmed)) return false;
+  const birth = parseISO(trimmed);
+  return isValid(birth) && format(birth, "yyyy-MM-dd") === trimmed;
+}
+
+/** Required signup DOB: a real calendar date meeting the 18+ rule. */
+export function isEligibleAccountDob(value: string): boolean {
+  if (!isRealIsoDob(value)) return false;
+  const years = birthIsoToAgeYears(value);
+  return years !== undefined && years >= MIN_ACCOUNT_AGE_YEARS;
+}
+
+/**
+ * Onboarding age value to keep: a stored ISO DOB wins over a non-DOB candidate (e.g. a stale
+ * numeric age from local onboarding data), so the birth date is never replaced by a number.
+ */
+export function preferStoredDob(
+  candidate: string | null | undefined,
+  stored: string | null | undefined
+): string {
+  const next = (candidate ?? "").trim();
+  if (isIsoDobString(next)) return next;
+  const storedDob = profileAgeStorageToDateInput(stored);
+  return storedDob || next;
+}
+
 /** True when ISO DOB meets minimum age; empty string is allowed. */
 export function isIsoDobMeetingMinAge(
   iso: string,

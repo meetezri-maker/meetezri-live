@@ -13,7 +13,6 @@ import {
   Users,
   Mail,
   User,
-  Calendar,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -48,15 +47,21 @@ import {
 } from "../components/ui/form";
 import { cn } from "@/lib/utils";
 import { PublicNav } from "../components/PublicNav";
+import { SolaceDateOfBirthPicker } from "@/app/solace";
+import { isEligibleAccountDob, MIN_ACCOUNT_AGE_YEARS } from "@/lib/profileAge";
 
 const signupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  age: z.string().refine((val) => {
-    const num = parseInt(val);
-    return !isNaN(num) && num >= 18;
-  }, "You must be 18+ to create an account"),
+  // Date of birth (YYYY-MM-DD), sent under the existing `age` key.
+  age: z
+    .string()
+    .min(1, "Date of birth is required")
+    .refine(
+      isEligibleAccountDob,
+      `Enter a valid date of birth. You must be at least ${MIN_ACCOUNT_AGE_YEARS} to create an account.`,
+    ),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -714,24 +719,21 @@ export function Signup() {
                           <FormField
                             control={form.control}
                             name="age"
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
-                                <FormLabel className={trialGlassLabel}>Age</FormLabel>
+                                <FormLabel className={trialGlassLabel}>Date of birth</FormLabel>
                                 <FormControl>
-                                  <div className="relative">
-                                    <Calendar
-                                      className="pointer-events-none absolute left-3.5 top-1/2 z-[1] h-[18px] w-[18px] -translate-y-1/2 text-violet-200/42"
-                                      aria-hidden
-                                    />
-                                    <Input
-                                      type="number"
-                                      min="18"
-                                      placeholder="18"
-                                      autoComplete="off"
-                                      className={cn(glassInput, "pl-11")}
-                                      {...field}
-                                    />
-                                  </div>
+                                  <SolaceDateOfBirthPicker
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    minAgeYears={MIN_ACCOUNT_AGE_YEARS}
+                                    externalError={fieldState.error?.message}
+                                    showLabelIcon={false}
+                                    showAgeHint
+                                    placeholder="MM/DD/YYYY"
+                                    triggerClassName={cn(glassInput, "pl-3.5")}
+                                    className="w-full"
+                                  />
                                 </FormControl>
                                 <FormMessage className="text-[#fda4af]" />
                               </FormItem>

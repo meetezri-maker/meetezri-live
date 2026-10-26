@@ -9,7 +9,7 @@ import {
   Sparkles,
   Shield,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -38,7 +38,14 @@ import {
 import { cn } from "@/lib/utils";
 import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 import { ONBOARDING_PROFILE_SETUP_BG } from "@/lib/solace/referenceImagery";
-import { SolaceSelect } from "@/app/solace";
+import { SolaceDateOfBirthPicker, SolaceSelect } from "@/app/solace";
+import {
+  isEligibleAccountDob,
+  isIsoDobString,
+  MIN_ACCOUNT_AGE_YEARS,
+  preferStoredDob,
+  profileAgeStorageToDateInput,
+} from "@/lib/profileAge";
 
 const PROFILE_SETUP_BG = ONBOARDING_PROFILE_SETUP_BG;
 const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
@@ -65,6 +72,8 @@ const profileSetupSchema = z.object({
       }),
   ),
   age: z.string().refine((val) => {
+    // A date of birth is checked as a date; its birth year is never read as an age.
+    if (isIsoDobString(val)) return isEligibleAccountDob(val);
     const num = parseInt(val);
     return !isNaN(num) && num >= 18;
   }, "You must be 18+ to use this app"),
@@ -268,6 +277,11 @@ export function OnboardingProfileSetup() {
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf("timeZone"));
+  // A DOB already saved on the profile (e.g. from signup). It outranks a stale numeric age in
+  // local onboarding data, and is only applied while the user has not edited the field.
+  const storedDob = profileAgeStorageToDateInput((profile as { age?: string } | null)?.age);
+  const ageEditedRef = useRef(false);
+  const numericAgeEditedRef = useRef(false);
 
   const form = useForm<ProfileSetupValues>({
     resolver: zodResolver(profileSetupSchema as any),
@@ -279,7 +293,7 @@ export function OnboardingProfileSetup() {
       phone: normalizeStoredPhoneForInput(
         data.phone || (profile as { phone?: string } | null)?.phone || "",
       ),
-      age: data.age || "",
+      age: preferStoredDob(data.age, storedDob),
       timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   });
@@ -291,13 +305,24 @@ export function OnboardingProfileSetup() {
     if (data.phone !== undefined) {
       form.setValue("phone", normalizeStoredPhoneForInput(data.phone));
     }
-    if (data.age) form.setValue("age", data.age);
     if (data.timezone) form.setValue("timezone", data.timezone);
     else {
       const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
       form.setValue("timezone", detected);
     }
   }, [data, form]);
+
+  // The profile can arrive after mount; fill age then too, but never over the user's own edit.
+  useEffect(() => {
+    if (ageEditedRef.current) return;
+    const age = preferStoredDob(data.age, storedDob);
+    if (age) form.setValue("age", age);
+  }, [data.age, storedDob, form]);
+
+  const ageValue = form.watch("age");
+  // A number the user already typed (before a slow profile load) keeps its own field.
+  const showDobPicker =
+    isIsoDobString(ageValue ?? "") || (Boolean(storedDob) && !numericAgeEditedRef.current);
 
   useEffect(() => {
     if (user?.user_metadata) {
@@ -683,22 +708,50 @@ export function OnboardingProfileSetup() {
                   <FormField
                     control={form.control}
                     name="age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className={onboardingLabelClass}>Age *</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="1"
-                            placeholder="18"
-                            className={onboardingInputClass}
-                            {...field}
-                          />
-                        </FormControl>
-                        <p className="text-xs text-violet-200/48">Enter your age</p>
-                        <FormMessage className="text-[13px] text-[#ff8ab8]" />
-                      </FormItem>
-                    )}
+                    render={({ field, fieldState }) =>
+                      showDobPicker ? (
+                        <FormItem>
+                          <FormLabel className={onboardingLabelClass}>Date of birth *</FormLabel>
+                          <FormControl>
+                            <SolaceDateOfBirthPicker
+                              value={field.value ?? ""}
+                              onChange={(iso) => {
+                                ageEditedRef.current = true;
+                                field.onChange(iso);
+                              }}
+                              minAgeYears={MIN_ACCOUNT_AGE_YEARS}
+                              externalError={fieldState.error?.message}
+                              showLabelIcon={false}
+                              showAgeHint
+                              placeholder="MM/DD/YYYY"
+                              triggerClassName={onboardingInputClass}
+                              className="w-full"
+                            />
+                          </FormControl>
+                          <FormMessage className="text-[13px] text-[#ff8ab8]" />
+                        </FormItem>
+                      ) : (
+                        <FormItem>
+                          <FormLabel className={onboardingLabelClass}>Age *</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              placeholder="18"
+                              className={onboardingInputClass}
+                              {...field}
+                              onChange={(event) => {
+                                ageEditedRef.current = true;
+                                numericAgeEditedRef.current = true;
+                                field.onChange(event);
+                              }}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-violet-200/48">Enter your age</p>
+                          <FormMessage className="text-[13px] text-[#ff8ab8]" />
+                        </FormItem>
+                      )
+                    }
                   />
                 </motion.div>
 

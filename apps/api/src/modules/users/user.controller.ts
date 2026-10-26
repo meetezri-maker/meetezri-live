@@ -294,6 +294,16 @@ export async function checkUserExistsHandler(
   return result;
 }
 
+/** Explicit 400 for a supplied-but-invalid signup DOB; the global handler would drop `code`. */
+function sendInvalidSignupDob(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({
+    statusCode: 400,
+    error: 'Bad Request',
+    message: (error as Error).message,
+    code: userService.INVALID_SIGNUP_DOB_CODE,
+  });
+}
+
 export async function signupHandler(
   request: FastifyRequest<{ Body: SignupInput }>,
   reply: FastifyReply
@@ -346,6 +356,7 @@ export async function signupHandler(
         await userService.createProfileForPaidSignup(authUserId, email, fullName);
         await billingService.linkSubscriptionToUser(authUserId, request.body.stripe_session_id);
       } catch (error) {
+        if (userService.isInvalidSignupDobError(error)) return sendInvalidSignupDob(reply, error);
         request.log.error({ error }, 'Failed to attach paid subscription during signup');
       }
     }
@@ -672,6 +683,20 @@ export async function initProfileHandler(
       }
     }
 
+    // A row created without the signup DOB gets it once. Only an empty `age` is filled
+    // (atomically), so a stored numeric age or DOB is never replaced.
+    if (!String(profile.age ?? '').trim()) {
+      try {
+        const signupDob = await userService.getSignupDobFromAuthMeta(user.sub);
+        if (signupDob && (await userService.fillEmptyProfileAge(user.sub, signupDob))) {
+          profile = (await userService.getProfile(user.sub)) ?? profile;
+        }
+      } catch (e) {
+        if (userService.isInvalidSignupDobError(e)) return sendInvalidSignupDob(reply, e);
+        request.log.warn({ e }, 'Failed to backfill age on initProfile');
+      }
+    }
+
     return sanitizeSelfProfileResponse(profile as any);
   }
 
@@ -693,6 +718,7 @@ export async function initProfileHandler(
     request.log.info({ profile }, 'Profile initialized successfully');
     return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {
+    if (userService.isInvalidSignupDobError(error)) return sendInvalidSignupDob(reply, error);
     request.log.error({ error }, 'Failed to initialize profile');
     return reply.code(500).send({ message: 'Failed to initialize profile' });
   }
