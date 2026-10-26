@@ -14,12 +14,14 @@ import {
 } from "./engine/mappings/avatarModelConfig";
 import {
   HYPER3D_ASSET_URLS,
+  HYPER3D_EXPERIMENTAL_ASSET_ID,
   HYPER3D_GLB_URL,
   HYPER3D_LEGACY_GLB_URL,
   isOperatorSelectableHyper3dAsset,
   type Hyper3dAssetId,
 } from "./engine/mappings/avatars/hyper3dAssetSelection";
 import { HYPER3D_EYELASH_TARGET_NAMES } from "./engine/mappings/avatars/hyper3dEyelashBinding";
+import { CORRECTIVE_MORPH } from "./hyper3dCorrectiveMorph";
 import { AvatarController } from "./engine/engine/avatar/AvatarController";
 import { MorphTargetController } from "./engine/engine/avatar/MorphTargetController";
 import { BoneController } from "./engine/engine/avatar/BoneController";
@@ -267,8 +269,10 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     let scene: THREE.Group | null = null;
     let assetChoice: Hyper3dAssetChoice = "production";
     let assetUrl = assetId ? HYPER3D_ASSET_URLS[assetId] : HYPER3D_GLB_URL;
+    // The DEV experimental asset gets exactly one attempt, its own file: falling
+    // back to female_2291 would hide a failed V2 load behind a working face.
     const attempts: Array<{ url: string; choice: Hyper3dAssetChoice }> =
-      assetId && !isOperatorSelectableHyper3dAsset(assetId)
+      assetId && (!isOperatorSelectableHyper3dAsset(assetId) || assetId === HYPER3D_EXPERIMENTAL_ASSET_ID)
         ? [{ url: HYPER3D_ASSET_URLS[assetId], choice: "production" }]
         : [
             { url: HYPER3D_GLB_URL, choice: "production" },
@@ -449,6 +453,15 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     const missingFaceMeshes = CONFIG.meshNames.face.filter((name) => !findMeshByName(scene!, name));
     const teethMesh = findMeshByName(scene, CONFIG.meshNames.teeth[0] ?? "");
     const morphNames = new Set(morph.names());
+    /**
+     * THE CORRECTIVE PROFILE FOLLOWS THE FILE THAT LOADED, not the flag that
+     * asked for it: DEV only, the experimental asset id, AND its morph actually
+     * present. A GLB without `mouthLowerDownDeep` can never run the profile.
+     */
+    const correctiveLowerLip =
+      import.meta.env.DEV === true &&
+      assetId === HYPER3D_EXPERIMENTAL_ASSET_ID &&
+      morphNames.has(CORRECTIVE_MORPH);
     const missingMorphs = EXPECTED_MINIFACE_BLENDSHAPES.filter((name) => !morphNames.has(name));
     /**
      * `hairExpected` and `hairMeshes` are resolved further up, before head
@@ -544,6 +557,13 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
     if (!materialReport) fail("material-setup", "face/hair material binding did not resolve");
     recordHyper3dAssetTimeline({ bindingValidatedAtMs: Math.round(globalThis.performance.now()) });
     recordHyper3dPath({ validationPassed: true }, "binding validation passed");
+    if (import.meta.env.DEV === true) {
+      recordHyper3dPath(
+        {},
+        `corrective lower-lip profile ${correctiveLowerLip ? "ON" : "off"} — asset ${assetUrl}, ` +
+          `face morphs ${faceMesh?.morphTargetInfluences?.length ?? 0}, ${CORRECTIVE_MORPH} ${morphNames.has(CORRECTIVE_MORPH) ? "present" : "absent"}`,
+      );
+    }
 
     // ── SCENE, CAMERA, LIGHTING (accepted values) ───────────────────────────
     init.scene.add(scene);
@@ -672,7 +692,16 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
         if (import.meta.env.DEV === true) countHyper3dOrchestratorFrame();
         const orchestratorStartMs = DEV_ENGINE_SPANS ? globalThis.performance.now() : 0;
         const resolved = resolveHyper3dFrame(
-          { config: CONFIG, controller, performance, activePresence, warmthYield, idleShowcase, headSupported: bones.isSupported() },
+          {
+            config: CONFIG,
+            controller,
+            performance,
+            activePresence,
+            warmthYield,
+            idleShowcase,
+            headSupported: bones.isSupported(),
+            correctiveLowerLip,
+          },
           {
             timeSeconds: t,
             deltaSeconds: delta,

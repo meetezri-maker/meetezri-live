@@ -93,26 +93,24 @@ export function computeSupportResponseRate(interactions: ResourceInteraction[]):
   return (engagements / interactions.length) * 100;
 }
 
-export function mergeInteractionSets(
-  server: ResourceInteraction[],
-  local: ResourceInteraction[]
-): ResourceInteraction[] {
-  const seen = new Set<string>();
-  const merged: ResourceInteraction[] = [];
-
-  const add = (ix: ResourceInteraction) => {
-    const key = ix.id.startsWith('interaction_')
-      ? `${ix.resourceId}|${ix.interactionType}|${ix.timestamp}`
-      : ix.id;
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(ix);
-  };
-
-  server.forEach(add);
-  local.forEach(add);
-
-  return merged.sort(
+/**
+ * The dataset Resource Analytics shows and exports.
+ * - Server request succeeded (even with zero rows): server rows only — server-confirmed activity.
+ *   Local rows are never added, because whether a failed or pending write reached the server
+ *   cannot be established from the browser.
+ * - Server request failed: this account's local rows only, as a labelled browser fallback.
+ * The two sources are never combined, so nothing is de-duplicated and repeated clicks on the
+ * same resource stay separate events.
+ */
+export function selectResourceAnalyticsInteractions(params: {
+  serverStatus: 'success' | 'error' | 'pending';
+  server: ResourceInteraction[];
+  local: ResourceInteraction[];
+}): ResourceInteraction[] {
+  const { serverStatus, server, local } = params;
+  if (serverStatus === 'pending') return [];
+  const source = serverStatus === 'success' ? server : local;
+  return [...source].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 }

@@ -26,7 +26,10 @@ import {
   companionHasNoLegacyModel,
   resolveHyper3dCompanionAsset,
 } from "@/lib/avatar/hyper3d/hyper3dCompanionAssets";
-import { hyper3dBackupAssetFor } from "@/lib/avatar/hyper3d/engine/mappings/avatars/hyper3dAssetSelection";
+import {
+  hyper3dBackupAssetFor,
+  hyper3dDevAssetOverride,
+} from "@/lib/avatar/hyper3d/engine/mappings/avatars/hyper3dAssetSelection";
 import { AvatarUnavailableNotice } from "./AvatarUnavailableNotice";
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { AvatarFailureBoundary } from "./AvatarFailureBoundary";
@@ -133,9 +136,9 @@ export function AvatarRuntimeSwitch(props: AvatarRuntimeSwitchProps) {
    * Not a hook — a pure table lookup over props, so it adds nothing to the hook
    * sequence and cannot reorder the effects below.
    */
-  const primaryAssetId = resolveHyper3dCompanionAsset(
-    props.rawAvatarLabel,
-    props.activeAvatarId,
+  // DEV `?hyper3dLowerLipV2=1` only; the identity in production.
+  const primaryAssetId = hyper3dDevAssetOverride(
+    resolveHyper3dCompanionAsset(props.rawAvatarLabel, props.activeAvatarId),
   );
   const backupAssetId = hyper3dBackupAssetFor(primaryAssetId);
   const noLegacyModel = companionHasNoLegacyModel(

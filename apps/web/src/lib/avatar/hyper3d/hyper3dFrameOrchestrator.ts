@@ -85,7 +85,6 @@ import {
   hyper3dArticulationTestAvailable,
   publishHyper3dDeadlineFrame,
 } from "./hyper3dArticulationTest";
-import { hyper3dAssetSelection } from "./engine/mappings/avatars/hyper3dAssetSelection";
 
 /**
  * THE ACCEPTED FRAME SEQUENCE, in one place.
@@ -110,6 +109,12 @@ export type Hyper3dRuntimePieces = {
   warmthYield: Hyper3dWarmthYieldFollower;
   idleShowcase?: Hyper3dIdleShowcaseRuntime;
   headSupported: boolean;
+  /**
+   * STAGE 2 EXPERIMENT. Decided by the engine factory from the GLB that
+   * actually LOADED — DEV, the experimental asset, and `mouthLowerDownDeep`
+   * present — so the corrective profile can never run on a file without it.
+   */
+  correctiveLowerLip?: boolean;
 };
 
 export type Hyper3dFrameInput = {
@@ -329,12 +334,6 @@ export type Hyper3dFrameReview = {
 };
 
 const DEV = import.meta.env.DEV === true;
-/**
- * Resolved ONCE at module load, like the asset selection itself. A mid-session
- * change needs a reload, which is the correct cost for swapping the GLB under a
- * live scene graph.
- */
-const hyper3dActiveAssetIsExperimental = DEV && hyper3dAssetSelection.experimental;
 
 function reviewPose(pose: BlendshapePose): BlendshapePose {
   const selected: BlendshapePose = {};
@@ -405,12 +404,11 @@ export function resolveHyper3dFrame(
      * production frame even in principle.
      */
     /**
-     * STAGE 2 EXPERIMENT. True only when a DEV session selected the
-     * corrective-morph asset — `resolveHyper3dAsset` gates that behind
-     * `import.meta.env.DEV` first, so this is false on every production frame
-     * and the controller then uses the shipped profile.
+     * STAGE 2 EXPERIMENT. True only when the engine actually loaded the
+     * corrective-morph GLB in a DEV build (see `Hyper3dRuntimePieces`), so it is
+     * false on every production frame and the controller uses the shipped profile.
      */
-    correctiveLowerLip: hyper3dActiveAssetIsExperimental,
+    correctiveLowerLip: DEV && pieces.correctiveLowerLip === true,
     mouthDeadlineOverride:
       DEV && hyper3dArticulationTestAvailable ? getHyper3dDeadlineOverride() : null,
   });
@@ -425,13 +423,21 @@ export function resolveHyper3dFrame(
   );
   let pose: BlendshapePose = transformed.pose;
   const articulationReview = captureReview ? reviewPose(pose) : undefined;
+  /**
+   * Whether the controller is articulating on THIS frame, read off the audio
+   * clock's own phoneme lookup rather than the conversation flag. The idle
+   * showcase yields to it below: `isSpeaking` is React state and can read false
+   * while scheduled audio is still audible, and the showcase deletes jawOpen and
+   * the mouth channels when it takes the face.
+   */
+  const controllerSpeechActive =
+    Boolean(frame.debug.currentPhoneme) || (frame.debug.speechEnvelope?.speechActivity ?? 0) > 0.03;
   if (mouthTrace) {
     mouthTrace.timeSeconds = t;
     mouthTrace.deltaSeconds = delta;
     mouthTrace.controllerEvaluated = true;
     mouthTrace.currentPhoneme = frame.debug.currentPhoneme ?? null;
-    mouthTrace.controllerSpeechActive =
-      Boolean(frame.debug.currentPhoneme) || (frame.debug.speechEnvelope?.speechActivity ?? 0) > 0.03;
+    mouthTrace.controllerSpeechActive = controllerSpeechActive;
     traceMouthStage(mouthTrace.preOwnership, pose);
   }
 
@@ -556,7 +562,7 @@ export function resolveHyper3dFrame(
           ? "processing"
           : input.isInterrupted === true
             ? "interrupted"
-            : input.isAudioActive === true
+            : input.isAudioActive === true || controllerSpeechActive
               ? "audio_active"
               : null;
   const showcaseSample = pieces.idleShowcase?.sample({

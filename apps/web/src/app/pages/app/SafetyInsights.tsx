@@ -313,8 +313,8 @@ export function SafetyInsights() {
   );
 
   const localInteractions = useMemo(
-    () => getInteractionsByTimePeriod(periodStart, periodEnd, getResourceInteractions()),
-    [periodStart, periodEnd]
+    () => getInteractionsByTimePeriod(periodStart, periodEnd, getResourceInteractions(userId)),
+    [periodStart, periodEnd, userId]
   );
 
   const resourceInteractions = useMemo(() => {

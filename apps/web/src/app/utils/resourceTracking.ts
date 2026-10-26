@@ -4,6 +4,10 @@
  */
 
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+
+/** Local write state: `synced` rows are on the server, `failed` rows exist only in this browser. */
+export type ResourceInteractionSyncStatus = 'pending' | 'synced' | 'failed';
 
 export interface ResourceInteraction {
   id: string;
@@ -20,6 +24,9 @@ export interface ResourceInteraction {
   sessionId?: string;
   safetyState?: string;
   userId?: string;
+  syncStatus?: ResourceInteractionSyncStatus;
+  /** Server row id once the POST succeeded. */
+  serverId?: string;
 }
 
 export interface ResourceAnalytics {
@@ -36,7 +43,45 @@ export interface ResourceAnalytics {
 
 type InteractionSet = ResourceInteraction[];
 
-const LOCAL_KEY = 'ezri_resource_interactions';
+/**
+ * Per-account local mirror. The legacy unscoped key (`ezri_resource_interactions`) is never read:
+ * its records carry no reliable owner, so they cannot be attributed to whoever is signed in.
+ */
+const LOCAL_KEY_PREFIX = 'ezri_resource_interactions:';
+const ANONYMOUS_BUCKET = 'anonymous';
+const MAX_LOCAL_INTERACTIONS = 500;
+
+/** Fired on `window` when a tracked write settles; `detail.userId` is the account it belongs to. */
+export const RESOURCE_INTERACTION_SETTLED_EVENT = 'ezri:resource-interaction-settled';
+
+function localKeyFor(userId: string | null | undefined): string {
+  return `${LOCAL_KEY_PREFIX}${userId || ANONYMOUS_BUCKET}`;
+}
+
+function readLocal(key: string): ResourceInteraction[] {
+  try {
+    const stored = localStorage.getItem(key);
+    const parsed: unknown = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? (parsed as ResourceInteraction[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(key: string, interactions: ResourceInteraction[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(interactions.slice(0, MAX_LOCAL_INTERACTIONS)));
+  } catch {
+    /* storage full / unavailable — the server copy is still attempted */
+  }
+}
+
+function updateLocal(key: string, id: string, patch: Partial<ResourceInteraction>): void {
+  writeLocal(
+    key,
+    readLocal(key).map((i) => (i.id === id ? { ...i, ...patch } : i))
+  );
+}
 
 /** Map REST rows from `GET /safety-resource-interactions` into client analytics shape (snake_case → camelCase). */
 export function mapServerRowsToInteractions(
@@ -67,6 +112,11 @@ export function mapServerRowsToInteractions(
 
 /**
  * Track a resource interaction (local mirror + persisted to database when authenticated).
+ *
+ * `userId` is the signed-in account at the moment of the interaction (null when signed out).
+ * It is captured here, so a write that completes after an account switch still lands in the
+ * original account's local bucket and is never sent with another account's session.
+ * Returns a promise that settles once the server write has finished (callers may ignore it).
  */
 export function trackResourceInteraction(
   resourceId: string,
@@ -74,8 +124,11 @@ export function trackResourceInteraction(
   resourceType: ResourceInteraction['resourceType'],
   interactionType: ResourceInteraction['interactionType'],
   contextSessionId?: string,
-  safetyState?: string
-): void {
+  safetyState?: string,
+  userId?: string | null
+): Promise<void> {
+  const ownerId = userId || null;
+  const key = localKeyFor(ownerId);
   const interaction: ResourceInteraction = {
     id: `interaction_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
     resourceId,
@@ -85,36 +138,70 @@ export function trackResourceInteraction(
     timestamp: new Date().toISOString(),
     sessionId: contextSessionId,
     safetyState,
-    userId: getCurrentUserId(),
+    userId: ownerId ?? ANONYMOUS_BUCKET,
+    syncStatus: 'pending',
   };
 
-  const stored = localStorage.getItem(LOCAL_KEY);
-  const interactions: ResourceInteraction[] = stored ? JSON.parse(stored) : [];
-  interactions.unshift(interaction);
-  const trimmed = interactions.slice(0, 500);
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(trimmed));
+  writeLocal(key, [interaction, ...readLocal(key)]);
 
-  void api.safetyResourceInteractions
-    .record({
-      resource_id: resourceId,
-      resource_name: resourceName,
-      resource_type: resourceType,
-      interaction_type: interactionType,
-      context_session_id: contextSessionId,
-      safety_state: safetyState,
-    })
-    .catch(() => {
-      /* offline / session edge cases — kept in localStorage */
-    });
+  const settle = (patch: Partial<ResourceInteraction>) => {
+    updateLocal(key, interaction.id, patch);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(RESOURCE_INTERACTION_SETTLED_EVENT, { detail: { userId: ownerId } })
+      );
+    }
+  };
+
+  return (async () => {
+    try {
+      // Signed-out activity stays in this browser only: the endpoint requires a session, and
+      // sending without a pinned token would let a session that appears later claim it.
+      if (!ownerId) {
+        settle({ syncStatus: 'failed' });
+        return;
+      }
+      // Resolve the session once and send with that exact token, so the request is
+      // authenticated as the owner even if another account signs in before it is built.
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!session?.access_token || session.user?.id !== ownerId) {
+        settle({ syncStatus: 'failed' });
+        return;
+      }
+      const created = (await api.safetyResourceInteractions.record(
+        {
+          resource_id: resourceId,
+          resource_name: resourceName,
+          resource_type: resourceType,
+          interaction_type: interactionType,
+          context_session_id: contextSessionId,
+          safety_state: safetyState,
+        },
+        session.access_token
+      )) as { id?: unknown } | null;
+      settle({
+        syncStatus: 'synced',
+        serverId: created && typeof created.id === 'string' ? created.id : undefined,
+      });
+    } catch {
+      /* offline / session edge cases — kept in localStorage as an unsynced event */
+      settle({ syncStatus: 'failed' });
+    }
+  })();
 }
 
-export function getResourceInteractions(): ResourceInteraction[] {
-  const stored = localStorage.getItem(LOCAL_KEY);
-  return stored ? JSON.parse(stored) : [];
+/** Local interactions recorded for this account. Signed-out or unknown callers get none. */
+export function getResourceInteractions(userId: string | null | undefined): ResourceInteraction[] {
+  if (!userId) return [];
+  return readLocal(localKeyFor(userId)).filter((i) => i.userId === userId);
 }
 
-export function getResourceInteractionHistory(resourceId: string): ResourceInteraction[] {
-  return getResourceInteractions().filter((i) => i.resourceId === resourceId);
+export function getResourceInteractionHistory(
+  userId: string | null | undefined,
+  resourceId: string
+): ResourceInteraction[] {
+  return getResourceInteractions(userId).filter((i) => i.resourceId === resourceId);
 }
 
 function engagementInteractions(history: InteractionSet): ResourceInteraction[] {
@@ -151,12 +238,18 @@ function getResourceAnalyticsFromInteractions(
   return analytics;
 }
 
-export function getResourceAnalytics(resourceId: string): ResourceAnalytics {
-  return getResourceAnalyticsFromInteractions(resourceId, getResourceInteractionHistory(resourceId));
+export function getResourceAnalytics(
+  userId: string | null | undefined,
+  resourceId: string
+): ResourceAnalytics {
+  return getResourceAnalyticsFromInteractions(
+    resourceId,
+    getResourceInteractionHistory(userId, resourceId)
+  );
 }
 
 export function getAllResourceAnalytics(
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): Record<string, ResourceAnalytics> {
   const resourceIds = [...new Set(interactions.map((i) => i.resourceId))];
   const analytics: Record<string, ResourceAnalytics> = {};
@@ -169,7 +262,7 @@ export function getAllResourceAnalytics(
 /** Sort by views + engagements (totalClicks is non-view actions: call, text, visit, share, copy). */
 export function getMostUsedResources(
   limit: number = 5,
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): Array<ResourceAnalytics & { rank: number }> {
   const allAnalytics = getAllResourceAnalytics(interactions);
   const sorted = Object.values(allAnalytics)
@@ -186,7 +279,7 @@ export function getMostUsedResources(
 
 export function getResourceEffectivenessScore(
   resourceId: string,
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): number {
   const analytics = getResourceAnalyticsFromInteractions(resourceId, interactions);
   const totalEvents = analytics.totalViews + analytics.totalClicks;
@@ -208,7 +301,7 @@ export function getResourceEffectivenessScore(
 }
 
 export function getInteractionsBySafetyState(
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): Record<string, number> {
   const byState: Record<string, number> = {};
   interactions.forEach((interaction) => {
@@ -220,7 +313,7 @@ export function getInteractionsBySafetyState(
 }
 
 export function getInteractionsByResourceType(
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): Record<string, number> {
   const byType: Record<string, number> = {};
   interactions.forEach((interaction) => {
@@ -232,7 +325,7 @@ export function getInteractionsByResourceType(
 export function getInteractionsByTimePeriod(
   startDate: Date,
   endDate: Date,
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): ResourceInteraction[] {
   return interactions.filter((interaction) => {
     const date = new Date(interaction.timestamp);
@@ -241,7 +334,7 @@ export function getInteractionsByTimePeriod(
 }
 
 export function exportResourceAnalytics(
-  interactions: InteractionSet = getResourceInteractions()
+  interactions: InteractionSet
 ): string {
   const analytics = getAllResourceAnalytics(interactions);
   return JSON.stringify(
@@ -258,25 +351,13 @@ export function exportResourceAnalytics(
   );
 }
 
-export function cleanupOldInteractions(): void {
-  const interactions = getResourceInteractions();
+export function cleanupOldInteractions(userId: string | null | undefined): void {
+  if (!userId) return;
+  const key = localKeyFor(userId);
   const ninetyDaysAgo = new Date();
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  const filtered = interactions.filter((interaction) => new Date(interaction.timestamp) >= ninetyDaysAgo);
+  const filtered = readLocal(key).filter((interaction) => new Date(interaction.timestamp) >= ninetyDaysAgo);
 
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(filtered));
-}
-
-function getCurrentUserId(): string {
-  try {
-    const currentUser = localStorage.getItem('currentUser');
-    if (currentUser) {
-      const user = JSON.parse(currentUser) as { id?: string };
-      return user.id || 'anonymous';
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'anonymous';
+  writeLocal(key, filtered);
 }

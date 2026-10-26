@@ -3,7 +3,7 @@
  * Cinematic wellness analytics sanctuary (real interaction data only).
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -52,6 +52,7 @@ import {
   exportResourceAnalytics,
   mapServerRowsToInteractions,
   getResourceInteractions,
+  RESOURCE_INTERACTION_SETTLED_EVENT,
 } from '@/app/utils/resourceTracking';
 import { getSafetyResources } from '@/app/utils/safetyResources';
 import { useAuth } from '@/app/contexts/AuthContext';
@@ -77,7 +78,7 @@ import {
   getResourceTypeForId,
   getResourceTypeLabel,
   getTopReachOutDays,
-  mergeInteractionSets,
+  selectResourceAnalyticsInteractions,
   sparklineFromBuckets,
   type ChartInterval,
 } from './resource-analytics/resourceAnalyticsUtils';
@@ -233,20 +234,40 @@ export function ResourceAnalyticsPage() {
     [rawRows]
   );
 
+  // Bumped when one of this account's tracked writes settles, so pending local rows are re-read.
+  const [localVersion, setLocalVersion] = useState(0);
+  useEffect(() => {
+    if (!userId) return;
+    const onSettled = (event: Event) => {
+      if ((event as CustomEvent<{ userId: string | null }>).detail?.userId !== userId) return;
+      setLocalVersion((v) => v + 1);
+      void refetch();
+    };
+    window.addEventListener(RESOURCE_INTERACTION_SETTLED_EVENT, onSettled);
+    return () => window.removeEventListener(RESOURCE_INTERACTION_SETTLED_EVENT, onSettled);
+  }, [userId, refetch]);
+
   const localInteractionsFiltered = useMemo(
     () =>
       getInteractionsByTimePeriod(
         periodBounds.start,
         periodBounds.end,
-        getResourceInteractions()
+        getResourceInteractions(userId)
       ),
-    [periodBounds.start, periodBounds.end]
+    // localVersion is a re-read trigger for localStorage, not a value used in the body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [periodBounds.start, periodBounds.end, userId, localVersion]
   );
 
-  const interactions = useMemo(() => {
-    if (!(isSuccess || isError)) return [];
-    return mergeInteractionSets(serverInteractions, localInteractionsFiltered);
-  }, [serverInteractions, localInteractionsFiltered, isSuccess, isError]);
+  const interactions = useMemo(
+    () =>
+      selectResourceAnalyticsInteractions({
+        serverStatus: !userId ? 'pending' : isSuccess ? 'success' : isError ? 'error' : 'pending',
+        server: serverInteractions,
+        local: localInteractionsFiltered,
+      }),
+    [userId, serverInteractions, localInteractionsFiltered, isSuccess, isError]
+  );
 
   const { recentHalfInteractions, priorHalfInteractions } = useMemo(() => {
     const midMs =
@@ -263,14 +284,7 @@ export function ResourceAnalyticsPage() {
     return { recentHalfInteractions: recent, priorHalfInteractions: prior };
   }, [interactions, periodBounds.start, periodBounds.end]);
 
-  const dataSourceNote: 'synced' | 'local_fallback' | 'offline' =
-    serverInteractions.length > 0
-      ? 'synced'
-      : isError
-        ? 'offline'
-        : localInteractionsFiltered.length > 0
-          ? 'local_fallback'
-          : 'synced';
+  const dataSourceNote: 'synced' | 'offline' = isError ? 'offline' : 'synced';
 
   const analytics = useMemo(
     () => getAllResourceAnalytics(interactions),
@@ -575,24 +589,11 @@ export function ResourceAnalyticsPage() {
             {/* Sync / offline notices */}
             {dataSourceNote === 'offline' && interactions.length > 0 ? (
               <div className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100/90">
-                Could not reach the server. Showing activity saved in this browser.{' '}
+                Could not reach the server. Showing activity saved in this browser only, which
+                may be incomplete.{' '}
                 <button type="button" className="font-semibold underline" onClick={() => refetch()}>
                   Retry sync
                 </button>
-              </div>
-            ) : null}
-
-            {dataSourceNote === 'local_fallback' &&
-            interactions.length > 0 &&
-            !isError &&
-            serverInteractions.length === 0 &&
-            isSuccess ? (
-              <div className="rounded-2xl border border-violet-400/18 bg-violet-500/[0.08] px-4 py-3 text-sm text-violet-100/88">
-                Showing browser-logged activity for this period.{' '}
-                <Link className="font-semibold underline" to="/app/emergency-resources">
-                  Emergency resources
-                </Link>{' '}
-                sync to your account when the API is available.
               </div>
             ) : null}
 

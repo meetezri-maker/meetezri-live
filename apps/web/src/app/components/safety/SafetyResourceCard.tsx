@@ -3,13 +3,14 @@
  * Display safety and support resources with interaction tracking
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SafetyResource } from '@/app/types/safety';
 import { Phone, MessageCircle, AlertCircle, ExternalLink, Users, Copy, Check, Share2 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { formatPhoneNumber } from '@/app/utils/safetyResources';
 import { trackResourceInteraction } from '@/app/utils/resourceTracking';
+import { useAuth } from '@/app/contexts/AuthContext';
 import { motion } from 'motion/react';
 
 interface SafetyResourceCardProps {
@@ -27,18 +28,29 @@ export function SafetyResourceCard({
   safetyState,
 }: SafetyResourceCardProps) {
   const [copied, setCopied] = useState(false);
+  const { user, isLoading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
+  // The stored session is still being read: the viewer is not known yet (not "signed out").
+  const authResolved = !(authLoading && !user);
+  const viewedKeyRef = useRef<string | null>(null);
 
-  // Track view on mount
+  // Track view on mount — once per resource display, attributed to the account known once auth
+  // has resolved. A later account change on the same display does not log another view.
   useEffect(() => {
+    if (!authResolved) return;
+    const viewKey = [resource.id, resource.name, resource.type, contextSessionId ?? '', safetyState ?? ''].join('|');
+    if (viewedKeyRef.current === viewKey) return;
+    viewedKeyRef.current = viewKey;
     trackResourceInteraction(
       resource.id,
       resource.name,
       resource.type,
       'view',
       contextSessionId,
-      safetyState
+      safetyState,
+      userId
     );
-  }, [resource.id, resource.name, resource.type, contextSessionId, safetyState]);
+  }, [authResolved, userId, resource.id, resource.name, resource.type, contextSessionId, safetyState]);
 
   const handleCall = () => {
     trackResourceInteraction(
@@ -47,7 +59,8 @@ export function SafetyResourceCard({
       resource.type,
       'call',
       contextSessionId,
-      safetyState
+      safetyState,
+      userId
     );
     window.location.href = `tel:${resource.phone}`;
   };
@@ -59,7 +72,8 @@ export function SafetyResourceCard({
       resource.type,
       'text',
       contextSessionId,
-      safetyState
+      safetyState,
+      userId
     );
     window.location.href = `sms:${resource.phone}`;
   };
@@ -71,7 +85,8 @@ export function SafetyResourceCard({
       resource.type,
       'visit',
       contextSessionId,
-      safetyState
+      safetyState,
+      userId
     );
     window.open(resource.url, '_blank', 'noopener,noreferrer');
   };
@@ -85,7 +100,8 @@ export function SafetyResourceCard({
         resource.type,
         'copy',
         contextSessionId,
-        safetyState
+        safetyState,
+        userId
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -101,7 +117,8 @@ export function SafetyResourceCard({
       resource.type,
       'share',
       contextSessionId,
-      safetyState
+      safetyState,
+      userId
     );
 
     const shareData = {

@@ -91,12 +91,13 @@ function renderSignup() {
 
 const currentPath = () => screen.getByTestId('location').textContent;
 
-async function fillAndSubmitSignupForm() {
+async function fillAndSubmitSignupForm(dob = '04/02/1990') {
   const user = userEvent.setup();
   await user.type(screen.getByPlaceholderText('John'), 'Jane');
   await user.type(screen.getByPlaceholderText('Doe'), 'Roe');
   await user.type(screen.getByPlaceholderText('you@example.com'), 'jane@example.com');
-  await user.type(screen.getByPlaceholderText('18'), '30');
+  // The DOB field commits its typed value on blur (moving to the password field below).
+  if (dob) await user.type(screen.getByLabelText('Date of birth'), dob);
   await user.type(screen.getByPlaceholderText('At least 8 characters'), 'supersecret1');
   await user.type(screen.getByPlaceholderText('Re-enter your password'), 'supersecret1');
   await user.click(screen.getByRole('button', { name: /create account/i }));
@@ -327,6 +328,109 @@ describe('Signup regression guards', () => {
 
     await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled());
     expect(signInWithOAuth.mock.calls[0][0].provider).toBe('google');
+  });
+});
+
+describe('Signup date of birth', () => {
+  /** MM/DD/YYYY for today minus `years`, shifted by `dayOffset` days (local calendar). */
+  function typedDob(years: number, dayOffset = 0) {
+    const now = new Date();
+    const d = new Date(now.getFullYear() - years, now.getMonth(), now.getDate() + dayOffset, 12);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+  }
+
+  async function expectBlocked() {
+    await new Promise((r) => setTimeout(r, 50));
+    expect(checkUserExists).not.toHaveBeenCalled();
+    expect(signUp).not.toHaveBeenCalled();
+    expect(apiSignup).not.toHaveBeenCalled();
+    expect(currentPath()).toBe('/signup');
+  }
+
+  it('replaces the numeric Age field with a Date of birth picker', () => {
+    renderSignup();
+    expect(screen.getByLabelText('Date of birth')).toHaveAttribute('placeholder', 'MM/DD/YYYY');
+    expect(screen.queryByPlaceholderText('18')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open calendar/i })).toBeInTheDocument();
+  });
+
+  it('shows the calculated age for the selected date', async () => {
+    const user = userEvent.setup();
+    renderSignup();
+    await user.type(screen.getByLabelText('Date of birth'), typedDob(30, -5));
+    await user.tab();
+    expect(await screen.findByText('30 years old')).toBeInTheDocument();
+  });
+
+  it('sends the exact ISO date of birth under the existing age key (trial)', async () => {
+    renderSignup();
+    await fillAndSubmitSignupForm('04/02/1990');
+
+    await waitFor(() => expect(signUp).toHaveBeenCalled());
+    expect(signUp.mock.calls[0][0].options.data.age).toBe('1990-04-02');
+  });
+
+  it('sends the exact ISO date of birth under the existing age key (paid)', async () => {
+    window.localStorage.setItem('selectedPlan', 'core');
+    renderSignup();
+    await fillAndSubmitSignupForm('04/02/1990');
+
+    await waitFor(() => expect(apiSignup).toHaveBeenCalled());
+    expect(apiSignup.mock.calls[0][0].age).toBe('1990-04-02');
+  });
+
+  it('does not add a redundant DOB write to the later trial profile update', async () => {
+    renderSignup();
+    const user = await fillAndSubmitSignupForm();
+
+    await waitFor(() => expect(screen.getByPlaceholderText('e.g., Jane Doe')).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText('e.g., Jane Doe'), 'Jane Roe');
+    await user.type(screen.getByPlaceholderText('Phone number'), '+14155552671');
+    await user.type(screen.getByPlaceholderText('e.g., Sister'), 'Sister');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /start your first talk/i }));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalled());
+    expect(updateProfile.mock.calls[0][0]).not.toHaveProperty('age');
+  });
+
+  it('accepts someone who turns 18 today', async () => {
+    renderSignup();
+    await fillAndSubmitSignupForm(typedDob(18));
+
+    await waitFor(() => expect(signUp).toHaveBeenCalled());
+  });
+
+  it('blocks someone who turns 18 tomorrow', async () => {
+    renderSignup();
+    await fillAndSubmitSignupForm(typedDob(18, 1));
+    await expectBlocked();
+  });
+
+  it('requires a date of birth', async () => {
+    renderSignup();
+    await fillAndSubmitSignupForm('');
+    await expectBlocked();
+    expect(await screen.findByText('Date of birth is required')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['an impossible date', '02/30/1990'],
+    ['a future date', '01/01/2099'],
+    ['a malformed value', 'not a date'],
+  ])('blocks %s', async (_label, value) => {
+    renderSignup();
+    await fillAndSubmitSignupForm(value);
+    await expectBlocked();
+  });
+
+  it('accepts a leap-day birth date', async () => {
+    renderSignup();
+    await fillAndSubmitSignupForm('02/29/2000');
+
+    await waitFor(() => expect(signUp).toHaveBeenCalled());
+    expect(signUp.mock.calls[0][0].options.data.age).toBe('2000-02-29');
   });
 });
 

@@ -3337,8 +3337,8 @@ export const api = {
       interaction_type: string;
       context_session_id?: string;
       safety_state?: string;
-    }) {
-      const headers = await getHeaders();
+    }, accessToken?: string) {
+      const headers = await getHeaders(accessToken);
       const res = await fetch(`${API_URL}/safety-resource-interactions`, {
         method: 'POST',
         headers,

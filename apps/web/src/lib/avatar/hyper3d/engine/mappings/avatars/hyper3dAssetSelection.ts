@@ -353,6 +353,28 @@ export const resolveHyper3dAsset = (): Hyper3dAssetSelection => {
 export const hyper3dAssetSelection: Hyper3dAssetSelection = resolveHyper3dAsset();
 
 /**
+ * THE DEV LOWER-LIP V2 OVERRIDE, applied at the companion seam.
+ *
+ * Talk It Out resolves its asset per companion (`resolveHyper3dCompanionAsset`),
+ * which never consults `resolveHyper3dAsset` — so `?hyper3dLowerLipV2=1` used to
+ * switch the controller to the corrective profile while the companion's own
+ * GLB, which has no `mouthLowerDownDeep`, loaded underneath it. This swaps the
+ * companion's asset for the experimental GLB when, and only when, a DEV session
+ * asked for it. The production companion table is not touched.
+ *
+ * `null` stays `null`: a companion with no Hyper3D asset is not given one.
+ * `import.meta.env?.DEV` first so a production build folds this to the identity.
+ */
+export const hyper3dDevAssetOverride = (
+  assetId: Hyper3dAssetId | null,
+  selection: Hyper3dAssetSelection = hyper3dAssetSelection,
+): Hyper3dAssetId | null => {
+  if (!import.meta.env?.DEV) return assetId;
+  if (assetId === null || !selection.experimental) return assetId;
+  return HYPER3D_EXPERIMENTAL_ASSET_ID;
+};
+
+/**
  * DEV-ONLY FBX ROLLBACK, DEFAULT OFF, and unrelated to the GLB fallback above.
  *
  * The legacy `additional_body.fbx` stays reachable for one reason only — putting

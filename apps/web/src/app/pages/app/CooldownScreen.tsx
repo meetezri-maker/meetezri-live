@@ -9,6 +9,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { GroundingExercises } from "@/app/components/safety/GroundingExercises";
 import { BreathingExercises } from "@/app/components/safety/BreathingExercises";
 import { useSafety } from "@/app/contexts/SafetyContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { trackResourceInteraction } from "@/app/utils/resourceTracking";
 import {
   getCrisisHotlineDisplayResources,
@@ -168,6 +169,7 @@ interface HelpfulResourcesCardProps {
 }
 
 function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
+  const { user } = useAuth();
   const { userRegion } = useSafety();
   const hotlines = getCrisisHotlineDisplayResources(userRegion);
   const textLine = hotlines.find((r) => r.variant === "text");
@@ -186,6 +188,7 @@ function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
       interaction,
       undefined,
       safetyLevel,
+      user?.id ?? null,
     );
   };
 

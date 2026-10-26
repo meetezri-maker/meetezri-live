@@ -24,6 +24,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { trackResourceInteraction } from "@/app/utils/resourceTracking";
 import { useSafety } from "@/app/contexts/SafetyContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import {
   getCrisisHotlineDisplayResources,
   getPrimaryEmergencyResource,
@@ -202,6 +203,8 @@ const RESOURCE_GUIDANCE = [
 export function CrisisResources() {
   const navigate = useNavigate();
   const { currentState, userRegion } = useSafety();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const regionInfo = getRegionInfo(userRegion);
   const primaryEmergency = getPrimaryEmergencyResource(userRegion);
   const hotlineResources = getCrisisHotlineDisplayResources(userRegion);
@@ -350,7 +353,8 @@ export function CrisisResources() {
                         "emergency",
                         "call",
                         undefined,
-                        currentState
+                        currentState,
+                        userId
                       )
                     }
                   >
@@ -417,7 +421,8 @@ export function CrisisResources() {
                             contact.resourceType,
                             contact.interactionOnDial,
                             undefined,
-                            currentState
+                            currentState,
+                            userId
                           )
                         }
                       >
@@ -521,7 +526,8 @@ export function CrisisResources() {
                                   "trusted_contact",
                                   "call",
                                   undefined,
-                                  currentState
+                                  currentState,
+                                  userId
                                 )
                               }
                             >
@@ -636,7 +642,8 @@ export function CrisisResources() {
                         "support_group",
                         "visit",
                         undefined,
-                        currentState
+                        currentState,
+                        userId
                       );
                     };
 
@@ -648,7 +655,8 @@ export function CrisisResources() {
                         "support_group",
                         "visit",
                         undefined,
-                        currentState
+                        currentState,
+                        userId
                       );
                       window.open(article.contentUrl, "_blank", "noopener,noreferrer");
                     };
