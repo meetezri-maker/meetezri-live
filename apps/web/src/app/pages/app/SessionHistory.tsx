@@ -13,7 +13,10 @@ import {
   Flame,
   Plus,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
+import { buildSessionTranscriptText } from "@/app/pages/app/session-history/sessionTranscriptExport";
+import { currentTimeZone } from "@/lib/reportTimeZone";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
@@ -51,7 +54,6 @@ import {
 } from "@/lib/modalTheme";
 import {
   deriveSessionSummaryFromTranscript,
-  formatTranscriptLine,
 } from "@meetezri/shared";
 
 interface SessionData {
@@ -334,7 +336,7 @@ function SessionHistoryPeriodSelect({
 
 export function SessionHistory() {
   const navigate = useNavigate();
-  const { session, profile } = useAuth();
+  const { session, profile, user } = useAuth();
   const isTrialUser = profile?.subscription_plan === "trial";
 
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(null);
@@ -354,6 +356,11 @@ export function SessionHistory() {
   const [loadingTranscript, setLoadingTranscript] = useState(false);
   const [generatedSummary, setGeneratedSummary] = useState("");
   const [loadingSummary, setLoadingSummary] = useState(false);
+  // Transcript export: sessions with a download in flight, and the signed-in account right now.
+  const exportingIdsRef = useRef(new Set<string>());
+  const [exportingIds, setExportingIds] = useState<Set<string>>(() => new Set());
+  const currentUserIdRef = useRef<string | null>(null);
+  currentUserIdRef.current = user?.id ?? null;
 
   const handleToggleFavorite = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -533,58 +540,49 @@ export function SessionHistory() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportSession = async (
-    sessionData: SessionData,
-    messages?: { role: string; content: string; created_at?: string }[]
-  ) => {
-    let rows: { role: string; content: string; created_at?: string }[];
-    if (messages !== undefined) {
-      rows = messages;
-    } else {
-      try {
-        rows = await api.sessions.getTranscript(sessionData.id);
-      } catch {
-        rows = [];
+  /**
+   * Shared by the row download icon and the popup's Export Transcript button. Read-only: it
+   * loads the stored session row and messages for the requested id and never asks for a
+   * summary to be generated. The account is captured at click time; if it changes before the
+   * data arrives, nothing is downloaded.
+   */
+  const handleExportSession = async (sessionId: string) => {
+    if (exportingIdsRef.current.has(sessionId)) return;
+    const accountId = currentUserIdRef.current;
+    if (!accountId) return;
+    exportingIdsRef.current.add(sessionId);
+    setExportingIds(new Set(exportingIdsRef.current));
+    try {
+      const [sessionRow, messages] = await Promise.all([
+        api.sessions.get(sessionId) as Promise<BackendSession & { config?: { summary_source?: string } }>,
+        api.sessions.getTranscript(sessionId) as Promise<
+          { role: string; content: string; created_at?: string }[]
+        >,
+      ]);
+      if (currentUserIdRef.current !== accountId) return;
+
+      const storedCompanion = sessionRow?.config?.avatar?.trim();
+      const result = buildSessionTranscriptText({
+        session: sessionRow,
+        messages: Array.isArray(messages) ? messages : [],
+        companionName: storedCompanion ? findLobbyAvatar(storedCompanion)?.name ?? storedCompanion : null,
+        exportedAt: new Date(),
+        timeZone: currentTimeZone(),
+      });
+      if (result.kind === "empty") {
+        toast.info("This talk has no saved conversation to export.");
+        return;
       }
-    }
-
-    let summaryText = sessionData.summary.trim();
-    const isWeakSummary =
-      !summaryText ||
-      summaryText.length < 30 ||
-      /^(instant talk|scheduled talk|talking|new session)$/i.test(summaryText);
-
-    if (isWeakSummary) {
-      try {
-        const result = await api.sessions.getSummary(sessionData.id);
-        summaryText = result.summary?.trim() ?? summaryText;
-      } catch {
-        // fall through to heuristic
+      downloadTextFile(result.fileName, result.text);
+    } catch (error) {
+      console.error("Transcript export failed", error);
+      if (currentUserIdRef.current === accountId) {
+        toast.error("We couldn't load this transcript. Please try again.");
       }
+    } finally {
+      exportingIdsRef.current.delete(sessionId);
+      setExportingIds(new Set(exportingIdsRef.current));
     }
-    if (!summaryText && rows.length > 0) {
-      summaryText = deriveSessionSummaryFromTranscript(rows);
-    }
-
-    const header = [
-      `Session ID: ${sessionData.id}`,
-      `Date: ${sessionData.date}`,
-      `Duration: ${sessionData.duration}`,
-      `Title: ${sessionData.title}`,
-      `Summary: ${summaryText || "No summary available."}`,
-      "",
-      "--- Transcript ---",
-      "",
-    ].join("\n");
-
-    const body =
-      rows.length > 0
-        ? rows.map((m) => formatTranscriptLine(m.role, m.content)).join("\n\n")
-        : "(No messages stored for this session.)";
-
-    const text = `${header}${body}`;
-    const safeDate = sessionData.date.replace(/,?\s+/g, "-");
-    downloadTextFile(`session-${sessionData.id}-${safeDate}-transcript.txt`, text);
   };
 
   const filteredSessions = useMemo(() => {
@@ -1022,10 +1020,11 @@ export function SessionHistory() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              void handleExportSession(sessionItem);
+                              void handleExportSession(sessionItem.id);
                             }}
                             className="session-history-row-action flex items-center gap-1.5 rounded-lg p-1 text-slate-400 transition-all hover:bg-slate-700/50 hover:text-white"
                             aria-label="Download transcript"
+                            aria-busy={exportingIds.has(sessionItem.id)}
                           >
                             <Download className="w-4 h-4" />
                           </button>
@@ -1349,7 +1348,8 @@ export function SessionHistory() {
 
                 <div className="flex gap-3 pt-2">
                   <Button
-                    onClick={() => void handleExportSession(selectedSession, transcript)}
+                    onClick={() => void handleExportSession(selectedSession.id)}
+                    aria-busy={exportingIds.has(selectedSession.id)}
                     variant="outline"
                     className={cn(modalPrimaryButton, "flex-1 rounded-xl")}
                   >
