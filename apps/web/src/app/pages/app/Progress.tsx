@@ -26,7 +26,7 @@ import {
   AreaChart,
 } from "recharts";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { cn } from "../../components/ui/utils";
 import {
@@ -51,6 +51,12 @@ import {
   type MoodInsightRow,
   type ProgressTimeRange,
 } from "./progress/progressInsights";
+import {
+  SESSION_LIST_LIMIT_CAP,
+  buildProgressExportCsv,
+  progressExportFileName,
+} from "./progress/progressExport";
+import { currentTimeZone } from "@/lib/reportTimeZone";
 
 interface ProgressRangeSelectProps {
   value: ProgressTimeRange;
@@ -69,17 +75,6 @@ function ProgressRangeSelect({ value, onValueChange, ariaLabel }: ProgressRangeS
       size="sm"
     />
   );
-}
-
-function escapeCsvCell(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function csvLine(cells: unknown[]): string {
-  return cells.map(escapeCsvCell).join(",");
 }
 
 interface CircularProgressProps {
@@ -246,7 +241,7 @@ function Sparkline({ data, color, height = 40 }: SparklineProps) {
 }
 
 export function Progress() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
 
   const [wellnessProgress, setWellnessProgress] = useState<any[]>([]);
@@ -267,19 +262,39 @@ export function Progress() {
   const [sleepEntries, setSleepEntries] = useState<
     { created_at: string; quality_rating?: number | null }[]
   >([]);
+  // Export-only: which optional sources actually loaded, and for which account. The screen keeps
+  // treating a failed source as empty; the CSV marks it Unavailable instead of 0.
+  const [exportSources, setExportSources] = useState<{
+    moods: boolean;
+    journals: boolean;
+    sessions: boolean;
+    userId: string | null;
+  } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportContextRef = useRef({ range: timelineRange, userId: user?.id ?? null });
+  exportContextRef.current = { range: timelineRange, userId: user?.id ?? null };
 
   const loadWellness = useCallback(() => {
     setLoadError(false);
     setIsLoadingWellness(true);
+    setExportSources(null);
+    const loadedFor = exportContextRef.current.userId;
+    const status = { moods: true, journals: true, sessions: true };
+    const optional = (key: keyof typeof status, request: Promise<unknown>) =>
+      request.catch(() => {
+        status[key] = false;
+        return [];
+      });
     Promise.all([
       api.wellness.getProgress(),
       api.wellness.getStats(),
-      api.moods.getMyMoods().catch(() => []),
-      api.journal.getAll().catch(() => []),
-      api.sessions.list({ limit: 300 }).catch(() => []),
+      optional("moods", api.moods.getMyMoods()),
+      optional("journals", api.journal.getAll()),
+      optional("sessions", api.sessions.list({ limit: 300 })),
       api.sleep.getEntries().catch(() => []),
     ])
       .then(([progress, stats, moods, journals, sessions, sleep]) => {
+        setExportSources({ ...status, userId: loadedFor });
         setWellnessProgress(Array.isArray(progress) ? progress : []);
         setStatsData(stats ?? null);
         setMoodEntries(
@@ -472,83 +487,66 @@ export function Progress() {
     }));
   }, [activityInput, currentStreak, timelineRange]);
 
-  const handleExportReport = () => {
+  const handleExportReport = async () => {
+    if (isExporting) return;
+    const range = timelineRange;
+    const userId = user?.id ?? null;
+    if (loadError || !exportSources || exportSources.userId !== userId) {
+      toast.error("Your progress data hasn't loaded for this account yet. Please try again.");
+      return;
+    }
+    setIsExporting(true);
     try {
-      const sections: string[] = [];
-
-      sections.push("Summary");
-      sections.push(
-        csvLine(["Metric", "Value"]),
-        csvLine(["Talks (in range)", rangeTalks]),
-        csvLine(["Mood check-ins (in range)", rangeMoodCheckins]),
-        csvLine(["Journal entries (in range)", rangeJournals]),
-        csvLine(["Time range", timelineRange]),
-        csvLine(["Wellness exercise completions (total)", totalWellnessSessions]),
-        csvLine(["Current streak (days)", currentStreak]),
-        ""
-      );
-
-      sections.push("Weekly progress");
-      if (weeklyProgress.length > 0) {
-        const keys = Object.keys(weeklyProgress[0] as object);
-        sections.push(csvLine(keys));
-        for (const row of weeklyProgress) {
-          sections.push(csvLine(keys.map((k) => (row as Record<string, unknown>)[k])));
-        }
-      } else {
-        sections.push("(no data)");
-      }
-      sections.push("");
-
-      sections.push("Wellness score (radar)");
-      if (wellnessScore.length > 0) {
-        const wKeys = Object.keys(wellnessScore[0] as object);
-        sections.push(csvLine(wKeys));
-        for (const row of wellnessScore) {
-          sections.push(csvLine(wKeys.map((k) => (row as Record<string, unknown>)[k])));
-        }
-      } else {
-        sections.push("(no data)");
-      }
-      sections.push("");
-
-      sections.push("Monthly activity");
-      if (monthlyActivity.length > 0) {
-        const mKeys = Object.keys(monthlyActivity[0] as object);
-        sections.push(csvLine(mKeys));
-        for (const row of monthlyActivity) {
-          sections.push(csvLine(mKeys.map((k) => (row as Record<string, unknown>)[k])));
-        }
-      } else {
-        sections.push("(no data)");
-      }
-      sections.push("");
-
-      sections.push("Wellness tools");
-      sections.push(
-        csvLine(["Tool ID", "Title", "Talk it out completed", "Total time (seconds)"])
-      );
-      if (wellnessProgress.length === 0) {
-        sections.push("(no rows)");
-      } else {
-        for (const p of wellnessProgress) {
-          sections.push(
-            csvLine([
-              p.toolId,
-              p.toolTitle,
-              p.sessionsCompleted,
-              wellnessProgressTotalSeconds(p),
-            ])
+      // The page's list is capped by the API; when it is full, fetch the complete list
+      // (GET /sessions without a limit) for the export only.
+      let sessions = sessionEntries;
+      let sessionsLimited = false;
+      if (exportSources.sessions && sessionEntries.length >= SESSION_LIST_LIMIT_CAP) {
+        try {
+          const all = await api.sessions.list();
+          sessions = (Array.isArray(all) ? all : []).map(
+            (s: { started_at?: string; ended_at?: string | null }) => ({
+              started_at: s.started_at,
+              ended_at: s.ended_at,
+            })
           );
+        } catch {
+          sessionsLimited = true;
         }
       }
+      // A range or account change while waiting must not produce a mislabelled file.
+      if (exportContextRef.current.range !== range || exportContextRef.current.userId !== userId) {
+        toast.info("The report period changed, so the export was cancelled. Please export again.");
+        return;
+      }
 
-      const csv = "\uFEFF" + sections.join("\n");
+      const now = new Date();
+      const csv = buildProgressExportCsv({
+        range,
+        now,
+        timeZone: currentTimeZone(),
+        sessions: exportSources.sessions
+          ? { ok: true, data: sessions, limited: sessionsLimited }
+          : { ok: false },
+        moods: exportSources.moods ? { ok: true, data: moodEntries } : { ok: false },
+        journals: exportSources.journals ? { ok: true, data: journalEntries } : { ok: false },
+        currentStreakDays: typeof profile?.streak_days === "number" ? profile.streak_days : null,
+        stats: statsData ? { ok: true, data: statsData } : { ok: false },
+        tools: {
+          ok: true,
+          data: wellnessProgress.map((p) => ({
+            toolId: String(p.toolId ?? ""),
+            toolTitle: String(p.toolTitle ?? ""),
+            sessionsCompleted: Number(p.sessionsCompleted) || 0,
+            totalSeconds: wellnessProgressTotalSeconds(p),
+          })),
+        },
+      });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `solace-progress-report-${new Date().toISOString().split("T")[0]}.csv`;
+      a.download = progressExportFileName(range, now);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -557,6 +555,8 @@ export function Progress() {
     } catch (e) {
       console.error(e);
       toast.error("Could not export report");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -751,7 +751,9 @@ export function Progress() {
             type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={handleExportReport}
+            onClick={() => void handleExportReport()}
+            disabled={isExporting}
+            aria-busy={isExporting}
             className="progress-btn-primary hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/20"
             aria-label="Export progress report as CSV"
           >

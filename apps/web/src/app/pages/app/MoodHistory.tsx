@@ -57,6 +57,13 @@ import {
   addYears,
 } from "date-fns";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  buildMoodHistoryExport,
+  moodHistoryExportFileName,
+  type SourceStatus,
+} from "@/app/pages/app/mood-history/moodHistoryExport";
+import { currentTimeZone } from "@/lib/reportTimeZone";
 import { SolacePanel } from "@/app/solace/SolacePanel";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 import { companionDisplayName } from "@meetezri/shared";
@@ -115,7 +122,7 @@ const MOOD_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
 
 
 export function MoodHistory() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
 
   if (profile?.subscription_plan === "trial") {
@@ -143,6 +150,13 @@ export function MoodHistory() {
   const [favoriteEntryIds, setFavoriteEntryIds] = useState<string[]>([]);
   const [checkInListPage, setCheckInListPage] = useState(1);
   const [checkInListPageSize, setCheckInListPageSize] = useState(10);
+  // Export-only: which sources loaded, and for which account, so a failed request is never
+  // exported as "no entries" and another account's data is never exported.
+  const [exportSources, setExportSources] = useState<{
+    checkIns: SourceStatus;
+    journals: SourceStatus;
+    userId: string | null;
+  } | null>(null);
 
   const getPeriodRange = () => {
     if (selectedView === "week") return { start: startOfWeek(currentDate, { weekStartsOn: 1 }), end: endOfWeek(currentDate, { weekStartsOn: 1 }) };
@@ -155,10 +169,14 @@ export function MoodHistory() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const loadedFor = user?.id ?? null;
+      let journalStatus: SourceStatus = "ok";
+      let checkInStatus: SourceStatus = "ok";
       const [journalData, moodData] = await Promise.all([
-        api.journal.getAll().catch(() => []),
-        api.moods.getMyMoods().catch(() => []),
+        api.journal.getAll().catch(() => { journalStatus = "failed"; return []; }),
+        api.moods.getMyMoods().catch(() => { checkInStatus = "failed"; return []; }),
       ]);
+      setExportSources({ checkIns: checkInStatus, journals: journalStatus, userId: loadedFor });
       const normalizedJournal: MoodEntry[] = (journalData || []).map((j: any) => {
         const mood = j.mood_tags?.[0] || "";
         const info = getMoodDisplayInfo(mood);
@@ -175,23 +193,35 @@ export function MoodHistory() {
   const goToNextCalendarMonth = () => setCalendarDate(prev => addMonths(prev, 1));
 
   const exportCurrentPeriod = () => {
-    const { start, end } = getPeriodRange();
-    const periodEntries = entries.filter(entry => { const date = new Date(entry.created_at); return date >= start && date <= end; })
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    if (periodEntries.length === 0) return;
-    const csvRows = [
-      ["Date", "Mood", "Mood Label", "Intensity", "Source", "Activities", "Notes"].join(","),
-      ...periodEntries.map(entry => {
-        const info = getMoodDisplayInfo(entry.mood);
-        return [format(new Date(entry.created_at), "yyyy-MM-dd HH:mm"), entry.mood, info?.label ?? "", String(entry.intensity), entry.source, entry.activities?.join(" | ") ?? "", entry.notes ?? ""]
-          .map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
-      }),
-    ];
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    if (!exportSources || exportSources.userId !== (user?.id ?? null)) {
+      toast.error("Your mood history is still loading for this account. Please try again in a moment.");
+      return;
+    }
+    const period = getPeriodRange();
+    const result = buildMoodHistoryExport({
+      entries,
+      period: { label: selectedView === "week" ? "Week (Mon–Sun)" : selectedView === "month" ? "Month" : "Year", ...period },
+      sources: exportSources,
+      moodLabel: (mood) => getMoodDisplayInfo(mood)?.label,
+      timeZone: currentTimeZone(),
+      generatedAt: new Date(),
+    });
+    if (result.kind === "source-unavailable") {
+      toast.error("We couldn't load your mood check-ins, so no export was created. Please try again.");
+      return;
+    }
+    if (result.kind === "empty") {
+      toast.info("There are no mood entries in this period to export.");
+      return;
+    }
+    if (result.partial) {
+      toast.warning("Exported without journal entries — they could not be loaded. The file is marked as partial.");
+    }
+    const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `mood-history-${selectedView}-${format(currentDate, "yyyy-MM-dd")}.csv`;
+    link.download = moodHistoryExportFileName(period);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
