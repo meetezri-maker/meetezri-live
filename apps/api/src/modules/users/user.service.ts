@@ -2355,11 +2355,3 @@ export async function deleteUser(userId: string) {
   invalidateUserProfileCache(userId);
   return { success: true };
 }
-
-export async function exportUserData(userId: string) {
-  const profile = await getProfile(userId);
-  // You can expand this to include more data from other services
-  return {
-    profile,
-  };
-}

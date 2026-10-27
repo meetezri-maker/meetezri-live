@@ -22,6 +22,7 @@ import {
 } from "./engine/mappings/avatars/hyper3dAssetSelection";
 import { HYPER3D_EYELASH_TARGET_NAMES } from "./engine/mappings/avatars/hyper3dEyelashBinding";
 import { CORRECTIVE_MORPH } from "./hyper3dCorrectiveMorph";
+import { createHyper3dMouthProbe } from "./hyper3dMouthProbe";
 import { AvatarController } from "./engine/engine/avatar/AvatarController";
 import { MorphTargetController } from "./engine/engine/avatar/MorphTargetController";
 import { BoneController } from "./engine/engine/avatar/BoneController";
@@ -592,6 +593,21 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
       enabled: isHyper3dIdleExpressionShowcaseEnabled(),
     });
 
+    // TEMPORARY DEV-ONLY live mouth probe (read-only). Remove with hyper3dMouthProbe.ts.
+    const mouthProbe =
+      import.meta.env.DEV === true
+        ? createHyper3dMouthProbe(faceMesh, {
+            assetUrl,
+            correctiveProfile: correctiveLowerLip,
+            showcaseEnabled: isHyper3dIdleExpressionShowcaseEnabled(),
+          })
+        : null;
+    let probedFrame: ReturnType<AvatarController["evaluate"]> | null = null;
+    if (mouthProbe) {
+      const evaluate = controller.evaluate.bind(controller);
+      controller.evaluate = (...args) => (probedFrame = evaluate(...args));
+    }
+
     type CachedHeadPlan = {
       revision: number;
       plan: HeadPerformancePlan | null;
@@ -778,6 +794,13 @@ export function createHyper3dEngineFactory(live: Hyper3dLiveInputs): Hyper3dEngi
           }
           live.recordLipSyncFrame(mouthTrace);
         }
+        mouthProbe?.sample({
+          context,
+          frame: probedFrame,
+          trace: mouthTrace,
+          payload: live.getPayload(),
+          turnId: planningTurnId,
+        });
         if (resolved.review) {
           const finalBindings = {} as Hyper3dEngineReviewFrame["finalBindings"];
           for (const name of HYPER3D_LOWER_FACE_REVIEW_CHANNELS) {

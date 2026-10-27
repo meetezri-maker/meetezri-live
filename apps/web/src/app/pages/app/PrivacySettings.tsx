@@ -73,47 +73,11 @@ import {
   computePrivacySecurityStatus,
   privacySecurityToneStyles,
 } from "@/app/pages/app/privacy-settings/privacySecurityStatus";
-
-function csvEscape(value: unknown) {
-  const normalized = value === null || value === undefined ? "" : String(value);
-  return `"${normalized.replace(/"/g, '""')}"`;
-}
-
-function flattenForCsv(value: unknown, basePath = "", rows: Array<[string, string]> = []) {
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      rows.push([basePath || "root", ""]);
-      return rows;
-    }
-    value.forEach((item, index) => {
-      const nextPath = basePath ? `${basePath}[${index}]` : `[${index}]`;
-      flattenForCsv(item, nextPath, rows);
-    });
-    return rows;
-  }
-
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length === 0) {
-      rows.push([basePath || "root", ""]);
-      return rows;
-    }
-    entries.forEach(([key, nestedValue]) => {
-      const nextPath = basePath ? `${basePath}.${key}` : key;
-      flattenForCsv(nestedValue, nextPath, rows);
-    });
-    return rows;
-  }
-
-  rows.push([basePath || "root", value === null || value === undefined ? "" : String(value)]);
-  return rows;
-}
-
-function jsonToExcelFriendlyCsv(jsonValue: unknown) {
-  const rows = flattenForCsv(jsonValue);
-  const contentRows = rows.map(([field, value]) => `${csvEscape(field)},${csvEscape(value)}`);
-  return `\uFEFFField,Value\r\n${contentRows.join("\r\n")}`;
-}
+import {
+  ACCOUNT_DATA_EXPORT_CARD_TEXT,
+  accountDataExportFileName,
+  buildAccountDataExportCsv,
+} from "@/app/pages/app/privacy-settings/accountDataExportCsv";
 
 interface PrivacySettingsState {
   profileVisibility: string;
@@ -431,40 +395,16 @@ export function PrivacySettings() {
   const handleDownloadData = async () => {
     toast.info("Preparing your data for download...");
     try {
-      const { blob, filename, contentType } = await api.exportUserData();
-      const isJsonPayload =
-        contentType.toLowerCase().includes("json") ||
-        (filename?.toLowerCase().endsWith(".json") ?? false);
-
-      let blobToDownload = blob;
-      let resolvedFilename = filename?.trim() || `ezri-data-export-${new Date().toISOString().split("T")[0]}.json`;
-
-      if (isJsonPayload) {
-        try {
-          const jsonText = await blob.text();
-          const parsedJson = JSON.parse(jsonText);
-          const csvContent = jsonToExcelFriendlyCsv(parsedJson);
-          blobToDownload = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-          resolvedFilename = resolvedFilename.replace(/\.json$/i, ".csv");
-          if (!resolvedFilename.toLowerCase().endsWith(".csv")) {
-            resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.csv`;
-          }
-        } catch (conversionError) {
-          console.warn("Export returned JSON-like file that could not be converted to CSV:", conversionError);
-        }
-      } else if (!filename?.trim()) {
-        const fallbackExtension = contentType.includes("csv")
-          ? "csv"
-          : contentType.includes("zip")
-            ? "zip"
-            : "json";
-        resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.${fallbackExtension}`;
-      }
+      const { blob } = await api.exportUserData();
+      // Only the documented fields are written; an unexpected response fails instead of
+      // falling back to a raw dump.
+      const csvContent = buildAccountDataExportCsv(JSON.parse(await blob.text()));
+      const blobToDownload = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
 
       const url = window.URL.createObjectURL(blobToDownload);
       const a = document.createElement("a");
       a.href = url;
-      a.download = resolvedFilename;
+      a.download = accountDataExportFileName();
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -852,7 +792,7 @@ export function PrivacySettings() {
                   <div>
                     <p className="font-semibold text-white">Export your data</p>
                     <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
-                      Download a copy of all your data including journals, insights, and account information.
+                      {ACCOUNT_DATA_EXPORT_CARD_TEXT}
                     </p>
                   </div>
                   <button type="button" onClick={handleDownloadData} className={privacyBtnPrimary}>

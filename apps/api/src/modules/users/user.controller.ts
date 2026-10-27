@@ -7,6 +7,7 @@ import { emailService } from '../email/email.service';
 import prisma from '../../lib/prisma';
 import { inferAdminRoleFromAuthUser, isAdminRole, normalizeAppRole } from '../../lib/adminRoles';
 import { normalizeSignupType } from './signupType';
+import { buildAccountDataExport } from './account-data-export';
 
 interface UserPayload {
   sub: string;
@@ -1073,11 +1074,15 @@ export async function exportUserDataHandler(
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
-  request.log.info({ user }, 'Processing user data export request');
+  request.log.info({ userId: user.sub }, 'Processing user data export request');
 
   try {
-    const userData = await userService.exportUserData(user.sub);
-    reply.header('Content-Disposition', `attachment; filename="meetezri-data-export-${new Date().toISOString()}.json"`);
+    const userData = await buildAccountDataExport(user.sub);
+    if (!userData) {
+      return reply.code(404).send({ message: 'Profile not found' });
+    }
+    const day = userData.generatedAt.slice(0, 10);
+    reply.header('Content-Disposition', `attachment; filename="solace-account-data-${day}.json"`);
     return reply.send(userData);
   } catch (error) {
     request.log.error({ error }, 'User data export failed');
