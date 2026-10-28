@@ -77,6 +77,14 @@ import {
   wellnessPlanSectionChip,
 } from "@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi";
 import { WellnessPlanSafetyRail } from "@/app/pages/app/wellness-plan-settings/WellnessPlanSafetyRail";
+import { WellnessPlanPrintDocument } from "@/app/pages/app/wellness-plan-settings/WellnessPlanPrintDocument";
+import { useWellnessPlanPrint } from "@/app/pages/app/wellness-plan-settings/useWellnessPlanPrint";
+import {
+  buildWellnessPlanPrintSnapshot,
+  type WellnessPlanConfirmedContent,
+  type WellnessPlanPrintInput,
+} from "@/app/pages/app/wellness-plan-settings/wellnessPlanPrint";
+import "@/app/pages/app/wellness-plan-settings/wellnessPlanPrint.css";
 import {
   addWellnessPlanSectionItem,
   applyWellnessPlanToEditor,
@@ -108,6 +116,13 @@ export function SafetyPlan() {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
+  /** Account the loaded plan belongs to (print uses it; never set from a failed load). */
+  const [planOwnerId, setPlanOwnerId] = useState<string | null>(null);
+  /**
+   * Print only: the last content the server confirmed for an account (as loaded, or exactly what a
+   * successful save/clear sent). Printing labels a plan "Saved" only when it matches this.
+   */
+  const confirmedPlanRef = useRef<WellnessPlanConfirmedContent | null>(null);
 
   const { sections, planId, loadState, saveStatus, isDirty, savedSnapshot } = editor;
   const setSections = (next: WellnessPlanSection[] | ((prev: WellnessPlanSection[]) => WellnessPlanSection[])) => {
@@ -152,10 +167,16 @@ export function SafetyPlan() {
       return;
     }
     setLoadState("loading");
+    setPlanOwnerId(null);
+    confirmedPlanRef.current = null;
+    const requestedFor = user.id;
     try {
       const data = await api.wellnessPlan.get();
       const loaded = wellnessPlanResponseToSections(data);
       setEditor((prev) => applyWellnessPlanToEditor(prev, data.id, loaded));
+      const owned = !data.user_id || data.user_id === requestedFor;
+      setPlanOwnerId(owned ? requestedFor : null);
+      confirmedPlanRef.current = owned ? { userId: requestedFor, body: wellnessPlanSectionsToUpsertBody(loaded) } : null;
     } catch (error) {
       console.error("Wellness plan load:", error);
       toast.error("Could not load your wellness plan. Please try again.");
@@ -178,6 +199,7 @@ export function SafetyPlan() {
     setSaveStatus("saving");
     try {
       const saved = await api.wellnessPlan.save(body);
+      confirmedPlanRef.current = { userId: user.id, body }; // print only: exactly what this save sent
       if (saved.id) setPlanId(saved.id);
       setEditor((prev) => ({
         ...prev,
@@ -221,15 +243,29 @@ export function SafetyPlan() {
     setIsDirty(true);
   };
 
+  // Printing (Print Plan, Save as PDF, Export Plan (PDF) and the browser's print command) uses one
+  // snapshot of what is on screen; it never saves.
+  const getPrintInput = (): WellnessPlanPrintInput => ({
+    userId: user?.id,
+    planOwnerId,
+    planId,
+    confirmed: confirmedPlanRef.current,
+    loadState,
+    saveStatus,
+    isDirty,
+    sections,
+    recoveryPercent,
+    contacts: emergencyContacts as WellnessPlanPrintInput["contacts"],
+    contactsLoading,
+    resources: [crisisLine, emergencyResource],
+  });
+  const { snapshot: printSnapshot, print: printPlan } = useWellnessPlanPrint(user?.id, getPrintInput);
   const handlePrintOrPdf = useCallback(() => {
-    document.documentElement.classList.add("wellness-plan-printing");
-    const cleanup = () => {
-      document.documentElement.classList.remove("wellness-plan-printing");
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    window.print();
-  }, []);
+    void printPlan();
+  }, [printPlan]);
+  // Without a prepared snapshot (e.g. a browser without beforeprint), print the current state.
+  const printDocument =
+    printSnapshot && printSnapshot.userId === user?.id ? printSnapshot : buildWellnessPlanPrintSnapshot(getPrintInput());
 
   const confirmClearPlan = useCallback(async () => {
     setClearLoading(true);
@@ -237,6 +273,7 @@ export function SafetyPlan() {
       const cleared = await api.wellnessPlan.clear();
       const emptySections = wellnessPlanResponseToSections(cleared);
       setEditor((prev) => applyWellnessPlanToEditor(prev, cleared.id, emptySections));
+      confirmedPlanRef.current = user?.id ? { userId: user.id, body: wellnessPlanSectionsToUpsertBody(emptySections) } : null;
       setShowClearDialog(false);
       toast.success("Plan cleared.");
     } catch {
@@ -244,7 +281,7 @@ export function SafetyPlan() {
     } finally {
       setClearLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   const confirmResetPlan = useCallback(() => {
     setEditor((prev) => ({
@@ -695,6 +732,8 @@ export function SafetyPlan() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <WellnessPlanPrintDocument snapshot={printDocument} />
     </motion.div>
   );
 }

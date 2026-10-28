@@ -1,133 +1,193 @@
 /**
- * Wellness plan print/PDF — preserve dark theme and hide app chrome.
- * Scoped via `.wellness-plan-print-root` on the SafetyPlan page wrapper.
+ * Wellness Plan — print / Save as PDF.
+ *
+ * The page renders a print-only copy of the plan (`.wellness-plan-print-doc`, WellnessPlanPrintDocument)
+ * as a direct child of <body>. On screen it is never shown. When printing this page, only that copy
+ * is shown: white paper, dark text, no app shell, no clipping containers.
+ *
+ * Every print rule is scoped to `html.wellness-plan-print-page`, a class present only while the
+ * Wellness Plan page is mounted, so importing this file doesn't change how other pages print.
+ * Nothing relies on "Background graphics" being enabled: colour comes from text and borders only.
  */
+
+.wellness-plan-print-doc {
+  display: none;
+}
 
 @media print {
   @page {
-    margin: 0.6in;
-    size: portrait;
-    background: #0a0b18;
+    size: A4 portrait;
+    margin: 16mm 15mm 16mm 15mm;
   }
 
-  html,
-  html.wellness-plan-printing,
-  body,
-  html.wellness-plan-printing body {
-    background: #0a0b18 !important;
-    color: #f4f4f5 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-scheme: dark;
-  }
-
-  /* Hide member app shell */
-  .solace-app-header,
-  .solace-mobile-nav,
-  .solace-sidebar-shell {
-    display: none !important;
-  }
-
-  .solace-app,
-  .solace-scroll,
-  .solace-app main {
-    overflow: visible !important;
+  html.wellness-plan-print-page,
+  html.wellness-plan-print-page body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    color-scheme: light !important;
     height: auto !important;
+    min-height: 0 !important;
     max-height: none !important;
-    padding: 0 !important;
-    padding-left: 0 !important;
-    padding-bottom: 0 !important;
-    margin: 0 !important;
-    background: #0a0b18 !important;
+    overflow: visible !important;
   }
 
-  .wellness-plan-print-root {
-    position: relative !important;
-    min-height: auto !important;
-    background: #0a0b18 !important;
-    color: #f4f4f5 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .wellness-plan-print-root,
-  .wellness-plan-print-root * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .wellness-plan-print-root .wellness-plan-print-atmosphere {
+  /* The app (header, sidebar, mobile nav, the editable page), toasts and dialogs. */
+  html.wellness-plan-print-page body > :not(.wellness-plan-print-doc) {
     display: none !important;
   }
 
-  .wellness-plan-print-root > .relative.z-10 {
-    max-width: 100% !important;
-    padding: 0 !important;
-  }
-
-  .wellness-plan-print-root .wellness-plan-print-grid {
+  html.wellness-plan-print-page .wellness-plan-print-doc {
     display: block !important;
+    position: static !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt;
+    line-height: 1.5;
+    overflow: visible !important;
   }
 
-  .wellness-plan-print-root aside,
-  .wellness-plan-printing .wellness-plan-print-root aside {
-    display: none !important;
+  .wellness-plan-print-doc * {
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
-  .wellness-plan-print-root .print\\:hidden {
-    display: none !important;
+  .wellness-plan-print-doc .wp-print-header {
+    border-bottom: 1.5pt solid #6d28d9;
+    padding-bottom: 8pt;
+    margin-bottom: 14pt;
+    break-inside: avoid;
   }
 
-  .wellness-plan-print-root h1,
-  .wellness-plan-print-root h2,
-  .wellness-plan-print-root h3,
-  .wellness-plan-print-root p,
-  .wellness-plan-print-root li,
-  .wellness-plan-print-root span {
-    color: inherit;
+  .wellness-plan-print-doc .wp-print-logo {
+    display: block;
+    height: 22pt;
+    width: auto;
+    margin-bottom: 8pt;
   }
 
-  .wellness-plan-print-root h1,
-  .wellness-plan-print-root h2,
-  .wellness-plan-print-root h3 {
-    color: #ffffff !important;
+  .wellness-plan-print-doc h1 {
+    font-size: 21pt;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #111827 !important;
+    margin: 0 0 4pt;
   }
 
-  .wellness-plan-print-root p,
-  .wellness-plan-print-root .text-sm,
-  .wellness-plan-print-root [class*="text-\\[rgba"] {
-    color: rgba(255, 255, 255, 0.82) !important;
+  .wellness-plan-print-doc h2 {
+    font-size: 13pt;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #111827 !important;
+    margin: 0 0 3pt;
+    padding-bottom: 2pt;
+    border-bottom: 0.75pt solid #d4d4d8;
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
-  .wellness-plan-print-root .font-serif {
-    color: #ffffff !important;
+  .wellness-plan-print-doc p,
+  .wellness-plan-print-doc li {
+    color: #1f2937 !important;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    orphans: 2;
+    widows: 2;
   }
 
-  .wellness-plan-print-root section,
-  .wellness-plan-print-root article {
+  .wellness-plan-print-doc .wp-print-meta {
+    color: #4b5563 !important;
+    font-size: 10pt;
+  }
+
+  .wellness-plan-print-doc .wp-print-status {
+    margin-top: 6pt;
+    font-size: 10pt;
+    padding: 5pt 8pt;
+    border: 0.75pt solid #a1a1aa;
+    border-radius: 4pt;
+    break-inside: avoid;
+  }
+
+  .wellness-plan-print-doc .wp-print-status-draft {
+    border: 1.5pt solid #b45309;
+    color: #78350f !important;
+  }
+
+  .wellness-plan-print-doc .wp-print-section {
+    margin: 0 0 13pt;
+    /* Large sections split across pages instead of being clipped. */
+    break-inside: auto;
+  }
+
+  .wellness-plan-print-doc .wp-print-description {
+    color: #4b5563 !important;
+    font-size: 9.5pt;
+    margin-bottom: 5pt;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .wellness-plan-print-doc .wp-print-list {
+    margin: 0;
+    padding-inline-start: 18pt;
+  }
+
+  /* Plan items are numbered as on screen, with the number drawn as text (no list markers, which
+     the app's CSS reset removes and which move to the far side of right-to-left items). */
+  .wellness-plan-print-doc .wp-print-numbered {
+    list-style: none;
+    padding-inline-start: 0;
+  }
+
+  .wellness-plan-print-doc .wp-print-numbered li {
+    display: flex;
+    align-items: baseline;
+    gap: 5pt;
+  }
+
+  .wellness-plan-print-doc .wp-print-num {
+    flex: 0 0 16pt;
+    text-align: right;
+    color: #4b5563 !important;
+  }
+
+  .wellness-plan-print-doc .wp-print-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Urdu keeps its right-to-left reading order (dir="auto") but sits next to its number,
+     aligned like the rest of the list, as it is on screen. */
+  .wellness-plan-print-doc .wp-print-text,
+  .wellness-plan-print-doc .wp-print-plain li {
+    text-align: left;
+  }
+
+  .wellness-plan-print-doc .wp-print-list li {
+    margin: 0 0 3pt;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .wellness-plan-print-root [class*="rounded-3xl"],
-  .wellness-plan-print-root [class*="rounded-2xl"],
-  .wellness-plan-print-root [class*="rounded-[1.625rem]"] {
-    background: linear-gradient(
-      165deg,
-      rgba(24, 16, 36, 0.95) 0%,
-      rgba(12, 10, 24, 0.98) 100%
-    ) !important;
-    border-color: rgba(255, 255, 255, 0.14) !important;
-    box-shadow: none !important;
+  .wellness-plan-print-doc .wp-print-plain {
+    list-style: none;
+    padding-inline-start: 0;
   }
 
-  .wellness-plan-print-root img {
-    opacity: 0.55 !important;
-    filter: none !important;
+  .wellness-plan-print-doc .wp-print-empty {
+    color: #6b7280 !important;
+    font-style: italic;
   }
 
-  .wellness-plan-print-root a[href^="tel:"] {
-    color: #fda4af !important;
-    text-decoration: none !important;
+  .wellness-plan-print-doc strong {
+    font-weight: 700;
+    color: #111827 !important;
   }
 }
