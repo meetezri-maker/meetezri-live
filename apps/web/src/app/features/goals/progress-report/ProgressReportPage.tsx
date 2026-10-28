@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
   achievementsPageFogMid,
@@ -48,7 +49,16 @@ export function ProgressReportPage() {
   // Invalid or missing values fall back to 30d without navigating.
   const range = normalizeRange(searchParams.get("range"));
 
-  const { data, isPending, isError, isFetching, refetch } = useProgressReportQuery(range);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { data, isPending, isError, isFetching, isPlaceholderData, refetch } = useProgressReportQuery(range, userId);
+
+  // Export only the settled response for the selected range and the signed-in account.
+  const contextKey = `${userId ?? ""}|${range}`;
+  const contextRef = useRef(contextKey);
+  contextRef.current = contextKey;
+  const exportReady =
+    !!data && !!userId && !isFetching && !isPlaceholderData && !isError && data.period.range === range;
 
   const handleRangeChange = useCallback(
     (next: ProgressReportRange) => {
@@ -86,7 +96,12 @@ export function ProgressReportPage() {
                 onChange={handleRangeChange}
                 isFetching={isFetching}
               />
-              <ProgressReportDownloadButton report={data} />
+              <ProgressReportDownloadButton
+                report={data}
+                ready={exportReady}
+                contextKey={contextKey}
+                getContextKey={() => contextRef.current}
+              />
             </div>
 
             {/* Previously loaded content stays visible while a new range loads. */}

@@ -96,6 +96,11 @@ export type Hyper3dScheduledChunk = {
   untimedPhonemeCount?: number;
   /** Diagnostics: how the client associated metadata with this audio. */
   associationMethod?: string | null;
+  /**
+   * The reply's `audio_start.format`. `pcm_s16le` is the streamed transport,
+   * whose phonemes are sentence-relative; see `phonemeTimeDomainForAssociation`.
+   */
+  audioFormat?: string | null;
   /** Diagnostics: the backend bundled this chunk's audio inside `avatar_data`. */
   audioB64Present?: boolean;
 };
@@ -684,6 +689,24 @@ function summarize(samplesMs: number[]): LookAheadStats | null {
 export type Hyper3dLiveSpeechAdapter = ReturnType<
   typeof createHyper3dLiveSpeechAdapter
 >;
+
+/**
+ * The backend's injected inter-sentence silence, by its exact signature: 250 ms
+ * (`bytes(12000)` of 24 kHz int16) and every decoded sample exactly zero.
+ * Spoken pauses are low-level noise, never exact zero, and the duration check
+ * keeps any other zero-valued chunk from ending a sentence early. No buffer
+ * means "not silence", which can only delay finalization to the next sentence.
+ */
+const INJECTED_SILENCE_SECONDS = 0.25;
+function isDigitalSilence(buffer: Hyper3dScheduledChunk["audioBuffer"]): boolean {
+  if (!buffer || buffer.length === 0 || !(buffer.sampleRate > 0)) return false;
+  if (Math.abs(buffer.length / buffer.sampleRate - INJECTED_SILENCE_SECONDS) > 0.02) return false;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const samples = buffer.getChannelData(channel);
+    for (let i = 0; i < samples.length; i += 1) if (samples[i] !== 0) return false;
+  }
+  return true;
+}
 
 export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
   const now = deps.now ?? (() => performance.now());
@@ -1637,15 +1660,18 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       const startedAt = now();
       const contextTimeAtAppend = deps.getContextTime() ?? chunk.audioContextStartTime;
 
-      const phonemeCountBefore = timeline.getPhonemeCount();
+      const phonemeTimeDomain = phonemeTimeDomainForAssociation(chunk.associationMethod, chunk.audioFormat);
       const result = timeline.appendScheduledChunk({
         audioContextStartTime: chunk.audioContextStartTime,
         durationSeconds: chunk.durationMs / 1000,
         leadInSeconds: chunk.leadInSec,
-        // Transport decides the clock domain; see the function's own note. The
-        // association method is already on the chunk, so nothing new is computed
-        // or plumbed for this.
-        phonemeTimeDomain: phonemeTimeDomainForAssociation(chunk.associationMethod),
+        // Transport decides the clock domain; see the function's own note.
+        phonemeTimeDomain,
+        // Only the streamed path reads it, and only phoneme-less chunks need it.
+        digitalSilence:
+          phonemeTimeDomain === "sentence-relative" && !chunk.timeline?.phonemes.length
+            ? isDigitalSilence(chunk.audioBuffer)
+            : false,
         timeline: chunk.timeline,
         chunkIndex: chunk.chunkIndex,
         sentence: chunk.sentence,
@@ -1684,7 +1710,10 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       }
 
       if (result.accepted) {
-        const acceptedPhonemes = timeline.getPayload().phonemes.slice(phonemeCountBefore);
+        // The chunk's phonemes are the timeline's tail. Not a count taken before
+        // the append: closing a streamed sentence can shorten what preceded it.
+        const timelinePhonemes = timeline.getPayload().phonemes;
+        const acceptedPhonemes = timelinePhonemes.slice(timelinePhonemes.length - result.appendedPhonemes);
         if (scheduledChunks.length > 0) liveReview.chunkBoundaryCount += 1;
         const sentenceId =
           chunk.timeline?.sentence || chunk.sentence || `chunk-${chunk.chunkIndex ?? "unknown"}`;
@@ -1707,7 +1736,9 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
           chunkIndex: chunk.chunkIndex,
           offsetSeconds: result.chunkOffsetSeconds,
           durationSeconds: chunk.durationMs / 1000,
-          phonemes: acceptedPhonemes,
+          // Streamed sentences: the per-chunk projection, as separate objects, so
+          // head-motion input is what it always was and never sees mouth timing.
+          phonemes: result.plannerPhonemes ?? acceptedPhonemes,
           scheduledAtMs: chunk.scheduledAtMs,
           audibleStartContextTime: chunk.audioContextStartTime,
           contextTimeAtPlan: deps.getContextTime() ?? contextTimeAtAppend,

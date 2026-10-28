@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const { getReport } = vi.hoisted(() => ({ getReport: vi.fn() }));
 vi.mock("@/lib/api", () => ({ api: { gamification: { getReport } } }));
+// The page reads the signed-in account to scope its cache and PDF export.
+vi.mock("@/app/contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "user-test" } }) }));
 
 import { ProgressReportPage } from "./ProgressReportPage";
 import { progressReportQueryKey } from "./progress-report.queries";

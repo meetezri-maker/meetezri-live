@@ -1,606 +1,346 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-
-// --- recording fake jsPDF ---------------------------------------------------
-const { docs, JsPdfMock, failNext, toastError } = vi.hoisted(() => {
-  interface TextCall { page: number; text: string; x: number; y: number }
-  interface RectCall { page: number; x: number; y: number; w: number; h: number; style: string }
-
-  const docs: FakeDoc[] = [];
-  const failNext = { value: false };
-
-  class FakeDoc {
-    pages = 1;
-    current = 1;
-    texts: TextCall[] = [];
-    rects: RectCall[] = [];
-    images = 0;
-
-    addPage() {
-      this.pages += 1;
-      this.current = this.pages;
-    }
-    setPage(n: number) {
-      this.current = n;
-    }
-    getNumberOfPages() {
-      return this.pages;
-    }
-    /** Approximate width-based wrapper so wrapping behaviour is exercised. */
-    splitTextToSize(text: string, width: number): string[] {
-      const perLine = Math.max(8, Math.floor(width / 1.9));
-      const words = String(text).split(/\s+/).filter(Boolean);
-      const out: string[] = [];
-      let line = "";
-      for (const w of words) {
-        if (line && (line + " " + w).length > perLine) {
-          out.push(line);
-          line = w;
-        } else {
-          line = line ? `${line} ${w}` : w;
-        }
-      }
-      if (line) out.push(line);
-      return out.length ? out : [""];
-    }
-    text(t: string, x: number, y: number) {
-      this.texts.push({ page: this.current, text: String(t), x, y });
-    }
-    setFont() {}
-    setFontSize() {}
-    setTextColor() {}
-    setFillColor() {}
-    setDrawColor() {}
-    setLineWidth() {}
-    roundedRect(x: number, y: number, w: number, h: number, _rx: number, _ry: number, style: string) {
-      this.rects.push({ page: this.current, x, y, w, h, style });
-    }
-    rect(x: number, y: number, w: number, h: number, style: string) {
-      this.rects.push({ page: this.current, x, y, w, h, style });
-    }
-    line() {}
-    addImage() {
-      this.images += 1;
-    }
-    internal = { pageSize: { getWidth: () => 210, getHeight: () => 297 } };
-    output() {
-      return new Blob(["%PDF-1.4"], { type: "application/pdf" });
-    }
-    save() {}
-  }
-
-  const JsPdfMock = vi.fn(() => {
-    if (failNext.value) {
-      failNext.value = false;
-      throw new Error("pdf boom");
-    }
-    const d = new FakeDoc();
-    docs.push(d);
-    return d;
-  });
-
-  return { docs, JsPdfMock, failNext, toastError: vi.fn() };
-});
-
-vi.mock("jspdf", () => ({ jsPDF: JsPdfMock }));
-vi.mock("sonner", () => ({ toast: { error: toastError, success: vi.fn() } }));
-
+/**
+ * Goals & Achievements PDF — tests against the real jsPDF engine and the bundled fonts.
+ *
+ * Text is read back from the generated content streams: each line's glyph IDs are mapped to
+ * characters through the embedded font, so assertions see exactly what is drawn, left to right.
+ */
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import fs from "fs";
+import path from "path";
+import type { jsPDF } from "jspdf";
 import {
   buildProgressReportPdf,
-  downloadProgressReportPdf,
+  formatGeneratedAt,
+  formatReportDay,
+  formatReportPeriod,
   progressReportFileName,
 } from "./progress-report.pdf";
-import { ProgressReportDownloadButton } from "./ProgressReportDownloadButton";
+import {
+  EMOJI_MARKER,
+  PDF_ARABIC_FONT_FAMILY,
+  PDF_FONT_FAMILY,
+  PdfUnsupportedTextError,
+  loadPdfFonts,
+  type PdfFontFiles,
+} from "./progress-report.pdf-text";
 import type { ProgressReport, ProgressReportItem } from "./progress-report.types";
 
-// --- fixtures ---------------------------------------------------------------
+const FONT_DIR = path.resolve(process.cwd(), "public/fonts/pdf");
+const readFont = (f: string) => fs.readFileSync(path.join(FONT_DIR, f)).toString("base64");
+let fonts: PdfFontFiles;
+beforeAll(() => {
+  fonts = {
+    latin: { regular: readFont("DejaVuSans.ttf"), bold: readFont("DejaVuSans-Bold.ttf") },
+    arabic: { regular: readFont("Amiri-Regular.ttf"), bold: readFont("Amiri-Bold.ttf") },
+  };
+});
+
+// --- fixtures ----------------------------------------------------------------------------------
+const URDU_FULL = "آج میں نے بہت سکون محسوس کیا۔"; // heh goal (ہ in بہت), yeh barree (ے), Urdu full stop
+const URDU_COVERED = "میں 25 منٹ پڑھا";
+
 const goal = (over: Partial<ProgressReportItem> = {}): ProgressReportItem => ({
-  id: "g1",
-  title: "Morning walk",
-  category: "wellness",
-  status: "active",
-  priority: "high",
-  trackingType: "count",
-  trackingUnit: "workouts",
-  currentValue: 18,
-  targetValue: 25,
-  currentProgress: 72,
-  progressAtStart: 40,
-  progressAtEnd: 72,
-  progressChange: 32,
-  checkInsDuringPeriod: 9,
-  activeCheckInDays: 9,
-  consistencyRate: 64,
-  startDate: "2026-05-01",
-  targetDate: "2026-08-30",
-  isOverdue: false,
-  isApproachingTarget: false,
-  hasNoRecentCheckIns: false,
-  hasNoProgressDuringPeriod: false,
-  rewardAwarded: false,
-  ...over,
+  id: "g1", title: "Morning walk", origin: "personal", category: "wellness", status: "active", priority: "high",
+  trackingType: "count", trackingUnit: "workouts", currentValue: 18, targetValue: 25, currentProgress: 72,
+  progressAtStart: 40, progressAtEnd: 72, progressChange: 32, checkInsDuringPeriod: 9, activeCheckInDays: 9,
+  consistencyRate: 64, startDate: "2026-05-01", targetDate: "2026-08-30", isOverdue: false, isApproachingTarget: false,
+  hasNoRecentCheckIns: false, hasNoProgressDuringPeriod: false, rewardAwarded: false, ...over,
 });
 
 function makeReport(over: Partial<ProgressReport> = {}): ProgressReport {
   return {
     version: 1,
     generatedAt: "2026-07-23T12:00:00.000Z",
-    timezone: "UTC",
+    timezone: "Asia/Karachi",
     period: { range: "30d", start: "2026-06-24", end: "2026-07-23", label: "Last 30 days" },
     user: { displayName: "Alex Rivera" },
-    currentSnapshot: {
-      totalPoints: 350,
-      currentLevel: 4,
-      pointsIntoLevel: 50,
-      pointsRequiredForNextLevel: 100,
-      pointsRemainingToNextLevel: 50,
-      activeGoals: 1,
-      activeAchievements: 1,
-      completedGoalsAllTime: 3,
-      completedAchievementsAllTime: 2,
-    },
-    periodSummary: {
-      completedGoals: 1,
-      completedAchievements: 0,
-      totalCheckIns: 18,
-      activeCheckInDays: 12,
-      overallConsistencyRate: 57,
-      pointsEarned: 20,
-      totalProgressChange: 27,
-    },
+    currentSnapshot: { totalPoints: 350, currentLevel: 4, pointsIntoLevel: 50, pointsRequiredForNextLevel: 100, pointsRemainingToNextLevel: 50, activeGoals: 1, activeAchievements: 1, completedGoalsAllTime: 3, completedAchievementsAllTime: 0 },
+    periodSummary: { completedGoals: 1, completedAchievements: 0, totalCheckIns: 18, activeCheckInDays: 12, overallConsistencyRate: 57, pointsEarned: 20, totalProgressChange: 27 },
     activeGoals: [goal()],
-    activeAchievements: [
-      goal({ id: "a1", title: "Read every evening", trackingType: "manual_milestone", currentValue: null, targetValue: null, trackingUnit: null, currentProgress: 50, consistencyRate: null }),
-    ],
-    completedDuringPeriod: [
-      {
-        itemType: "goal",
-        itemId: "g9",
-        title: "Drink more water",
-        completedAt: "2026-07-19",
-        rewardPointsAwarded: 20,
-        trackingType: "count",
-        finalCurrentValue: 30,
-        finalTargetValue: 30,
-      },
-    ],
-    checkInActivity: {
-      totalCheckIns: 18,
-      activeDays: 12,
-      mostConsistentItem: { itemType: "goal", itemId: "g1", title: "Morning walk", rate: 64 },
-    },
+    activeAchievements: [goal({ id: "a1", title: "Read every evening", trackingType: "manual_milestone", currentValue: null, targetValue: null, trackingUnit: null, currentProgress: 50, consistencyRate: null })],
+    completedDuringPeriod: [{ itemType: "goal", itemId: "g9", title: "Drink more water", completedAt: "2026-07-19", rewardPointsAwarded: 20, trackingType: "count", finalCurrentValue: 30, finalTargetValue: 30 }],
+    checkInActivity: { totalCheckIns: 18, activeDays: 12, mostConsistentItem: { itemType: "goal", itemId: "g1", title: "Morning walk", rate: 64 } },
     wellbeingEntries: {
       wins: [{ text: "Ran my first 5k", date: "2026-07-19", itemId: "g1", itemType: "goal", itemTitle: "Morning walk" }],
-      challenges: [{ text: "Rain made it hard", date: "2026-07-18", itemId: "g1", itemType: "goal", itemTitle: "Morning walk" }],
-      reflections: [],
-      notes: [],
-      moodCounts: [{ mood: "calm", count: 4 }],
+      challenges: [], reflections: [], notes: [], moodCounts: [{ mood: "calm", count: 4 }],
     },
-    needsAttention: [
-      { itemType: "goal", itemId: "g1", title: "Morning walk", reasons: ["overdue", "no_recent_check_ins"] },
-    ],
-    rewards: {
-      pointsEarned: 20,
-      transactions: [
-        {
-          id: "t1",
-          sourceType: "personal_goal_completion",
-          sourceItemId: "g9",
-          points: 20,
-          reason: "Goal completed",
-          createdAt: "2026-07-19T10:00:00.000Z",
-          date: "2026-07-19",
-        },
-      ],
-    },
-    closingSummary: [
-      "You completed 1 Goal during this reporting period.",
-      "You earned 20 points.",
-    ],
+    needsAttention: [{ itemType: "goal", itemId: "g1", title: "Morning walk", reasons: ["overdue", "no_recent_check_ins"] }],
+    rewards: { pointsEarned: 20, transactions: [{ id: "t1", sourceType: "personal_goal_completion", sourceItemId: "g9", points: 20, reason: null, createdAt: "2026-07-19T10:00:00.000Z", date: "2026-07-19" }] },
+    closingSummary: ["You completed 1 Goal during this reporting period."],
     ...over,
   };
 }
 
-const emptyReport = (): ProgressReport =>
+// --- reading the generated PDF -----------------------------------------------------------------
+type Internal = {
+  pages: string[][];
+  getFont(): { id: string; metadata: { cmap: { unicode: { codeMap: Record<number, number> } } } };
+};
+
+/** Drawn lines per page, as characters in drawing order (presentation forms folded with NFKC). */
+function drawnPages(doc: jsPDF): string[][] {
+  const internal = doc.internal as unknown as Internal;
+  // One glyph-ID → character map per embedded font (regular and bold use different IDs).
+  const byFont = new Map<string, Map<number, string>>();
+  const families = Object.keys(doc.getFontList()).filter((f) => f === PDF_FONT_FAMILY || f === PDF_ARABIC_FONT_FAMILY);
+  for (const [family, style] of families.flatMap((f) => (["normal", "bold"] as const).map((s) => [f, s] as const))) {
+    doc.setFont(family, style);
+    const font = internal.getFont();
+    const map = new Map<number, string>();
+    for (const [cp, gid] of Object.entries(font.metadata.cmap.unicode.codeMap)) {
+      const c = Number(cp);
+      if (!map.has(gid) || c < 0xfb50) map.set(gid, String.fromCodePoint(c));
+    }
+    byFont.set(font.id, map);
+  }
+  return internal.pages.slice(1).map((ops) => {
+    const lines: string[] = [];
+    const body = ops.join("\n");
+    const re = /\/(F\d+)\s+[\d.]+\s+Tf[\s\S]*?<([0-9A-Fa-f]+)>\s*Tj/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body))) {
+      const map = byFont.get(m[1]);
+      const hex = m[2];
+      let s = "";
+      for (let i = 0; i < hex.length; i += 4) {
+        const gid = parseInt(hex.slice(i, i + 4), 16);
+        const ch = map?.get(gid) ?? "�";
+        // A lam-alef ligature is one glyph; drawn left to right its parts read alef, then lam.
+        s += /[ﻵ-ﻼ]/.test(ch) ? rev(ch.normalize("NFKC")) : ch;
+      }
+      lines.push(s.normalize("NFKC").replace(/ /g, " "));
+    }
+    return lines;
+  });
+}
+
+const rev = (s: string) => Array.from(s).reverse().join("");
+/**
+ * Expected left-to-right drawing order of a right-to-left line: characters reversed, digit runs
+ * kept in reading order, brackets mirrored. (Applying it twice gives back the typed text.)
+ */
+const rtlVisual = (s: string) =>
+  rev(s)
+    .replace(/[0-9]+/g, (d) => rev(d))
+    .replace(/[()[\]]/g, (c) => ({ "(": ")", ")": "(", "[": "]", "]": "[" })[c]!);
+
+const withNotes = (notes: string[]) =>
   makeReport({
-    activeGoals: [],
-    activeAchievements: [],
-    completedDuringPeriod: [],
-    checkInActivity: { totalCheckIns: 0, activeDays: 0, mostConsistentItem: null },
-    wellbeingEntries: { wins: [], challenges: [], reflections: [], notes: [], moodCounts: [] },
-    needsAttention: [],
-    rewards: { pointsEarned: 0, transactions: [] },
-    closingSummary: [],
+    wellbeingEntries: {
+      ...makeReport().wellbeingEntries,
+      notes: notes.map((text, i) => ({ text, date: "2026-07-20", itemId: `g${i}`, itemType: "goal" as const, itemTitle: "Morning walk" })),
+    },
   });
 
-/** All text drawn on a given page, joined. */
-const pageText = (d: { texts: Array<{ page: number; text: string }> }, page: number) =>
-  d.texts.filter((t) => t.page === page).map((t) => t.text).join(" ");
-const allText = (d: { texts: Array<{ text: string }> }) => d.texts.map((t) => t.text).join(" ");
+async function build(report: ProgressReport, f: PdfFontFiles = fonts) {
+  const built = await buildProgressReportPdf(report, { fonts: f, logo: null });
+  return { ...built, pages: f.latin || f.arabic ? drawnPages(built.doc) : [] };
+}
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  docs.length = 0;
-  failNext.value = false;
-  // Logo fetch is unavailable in jsdom -> renderer must degrade to a text header.
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
-});
-
-// ===========================================================================
-describe("file naming", () => {
-  it("uses solace-progress-report-YYYY-MM-DD.pdf from the generated date", () => {
-    expect(progressReportFileName(makeReport())).toBe("solace-progress-report-2026-07-23.pdf");
+// ===============================================================================================
+describe("dates, period and file name", () => {
+  it("formats date-only values from their calendar parts (no time-zone shift)", () => {
+    expect(formatReportDay("2026-07-01")?.replace(/ /g, " ")).toBe("1 Jul 2026");
+    expect(formatReportDay("2026-12-31")?.replace(/ /g, " ")).toBe("31 Dec 2026");
+    expect(formatReportDay(null)).toBeNull();
   });
 
-  it("always produces a safe dated filename", () => {
-    expect(progressReportFileName(makeReport({ generatedAt: "not-a-date" }))).toMatch(
-      /^solace-progress-report-\d{4}-\d{2}-\d{2}\.pdf$/
+  it("states the inclusive reporting dates, and never invents a start for all time", () => {
+    const plain = (s: string) => s.replace(/ /g, " ");
+    expect(plain(formatReportPeriod(makeReport()))).toBe("Last 30 days: 24 Jun 2026 – 23 Jul 2026");
+    expect(plain(formatReportPeriod(makeReport({ period: { range: "all", start: null, end: "2026-07-23", label: "All time" } })))).toBe(
+      "All time, through 23 Jul 2026"
+    );
+  });
+
+  it("shows the generated time in the report's time zone, falling back to the device zone", () => {
+    expect(formatGeneratedAt(makeReport())).toEqual({ text: "23 Jul 2026, 17:00", timeZone: "Asia/Karachi" });
+    const fallback = formatGeneratedAt(makeReport({ timezone: "Not/AZone" }));
+    expect(fallback.timeZone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it("names the file after the actual period", () => {
+    expect(progressReportFileName(makeReport())).toBe("solace-goals-progress-report-2026-06-24-to-2026-07-23.pdf");
+    expect(progressReportFileName(makeReport({ period: { range: "all", start: null, end: "2026-07-23", label: "All time" } }))).toBe(
+      "solace-goals-progress-report-all-time-to-2026-07-23.pdf"
     );
   });
 });
 
-// ===========================================================================
-describe("document structure", () => {
-  it("renders the cover title, subtitle and period", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string; page: number }> };
-    const text = allText(d);
-    expect(text).toContain("Goals & Achievements Progress Report");
-    expect(text).toContain("Your personal wellness progress and growth.");
-    expect(text).toContain("Last 30 days");
-    expect(text).toContain("Alex Rivera");
+describe("content", () => {
+  it("renders sections in reading order with real dates and page numbers on every page", async () => {
+    const { pages } = await build(makeReport());
+    const all = pages.flat();
+    const order = ["Summary", "Goal progress", "Completed during this period", "Needs attention", "Check-in notes", "Points history", "Report notes"]
+      .map((h) => all.indexOf(h));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(all).toContain("Goals & Achievements Progress Report");
+    expect(all).toContain("Reporting period: Last 30 days: 24 Jun 2026 – 23 Jul 2026 (dates inclusive)");
+    expect(all).toContain("Generated: 23 Jul 2026, 17:00 (Asia/Karachi)");
+    // The snapshot is computed when the report is generated, so it is labelled with that time.
+    expect(all).toContain("Current snapshot (as of 23 Jul 2026, 17:00, Asia/Karachi)");
+    pages.forEach((lines, i) => expect(lines).toContain(`Page ${i + 1} of ${pages.length}`));
   });
 
-  it("renders every required section heading", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string; page: number }> };
-    const text = allText(d);
-    for (const heading of [
-      "Executive Summary",
-      "Active Goals",
-      "Active Personal Achievements",
-      "Period Summary",
-      "Completed During This Period",
-      "Check-In Activity",
-      "Needs Attention",
-      "Rewards & Levels",
-      "Summary",
-    ]) {
-      expect(text).toContain(heading);
-    }
+  it("shows each summary measure once, keeping all-time and period values distinct", async () => {
+    const all = (await build(makeReport())).pages.flat();
+    const count = (s: string) => all.filter((l) => l === s).length;
+    expect(count("Total points (all time)")).toBe(1);
+    expect(count("Points earned")).toBe(1);
+    expect(count("Check-ins")).toBe(1);
+    expect(count("Goals completed (all time)")).toBe(1);
+    expect(count("Goals completed")).toBe(1);
+    expect(all).toContain("350"); // total points (all time)
+    expect(all).toContain("20"); // points earned in the period
   });
 
-  it("uses a text wordmark when no logo image is available", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as {
-      texts: Array<{ text: string }>;
-      images: number;
-    };
-    expect(d.images).toBe(0);
-    expect(allText(d)).toContain("Solace");
+  it("keeps zeros, and says 'Not available' only for missing values", async () => {
+    const all = (await build(makeReport({ periodSummary: { ...makeReport().periodSummary, overallConsistencyRate: null, completedAchievements: 0 } }))).pages.flat();
+    expect(all).toContain("Not available");
+    expect(all.filter((l) => l === "0").length).toBeGreaterThanOrEqual(2);
+    expect(all.some((l) => l.includes("Consistency: custom frequency (not calculated)"))).toBe(true);
   });
-});
 
-// ===========================================================================
-describe("header and footer on every page", () => {
-  it("stamps the running header and Page X of Y on all pages", async () => {
-    const many = Array.from({ length: 14 }, (_, i) => goal({ id: `g${i}`, title: `Goal number ${i}` }));
-    const d = (await buildProgressReportPdf(makeReport({ activeGoals: many }))) as unknown as {
-      pages: number;
-      texts: Array<{ page: number; text: string }>;
-    };
-    expect(d.pages).toBeGreaterThan(1);
-
-    for (let p = 1; p <= d.pages; p += 1) {
-      const text = pageText(d, p);
-      expect(text).toContain("Solace");
-      expect(text).toContain("Goals & Achievements Progress Report");
-      expect(text).toContain(`Page ${p} of ${d.pages}`);
-      expect(text).toContain("Generated:");
-    }
+  it("shows honest empty states", async () => {
+    const all = (await build(makeReport({
+      activeGoals: [], activeAchievements: [], completedDuringPeriod: [], needsAttention: [],
+      wellbeingEntries: { wins: [], challenges: [], reflections: [], notes: [], moodCounts: [] },
+      rewards: { pointsEarned: 0, transactions: [] }, closingSummary: [],
+    }))).pages.flat();
+    for (const msg of [
+      "No active Goals.", "No active Personal Achievements.", "Nothing was completed during this reporting period.",
+      "No active items currently need attention for this reporting period.", "No points were earned during this reporting period.",
+    ]) expect(all).toContain(msg);
   });
-});
 
-// ===========================================================================
-describe("pagination", () => {
-  it("produces multiple pages for a large report", async () => {
-    const many = Array.from({ length: 30 }, (_, i) => goal({ id: `g${i}`, title: `Goal ${i}` }));
-    const wins = Array.from({ length: 60 }, (_, i) => ({
-      text: `Win number ${i} with a reasonably long description that needs wrapping across lines.`,
-      date: "2026-07-19",
-      itemId: "g1",
-      itemType: "goal" as const,
-      itemTitle: "Morning walk",
+  it("wraps long and unbroken text without truncating it", async () => {
+    const unbroken = "Supercalifragilisticexpialidocious".repeat(5);
+    const longName = `${"Very long display name ".repeat(8)}end`;
+    const { pages } = await build(makeReport({
+      user: { displayName: longName },
+      completedDuringPeriod: [{ ...makeReport().completedDuringPeriod[0], title: unbroken }],
     }));
-    const d = (await buildProgressReportPdf(
-      makeReport({ activeGoals: many, wellbeingEntries: { ...makeReport().wellbeingEntries, wins } })
-    )) as unknown as { pages: number };
-    expect(d.pages).toBeGreaterThan(3);
+    const all = pages.flat();
+    const parts = all.filter((l) => /^[A-Za-z]+$/.test(l) && unbroken.includes(l) && l.length > 10);
+    expect(parts.length).toBeGreaterThanOrEqual(2);
+    expect(parts.join("")).toBe(unbroken);
+    expect(all.join(" ").replace(/\s+/g, " ")).toContain(longName);
   });
 
-  it("never splits an item card across a page boundary", async () => {
-    const many = Array.from({ length: 20 }, (_, i) => goal({ id: `g${i}`, title: `Goal ${i}` }));
-    const d = (await buildProgressReportPdf(makeReport({ activeGoals: many }))) as unknown as {
-      rects: Array<{ page: number; y: number; h: number; style: string }>;
-    };
-    // Card surfaces are the full-width outlined rects; each must fit its page.
-    const cards = d.rects.filter((r) => r.style === "FD" && r.h > 25);
-    expect(cards.length).toBeGreaterThan(0);
-    for (const card of cards) {
-      expect(card.y + card.h).toBeLessThanOrEqual(297);
+  it("repeats table headers on continuation pages", async () => {
+    const tx = Array.from({ length: 80 }, (_, i) => ({ id: `t${i}`, sourceType: "personal_goal_completion", sourceItemId: "g", points: i, reason: null, createdAt: "2026-07-01T00:00:00Z", date: "2026-07-01" }));
+    const { pages } = await build(makeReport({ rewards: { pointsEarned: 1, transactions: tx } }));
+    const withRows = pages.filter((lines) => lines.includes("+79") || lines.some((l) => /^\+\d+$/.test(l)));
+    expect(withRows.length).toBeGreaterThanOrEqual(2);
+    for (const lines of withRows) expect(lines).toContain("Source");
+  });
+
+  it("never draws a separator through text, and keeps text inside the margins", async () => {
+    const tx = Array.from({ length: 50 }, (_, i) => ({ id: `t${i}`, sourceType: "personal_goal_completion", sourceItemId: "g", points: i, reason: i % 3 ? null : "Bonus", createdAt: "2026-07-01T00:00:00Z", date: "2026-07-01" }));
+    const { doc } = await build(makeReport({ rewards: { pointsEarned: 1, transactions: tx }, activeGoals: Array.from({ length: 6 }, (_, i) => goal({ id: `g${i}` })) }));
+    const pages = (doc.internal as unknown as Internal).pages.slice(1);
+    for (const ops of pages) {
+      const body = ops.join("\n");
+      const texts = [...body.matchAll(/\/F\d+\s+([\d.]+)\s+Tf[\s\S]*?([\d.-]+)\s+([\d.-]+)\s+Td/g)].map((m) => ({ size: +m[1], y: +m[3] }));
+      const rules = [...body.matchAll(/([\d.]+)\s+([\d.]+)\s+m\s+([\d.]+)\s+([\d.]+)\s+l\s+S/g)].filter((m) => m[2] === m[4]).map((m) => +m[2]);
+      for (const y of rules) {
+        for (const t of texts) {
+          expect(y > t.y - t.size * 0.22 + 0.3 && y < t.y + t.size * 0.78 - 0.3).toBe(false);
+        }
+      }
+      for (const t of texts) {
+        const fromTopMm = (841.89 - t.y) * 0.3528;
+        expect(fromTopMm).toBeGreaterThan(8);
+        expect(fromTopMm).toBeLessThan(290);
+      }
     }
   });
 });
 
-// ===========================================================================
-describe("progress bars", () => {
-  it("draws a filled bar sized from the backend percentage only", async () => {
-    const d = (await buildProgressReportPdf(
-      makeReport({ activeGoals: [goal({ currentProgress: 72 })], activeAchievements: [] })
-    )) as unknown as { rects: Array<{ w: number; h: number; style: string }> };
-
-    const bars = d.rects.filter((r) => r.h === 3.2 && r.style === "F");
-    expect(bars.length).toBeGreaterThanOrEqual(2); // track + fill
-    const track = bars.find((b) => b.w === 170);
-    const fillBar = bars.find((b) => Math.abs(b.w - 170 * 0.72) < 0.01);
-    expect(track).toBeTruthy();
-    expect(fillBar).toBeTruthy(); // width is exactly 72% of the track
+describe("multilingual text", () => {
+  it("draws complete Urdu, including ہ ے and ۔, in right-to-left order", async () => {
+    const { pages, usedUnicodeFont, emojiReplacedCount } = await build(withNotes([URDU_FULL, URDU_COVERED]));
+    const all = pages.flat();
+    expect(usedUnicodeFont).toBe(true);
+    expect(emojiReplacedCount).toBe(0);
+    expect(all).toContain(rtlVisual(URDU_FULL));
+    // Drawn left to right: پڑھا منٹ 25 میں, the number kept in reading order.
+    expect(all).toContain(`${rev("پڑھا")} ${rev("منٹ")} 25 ${rev("میں")}`);
+    expect(all.join("")).not.toContain("�");
   });
 
-  it("clamps out-of-range percentages safely", async () => {
-    const d = (await buildProgressReportPdf(
-      makeReport({ activeGoals: [goal({ currentProgress: 250 })], activeAchievements: [] })
-    )) as unknown as { rects: Array<{ w: number; h: number; style: string }> };
-    const bars = d.rects.filter((r) => r.h === 3.2 && r.style === "F");
-    // No bar may exceed its track (item bars 170mm, level bar 178mm full width).
-    for (const b of bars) expect(b.w).toBeLessThanOrEqual(178.001);
-    // The 250% item bar is clamped to exactly its 170mm track, never wider.
-    expect(bars.some((b) => Math.abs(b.w - 170) < 0.01)).toBe(true);
+  it("keeps numbers, punctuation and brackets in place in right-to-left lines", async () => {
+    const text = "میں نے (3) کتابیں پڑھیں، اور 45 منٹ چلا! [ہفتہ 2]؟";
+    const { pages } = await build(withNotes([text]));
+    expect(pages.flat()).toContain(rtlVisual(text));
   });
 
-  it("prints the percentage next to the bar", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    expect(allText(d)).toContain("72%");
-  });
-});
-
-// ===========================================================================
-describe("content rendering (backend values verbatim)", () => {
-  it("renders item detail using backend values", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("Morning walk");
-    expect(text).toContain("18 / 25 workouts");
-    expect(text).toContain("Consistency: 64%");
-    expect(text).toContain("Period: 40% to 72%");
-    expect(text).toContain("+32 percentage points");
+  it("orders Urdu inside an English line, and English inside an Urdu line", async () => {
+    const { pages } = await build({ ...withNotes(["آج Calm رہا 3 بار"]), activeGoals: [goal({ title: "Goal: پاکستان ٹھیک" })] });
+    const all = pages.flat();
+    expect(all).toContain(`Goal: ${rev("ٹھیک")} ${rev("پاکستان")}`);
+    expect(all).toContain(`${rev("بار")} 3 ${rev("رہا")} Calm ${rev("آج")}`);
   });
 
-  it("shows custom frequency instead of a 0% consistency", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    expect(allText(d)).toContain("Consistency: Custom frequency");
+  it("wraps long Urdu over several lines without losing or reordering words", async () => {
+    const text = Array.from({ length: 6 }, () => URDU_FULL).join(" ");
+    const { pages } = await build(withNotes([text]));
+    const lines = pages.flat().filter((l) => /[؀-ۿ]/.test(l));
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.map((l) => rtlVisual(l)).join(" ")).toBe(text);
   });
 
-  it("renders completed items with ledger points", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("Drink more water");
-    expect(text).toContain("20 pts");
+  it("shows emoji as a marker and keeps the rest of the text", async () => {
+    const { pages, emojiReplacedCount } = await build(withNotes(["Great day 😊 with family 👨‍👩‍👧 and friends 🇵🇰!"]));
+    const all = pages.flat();
+    expect(all).toContain(`Great day ${EMOJI_MARKER} with family ${EMOJI_MARKER} and friends ${EMOJI_MARKER}!`);
+    expect(emojiReplacedCount).toBe(3);
+    expect(all.some((l) => l.startsWith("Emoji can't be shown in this PDF."))).toBe(true);
   });
 
-  it("renders rewards with friendly labels, never raw codes", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("Goal completion");
-    expect(text).toContain("+20 pts");
-    expect(text).not.toContain("personal_goal_completion");
+  it("does not add the emoji note when there are no emoji", async () => {
+    const all = (await build(makeReport())).pages.flat();
+    expect(all.some((l) => l.startsWith("Emoji can't be shown"))).toBe(false);
   });
 
-  it("renders backend attention reasons and infers none", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("Past target date");
-    expect(text).toContain("No recent check-ins");
-    expect(text).not.toContain("Target date is approaching");
-  });
-
-  it("renders the closing summary lines verbatim", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("You completed 1 Goal during this reporting period.");
-    expect(text).toContain("You earned 20 points.");
-  });
-
-  it("renders mood summary counts", async () => {
-    const d = (await buildProgressReportPdf(makeReport())) as unknown as { texts: Array<{ text: string }> };
-    expect(allText(d)).toContain("Calm - 4");
+  it("fails instead of drawing a report with characters missing", async () => {
+    const err = await build(withNotes(["Learning 你好 today"])).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PdfUnsupportedTextError);
+    expect((err as PdfUnsupportedTextError).reason).toBe("no-glyph");
+    expect((err as PdfUnsupportedTextError).characters).toEqual(["你", "好"]);
   });
 });
 
-// ===========================================================================
-describe("long content", () => {
-  it("wraps a very long note over many lines without truncating it", async () => {
-    const longText = Array.from({ length: 90 }, (_, i) => `sentence${i}`).join(" ");
-    const d = (await buildProgressReportPdf(
-      makeReport({
-        wellbeingEntries: {
-          ...makeReport().wellbeingEntries,
-          notes: [
-            { text: longText, date: "2026-07-19", itemId: "a1", itemType: "achievement", itemTitle: "Read every evening" },
-          ],
-        },
-      })
-    )) as unknown as { texts: Array<{ text: string }> };
-
-    const joined = allText(d);
-    // First and last fragments both present -> nothing cut off.
-    expect(joined).toContain("sentence0");
-    expect(joined).toContain("sentence89");
-  });
-});
-
-// ===========================================================================
-describe("empty report", () => {
-  it("keeps every section and shows the empty message", async () => {
-    const d = (await buildProgressReportPdf(emptyReport())) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    for (const heading of [
-      "Executive Summary",
-      "Active Goals",
-      "Active Personal Achievements",
-      "Period Summary",
-      "Completed During This Period",
-      "Check-In Activity",
-      "Needs Attention",
-      "Rewards & Levels",
-      "Summary",
-    ]) {
-      expect(text).toContain(heading);
-    }
-    expect(text).toContain("No activity during this reporting period.");
-    expect(text).toContain("No active Goals.");
-  });
-});
-
-// ===========================================================================
-describe("download button", () => {
-  beforeEach(() => {
-    vi.stubGlobal("URL", {
-      ...URL,
-      createObjectURL: vi.fn(() => "blob:mock"),
-      revokeObjectURL: vi.fn(),
-    });
+describe("font loading", () => {
+  it("falls back to Helvetica for text it can draw when the Latin font cannot load", async () => {
+    const built = await buildProgressReportPdf(makeReport(), { fonts: { latin: null, arabic: null }, logo: null });
+    expect(built.usedUnicodeFont).toBe(false);
+    const raw = built.doc.output();
+    expect(raw).toContain("Goals & Achievements Progress Report");
+    expect(raw).toContain("Morning walk");
   });
 
-  it("renders an accessible Download PDF button", () => {
-    render(<ProgressReportDownloadButton report={makeReport()} />);
-    expect(screen.getByRole("button", { name: /Download PDF/i })).toBeInTheDocument();
-  });
-
-  it("downloads a file with the dated Solace name", async () => {
-    const user = userEvent.setup();
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(function (this: HTMLAnchorElement) {
-        expect(this.download).toBe("solace-progress-report-2026-07-23.pdf");
-      });
-
-    render(<ProgressReportDownloadButton report={makeReport()} />);
-    await user.click(screen.getByRole("button", { name: /Download PDF/i }));
-
-    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
-    expect(JsPdfMock).toHaveBeenCalled();
-    clickSpy.mockRestore();
-  });
-
-  it("shows a toast and recovers when generation fails", async () => {
-    const user = userEvent.setup();
-    failNext.value = true;
-
-    render(<ProgressReportDownloadButton report={makeReport()} />);
-    const button = screen.getByRole("button", { name: /Download PDF/i });
-    await user.click(button);
-
-    await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith("Unable to generate your report. Please try again.")
-    );
-    // Control is restored, not stuck in a pending state.
-    await waitFor(() => expect(button).not.toBeDisabled());
-  });
-
-  it("exposes a busy state while generating", async () => {
-    render(<ProgressReportDownloadButton report={makeReport()} />);
-    const button = screen.getByRole("button", { name: /Download PDF/i });
-    expect(button).toHaveAttribute("aria-busy", "false");
-  });
-});
-
-// ===========================================================================
-describe("no additional API calls", () => {
-  it("builds entirely from the passed report object", async () => {
-    const fetchSpy = vi.fn().mockRejectedValue(new Error("no network"));
-    vi.stubGlobal("fetch", fetchSpy);
-    await buildProgressReportPdf(makeReport());
-    // The only fetch attempted is the optional local logo asset.
-    for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).toContain("/logos/");
+  it("fails (no PDF) when Urdu is present but its font cannot load", async () => {
+    for (const f of [{ latin: fonts.latin, arabic: null }, { latin: null, arabic: null }]) {
+      const err = await buildProgressReportPdf(withNotes([URDU_COVERED]), { fonts: f, logo: null }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PdfUnsupportedTextError);
+      expect((err as PdfUnsupportedTextError).reason).toBe("font-unavailable");
     }
   });
-});
 
-describe("system achievements in the PDF (Phase 5)", () => {
-  it("renders a system achievement with its origin label", async () => {
-    const report = makeReport({
-      activeAchievements: [
-        goal({ id: "s1", title: "First Steps", origin: "system", iconName: "footprints", status: "active", currentProgress: 30 }),
-      ],
-    });
-    const d = (await buildProgressReportPdf(report)) as unknown as { texts: Array<{ text: string }> };
-    const text = allText(d);
-    expect(text).toContain("First Steps");
-    expect(text).toContain("Origin: System");
+  it("fails (no PDF) when the Latin font is missing and text needs more than Helvetica has", async () => {
+    const err = await buildProgressReportPdf(withNotes(["Привет"]), { fonts: { latin: null, arabic: null }, logo: null }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PdfUnsupportedTextError);
+    expect((err as PdfUnsupportedTextError).reason).toBe("font-unavailable");
   });
 
-  it("renders the reward-pending status verbatim (never Active 100%)", async () => {
-    const report = makeReport({
-      activeAchievements: [
-        goal({ id: "s1", title: "First Steps", origin: "system", status: "completed_reward_pending", currentProgress: 100 }),
-      ],
-    });
-    const d = (await buildProgressReportPdf(report)) as unknown as { texts: Array<{ text: string }> };
-    expect(allText(d)).toContain("Completed · Reward pending");
-  });
+  it("fetches the Urdu font only when needed, and reports failed loads as null", async () => {
+    const ok = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    await loadPdfFonts(false, ok as unknown as typeof fetch);
+    expect(ok.mock.calls.map((c) => String(c[0])).some((u) => u.includes("Amiri"))).toBe(false);
 
-  it("renders a system completion with origin + ledger reward, and no invented reward without a ledger row", async () => {
-    const withReward = makeReport({
-      completedDuringPeriod: [
-        {
-          itemType: "achievement",
-          itemId: "s1",
-          title: "First Steps",
-          origin: "system",
-          completedAt: "2026-07-19",
-          rewardPointsAwarded: 10,
-          trackingType: "count",
-          finalCurrentValue: 1,
-          finalTargetValue: 1,
-        },
-      ],
-    });
-    const d1 = (await buildProgressReportPdf(withReward)) as unknown as { texts: Array<{ text: string }> };
-    const t1 = allText(d1);
-    expect(t1).toContain("First Steps");
-    expect(t1).toContain("System");
-    expect(t1).toContain("10 pts");
-
-    const noReward = makeReport({
-      completedDuringPeriod: [
-        {
-          itemType: "achievement",
-          itemId: "s2",
-          title: "Mood Master",
-          origin: "system",
-          completedAt: "2026-07-19",
-          rewardPointsAwarded: 0, // no ledger row yet
-          trackingType: "count",
-          finalCurrentValue: 7,
-          finalTargetValue: 7,
-        },
-      ],
-    });
-    const d2 = (await buildProgressReportPdf(noReward)) as unknown as { texts: Array<{ text: string }> };
-    expect(allText(d2)).toContain("0 pts");
-  });
-
-  it("paginates a mixed personal + system report across multiple pages", async () => {
-    const many = Array.from({ length: 16 }, (_, i) =>
-      goal({ id: `s${i}`, title: `System achievement ${i}`, origin: i % 2 ? "system" : "personal" })
-    );
-    const d = (await buildProgressReportPdf(
-      makeReport({ activeAchievements: many })
-    )) as unknown as { pages: number; texts: Array<{ page: number; text: string }> };
-    expect(d.pages).toBeGreaterThan(1);
-    for (let p = 1; p <= d.pages; p += 1) {
-      expect(pageText(d, p)).toContain(`Page ${p} of ${d.pages}`);
-    }
+    const failing = vi.fn(async () => new Response("", { status: 404 }));
+    await expect(loadPdfFonts(true, failing as unknown as typeof fetch)).resolves.toEqual({ latin: null, arabic: null });
   });
 });

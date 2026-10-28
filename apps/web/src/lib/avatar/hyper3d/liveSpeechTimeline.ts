@@ -112,8 +112,13 @@ const MIN_PHONEME_SECONDS = 0.001;
  *    RESCALED onto the audible window.
  *  - `audible-onset`   absolute times whose t=0 is the voice onset. Already
  *    audible-local; the conversion is the pure offset it has always been.
+ *  - `sentence-relative`  STREAMED PCM. The backend's `_tts_drainer` puts the
+ *    WHOLE sentence's estimated phonemes on the sentence's first PCM chunk and
+ *    `phonemes: []` on every later chunk, then a 250 ms all-zero chunk. These
+ *    times span the sentence, not the chunk, so they are laid across the
+ *    sentence's accumulated audio — see `placeOpenSentence`.
  */
-export type PhonemeTimeDomain = "estimated-span" | "audible-onset";
+export type PhonemeTimeDomain = "estimated-span" | "audible-onset" | "sentence-relative";
 
 /**
  * THE ONE PLACE the clock-domain assumption lives.
@@ -143,9 +148,20 @@ export type PhonemeTimeDomain = "estimated-span" | "audible-onset";
  */
 export function phonemeTimeDomainForAssociation(
   associationMethod: string | null | undefined,
+  /** The reply's `audio_start.format`. Only `pcm_s16le` is the streaming transport. */
+  audioFormat?: string | null,
 ): PhonemeTimeDomain {
-  return associationMethod === "bundled" ? "estimated-span" : "audible-onset";
+  if (associationMethod !== "bundled") return "audible-onset";
+  return audioFormat === "pcm_s16le" ? "sentence-relative" : "estimated-span";
 }
+
+/**
+ * Phonemes starting before `now + this` are never re-placed. It covers the
+ * coarticulation look-ahead (80 ms) and the corrective bilabial look-ahead
+ * (100 ms) plus a frame, so a re-placement can never change the pose the next
+ * rendered frame blends.
+ */
+export const SENTENCE_FREEZE_SECONDS = 0.15;
 
 export type LiveChunkAppendInput = {
   /**
@@ -178,6 +194,11 @@ export type LiveChunkAppendInput = {
   sentence: string;
   /** `AudioContext.currentTime` sampled at append — for natural look-ahead stats. */
   contextTimeAtAppend: number;
+  /**
+   * The decoded chunk is exact digital zero — the backend's injected 250 ms
+   * inter-sentence silence. Read only in the `sentence-relative` domain.
+   */
+  digitalSilence?: boolean;
 };
 
 export type LiveChunkAppendResult =
@@ -198,6 +219,13 @@ export type LiveChunkAppendResult =
        * skipped one. Observational; nothing reads it back.
        */
       timeScale: number;
+      /**
+       * `sentence-relative` only: this chunk's phonemes as the per-chunk rescale
+       * places them — exactly what every domain produced before — as objects of
+       * their own. The head-motion planner consumes these so its input does not
+       * change, and the mouth-timing objects it never sees can be replaced.
+       */
+      plannerPhonemes?: TimedPhoneme[];
     }
   | {
       accepted: false;
@@ -266,6 +294,117 @@ export function createLiveSpeechTimeline() {
   let lookAheadSamples: number[] = [];
 
   /**
+   * THE STREAMED SENTENCE STILL BEING TIMED (`sentence-relative` only).
+   *
+   * Its phonemes are always the TAIL of `phonemes`: the next sentence closes it
+   * before appending. `bStart`/`bEnd` are the backend's sentence-relative times,
+   * kept so the unplayed part can be re-placed as the sentence's audio arrives.
+   */
+  type OpenSentence = {
+    /** Index in `phonemes` of the sentence's first phoneme. */
+    first: number;
+    /** Response time of the sentence's first chunk. */
+    offset: number;
+    ids: string[];
+    labels: string[];
+    bStart: number[];
+    bEnd: number[];
+    /** Backend span: the last backend end. */
+    span: number;
+    /** End of the sentence's last NON-silent chunk. */
+    audioEnd: number;
+    /** Where the sentence's last phoneme currently ends. */
+    estEnd: number;
+    /** False until the first placement; after it, the freeze window is respected. */
+    placed: boolean;
+  };
+  let openSentence: OpenSentence | null = null;
+  /** Actual / backend duration of each sentence closed this turn. */
+  const sentenceRatios: number[] = [];
+
+  /**
+   * Lay the open sentence's backend times linearly onto `[anchor, end]`.
+   *
+   * FROZEN: every phoneme already placed that starts before
+   * `now + SENTENCE_FREEZE_SECONDS` keeps its object and its times. The anchor is
+   * the last frozen phoneme's end, so the re-placed remainder continues from it
+   * with no gap, overlap or reorder. Everything after is REPLACED with new
+   * objects (copy-on-write) — nothing outside this module holds them, and the
+   * planner is handed separate objects altogether.
+   *
+   * `clip` (end of speech): a frozen phoneme may not start at or after `end`, and
+   * the last one is cut to end there, so nothing plays past the sentence's audio.
+   */
+  function placeOpenSentence(sentence: OpenSentence, now: number, end: number, clip: boolean): number {
+    sentence.estEnd = end;
+    const freezeAt = Number.isFinite(now) ? now + SENTENCE_FREEZE_SECONDS : Infinity;
+    let frozen = 0;
+    while (sentence.first + frozen < phonemes.length && phonemes[sentence.first + frozen].start_time < freezeAt) {
+      frozen += 1;
+    }
+    if (clip) {
+      while (frozen > 0 && phonemes[sentence.first + frozen - 1].start_time >= end) frozen -= 1;
+      const last = sentence.first + frozen - 1;
+      if (frozen > 0 && phonemes[last].end_time > end) phonemes[last] = { ...phonemes[last], end_time: end };
+    }
+    phonemes.length = sentence.first + frozen;
+
+    const previousEnd = sentence.first > 0 ? phonemes[sentence.first - 1].end_time : 0;
+    // Once placed, nothing re-placed may START inside the freeze window either —
+    // a frozen phoneme can end inside it, and the gap after it is what the next
+    // frames were going to render. Starts are clamped to it; the anchor is not
+    // moved, so the remainder keeps its pace and nothing chases the window.
+    const floor = sentence.placed && Number.isFinite(freezeAt) ? freezeAt : -Infinity;
+    sentence.placed = true;
+    const anchorTime =
+      frozen > 0 ? phonemes[sentence.first + frozen - 1].end_time : Math.max(sentence.offset, previousEnd);
+    const anchorBackend = frozen > 0 ? sentence.bEnd[frozen - 1] : 0;
+    const remaining = sentence.span - anchorBackend;
+    if (frozen >= sentence.labels.length || !(end > anchorTime) || !(remaining > 0)) return frozen;
+
+    const slope = (end - anchorTime) / remaining;
+    let cursor = anchorTime;
+    for (let j = frozen; j < sentence.labels.length; j += 1) {
+      const start = Math.max(cursor, floor, anchorTime + (sentence.bStart[j] - anchorBackend) * slope);
+      const stop = Math.max(start, Math.min(end, anchorTime + (sentence.bEnd[j] - anchorBackend) * slope));
+      phonemes.push({
+        id: sentence.ids[j],
+        phoneme: sentence.labels[j],
+        start_time: start,
+        end_time: stop,
+        intensity: ACCEPTED_LIVE_PHONEME_INTENSITY,
+      });
+      cursor = stop;
+    }
+    return sentence.labels.length;
+  }
+
+  /** The open sentence's speech has ended at `audioEnd`: fit it there and close it. */
+  function closeOpenSentence(now: number) {
+    const sentence = openSentence;
+    if (!sentence) return;
+    if (sentence.span > 0 && sentence.audioEnd > sentence.offset) {
+      sentenceRatios.push(Math.min(2, Math.max(0.5, (sentence.audioEnd - sentence.offset) / sentence.span)));
+    }
+    placeOpenSentence(sentence, now, sentence.audioEnd, true);
+    openSentence = null;
+  }
+
+  /**
+   * How much longer than the backend's own estimate this turn's sentences run,
+   * and NEVER below 1. The provisional end deliberately errs long: a long
+   * estimate is corrected for free at the boundary by compressing the unplayed
+   * remainder, but a short one plays its phonemes out early and cannot be
+   * recovered once they are frozen.
+   */
+  const sentenceRatio = () => {
+    if (!sentenceRatios.length) return 1;
+    const sorted = [...sentenceRatios].sort((a, b) => a - b);
+    const mid = sorted.length >> 1;
+    return Math.max(1, sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+  };
+
+  /**
    * The payload handed to the runtime. Its identity changes only when the
    * timeline actually changes, so a consumer can cheaply detect "new data"
    * without diffing — and `phonemes` keeps ONE array identity for the whole
@@ -326,6 +465,8 @@ export function createLiveSpeechTimeline() {
     exactLabelMatches = 0;
     normalizedLabelMatches = 0;
     lookAheadSamples = [];
+    openSentence = null;
+    sentenceRatios.length = 0;
     payload = buildPayload();
   }
 
@@ -418,6 +559,24 @@ export function createLiveSpeechTimeline() {
         chunkCount += 1;
         const trimmedSentence = input.sentence.trim();
         if (trimmedSentence) sentences.push(trimmedSentence);
+        /**
+         * A streamed sentence's continuation. Its audio is the sentence's own, so
+         * the sentence may only ever end later than its estimate — extend when
+         * the audio passes it. The injected all-zero chunk marks where speech
+         * stopped: fit to it now. It is provisional — a later non-silent chunk
+         * extends again — and the next sentence's first chunk finalizes.
+         */
+        if (openSentence && input.phonemeTimeDomain === "sentence-relative") {
+          const now = input.contextTimeAtAppend - origin;
+          if (input.digitalSilence) {
+            placeOpenSentence(openSentence, now, openSentence.audioEnd, true);
+          } else {
+            openSentence.audioEnd = Math.max(openSentence.audioEnd, offset + input.durationSeconds);
+            if (openSentence.audioEnd > openSentence.estEnd) {
+              placeOpenSentence(openSentence, now, openSentence.audioEnd, false);
+            }
+          }
+        }
         payload = buildPayload();
         return { accepted: false, chunkKey, reason: "no-phonemes" };
       }
@@ -435,6 +594,11 @@ export function createLiveSpeechTimeline() {
       }
 
       const chunkEnd = chunkOffset + input.durationSeconds;
+      const sentenceRelative = input.phonemeTimeDomain === "sentence-relative";
+      const now = input.contextTimeAtAppend - origin;
+      // A new sentence: the previous one's audio is complete, so fit and close it
+      // BEFORE anything below reads where the timeline ends.
+      if (openSentence) closeOpenSentence(now);
 
       /**
        * The span the backend laid its estimate across: the last phoneme's `end`,
@@ -461,10 +625,14 @@ export function createLiveSpeechTimeline() {
        */
       const spanCoversAudio =
         Number.isFinite(backendSpan) && backendSpan >= input.durationSeconds - MIN_PHONEME_SECONDS;
+      // `sentence-relative` computes the per-chunk projection exactly as
+      // `estimated-span` does: that projection is what the planner keeps getting.
       const scale =
-        input.phonemeTimeDomain === "estimated-span" && spanCoversAudio && backendSpan > 0
+        (input.phonemeTimeDomain === "estimated-span" || sentenceRelative) && spanCoversAudio && backendSpan > 0
           ? input.durationSeconds / backendSpan
           : 1;
+      const plannerPhonemes: TimedPhoneme[] = [];
+      const backend: Array<{ label: string; start: number; end: number }> = [];
       let appended = 0;
       let localDroppedUnknown = 0;
       let localDroppedDegenerate = 0;
@@ -498,6 +666,14 @@ export function createLiveSpeechTimeline() {
         // own start and collapse it to zero length.
         const nextStart = source[i + 1]?.start;
         const backendEnd = item.end ?? nextStart;
+        if (sentenceRelative) {
+          const previous = backend[backend.length - 1]?.end ?? 0;
+          const bStart = Math.max(previous, item.start);
+          const bEnd = backendEnd ?? item.start + 0.1;
+          if (Number.isFinite(bStart) && Number.isFinite(bEnd) && bEnd > bStart) {
+            backend.push({ label: result.phoneme, start: bStart, end: bEnd });
+          }
+        }
         const localStart = item.start * scale;
         const localEnd = backendEnd != null ? backendEnd * scale : input.durationSeconds;
 
@@ -528,7 +704,7 @@ export function createLiveSpeechTimeline() {
         }
 
         phonemeSeq += 1;
-        phonemes.push({
+        (sentenceRelative ? plannerPhonemes : phonemes).push({
           id: `t${turnId}-p${phonemeSeq}`,
           phoneme: result.phoneme,
           start_time: start,
@@ -537,6 +713,39 @@ export function createLiveSpeechTimeline() {
         });
         cursor = end;
         appended += 1;
+      }
+
+      /**
+       * STREAMED PCM: lay the sentence across its own audio, not its first chunk.
+       * Provisional end = the estimate scaled by this turn's measured
+       * actual/backend ratio, never before this chunk ends; continuation chunks
+       * extend it and the sentence boundary fits it exactly.
+       */
+      if (sentenceRelative) {
+        appended = 0;
+        if (backend.length) {
+          const span = backend[backend.length - 1].end;
+          const sentence: OpenSentence = {
+            first: phonemes.length,
+            offset: chunkOffset,
+            // Own namespace: `phonemeSeq` numbers the planner's objects exactly as before.
+            ids: backend.map((_, j) => `t${turnId}-s${chunkCount}-${j}`),
+            labels: backend.map((b) => b.label),
+            bStart: backend.map((b) => b.start),
+            bEnd: backend.map((b) => b.end),
+            span,
+            audioEnd: input.digitalSilence ? chunkOffset : chunkEnd,
+            estEnd: chunkEnd,
+            placed: false,
+          };
+          appended = placeOpenSentence(
+            sentence,
+            now,
+            Math.max(chunkOffset + span * sentenceRatio(), sentence.audioEnd),
+            false,
+          );
+          openSentence = sentence;
+        }
       }
 
       seenChunkKeys.add(chunkKey);
@@ -566,6 +775,7 @@ export function createLiveSpeechTimeline() {
         clampedOverlaps: localClamped,
         lookAheadSeconds,
         timeScale: scale,
+        ...(sentenceRelative ? { plannerPhonemes } : null),
       };
     },
 

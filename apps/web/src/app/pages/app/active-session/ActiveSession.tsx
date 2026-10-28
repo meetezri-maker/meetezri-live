@@ -1208,6 +1208,8 @@ export function ActiveSession() {
    * Read only by the Hyper3D association path; counting alone changes nothing.
    */
   const wsResponseEpochRef = useRef(0);
+  /** The current reply's `audio_start.format` — tells Hyper3D how its phonemes are timed. */
+  const wsAudioFormatRef = useRef<string | null>(null);
   const advanceWsResponseEpoch = () => {
     wsResponseEpochRef.current += 1;
   };
@@ -2981,6 +2983,7 @@ export function ActiveSession() {
         audioBuffer: timing.audioBuffer ?? null,
         isWelcome: item.prePermissionWelcome === true || item.sessionGreeting === true,
         associationMethod: item.metadataAssociation ?? null,
+        audioFormat: wsAudioFormatRef.current,
         audioB64Present: Boolean(item.avatarData?.audio_b64),
       });
       if (REALTIME_TRACE_ENABLED && hyper3dAppend) {
@@ -4599,6 +4602,7 @@ export function ActiveSession() {
         onAudioStart: (info) => {
           resetWsAudioReorderBuffer({ atAudioStart: true, traceReason: "audio_start" });
           wsSchedulerRef.current?.setAudioFormat(info.format, info.sampleRate);
+          wsAudioFormatRef.current = info.format;
         },
         onSpeakingStart: () => {
           advanceWsResponseEpoch();

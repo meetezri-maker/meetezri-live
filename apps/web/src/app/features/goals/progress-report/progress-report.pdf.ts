@@ -1,460 +1,757 @@
 /**
- * Progress Report PDF renderer — PRESENTATION ONLY.
+ * Goals & Achievements Progress Report PDF — PRESENTATION ONLY.
  *
- * Every number, label, date and summary line is taken verbatim from the report
- * object returned by GET /api/gamification/report. Nothing is recalculated: no
- * progress, consistency, completion, reward, level or attention logic lives
- * here. The renderer only lays the backend response out on A4 pages.
+ * Every number, label, date and summary line comes verbatim from the report returned by
+ * GET /api/gamification/report. Nothing is recalculated here; the renderer only lays the
+ * backend response out on A4 pages:
  *
- * Reuses the repository's existing PDF infrastructure: jsPDF v4 (dynamically
- * imported so it stays out of the main bundle), A4/mm geometry, and the shared
- * `cleanPdfText` sanitiser from `lib/journalExport`.
+ *   Cover (title, reporting dates, generated time + time zone)
+ *   Summary — current snapshot (as of the period end) and activity during the period, once each
+ *   Goal progress — active Goals, then active Personal Achievements
+ *   Completed during this period
+ *   Needs attention
+ *   Check-in notes (wins, challenges, reflections, notes, moods)
+ *   Points history
+ *   Report notes (the backend's closing summary)
+ *
+ * Layout: every block is measured before it is drawn, separators sit below the full row,
+ * tables repeat their header on continuation pages, and anything taller than a page flows
+ * line by line instead of being clipped. Text uses the export-only Unicode font when it
+ * loads (see progress-report.pdf-text.ts); text the font cannot draw is replaced by a visible
+ * notice, never silently dropped.
  */
 import type { jsPDF } from "jspdf";
-import { cleanPdfText, localDateKey } from "@/lib/journalExport";
 import {
   ITEM_TYPE_LABELS,
-  originLabel,
-  statusLabel,
   TRACKING_METHOD_LABELS,
   attentionReasonLabel,
   formatNumericProgress,
-  formatReportDate,
   formatSignedPoints,
   humanizeToken,
+  originLabel,
   rewardSourceLabel,
+  statusLabel,
 } from "./progress-report.utils";
-import type { ProgressReport, ProgressReportItem } from "./progress-report.types";
+import type {
+  ProgressReport,
+  ProgressReportItem,
+  ProgressReportItemType,
+  ProgressReportTextEntry,
+} from "./progress-report.types";
+import {
+  ARABIC_SCRIPT,
+  EMOJI_MARKER,
+  loadPdfFonts,
+  setupPdfText,
+  type PdfFontFiles,
+  type PdfTextKit,
+} from "./progress-report.pdf-text";
 
 type Doc = jsPDF;
+type RGB = [number, number, number];
+type Style = "normal" | "bold";
 
-// --- Geometry (A4, millimetres) --------------------------------------------
+// --- Geometry (A4, millimetres) ---------------------------------------------------------------
 const PAGE_W = 210;
 const PAGE_H = 297;
-const M = 16; // side margin
-const CONTENT_W = PAGE_W - M * 2; // 178
-const CONTENT_TOP = 32; // below the running header band
-const CONTENT_BOTTOM = 276; // above the footer
+const M = 18;
+const CONTENT_W = PAGE_W - M * 2; // 174
+const FIRST_TOP = 20;
+const TOP = 27; // below the running header on continuation pages
+const BOTTOM = 274; // content never goes below this
+const FOOTER_RULE = 281;
+const FOOTER_TEXT = 287;
+/** Blocks up to this height (mm) are moved whole to the next page rather than split. */
+const KEEP_TOGETHER_MAX = 90;
 
-// --- Type scale (pt) --------------------------------------------------------
-const T_TITLE = 23;
-const T_SECTION = 16;
-const T_CARD = 12;
-const T_BODY = 10;
-const T_META = 9;
-const T_FOOTER = 8;
+// --- Type (pt) --------------------------------------------------------------------------------
+const T_TITLE = 19;
+const T_SECTION = 13;
+const T_SUB = 10.5;
+const T_BODY = 9.5;
+const T_META = 8.5;
+const T_SMALL = 7.5;
+const PT = 0.3528; // mm per pt
 
-const LH_BODY = 4.6; // line height for 10pt body copy
-const LH_META = 4.1;
+const lineH = (size: number) => size * PT * 1.42;
+const ascent = (size: number) => size * PT * 0.78;
+const descent = (size: number) => size * PT * 0.24;
 
-// --- Solace palette (mirrors the app's violet/ink system) -------------------
-const INK: RGB = [26, 21, 35];
-const MUTED: RGB = [107, 114, 128];
-const BRAND: RGB = [124, 58, 237]; // violet-600
-const BORDER: RGB = [229, 231, 235];
-const SURFACE: RGB = [247, 245, 255];
-const TRACK: RGB = [226, 222, 240];
-const POSITIVE: RGB = [5, 150, 105];
-const CAUTION: RGB = [180, 83, 9];
+// --- Print-friendly palette ---------------------------------------------------------------------
+const INK: RGB = [17, 24, 39];
+const BODY: RGB = [40, 46, 58];
+const MUTED: RGB = [96, 104, 117];
+const BRAND: RGB = [109, 40, 217];
+const RULE: RGB = [221, 223, 230];
+const TRACK: RGB = [232, 229, 243];
+const CAUTION: RGB = [154, 72, 6];
 
-type RGB = [number, number, number];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const EMPTY_TEXT = "No activity during this reporting period.";
+/** No-break space: keeps "27 Oct 2026" on one line when text wraps. */
+const NBSP = " ";
 
-interface Cursor {
-  y: number;
+/** "2026-10-27" → "27 Oct 2026" from the calendar parts (no time-zone conversion). */
+export function formatReportDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? [Number(m[3]), month, m[1]].join(NBSP) : value;
 }
 
-// ---------------------------------------------------------------------------
-// Low-level helpers
-// ---------------------------------------------------------------------------
-
-const ink = (d: Doc, c: RGB = INK) => d.setTextColor(c[0], c[1], c[2]);
-const fill = (d: Doc, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
-const stroke = (d: Doc, c: RGB) => d.setDrawColor(c[0], c[1], c[2]);
-
-function font(d: Doc, style: "normal" | "bold", size: number): void {
-  d.setFont("helvetica", style);
-  d.setFontSize(size);
+/** The report's inclusive period, e.g. "Last 30 days: 29 Sep 2026 – 28 Oct 2026". */
+export function formatReportPeriod(report: ProgressReport): string {
+  const end = formatReportDay(report.period.end) ?? report.period.end;
+  if (!report.period.start) return `${report.period.label}, through ${end}`;
+  return `${report.period.label}: ${formatReportDay(report.period.start)} – ${end}`;
 }
 
-/** Sanitise + wrap. Measured ONCE per block and reused for drawing (linear). */
-function wrap(d: Doc, text: string, width: number): string[] {
-  const clean = cleanPdfText(String(text ?? ""));
-  if (!clean) return [];
-  return d.splitTextToSize(clean, width) as string[];
-}
-
-/** Break to a new page when `needed` mm will not fit in the content band. */
-function ensure(d: Doc, cur: Cursor, needed: number): void {
-  if (cur.y + needed > CONTENT_BOTTOM) {
-    d.addPage();
-    cur.y = CONTENT_TOP;
+/** Generated time in the report's own time zone; falls back to this device's zone. */
+export function formatGeneratedAt(report: ProgressReport): { text: string; timeZone: string } {
+  const at = new Date(report.generatedAt);
+  if (Number.isNaN(at.getTime())) return { text: "Not recorded", timeZone: report.timezone || "" };
+  const fmt = (timeZone?: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(at);
+  try {
+    return { text: fmt(report.timezone), timeZone: report.timezone };
+  } catch {
+    const local = Intl.DateTimeFormat().resolvedOptions().timeZone || "device time";
+    return { text: fmt(undefined), timeZone: local };
   }
 }
 
-function drawLines(d: Doc, lines: string[], x: number, cur: Cursor, lineH: number): void {
-  for (const line of lines) {
-    // Long blocks continue naturally across pages.
-    ensure(d, cur, lineH);
-    d.text(line, x, cur.y);
-    cur.y += lineH;
+/** `solace-goals-progress-report-2026-09-29-to-2026-10-28.pdf` (all time: `…-all-time-to-…`). */
+export function progressReportFileName(report: ProgressReport): string {
+  const safe = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
+  const end = safe(report.period.end) ?? "undated";
+  const start = safe(report.period.start);
+  return start
+    ? `solace-goals-progress-report-${start}-to-${end}.pdf`
+    : `solace-goals-progress-report-all-time-to-${end}.pdf`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Writer: cursor, pages, measured text
+// ---------------------------------------------------------------------------------------------
+
+interface Row {
+  h: number;
+  draw: (top: number) => void;
+}
+
+/** One wrapped line and the font family it is drawn in. */
+interface Line {
+  text: string;
+  family: string;
+}
+
+class Writer {
+  y = FIRST_TOP;
+  private onPageBreak: (() => void) | null = null;
+
+  constructor(readonly d: Doc, readonly kit: PdfTextKit) {}
+
+  font(style: Style, size: number, color: RGB = BODY, family: string = this.kit.baseFamily): void {
+    this.d.setFont(family, style);
+    this.d.setFontSize(size);
+    this.d.setTextColor(color[0], color[1], color[2]);
   }
-}
 
-/**
- * Section heading. Keeps the heading with its first content by requiring room
- * for the heading plus a minimum content block before breaking.
- */
-function sectionHeader(d: Doc, cur: Cursor, title: string, minContent = 22): void {
-  ensure(d, cur, 12 + minContent);
-  font(d, "bold", T_SECTION);
-  ink(d, INK);
-  d.text(cleanPdfText(title), M, cur.y);
-  cur.y += 2.5;
-  stroke(d, BORDER);
-  d.setLineWidth(0.3);
-  d.line(M, cur.y, M + CONTENT_W, cur.y);
-  cur.y += 6;
-}
-
-/** Muted one-line note used for empty sections. */
-function emptyLine(d: Doc, cur: Cursor, text = EMPTY_TEXT): void {
-  ensure(d, cur, LH_BODY + 2);
-  font(d, "normal", T_BODY);
-  ink(d, MUTED);
-  d.text(text, M, cur.y);
-  cur.y += LH_BODY + 4;
-  ink(d, INK);
-}
-
-/**
- * Visual progress bar. Uses ONLY the backend percentage; the width is a direct
- * display ratio, clamped 0..100. Drawn as vectors so it prints cleanly and
- * remains legible in grayscale.
- */
-function progressBar(d: Doc, x: number, y: number, w: number, pct: number): void {
-  const safe = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
-  const h = 3.2;
-  fill(d, TRACK);
-  d.roundedRect(x, y, w, h, 1.6, 1.6, "F");
-  if (safe > 0) {
-    fill(d, BRAND);
-    d.roundedRect(x, y, Math.max((w * safe) / 100, 1.6), h, 1.6, 1.6, "F");
+  /** User-authored or backend text, normalised (NFC, trailing spaces removed); content is kept as typed. */
+  safe(text: string | null | undefined): string {
+    const t = (text ?? "").normalize("NFC").replace(/ /g, " ").replace(/[ \t]+$/gm, "");
+    return t;
   }
-}
 
-/** Compact metric tile grid (3 per row). */
-function statGrid(d: Doc, cur: Cursor, stats: Array<{ label: string; value: string }>): void {
-  if (stats.length === 0) return;
-  const perRow = 3;
-  const gap = 4;
-  const cardW = (CONTENT_W - gap * (perRow - 1)) / perRow;
-  const cardH = 18;
+  /** Wraps prepared text; long unbroken words are split so nothing runs past `width`. */
+  wrap(text: string, width: number, style: Style, size: number, family: string = this.kit.baseFamily): string[] {
+    if (!text) return [];
+    this.d.setFont(family, style);
+    this.d.setFontSize(size);
+    const out: string[] = [];
+    for (const para of text.split("\n")) {
+      if (!para.trim()) {
+        out.push("");
+        continue;
+      }
+      for (const line of this.d.splitTextToSize(para, width) as string[]) {
+        if (this.d.getTextWidth(line) <= width + 0.5) {
+          out.push(line);
+          continue;
+        }
+        // splitTextToSize leaves a single over-long token intact: break it by characters.
+        let chunk = "";
+        for (const ch of Array.from(line)) {
+          if (chunk && this.d.getTextWidth(chunk + ch) > width) {
+            out.push(chunk);
+            chunk = ch;
+          } else chunk += ch;
+        }
+        if (chunk) out.push(chunk);
+      }
+    }
+    return out;
+  }
 
-  for (let i = 0; i < stats.length; i += perRow) {
-    const row = stats.slice(i, i + perRow);
-    ensure(d, cur, cardH + gap);
-    row.forEach((s, idx) => {
-      const x = M + idx * (cardW + gap);
-      fill(d, SURFACE);
-      stroke(d, BORDER);
-      d.setLineWidth(0.3);
-      d.roundedRect(x, cur.y, cardW, cardH, 2, 2, "FD");
+  /**
+   * Prepares each paragraph (complete text, its font chosen by script, emoji marked) and wraps
+   * it. Throws `PdfUnsupportedTextError` when a paragraph cannot be drawn faithfully.
+   */
+  layout(text: string, width: number, style: Style, size: number): Line[] {
+    if (!text) return [];
+    const out: Line[] = [];
+    for (const para of text.split("\n")) {
+      if (!para.trim()) {
+        out.push({ text: "", family: this.kit.baseFamily });
+        continue;
+      }
+      const p = this.kit.prepare(para, style);
+      for (const ln of this.wrap(p.text, width, style, size, p.family)) out.push({ text: ln, family: p.family });
+    }
+    return out;
+  }
 
-      font(d, "normal", T_META - 1);
-      ink(d, MUTED);
-      const labelLines = wrap(d, s.label, cardW - 6).slice(0, 1);
-      if (labelLines[0]) d.text(labelLines[0], x + 3, cur.y + 6);
+  /** Draws one wrapped line; right-to-left lines are right-aligned within the box. */
+  line(text: string, x: number, baseline: number, width: number, align: "left" | "right" = "left"): void {
+    if (!text) return;
+    const opts = this.kit.textOptions(text);
+    const rtl = !!opts;
+    const right = align === "right" || rtl;
+    this.d.text(text, right ? x + width : x, baseline, { ...(opts ?? {}), ...(right ? { align: "right" } : {}) });
+  }
 
-      font(d, "bold", T_CARD + 1);
-      ink(d, INK);
-      const valueLines = wrap(d, s.value, cardW - 6).slice(0, 1);
-      if (valueLines[0]) d.text(valueLines[0], x + 3, cur.y + 13.5);
+  newPage(): void {
+    this.d.addPage();
+    this.y = TOP;
+    this.onPageBreak?.();
+  }
+
+  ensure(h: number): void {
+    if (this.y + h > BOTTOM) this.newPage();
+  }
+
+  withPageBreakHook<T>(hook: () => void, body: () => T): T {
+    const prev = this.onPageBreak;
+    this.onPageBreak = hook;
+    try {
+      return body();
+    } finally {
+      this.onPageBreak = prev;
+    }
+  }
+
+  /**
+   * Keeps a short block (an item card, a short note) together on one page; longer text flows
+   * from where it is, keeping at least its first two rows with what precedes it.
+   */
+  block(rows: Row[], gapAfter = 0): void {
+    const total = rows.reduce((s, r) => s + r.h, 0);
+    if (total <= KEEP_TOGETHER_MAX) this.ensure(total);
+    else this.ensure(rows.slice(0, 2).reduce((s, r) => s + r.h, 0));
+    for (const r of rows) {
+      this.ensure(r.h);
+      r.draw(this.y);
+      this.y += r.h;
+    }
+    this.y += gapAfter;
+  }
+
+  /** Rows for a wrapped paragraph (one row per line, so long text can cross pages). */
+  textRows(
+    text: string,
+    opts: { style?: Style; size?: number; color?: RGB; x?: number; width?: number; padTop?: number }
+  ): Row[] {
+    const style = opts.style ?? "normal";
+    const size = opts.size ?? T_BODY;
+    const color = opts.color ?? BODY;
+    const x = opts.x ?? M;
+    const width = opts.width ?? CONTENT_W;
+    const lines = this.layout(text, width, style, size);
+    return lines.map((ln, i) => {
+      const first = i === 0;
+      const h = (first ? (opts.padTop ?? 0) + ascent(size) : lineH(size)) + (i === lines.length - 1 ? descent(size) : 0);
+      return {
+        h,
+        draw: (top: number) => {
+          this.font(style, size, color, ln.family);
+          const baseline = top + (first ? (opts.padTop ?? 0) + ascent(size) : lineH(size));
+          this.line(ln.text, x, baseline, width);
+        },
+      };
     });
-    cur.y += cardH + gap;
   }
-  cur.y += 2;
+
+  space(h: number): Row {
+    return { h, draw: () => undefined };
+  }
+
+  rule(color: RGB = RULE, width = 0.25, gapBefore = 2, gapAfter = 3): Row {
+    return {
+      h: gapBefore + gapAfter,
+      draw: (top) => {
+        this.d.setDrawColor(color[0], color[1], color[2]);
+        this.d.setLineWidth(width);
+        this.d.line(M, top + gapBefore, M + CONTENT_W, top + gapBefore);
+      },
+    };
+  }
+
+  /** Section heading kept with at least `minFollowing` mm of the content after it. */
+  section(title: string, minFollowing = 24): void {
+    const rows = [this.space(this.y > TOP + 1 ? 5 : 0), ...this.textRows(title, { style: "bold", size: T_SECTION, color: INK }), this.rule(BRAND, 0.5, 1.6, 4)];
+    const h = rows.reduce((s, r) => s + r.h, 0);
+    this.ensure(h + minFollowing);
+    this.block(rows);
+  }
+
+  subheading(title: string, minFollowing = 10): void {
+    const rows = [this.space(2), ...this.textRows(title, { style: "bold", size: T_SUB, color: INK }), this.space(1.5)];
+    this.ensure(rows.reduce((s, r) => s + r.h, 0) + minFollowing);
+    this.block(rows);
+  }
+
+  muted(text: string, gapAfter = 2): void {
+    this.block(this.textRows(text, { size: T_BODY, color: MUTED }), gapAfter);
+  }
+
+  progressBar(x: number, top: number, w: number, pct: number): void {
+    const safe = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
+    const h = 2.6;
+    this.d.setFillColor(TRACK[0], TRACK[1], TRACK[2]);
+    this.d.roundedRect(x, top, w, h, 1.3, 1.3, "F");
+    if (safe > 0) {
+      this.d.setFillColor(BRAND[0], BRAND[1], BRAND[2]);
+      this.d.roundedRect(x, top, Math.max((w * safe) / 100, 2.6), h, 1.3, 1.3, "F");
+    }
+  }
+
+  /**
+   * Table with wrapped cells. Each row is measured first; its separator is drawn below the
+   * whole row; the header repeats at the top of continuation pages.
+   */
+  table(columns: Array<{ label: string; width: number; align?: "left" | "right" }>, rows: string[][]): void {
+    const padX = 1.5;
+    const padTop = 2;
+    const padBottom = 2;
+    const xs: number[] = [];
+    columns.reduce((x, c) => (xs.push(x), x + c.width), M);
+
+    const drawHeader = () => {
+      const h = padTop + ascent(T_META) + descent(T_META) + padBottom;
+      this.font("bold", T_META, MUTED);
+      columns.forEach((c, i) => this.line(c.label, xs[i] + padX, this.y + padTop + ascent(T_META), c.width - padX * 2, c.align));
+      this.d.setDrawColor(RULE[0], RULE[1], RULE[2]);
+      this.d.setLineWidth(0.4);
+      this.d.line(M, this.y + h, M + CONTENT_W, this.y + h);
+      this.y += h + 0.6;
+    };
+
+    const headerH = padTop + ascent(T_META) + descent(T_META) + padBottom + 0.6;
+    const measured = rows.map((cells) => {
+      const wrapped = cells.map((cell, i) => this.layout(cell, columns[i].width - padX * 2, "normal", T_BODY));
+      const n = Math.max(1, ...wrapped.map((w) => w.length));
+      return { wrapped, n, rowH: padTop + ascent(T_BODY) + (n - 1) * lineH(T_BODY) + descent(T_BODY) + padBottom };
+    });
+    // Never leave a header alone at the bottom of a page: keep it with its first row.
+    this.ensure(headerH + Math.min(measured[0]?.rowH ?? 0, BOTTOM - TOP - headerH));
+    drawHeader();
+
+    this.withPageBreakHook(drawHeader, () => {
+      for (const { wrapped, n, rowH } of measured) {
+        if (rowH <= BOTTOM - TOP - headerH) {
+          this.ensure(rowH);
+          this.drawRow(wrapped, columns, xs, padX, padTop, 0, n);
+          this.y += rowH;
+          this.separator();
+        } else {
+          // Taller than a page: continue the row's lines on following pages.
+          let from = 0;
+          while (from < n) {
+            const avail = BOTTOM - this.y - padTop - ascent(T_BODY) - descent(T_BODY) - padBottom;
+            const fit = Math.max(1, Math.floor(avail / lineH(T_BODY)) + 1);
+            const to = Math.min(n, from + fit);
+            this.drawRow(wrapped, columns, xs, padX, padTop, from, to);
+            this.y += padTop + ascent(T_BODY) + (to - from - 1) * lineH(T_BODY) + descent(T_BODY) + padBottom;
+            from = to;
+            if (from < n) this.newPage();
+          }
+          this.separator();
+        }
+      }
+    });
+    this.y += 2;
+  }
+
+  private drawRow(
+    wrapped: Line[][],
+    columns: Array<{ width: number; align?: "left" | "right" }>,
+    xs: number[],
+    padX: number,
+    padTop: number,
+    from: number,
+    to: number
+  ): void {
+    wrapped.forEach((lines, i) => {
+      lines.slice(from, to).forEach((ln, k) => {
+        this.font("normal", T_BODY, BODY, ln.family);
+        this.line(ln.text, xs[i] + padX, this.y + padTop + ascent(T_BODY) + k * lineH(T_BODY), columns[i].width - padX * 2, columns[i].align);
+      });
+    });
+  }
+
+  private separator(): void {
+    this.d.setDrawColor(RULE[0], RULE[1], RULE[2]);
+    this.d.setLineWidth(0.2);
+    this.d.line(M, this.y, M + CONTENT_W, this.y);
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Item cards (Goals / Personal Achievements)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
+// Sections
+// ---------------------------------------------------------------------------------------------
 
-/**
- * Renders one active item. Height is measured up-front so a card is NEVER
- * split across a page boundary.
- */
-function itemCard(d: Doc, cur: Cursor, item: ProgressReportItem): void {
-  const innerW = CONTENT_W - 8;
+const valueOrUnavailable = (v: number | null, suffix = "") => (v === null ? "Not available" : `${v}${suffix}`);
 
-  font(d, "bold", T_CARD);
-  const titleLines = wrap(d, item.title || "Untitled", innerW);
+function cover(w: Writer, report: ProgressReport, logo: LogoImage | null, generated: { text: string; timeZone: string }, emojiReplaced: number): void {
+  const { d } = w;
+  if (logo) {
+    try {
+      d.addImage(logo.dataUrl, "PNG", M, w.y - 4, logo.width, logo.height);
+      w.y += logo.height + 2;
+    } catch {
+      logo = null;
+    }
+  }
+  if (!logo) {
+    w.block(w.textRows("Solace", { style: "bold", size: 12, color: BRAND }), 2);
+  }
+  w.block(w.textRows("Goals & Achievements Progress Report", { style: "bold", size: T_TITLE, color: INK }), 2.5);
+  const name = w.safe(report.user.displayName);
+  if (name) w.block(w.textRows(name, { size: T_SUB, color: BODY }), 1.5);
+  w.block(w.textRows(`Reporting period: ${formatReportPeriod(report)} (dates inclusive)`, { size: T_BODY, color: BODY }), 0.5);
+  w.block(w.textRows(`Generated: ${generated.text} (${generated.timeZone || "time zone not recorded"})`, { size: T_BODY, color: MUTED }), 0.5);
+  if (emojiReplaced > 0) {
+    w.block(
+      w.textRows(
+        `Emoji can't be shown in this PDF. Each emoji appears as ${EMOJI_MARKER}; the rest of the text is unchanged and the original can be seen in the Solace app.`,
+        { size: T_META, color: CAUTION, padTop: 1.5 }
+      ),
+      0
+    );
+  }
+  w.block([w.rule(RULE, 0.3, 3, 1)]);
+}
 
-  const metaBits = [
-    `Origin: ${originLabel(item.origin)}`,
-    humanizeToken(item.category),
+function summary(w: Writer, report: ProgressReport): void {
+  const s = report.currentSnapshot;
+  const p = report.periodSummary;
+  const most = report.checkInActivity.mostConsistentItem;
+  // The backend computes the snapshot when the report is generated (not at the period's end).
+  const generated = formatGeneratedAt(report);
+  const asOf = `${generated.text}${generated.timeZone ? `, ${generated.timeZone}` : ""}`;
+
+  w.section("Summary", 30);
+  w.subheading(`Current snapshot (as of ${asOf})`, 24);
+  w.table(
+    [
+      { label: "Measure", width: 124 },
+      { label: "Value", width: 50, align: "right" },
+    ],
+    [
+      ["Level", String(s.currentLevel)],
+      ["Total points (all time)", String(s.totalPoints)],
+      ["Active Goals", String(s.activeGoals)],
+      ["Active Personal Achievements", String(s.activeAchievements)],
+      ["Goals completed (all time)", String(s.completedGoalsAllTime)],
+      ["Personal Achievements completed (all time)", String(s.completedAchievementsAllTime)],
+    ]
+  );
+  const levelText = `Level progress: ${s.pointsIntoLevel} of ${s.pointsRequiredForNextLevel} points into level ${s.currentLevel} · ${s.pointsRemainingToNextLevel} points to the next level`;
+  const levelRows = w.textRows(levelText, { size: T_META, color: MUTED });
+  w.block([
+    ...levelRows,
+    {
+      h: 6,
+      draw: (top) =>
+        w.progressBar(M, top + 1.8, CONTENT_W, s.pointsRequiredForNextLevel > 0 ? (s.pointsIntoLevel / s.pointsRequiredForNextLevel) * 100 : 0),
+    },
+  ], 2);
+
+  w.subheading(`During this period (${formatReportPeriod(report)})`, 24);
+  const rows: string[][] = [
+    ["Goals completed", String(p.completedGoals)],
+    ["Personal Achievements completed", String(p.completedAchievements)],
+    ["Check-ins", String(p.totalCheckIns)],
+    ["Days with a check-in", String(p.activeCheckInDays)],
+    ["Points earned", String(p.pointsEarned)],
+    ["Overall consistency", valueOrUnavailable(p.overallConsistencyRate, "%")],
+    ["Tracked progress change", `${formatSignedPoints(p.totalProgressChange)} percentage points`],
+  ];
+  if (most) {
+    rows.push([
+      `Most consistent: ${w.safe(most.title)} (${ITEM_TYPE_LABELS[most.itemType]})`,
+      `${most.rate}%`,
+    ]);
+  }
+  w.table(
+    [
+      { label: "Measure", width: 124 },
+      { label: "Value", width: 50, align: "right" },
+    ],
+    rows
+  );
+}
+
+function itemRows(w: Writer, item: ProgressReportItem, itemType: ProgressReportItemType): Row[] {
+  const rows: Row[] = [];
+  rows.push(...w.textRows(w.safe(item.title || "Untitled"), { style: "bold", size: T_SUB, color: INK }));
+
+  const category = item.category ? w.safe(humanizeToken(item.category)) : null;
+  const unit = item.trackingUnit ? w.safe(item.trackingUnit) : null;
+  const meta = [
+    `${originLabel(item.origin)} ${ITEM_TYPE_LABELS[itemType]}`,
+    category,
     statusLabel(item.status),
     item.priority ? `Priority: ${humanizeToken(item.priority)}` : null,
     `Tracking: ${TRACKING_METHOD_LABELS[item.trackingType]}`,
-  ].filter(Boolean) as string[];
-  font(d, "normal", T_META);
-  const metaLines = wrap(d, metaBits.join("  ·  "), innerW);
+  ].filter(Boolean);
+  rows.push(...w.textRows(meta.join("  ·  "), { size: T_META, color: MUTED, padTop: 1 }));
 
-  const numeric = formatNumericProgress(
-    item.trackingType,
-    item.currentValue,
-    item.targetValue,
-    item.trackingUnit
+  // Current progress: label + backend percentage, then the bar.
+  rows.push({
+    h: 2 + ascent(T_META) + descent(T_META),
+    draw: (top) => {
+      const base = top + 2 + ascent(T_META);
+      w.font("normal", T_META, MUTED);
+      w.line("Current progress", M, base, CONTENT_W);
+      w.font("bold", T_BODY, INK);
+      w.line(`${item.currentProgress}%`, M, base, CONTENT_W, "right");
+    },
+  });
+  rows.push({ h: 5, draw: (top) => w.progressBar(M, top + 1, CONTENT_W, item.currentProgress) });
+
+  const numeric = formatNumericProgress(item.trackingType, item.currentValue, item.targetValue, unit);
+  if (numeric) rows.push(...w.textRows(numeric, { size: T_META, color: BODY }));
+
+  rows.push(
+    ...w.textRows(
+      `This period: ${item.progressAtStart}% to ${item.progressAtEnd}% (${formatSignedPoints(item.progressChange)} percentage points)`,
+      { size: T_META, color: BODY, padTop: 1 }
+    )
   );
 
-  const detailBits: string[] = [];
-  detailBits.push(
-    item.consistencyRate === null
-      ? `Consistency: Custom frequency (${item.activeCheckInDays} check-in days)`
-      : `Consistency: ${item.consistencyRate}%`
-  );
-  const started = formatReportDate(item.startDate);
-  const due = formatReportDate(item.targetDate);
-  if (started) detailBits.push(`Started: ${started}`);
-  detailBits.push(`Due: ${due ?? "No target date"}`);
-  detailBits.push(`Check-ins: ${item.checkInsDuringPeriod}`);
-  const detailLines = wrap(d, detailBits.join("  ·  "), innerW);
+  const details = [
+    `Check-ins this period: ${item.checkInsDuringPeriod}`,
+    `Days with a check-in: ${item.activeCheckInDays}`,
+    item.consistencyRate === null ? "Consistency: custom frequency (not calculated)" : `Consistency: ${item.consistencyRate}%`,
+    item.startDate ? `Started: ${formatReportDay(item.startDate)}` : "Start date: not recorded",
+    item.targetDate ? `Target date: ${formatReportDay(item.targetDate)}` : "No target date",
+  ];
+  rows.push(...w.textRows(details.join("  ·  "), { size: T_META, color: MUTED, padTop: 1 }));
 
   const attention = [
-    item.isOverdue ? attentionReasonLabel("overdue") : null,
-    item.isApproachingTarget ? attentionReasonLabel("approaching_target") : null,
-    item.hasNoRecentCheckIns ? attentionReasonLabel("no_recent_check_ins") : null,
-  ].filter(Boolean) as string[];
-  const attentionLines = attention.length ? wrap(d, attention.join("  ·  "), innerW) : [];
+    item.isOverdue && attentionReasonLabel("overdue"),
+    item.isApproachingTarget && attentionReasonLabel("approaching_target"),
+    item.hasNoRecentCheckIns && attentionReasonLabel("no_recent_check_ins"),
+    item.hasNoProgressDuringPeriod && attentionReasonLabel("no_progress_during_period"),
+  ].filter(Boolean);
+  if (attention.length) rows.push(...w.textRows(attention.join("  ·  "), { size: T_META, color: CAUTION, padTop: 1 }));
 
-  // --- measured height (title, meta, progress block, details, attention) ---
-  const h =
-    5 +
-    titleLines.length * 5 +
-    metaLines.length * LH_META +
-    2 +
-    10 + // "Current Progress" value + bar
-    (numeric ? LH_META : 0) +
-    4 +
-    LH_META + // period change line
-    2 +
-    detailLines.length * LH_META +
-    (attentionLines.length ? 1 + attentionLines.length * LH_META : 0) +
-    5;
+  rows.push(w.rule(RULE, 0.25, 3, 3.5));
+  return rows;
+}
 
-  ensure(d, cur, h + 4);
-
-  // Card surface
-  fill(d, [255, 255, 255]);
-  stroke(d, BORDER);
-  d.setLineWidth(0.3);
-  d.roundedRect(M, cur.y, CONTENT_W, h, 2.5, 2.5, "FD");
-
-  const x = M + 4;
-  let y = cur.y + 6.5;
-
-  font(d, "bold", T_CARD);
-  ink(d, INK);
-  for (const line of titleLines) {
-    d.text(line, x, y);
-    y += 5;
+function goalProgress(w: Writer, report: ProgressReport): void {
+  w.section("Goal progress", 30);
+  for (const [title, items, type, empty] of [
+    ["Active Goals", report.activeGoals, "goal", "No active Goals."],
+    ["Active Personal Achievements", report.activeAchievements, "achievement", "No active Personal Achievements."],
+  ] as const) {
+    w.subheading(title, 26);
+    if (items.length === 0) {
+      w.muted(empty, 3);
+      continue;
+    }
+    for (const item of items) w.block(itemRows(w, item, type));
   }
+}
 
-  font(d, "normal", T_META);
-  ink(d, MUTED);
-  for (const line of metaLines) {
-    d.text(line, x, y);
-    y += LH_META;
+function completed(w: Writer, report: ProgressReport): void {
+  w.section("Completed during this period", 32);
+  if (report.completedDuringPeriod.length === 0) {
+    w.muted("Nothing was completed during this reporting period.");
+    return;
   }
-
-  // Current progress (label + % + bar) — backend value, no recalculation.
-  y += 2;
-  font(d, "normal", T_META - 0.5);
-  ink(d, MUTED);
-  d.text("CURRENT PROGRESS", x, y);
-  font(d, "bold", T_CARD);
-  ink(d, INK);
-  d.text(`${item.currentProgress}%`, M + CONTENT_W - 4, y, { align: "right" });
-  y += 2.5;
-  progressBar(d, x, y, innerW, item.currentProgress);
-  y += 6;
-
-  if (numeric) {
-    font(d, "normal", T_META);
-    ink(d, MUTED);
-    d.text(cleanPdfText(numeric), x, y);
-    y += LH_META;
-  }
-
-  // Period movement, explicitly distinct from current progress.
-  y += 2;
-  font(d, "normal", T_META);
-  ink(d, INK);
-  d.text(
-    cleanPdfText(
-      `Period: ${item.progressAtStart}% to ${item.progressAtEnd}%  (${formatSignedPoints(
-        item.progressChange
-      )} percentage points)`
-    ),
-    x,
-    y
+  w.table(
+    [
+      { label: "Date", width: 28 },
+      { label: "Item", width: 86 },
+      { label: "Type", width: 40 },
+      { label: "Points", width: 20, align: "right" },
+    ],
+    report.completedDuringPeriod.map((c) => {
+      const final = formatNumericProgress(c.trackingType, c.finalCurrentValue, c.finalTargetValue, null);
+      return [
+        formatReportDay(c.completedAt) ?? "",
+        [w.safe(c.title || "Untitled"), final ? `Final: ${final}` : ""].filter(Boolean).join("\n"),
+        `${originLabel(c.origin)} ${ITEM_TYPE_LABELS[c.itemType]}`,
+        String(c.rewardPointsAwarded),
+      ];
+    })
   );
-  y += LH_META + 2;
+}
 
-  font(d, "normal", T_META);
-  ink(d, MUTED);
-  for (const line of detailLines) {
-    d.text(line, x, y);
-    y += LH_META;
+function attention(w: Writer, report: ProgressReport): void {
+  w.section("Needs attention", 32);
+  if (report.needsAttention.length === 0) {
+    w.muted("No active items currently need attention for this reporting period.");
+    return;
   }
+  w.table(
+    [
+      { label: "Item", width: 80 },
+      { label: "Type", width: 38 },
+      { label: "Reason", width: 56 },
+    ],
+    report.needsAttention.map((a) => [
+      w.safe(a.title || "Untitled"),
+      ITEM_TYPE_LABELS[a.itemType],
+      a.reasons.map((r) => attentionReasonLabel(r)).join("\n"),
+    ])
+  );
+}
 
-  if (attentionLines.length) {
-    y += 1;
-    ink(d, CAUTION);
-    for (const line of attentionLines) {
-      d.text(line, x, y);
-      y += LH_META;
+function checkInNotes(w: Writer, report: ProgressReport): void {
+  const wb = report.wellbeingEntries;
+  w.section("Check-in notes", 20);
+  const groups: Array<[string, ProgressReportTextEntry[]]> = [
+    ["Wins", wb.wins],
+    ["Challenges", wb.challenges],
+    ["Reflections", wb.reflections],
+    ["Notes", wb.notes],
+  ];
+  for (const [title, entries] of groups) {
+    w.subheading(title, 12);
+    if (entries.length === 0) {
+      w.muted(`No ${title.toLowerCase()} recorded in this period.`);
+      continue;
+    }
+    for (const e of entries) {
+      const meta = [w.safe(e.itemTitle), formatReportDay(e.date)].filter(Boolean).join("  ·  ");
+      w.block(
+        [
+          ...w.textRows(w.safe(e.text), { size: T_BODY, color: BODY }),
+          ...w.textRows(meta, { size: T_META, color: MUTED, padTop: 1 }),
+        ],
+        3
+      );
     }
   }
-
-  ink(d, INK);
-  cur.y += h + 4;
+  w.subheading("Moods noted in check-ins", 10);
+  if (wb.moodCounts.length === 0) {
+    w.muted("No moods were noted in check-ins during this period.");
+  } else {
+    w.block(
+      w.textRows(
+        wb.moodCounts.map((m) => `${w.safe(humanizeToken(m.mood) ?? m.mood)}: ${m.count}`).join("   ·   "),
+        { size: T_BODY }
+      ),
+      2
+    );
+  }
 }
 
-function itemsSection(
-  d: Doc,
-  cur: Cursor,
-  title: string,
-  items: ProgressReportItem[],
-  emptyText: string
-): void {
-  sectionHeader(d, cur, title, items.length ? 34 : 10);
-  if (items.length === 0) {
-    emptyLine(d, cur, emptyText);
+function pointsHistory(w: Writer, report: ProgressReport): void {
+  w.section("Points history", 28);
+  if (report.rewards.transactions.length === 0) {
+    w.muted("No points were earned during this reporting period.");
     return;
   }
-  for (const item of items) itemCard(d, cur, item);
-  cur.y += 2;
+  w.table(
+    [
+      { label: "Date", width: 28 },
+      { label: "Source", width: 122 },
+      { label: "Points", width: 24, align: "right" },
+    ],
+    report.rewards.transactions.map((t) => [
+      formatReportDay(t.date) ?? "",
+      [rewardSourceLabel(t.sourceType), t.reason ? w.safe(t.reason) : ""].filter(Boolean).join("\n"),
+      `${t.points >= 0 ? "+" : ""}${t.points}`,
+    ])
+  );
 }
 
-/** A labelled block of user-entered entries; long text wraps and continues. */
-function entryBlock(
-  d: Doc,
-  cur: Cursor,
-  heading: string,
-  entries: Array<{ text: string; date: string; itemTitle: string }>
-): void {
-  ensure(d, cur, 12);
-  font(d, "bold", T_BODY + 1);
-  ink(d, INK);
-  d.text(cleanPdfText(heading), M, cur.y);
-  cur.y += 5;
-
-  if (entries.length === 0) {
-    emptyLine(d, cur, EMPTY_TEXT);
+function reportNotes(w: Writer, report: ProgressReport): void {
+  w.section("Report notes", 14);
+  if (report.closingSummary.length === 0) {
+    w.muted("No additional notes for this reporting period.");
     return;
   }
-
-  for (const entry of entries) {
-    font(d, "normal", T_BODY);
-    ink(d, INK);
-    const bodyLines = wrap(d, entry.text, CONTENT_W - 4);
-    // Keep at least the first line with its meta line.
-    ensure(d, cur, LH_BODY * Math.min(bodyLines.length, 2) + LH_META + 3);
-    drawLines(d, bodyLines, M + 2, cur, LH_BODY);
-
-    const when = formatReportDate(entry.date);
-    const metaText = [entry.itemTitle, when].filter(Boolean).join("  ·  ");
-    font(d, "normal", T_META);
-    ink(d, MUTED);
-    drawLines(d, wrap(d, metaText, CONTENT_W - 4), M + 2, cur, LH_META);
-    cur.y += 2.5;
-    ink(d, INK);
+  for (const line of report.closingSummary) {
+    w.block(w.textRows(`•  ${w.safe(line)}`, { size: T_BODY }), 1.5);
   }
 }
 
-/** Simple 3-column list row (date / label / value) that never needs a table. */
-function listRow(d: Doc, cur: Cursor, left: string, middle: string, right: string): void {
-  const leftW = 32;
-  const rightW = 26;
-  const midW = CONTENT_W - leftW - rightW - 6;
-
-  font(d, "normal", T_BODY);
-  const midLines = wrap(d, middle, midW);
-  const h = Math.max(LH_BODY, midLines.length * LH_BODY) + 2.5;
-  ensure(d, cur, h);
-
-  ink(d, MUTED);
-  d.text(cleanPdfText(left), M, cur.y);
-
-  ink(d, INK);
-  let my = cur.y;
-  for (const line of midLines) {
-    d.text(line, M + leftW, my);
-    my += LH_BODY;
-  }
-
-  font(d, "bold", T_BODY);
-  d.text(cleanPdfText(right), M + CONTENT_W, cur.y, { align: "right" });
-  font(d, "normal", T_BODY);
-
-  cur.y += h;
-  stroke(d, BORDER);
-  d.setLineWidth(0.2);
-  d.line(M, cur.y - 1.5, M + CONTENT_W, cur.y - 1.5);
-}
-
-// ---------------------------------------------------------------------------
-// Running header + footer (stamped on every page once totals are known)
-// ---------------------------------------------------------------------------
-
-function stampChrome(d: Doc, generatedLabel: string, logo: LogoImage | null): void {
+/** Running header (continuation pages) and footer (every page), stamped once totals are known. */
+function stampPages(d: Doc, kit: PdfTextKit, report: ProgressReport): void {
   const total = d.getNumberOfPages();
   for (let page = 1; page <= total; page += 1) {
     d.setPage(page);
-
-    // Header band
-    fill(d, SURFACE);
-    d.rect(0, 0, PAGE_W, 20, "F");
-    stroke(d, BORDER);
-    d.setLineWidth(0.3);
-    d.line(0, 20, PAGE_W, 20);
-
-    let textX = M;
-    if (logo) {
-      try {
-        d.addImage(logo.dataUrl, "PNG", M, 6.5, logo.width, logo.height);
-        textX = M + logo.width + 4;
-      } catch {
-        /* fall back to the text wordmark below */
-      }
+    d.setFont(kit.baseFamily, "normal");
+    if (page > 1) {
+      d.setFontSize(T_SMALL);
+      d.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      d.text(`Goals & Achievements Progress Report  ·  ${formatReportPeriod(report)}`, M, 14);
+      d.setDrawColor(RULE[0], RULE[1], RULE[2]);
+      d.setLineWidth(0.25);
+      d.line(M, 17, M + CONTENT_W, 17);
     }
-    if (!logo) {
-      font(d, "bold", 12);
-      ink(d, BRAND);
-      d.text("Solace", textX, 12.5);
-      textX += 18;
-    }
-
-    font(d, "normal", T_META);
-    ink(d, MUTED);
-    d.text("Goals & Achievements Progress Report", textX, 12.5);
-
-    // Footer
-    stroke(d, BORDER);
-    d.setLineWidth(0.3);
-    d.line(M, PAGE_H - 14, PAGE_W - M, PAGE_H - 14);
-    font(d, "normal", T_FOOTER);
-    ink(d, MUTED);
-    d.text(`Page ${page} of ${total}`, M, PAGE_H - 9);
-    d.text(`Generated: ${generatedLabel}`, PAGE_W - M, PAGE_H - 9, { align: "right" });
+    d.setDrawColor(RULE[0], RULE[1], RULE[2]);
+    d.setLineWidth(0.25);
+    d.line(M, FOOTER_RULE, M + CONTENT_W, FOOTER_RULE);
+    d.setFontSize(T_SMALL);
+    d.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    d.text("Solace", M, FOOTER_TEXT);
+    d.text(`Page ${page} of ${total}`, M + CONTENT_W, FOOTER_TEXT, { align: "right" });
   }
 }
 
-// ---------------------------------------------------------------------------
+/** Every string a user (or the backend) authored: checked before drawing, and scanned for Arabic script. */
+function reportStrings(report: ProgressReport): Array<[string, Style]> {
+  const out: Array<[string, Style]> = [];
+  const add = (s: string | null | undefined, style: Style = "normal") => s && out.push([s, style]);
+  add(report.user.displayName);
+  for (const i of [...report.activeGoals, ...report.activeAchievements]) {
+    add(i.title, "bold");
+    add(humanizeToken(i.category));
+    add(i.trackingUnit);
+  }
+  report.completedDuringPeriod.forEach((c) => add(c.title));
+  report.needsAttention.forEach((a) => add(a.title));
+  add(report.checkInActivity.mostConsistentItem?.title);
+  const wb = report.wellbeingEntries;
+  [...wb.wins, ...wb.challenges, ...wb.reflections, ...wb.notes].forEach((e) => {
+    add(e.text);
+    add(e.itemTitle);
+  });
+  wb.moodCounts.forEach((m) => add(humanizeToken(m.mood) ?? m.mood));
+  report.rewards.transactions.forEach((t) => add(t.reason));
+  report.closingSummary.forEach((l) => add(l));
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Logo (optional — never blocks generation)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 
 export interface LogoImage {
   dataUrl: string;
@@ -462,8 +759,8 @@ export interface LogoImage {
   height: number;
 }
 
-/** Dark wordmark on the white PDF page. Returns null if unavailable. */
-async function loadLogo(): Promise<LogoImage | null> {
+/** The dark Solace wordmark ("logo white.png" is the variant for white backgrounds). */
+export async function loadLogo(): Promise<LogoImage | null> {
   try {
     if (typeof fetch !== "function" || typeof FileReader === "undefined") return null;
     const res = await fetch("/logos/logo white.png");
@@ -476,7 +773,6 @@ async function loadLogo(): Promise<LogoImage | null> {
       reader.readAsDataURL(blob);
     });
     if (!dataUrl.startsWith("data:image")) return null;
-
     const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
       if (typeof Image === "undefined") return resolve(null);
       const img = new Image();
@@ -484,263 +780,76 @@ async function loadLogo(): Promise<LogoImage | null> {
       img.onerror = () => resolve(null);
       img.src = dataUrl;
     });
-    const height = 7;
-    const ratio = dims && dims.h > 0 ? dims.w / dims.h : 3.4;
-    return { dataUrl, width: Math.min(height * ratio, 46), height };
+    const height = 9;
+    const ratio = dims && dims.h > 0 ? dims.w / dims.h : 2.6;
+    return { dataUrl, width: Math.min(height * ratio, 42), height };
   } catch {
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 // Public API
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 
-/** `solace-progress-report-YYYY-MM-DD.pdf` (generated date, user's local day). */
-export function progressReportFileName(report: ProgressReport): string {
-  const stamp = report.generatedAt ? new Date(report.generatedAt) : new Date();
-  const day = Number.isNaN(stamp.getTime()) ? localDateKey(new Date()) : localDateKey(stamp);
-  return `solace-progress-report-${day}.pdf`;
+export interface BuildOptions {
+  /** Report fonts; a missing Latin font falls back to Helvetica, a missing Arabic-script font fails Urdu text. */
+  fonts: PdfFontFiles;
+  logo?: LogoImage | null;
 }
 
-/**
- * Render the backend report into a multi-page A4 PDF document.
- * Pure presentation: no value below is computed, only formatted.
- */
-export async function buildProgressReportPdf(report: ProgressReport): Promise<Doc> {
+export interface BuiltReport {
+  doc: Doc;
+  /** How many emoji are shown as the "[emoji]" marker. */
+  emojiReplacedCount: number;
+  usedUnicodeFont: boolean;
+}
+
+/** Renders the backend report into an A4 PDF. Pure presentation: values are formatted, not computed. */
+export async function buildProgressReportPdf(report: ProgressReport, options: BuildOptions): Promise<BuiltReport> {
   const { jsPDF: JsPdf } = await import("jspdf");
   const d = new JsPdf({ unit: "mm", format: "a4" }) as Doc;
-  const logo = await loadLogo();
+  d.setProperties({ title: "Goals & Achievements Progress Report", creator: "Solace" });
+  const kit = setupPdfText(d, options.fonts);
+  const w = new Writer(d, kit);
 
-  const generatedLabel = formatReportDate(report.generatedAt) ?? "";
-  const cur: Cursor = { y: CONTENT_TOP };
-
-  // ---- Cover block -------------------------------------------------------
-  font(d, "bold", T_TITLE);
-  ink(d, INK);
-  const titleLines = wrap(d, "Goals & Achievements Progress Report", CONTENT_W);
-  for (const line of titleLines) {
-    d.text(line, M, cur.y);
-    cur.y += 9;
-  }
-  font(d, "normal", T_BODY + 1);
-  ink(d, MUTED);
-  d.text("Your personal wellness progress and growth.", M, cur.y);
-  cur.y += 7;
-
-  const coverMeta = [
-    report.user.displayName ? cleanPdfText(report.user.displayName) : null,
-    report.period.label,
-    generatedLabel ? `Generated ${generatedLabel}` : null,
-  ].filter(Boolean) as string[];
-  font(d, "normal", T_META);
-  ink(d, MUTED);
-  d.text(cleanPdfText(coverMeta.join("  ·  ")), M, cur.y);
-  cur.y += 9;
-
-  // ---- Executive summary -------------------------------------------------
-  const snap = report.currentSnapshot;
-  const sum = report.periodSummary;
-  sectionHeader(d, cur, "Executive Summary", 26);
-  statGrid(d, cur, [
-    { label: "Current level", value: String(snap.currentLevel) },
-    { label: "Current points", value: String(snap.totalPoints) },
-    { label: "Active goals", value: String(snap.activeGoals) },
-    { label: "Active personal achievements", value: String(snap.activeAchievements) },
-    {
-      label: "Completed this period",
-      value: String(sum.completedGoals + sum.completedAchievements),
-    },
-    { label: "Total check-ins", value: String(sum.totalCheckIns) },
-    {
-      label: "Overall consistency",
-      value: sum.overallConsistencyRate === null ? "Not available" : `${sum.overallConsistencyRate}%`,
-    },
-  ]);
-
-  // ---- Current snapshot: active items ------------------------------------
-  itemsSection(d, cur, "Active Goals", report.activeGoals, "No active Goals.");
-  itemsSection(
-    d,
-    cur,
-    "Active Personal Achievements",
-    report.activeAchievements,
-    "No active Personal Achievements."
-  );
-
-  // ---- Period summary ----------------------------------------------------
-  sectionHeader(d, cur, "Period Summary", 26);
-  statGrid(d, cur, [
-    { label: "Goals completed", value: String(sum.completedGoals) },
-    { label: "Achievements completed", value: String(sum.completedAchievements) },
-    { label: "Total check-ins", value: String(sum.totalCheckIns) },
-    { label: "Active check-in days", value: String(sum.activeCheckInDays) },
-    { label: "Points earned", value: String(sum.pointsEarned) },
-    {
-      label: "Overall consistency",
-      value: sum.overallConsistencyRate === null ? "Not available" : `${sum.overallConsistencyRate}%`,
-    },
-    {
-      label: "Tracked progress change",
-      value: `${formatSignedPoints(sum.totalProgressChange)} pts`,
-    },
-  ]);
-
-  // ---- Completed during the period ---------------------------------------
-  sectionHeader(d, cur, "Completed During This Period", 16);
-  if (report.completedDuringPeriod.length === 0) {
-    emptyLine(d, cur);
-  } else {
-    for (const c of report.completedDuringPeriod) {
-      listRow(
-        d,
-        cur,
-        formatReportDate(c.completedAt) ?? "",
-        `${c.title}  ·  ${ITEM_TYPE_LABELS[c.itemType]}  ·  ${originLabel(c.origin)}`,
-        `${c.rewardPointsAwarded} pts`
-      );
-    }
-    cur.y += 4;
-  }
-
-  // ---- Check-in activity + user-entered content ---------------------------
-  sectionHeader(d, cur, "Check-In Activity", 24);
-  const act = report.checkInActivity;
-  statGrid(d, cur, [
-    { label: "Total check-ins", value: String(act.totalCheckIns) },
-    { label: "Active days", value: String(act.activeDays) },
-    {
-      label: "Most consistent item",
-      value: act.mostConsistentItem ? `${act.mostConsistentItem.rate}%` : "Not available",
-    },
-  ]);
-  if (act.mostConsistentItem) {
-    font(d, "normal", T_META);
-    ink(d, MUTED);
-    ensure(d, cur, LH_META + 2);
-    d.text(
-      cleanPdfText(
-        `Most consistent: ${act.mostConsistentItem.title} (${ITEM_TYPE_LABELS[act.mostConsistentItem.itemType]})`
-      ),
-      M,
-      cur.y
-    );
-    cur.y += LH_META + 3;
-    ink(d, INK);
-  }
-
-  const wb = report.wellbeingEntries;
-  entryBlock(d, cur, "Wins", wb.wins);
-  entryBlock(d, cur, "Challenges", wb.challenges);
-  entryBlock(d, cur, "Reflections", wb.reflections);
-  entryBlock(d, cur, "Notes", wb.notes);
-
-  ensure(d, cur, 12);
-  font(d, "bold", T_BODY + 1);
-  ink(d, INK);
-  d.text("Mood summary", M, cur.y);
-  cur.y += 5;
-  if (wb.moodCounts.length === 0) {
-    emptyLine(d, cur);
-  } else {
-    font(d, "normal", T_BODY);
-    ink(d, INK);
-    const moodText = wb.moodCounts
-      .map((m) => `${humanizeToken(m.mood)} - ${m.count}`)
-      .join("   ·   ");
-    drawLines(d, wrap(d, moodText, CONTENT_W), M, cur, LH_BODY);
-    cur.y += 3;
-  }
-
-  // ---- Needs attention ---------------------------------------------------
-  sectionHeader(d, cur, "Needs Attention", 16);
-  if (report.needsAttention.length === 0) {
-    emptyLine(d, cur, "No active items currently need attention based on this report period.");
-  } else {
-    for (const a of report.needsAttention) {
-      // Exactly the backend's reasons — none inferred.
-      const reasons = a.reasons.map((r) => attentionReasonLabel(r)).join("  ·  ");
-      font(d, "bold", T_BODY);
-      const titleLines2 = wrap(d, `${a.title}  (${ITEM_TYPE_LABELS[a.itemType]})`, CONTENT_W);
-      font(d, "normal", T_META);
-      const reasonLines = wrap(d, reasons, CONTENT_W - 2);
-      ensure(d, cur, titleLines2.length * LH_BODY + reasonLines.length * LH_META + 4);
-
-      font(d, "bold", T_BODY);
-      ink(d, INK);
-      drawLines(d, titleLines2, M, cur, LH_BODY);
-      font(d, "normal", T_META);
-      ink(d, CAUTION);
-      drawLines(d, reasonLines, M + 2, cur, LH_META);
-      ink(d, INK);
-      cur.y += 2.5;
+  // Fail before drawing anything if some text cannot be drawn faithfully; count emoji markers.
+  let emojiReplaced = 0;
+  for (const [text, style] of reportStrings(report)) {
+    for (const para of w.safe(text).split("\n")) {
+      if (para.trim()) emojiReplaced += kit.prepare(para, style).emojiReplaced;
     }
   }
+  cover(w, report, options.logo ?? null, formatGeneratedAt(report), emojiReplaced);
+  summary(w, report);
+  goalProgress(w, report);
+  completed(w, report);
+  attention(w, report);
+  checkInNotes(w, report);
+  pointsHistory(w, report);
+  reportNotes(w, report);
+  stampPages(d, kit, report);
 
-  // ---- Rewards & levels --------------------------------------------------
-  sectionHeader(d, cur, "Rewards & Levels", 26);
-  statGrid(d, cur, [
-    { label: "Current level", value: String(snap.currentLevel) },
-    { label: "Current points", value: String(snap.totalPoints) },
-    { label: "Points earned this period", value: String(report.rewards.pointsEarned) },
-  ]);
-
-  font(d, "normal", T_META);
-  ink(d, MUTED);
-  ensure(d, cur, LH_META + 3);
-  d.text(
-    cleanPdfText(
-      `Level progress: ${snap.pointsIntoLevel} of ${snap.pointsRequiredForNextLevel} points  ·  ${snap.pointsRemainingToNextLevel} to next level`
-    ),
-    M,
-    cur.y
-  );
-  cur.y += LH_META + 1;
-  progressBar(d, M, cur.y, CONTENT_W, (snap.pointsIntoLevel / snap.pointsRequiredForNextLevel) * 100);
-  cur.y += 8;
-  ink(d, INK);
-
-  if (report.rewards.transactions.length === 0) {
-    emptyLine(d, cur);
-  } else {
-    for (const t of report.rewards.transactions) {
-      listRow(
-        d,
-        cur,
-        formatReportDate(t.date) ?? "",
-        rewardSourceLabel(t.sourceType),
-        `+${t.points} pts`
-      );
-    }
-    cur.y += 4;
-  }
-
-  // ---- Closing summary (verbatim) ----------------------------------------
-  sectionHeader(d, cur, "Summary", 16);
-  if (report.closingSummary.length === 0) {
-    emptyLine(d, cur);
-  } else {
-    font(d, "normal", T_BODY);
-    ink(d, INK);
-    for (const line of report.closingSummary) {
-      const lines = wrap(d, `-  ${line}`, CONTENT_W - 2);
-      ensure(d, cur, lines.length * LH_BODY);
-      drawLines(d, lines, M, cur, LH_BODY);
-      cur.y += 1.5;
-    }
-  }
-
-  // Stamp header/footer last, once the total page count is known.
-  stampChrome(d, generatedLabel, logo);
-  return d;
+  return { doc: d, emojiReplacedCount: emojiReplaced, usedUnicodeFont: kit.unicode };
 }
 
+export type DownloadOutcome = "downloaded" | "cancelled";
+
 /**
- * Build + download the PDF using the repository's existing blob-download flow
- * (object URL + anchor click + revoke), matching the Journal export.
+ * Loads the export-only fonts and logo, builds the PDF and saves it — unless `isStillCurrent`
+ * reports that the account or range changed while it was being prepared. Throws
+ * `PdfUnsupportedTextError` (nothing is downloaded) when some text cannot be drawn faithfully.
  */
-export async function downloadProgressReportPdf(report: ProgressReport): Promise<void> {
-  const doc = await buildProgressReportPdf(report);
+export async function downloadProgressReportPdf(
+  report: ProgressReport,
+  isStillCurrent: () => boolean = () => true
+): Promise<DownloadOutcome> {
+  const needArabic = reportStrings(report).some(([text]) => ARABIC_SCRIPT.test(text));
+  const [fonts, logo] = await Promise.all([loadPdfFonts(needArabic), loadLogo()]);
+  if (!isStillCurrent()) return "cancelled";
+  const { doc } = await buildProgressReportPdf(report, { fonts, logo });
+  if (!isStillCurrent()) return "cancelled";
+
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -752,4 +861,5 @@ export async function downloadProgressReportPdf(report: ProgressReport): Promise
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return "downloaded";
 }
