@@ -736,6 +736,8 @@ export function Journal() {
   const [draftFavorites, setDraftFavorites] = useState(false);
   const [draftDateRange, setDraftDateRange] = useState<"all" | "week" | "month" | "year">("all");
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  /** Account the loaded `entries` were fetched for (export uses it to avoid another account's list). */
+  const [entriesOwnerId, setEntriesOwnerId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -831,6 +833,7 @@ export function Journal() {
       });
 
       setEntries(formattedEntries);
+      setEntriesOwnerId(user.id);
     } catch (error) {
       console.error("Failed to fetch journal entries", error);
       setLoadError("We couldn’t reach your journal just now. Your words are still safe — try again in a moment.");
@@ -1968,6 +1971,10 @@ export function Journal() {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         entries={entries}
+        entriesOwnerId={entriesOwnerId}
+        currentUserId={user?.id ?? null}
+        isLoading={isLoading}
+        loadFailed={Boolean(loadError)}
       />
     </>
   );

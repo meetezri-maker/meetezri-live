@@ -1,21 +1,31 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, Download, FileText, FileJson, CheckCircle2, Loader2 } from "lucide-react";
 import { SolaceDatePicker } from "@/app/solace";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import {
   filterJournalEntriesByDateRange,
   buildJournalJsonExport,
-  buildJournalPdf,
+  deviceTimeZone,
+  journalExportFileName,
+  validateJournalDateRange,
   type JournalExportEntry,
 } from "../../../lib/journalExport";
+import { PdfUnsupportedTextError } from "@/app/features/goals/progress-report/progress-report.pdf-text";
 
 interface JournalExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   entries: JournalExportEntry[];
+  /** Account the loaded `entries` belong to; exporting needs it to be the signed-in account. */
+  entriesOwnerId?: string | null;
+  currentUserId?: string | null;
+  /** Entries are (re)loading: export waits for the settled list. */
+  isLoading?: boolean;
+  /** The last load failed (so an empty list is not "no entries"). */
+  loadFailed?: boolean;
 }
 
 const FORMAT_CARD_BASE =
@@ -27,20 +37,41 @@ const FORMAT_CARD_SELECTED =
 const FORMAT_CARD_IDLE =
   "border-white/[0.08] bg-white/[0.03] hover:border-violet-500/25 hover:bg-white/[0.05]";
 
-export function JournalExportModal({ isOpen, onClose, entries }: JournalExportModalProps) {
+export function JournalExportModal({
+  isOpen,
+  onClose,
+  entries,
+  entriesOwnerId,
+  currentUserId,
+  isLoading = false,
+  loadFailed = false,
+}: JournalExportModalProps) {
   const [exportFormat, setExportFormat] = useState<"pdf" | "json">("pdf");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [exportComplete, setExportComplete] = useState(false);
+  const generatingRef = useRef(false);
+  /** Increments each time the dialog opens, so an export started before closing can't finish later. */
+  const [openCount, setOpenCount] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
+    setOpenCount((n) => n + 1);
     setDateFrom("");
     setDateTo("");
     setExportComplete(false);
     setIsExporting(false);
   }, [isOpen]);
+
+  // Entries are exportable only once loaded for the signed-in account.
+  const ownerKnown = entriesOwnerId !== undefined || currentUserId !== undefined;
+  const ready = !isLoading && (!ownerKnown || (!!currentUserId && entriesOwnerId === currentUserId));
+
+  // What an export was started for; if any of it changes before the file is ready, it is not saved.
+  const contextKey = `${openCount}|${isOpen}|${currentUserId ?? ""}|${entriesOwnerId ?? ""}|${exportFormat}|${dateFrom}|${dateTo}`;
+  const contextRef = useRef({ key: contextKey, entries });
+  contextRef.current = { key: contextKey, entries };
 
   const filteredEntries = useMemo(
     () => filterJournalEntriesByDateRange(entries ?? [], dateFrom, dateTo),
@@ -48,25 +79,49 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
   );
 
   const handleExport = async () => {
+    if (generatingRef.current || !ready) return;
+
+    const range = validateJournalDateRange(dateFrom, dateTo);
+    if (!range.ok) {
+      toast.error(range.message);
+      return;
+    }
+    if (loadFailed && (entries ?? []).length === 0) {
+      toast.error("We couldn't load your journal, so there is nothing to export yet. Please try again.");
+      return;
+    }
+    if (entriesOwnerId && (entries ?? []).some((e) => e.user_id && e.user_id !== entriesOwnerId)) {
+      toast.error("Export failed. Please reload your journal and try again.");
+      return;
+    }
     if (filteredEntries.length === 0) {
       toast.error("No journal entries to export for this date range.");
       return;
     }
 
+    generatingRef.current = true;
     setIsExporting(true);
+    const started = contextRef.current;
+    const isStillCurrent = () => contextRef.current.key === started.key && contextRef.current.entries === started.entries;
     try {
       const stamp = new Date();
-      const day = stamp.toISOString().split("T")[0];
-      const filename = `solace-journal-${day}.${exportFormat}`;
+      const timeZone = deviceTimeZone();
+      const filename = journalExportFileName(exportFormat, dateFrom, dateTo, stamp);
 
       let blob: Blob;
       if (exportFormat === "json") {
-        blob = new Blob([buildJournalJsonExport(filteredEntries, stamp)], {
+        blob = new Blob([buildJournalJsonExport(filteredEntries, stamp, { dateFrom, dateTo, timeZone })], {
           type: "application/json;charset=utf-8",
         });
       } else {
-        const doc = await buildJournalPdf(filteredEntries);
+        const { createJournalPdf } = await import("../../../lib/journalExportPdf");
+        const { doc } = await createJournalPdf({ entries: filteredEntries, dateFrom, dateTo, generatedAt: stamp, timeZone });
         blob = doc.output("blob");
+      }
+
+      if (!isStillCurrent()) {
+        toast.info("Your journal or export options changed while the file was being prepared, so it wasn't downloaded. Please try again.");
+        return;
       }
 
       const url = URL.createObjectURL(blob);
@@ -87,8 +142,17 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
       }, 2000);
     } catch (e) {
       console.error("Journal export failed", e);
-      toast.error("Export failed. Please try again.");
+      if (e instanceof PdfUnsupportedTextError) {
+        toast.error(
+          e.reason === "font-unavailable"
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or export as JSON."
+            : `Your journal contains characters the PDF can't display (${e.characters.join(" ")}), so it wasn't downloaded. You can export as JSON instead.`
+        );
+      } else {
+        toast.error("Export failed. Please try again.");
+      }
     } finally {
+      generatingRef.current = false;
       setIsExporting(false);
     }
   };
@@ -290,7 +354,8 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
                   <Button
                     type="button"
                     onClick={handleExport}
-                    disabled={isExporting}
+                    disabled={isExporting || !ready}
+                    aria-busy={isExporting}
                     className="min-h-11 flex-1 bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_28px_rgba(139,92,246,0.3)] hover:from-violet-500 hover:to-fuchsia-500"
                   >
                     {isExporting ? (

@@ -1,22 +1,12 @@
-import { htmlToPlainText } from "./htmlPlainText";
-
-// Type alias derived purely from TypeScript's import() type syntax.
-interface JsPdfDoc {
-  addPage(): void;
-  splitTextToSize(text: string, maxWidth: number): string[];
-  text(text: string, x: number, y: number): void;
-  setFont(fontName: string, fontStyle: string): void;
-  setFontSize(size: number): void;
-  setTextColor(r: number, g: number, b: number): void;
-  setFillColor(r: number, g: number, b: number): void;
-  setDrawColor(r: number, g: number, b: number): void;
-  roundedRect(x: number, y: number, w: number, h: number,
-              rx: number, ry: number, style: string): void;
-  line(x1: number, y1: number, x2: number, y2: number): void;
-  internal: { pageSize: { getWidth(): number } };
-  output(type: 'blob'): Blob;
-  save(filename: string): void;
-}
+/**
+ * Journal exports (PDF and JSON): entry shape, date-range selection, JSON payload, file names.
+ *
+ * Dates follow the Journal page: each entry belongs to the calendar day of its `created_at` in
+ * this device's time zone, and a range includes both of its (whole) end days.
+ * The PDF layout lives in `journalExportPdf.ts`; rich text is read by `journalRichText.ts`.
+ */
+import { journalHtmlToPlainText } from "./journalRichText";
+import { MOOD_CHECKIN_CARDS, insightLabelForMoodKey } from "@/app/pages/app/mood-check-in/moodCheckInData";
 
 /** Minimal shape for journal export (matches Journal page entry fields). */
 export interface JournalExportEntry {
@@ -31,6 +21,8 @@ export interface JournalExportEntry {
   favorite?: boolean;
   /** Present on API payloads; UI also sets `favorite`. */
   is_favorite?: boolean | null;
+  /** Present on API payloads: the account the entry belongs to. */
+  user_id?: string;
 }
 
 /** YYYY-MM-DD in the user's local calendar — matches `<input type="date">` semantics. */
@@ -43,6 +35,15 @@ export function localDateKey(isoOrDate: string | Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** The device time zone used for entry days and times (IANA name when available). */
+export function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "device time";
+  } catch {
+    return "device time";
+  }
+}
+
 export function getEntryContent(e: JournalExportEntry): string {
   const c = e.content;
   return typeof c === "string" ? c : "";
@@ -52,231 +53,132 @@ export function getEntryFavorite(e: JournalExportEntry): boolean {
   return Boolean(e.favorite ?? e.is_favorite);
 }
 
+/** Legacy journal entries may store emoji strings in mood_tags (same mapping as the Journal page). */
+const LEGACY_EMOJI_TO_MOOD_VALUE: Record<string, string> = {
+  "😊": "happy",
+  "😌": "calm",
+  "😰": "anxious",
+  "😢": "sad",
+  "🤩": "excited",
+  "😡": "angry",
+  "🥰": "grateful",
+};
+
+/** The label the Journal page shows for a stored mood tag. */
+export function journalMoodLabel(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  const card = MOOD_CHECKIN_CARDS.find((c) => c.value === lower || c.label.toLowerCase() === lower);
+  const key = card ? card.value : LEGACY_EMOJI_TO_MOOD_VALUE[trimmed] ?? lower;
+  return insightLabelForMoodKey(key);
+}
+
+// --- Date range ---------------------------------------------------------------------------------
+
+const DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** A real calendar date in YYYY-MM-DD form. */
+export function isDateKey(value: string): boolean {
+  const m = DATE_KEY.exec(value);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+export type JournalDateRangeCheck = { ok: true } | { ok: false; message: string };
+
+/** Empty bounds mean "no limit"; a set bound must be a real date, and start ≤ end. */
+export function validateJournalDateRange(dateFrom: string, dateTo: string): JournalDateRangeCheck {
+  if ((dateFrom && !isDateKey(dateFrom)) || (dateTo && !isDateKey(dateTo))) {
+    return { ok: false, message: "Please choose valid dates for the export range." };
+  }
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    return { ok: false, message: "The start date must be on or before the end date." };
+  }
+  return { ok: true };
+}
+
+/**
+ * Entries whose local calendar day falls within [dateFrom, dateTo], both inclusive; either bound
+ * may be empty. An invalid range matches nothing (the export reports why). Entries with an
+ * unreadable `created_at` are only included when no range is set.
+ */
 export function filterJournalEntriesByDateRange(
   entries: JournalExportEntry[],
   dateFrom: string,
   dateTo: string
 ): JournalExportEntry[] {
   if (!dateFrom && !dateTo) return [...entries];
-
-  let from = dateFrom;
-  let to = dateTo;
-  if (from && to && from > to) {
-    [from, to] = [to, from];
-  }
+  if (!validateJournalDateRange(dateFrom, dateTo).ok) return [];
 
   return entries.filter((e) => {
+    if (Number.isNaN(new Date(e.created_at).getTime())) return false;
     const key = localDateKey(e.created_at);
-    if (from && key < from) return false;
-    if (to && key > to) return false;
+    if (dateFrom && key < dateFrom) return false;
+    if (dateTo && key > dateTo) return false;
     return true;
   });
 }
 
+/** Newest first, as on the Journal page. */
+export function sortJournalEntries(entries: JournalExportEntry[]): JournalExportEntry[] {
+  const time = (e: JournalExportEntry) => {
+    const t = new Date(e.created_at).getTime();
+    return Number.isNaN(t) ? -Infinity : t;
+  };
+  return entries.slice().sort((a, b) => time(b) - time(a));
+}
+
+// --- JSON ---------------------------------------------------------------------------------------
+
+export interface JournalJsonOptions {
+  dateFrom?: string;
+  dateTo?: string;
+  timeZone?: string;
+}
+
+/**
+ * The JSON export. `contentHtml` is the stored rich text exactly as saved (null stays null);
+ * `contentPlain` is a readable copy keeping paragraphs, line breaks, headings and lists.
+ */
 export function buildJournalJsonExport(
   entries: JournalExportEntry[],
-  exportedAt: Date
+  exportedAt: Date,
+  options: JournalJsonOptions = {}
 ): string {
   const payload = {
     exportVersion: 1,
     app: "Solace Journal",
     exportedAt: exportedAt.toISOString(),
+    dateRange: {
+      from: options.dateFrom || null,
+      to: options.dateTo || null,
+      timeZone: options.timeZone ?? deviceTimeZone(),
+    },
     entryCount: entries.length,
-    entries: entries
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .map((e) => ({
-        id: e.id,
-        title: e.title,
-        contentHtml: getEntryContent(e) || null,
-        contentPlain: (() => {
-          const html = getEntryContent(e);
-          return html ? htmlToPlainText(html) : "";
-        })(),
-        moodTags: Array.isArray(e.mood_tags) ? e.mood_tags : [],
-        favorite: getEntryFavorite(e),
-        isPrivate: e.is_private,
-        location: e.location,
-        createdAt: e.created_at,
-        updatedAt: e.updated_at,
-      })),
+    entries: sortJournalEntries(entries).map((e) => ({
+      id: e.id,
+      title: e.title,
+      contentHtml: typeof e.content === "string" ? e.content : null,
+      contentPlain: journalHtmlToPlainText(getEntryContent(e)),
+      moodTags: Array.isArray(e.mood_tags) ? e.mood_tags : [],
+      favorite: getEntryFavorite(e),
+      isPrivate: e.is_private,
+      location: e.location,
+      createdAt: e.created_at,
+      updatedAt: e.updated_at,
+    })),
   };
   return JSON.stringify(payload, null, 2);
 }
 
-const PDF_MARGIN = 20;
-const PDF_LINE = 5.5;
-const PDF_TITLE_SIZE = 13;
-const PDF_BODY_SIZE = 10;
-const PDF_META_SIZE = 9;
-const PDF_BOTTOM = 287;
-const PDF_SECTION_GAP = 6;
-
-const MOOD_LABELS: Record<string, string> = {
-  "😊": "Happy",
-  "😌": "Calm",
-  "😰": "Anxious",
-  "😢": "Sad",
-  "🤩": "Excited",
-  "😡": "Angry",
-};
-
-function nextY(doc: JsPdfDoc, y: number, step: number): number {
-  if (y + step > PDF_BOTTOM) {
-    doc.addPage();
-    return PDF_MARGIN + step;
-  }
-  return y + step;
-}
-
-function writeWrapped(
-  doc: JsPdfDoc,
-  text: string,
-  maxW: number,
-  y: number,
-  lineH: number,
-  draw: (line: string, yy: number) => void
-): number {
-  const lines = doc.splitTextToSize(text, maxW);
-  let cy = y;
-  for (const line of lines) {
-    if (cy + lineH > PDF_BOTTOM) {
-      doc.addPage();
-      cy = PDF_MARGIN;
-    }
-    draw(line, cy);
-    cy += lineH;
-  }
-  return cy;
-}
-
-/**
- * jsPDF core fonts do not support emoji and many pictographic glyphs, which can
- * show as garbled characters in generated PDFs. Strip those symbols and normalize
- * whitespace so exported reports stay readable.
- *
- * Exported so other PDF exports (e.g. the Progress Report) reuse the same
- * sanitisation instead of duplicating it.
- */
-export function cleanPdfText(value: string): string {
-  return value
-    .replace(/[\uFE0F\u200D]/g, "")
-    .replace(/\p{Extended_Pictographic}/gu, "")
-    .replace(/\u00A0/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .trim();
-}
-
-function formatMoodTags(tags: string[]): string {
-  if (!tags.length) return "";
-  const labels = tags.map((tag) => MOOD_LABELS[tag] ?? tag);
-  return cleanPdfText(`Mood: ${labels.join(", ")}`);
-}
-
-export async function buildJournalPdf(entries: JournalExportEntry[]): Promise<JsPdfDoc> {
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const maxW = pageW - PDF_MARGIN * 2;
-  const headerBandY = 8;
-  const headerBandH = 22;
-
-  let y = PDF_MARGIN;
-  const exportStamp = new Date();
-
-  doc.setFillColor(243, 247, 255);
-  doc.roundedRect(PDF_MARGIN, headerBandY, maxW, headerBandH, 2, 2, "F");
-  doc.setDrawColor(210, 225, 248);
-  doc.roundedRect(PDF_MARGIN, headerBandY, maxW, headerBandH, 2, 2, "S");
-
-  y = headerBandY + 8;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("Solace Journal Export", PDF_MARGIN, y);
-  y = nextY(doc, y, 7);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(PDF_META_SIZE);
-  doc.setTextColor(80, 80, 80);
-  y = writeWrapped(
-    doc,
-    `Exported ${exportStamp.toLocaleString()} - ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`,
-    maxW,
-    y,
-    PDF_LINE,
-    (line, yy) => doc.text(line, PDF_MARGIN, yy)
-  );
-  y += PDF_SECTION_GAP;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(50, 50, 50);
-  doc.text("Journal Entries", PDF_MARGIN, y);
-  y = nextY(doc, y, 4);
-  doc.setTextColor(0, 0, 0);
-
-  const sorted = [...entries].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-
-  for (let i = 0; i < sorted.length; i++) {
-    const e = sorted[i];
-    const title = cleanPdfText(e.title?.trim() || "Untitled Entry");
-    const when = new Date(e.created_at).toLocaleString();
-    const tags = Array.isArray(e.mood_tags) ? e.mood_tags : [];
-    const moods = formatMoodTags(tags);
-    const fav = getEntryFavorite(e) ? " · Favorite" : "";
-    const raw = getEntryContent(e);
-    const plainRaw = raw ? htmlToPlainText(raw) : "(No body)";
-    const plain = cleanPdfText(plainRaw) || "(No body)";
-
-    if (i > 0) {
-      y += PDF_SECTION_GAP - 1;
-      if (y + 8 > PDF_BOTTOM) {
-        doc.addPage();
-        y = PDF_MARGIN;
-      }
-      doc.setDrawColor(230, 230, 230);
-      doc.line(PDF_MARGIN, y, pageW - PDF_MARGIN, y);
-      y += 6;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(PDF_TITLE_SIZE);
-    y = writeWrapped(doc, `${i + 1}. ${title}`, maxW, y, PDF_LINE + 1, (line, yy) =>
-      doc.text(line, PDF_MARGIN, yy)
-    );
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(PDF_META_SIZE);
-    doc.setTextColor(70, 70, 70);
-    y = writeWrapped(
-      doc,
-      cleanPdfText(`${when}${fav}`),
-      maxW,
-      y,
-      PDF_LINE,
-      (line, yy) => doc.text(line, PDF_MARGIN, yy)
-    );
-    if (moods) {
-      y = writeWrapped(doc, moods, maxW, y, PDF_LINE, (line, yy) =>
-        doc.text(line, PDF_MARGIN, yy)
-      );
-    }
-    doc.setTextColor(0, 0, 0);
-
-    y += 2;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(PDF_BODY_SIZE);
-    y = writeWrapped(doc, plain, maxW, y, PDF_LINE, (line, yy) =>
-      doc.text(line, PDF_MARGIN, yy)
-    );
-  }
-
-  return doc;
+/** e.g. `solace-journal-2026-10-01-to-2026-10-28.pdf`; without a range, the export day. */
+export function journalExportFileName(format: "pdf" | "json", dateFrom: string, dateTo: string, now: Date): string {
+  const today = localDateKey(now);
+  if (dateFrom && dateTo) return `solace-journal-${dateFrom}-to-${dateTo}.${format}`;
+  if (dateFrom) return `solace-journal-${dateFrom}-to-${today}.${format}`;
+  if (dateTo) return `solace-journal-through-${dateTo}.${format}`;
+  return `solace-journal-${today}.${format}`;
 }
