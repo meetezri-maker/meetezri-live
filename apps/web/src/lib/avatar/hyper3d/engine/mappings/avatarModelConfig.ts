@@ -927,19 +927,41 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    * and these names are only the fallback, so the next re-export cannot repeat
    * it. They record what the CURRENT file holds, verified with the real loader.
    *
-   * `faceMaps` IS DELIBERATELY afr's `usc-shared`, so this entry changes the
-   * MODEL and nothing about the face look. The asset does ship a re-authored
-   * face texture, which that setting replaces with the USC evened albedo;
-   * changing this one word to `"authored"` is what keeps the designer's texture
-   * instead.
+   * RE-DELIVERED 2026-10-27 (44,039,044 bytes, sha256 2295edec…, Blender I/O
+   * v5.2.40): inside-nose colour corrected and a new hairstyle. MEASURED with
+   * the real GLTFLoader and engine factory:
+   *
+   *   face   the head mesh is now `blendshapes.001` with TWO primitives, so
+   *          three.js names them `blendshapes001` (1,099 v, `M_Face.001`, an
+   *          interior shell mapped to a dark patch) and `blendshapes001_1`
+   *          (10,415 v, `M_Face.002`, the face proper — listed first). Both
+   *          carry all 51 targets. The inherited single `blendshapes` no longer
+   *          exists, and with it the binding gate threw "face mesh did not
+   *          resolve" and Romy fell to her backup.
+   *   hair   a new style under the same `Hair` node, `Character.001` ->
+   *          `Character001` (`Material.003` cap) and `Character001_1` (57,180 v
+   *          on a material named `Hair`). No shared hair pass targets either
+   *          name (they match `Material.005`), so the designer's colour, alpha
+   *          and texture reach the screen as authored.
+   *   same   `Eyes` and `Teeth` within 1.1e-6 of the 19 Oct file (same UVs,
+   *          joints, weights), the authoring scale, the skeleton within float
+   *          noise — so the inherited transform and afr's eye-rest still hold
+   *          (re-measured: 0.002 / 0.003 deg off the accepted neutral).
+   *
+   * `faceMaps: "authored"` — CHANGED from afr's `usc-shared` for THIS FILE ONLY.
+   * The designer's nostril fix lives in this asset's face map; the shared swap
+   * replaced it with the USC albedo, whose nostril interior renders pale in the
+   * production pipeline, and also discarded the dark scalp painted under the
+   * new hair. Romy's frozen backup keeps `usc-shared`.
    */
   hyper3d_arfv2: {
     label: "Hyper3D (arfv2 — Sara Mitchell)",
+    face: ["blendshapes001_1", "blendshapes001"],
     eyelashes: ["Lashes"],
-    hair: ["Character002", "Character002_1"],
-    headAttachedMeshes: ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"],
+    hair: ["Character001", "Character001_1"],
+    headAttachedMeshes: ["blendshapes", "Teeth", "Character001", "Character001_1", "Lashes"],
     hiddenMeshNames: [],
-    faceMaps: "usc-shared"
+    faceMaps: "authored"
   },
   /**
    * `romy-fallback.glb` — ROMY'S FROZEN BACKUP SNAPSHOT.

@@ -133,9 +133,9 @@ export const HYPER3D_ARFV2_GLB_URL = "/avatars/hyper3d/arfv2.glb";
  * — the contract test over `meshNames` / `headAttachedMeshes` is what catches a
  * backup whose adapter has gone stale.
  *
- * TODAY the two files are byte-identical (43,260,712 bytes, md5 3ef519c8…), so
- * a DETERMINISTIC primary failure reproduces here and the chain reaches its
- * terminal state. The backup earns its keep from the next primary update on.
+ * The backup is the 19 Oct export (43,260,712 bytes, sha256 c802ad42…). Since
+ * the 27 Oct re-delivery (44,039,044 bytes, sha256 2295edec…) the two files
+ * differ, so a primary-only failure now lands on this known-good snapshot.
  */
 export const HYPER3D_ROMY_BACKUP_GLB_URL = "/avatars/hyper3d/romy-fallback.glb";
 export const HYPER3D_SARA_GLB_URL = "/avatars/hyper3d/sara.glb";

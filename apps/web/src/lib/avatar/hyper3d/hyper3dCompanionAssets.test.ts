@@ -162,6 +162,10 @@ describe("per-model adapters", () => {
    */
   it.each([
     ["hyper3d_afr", ["blendshapes"]],
+    // The 2026-10-27 arfv2.glb splits the head into `blendshapes.001` with two
+    // primitives. The face proper (`M_Face.002`) loads as the SECOND, so it is
+    // listed first; the first is a 1,099-vertex interior shell on `M_Face.001`.
+    ["hyper3d_arfv2", ["blendshapes001_1", "blendshapes001"]],
     ["hyper3d_sara", ["blendshapes_1", "blendshapes_2"]],
     ["hyper3d_perm", ["blendshapes_1", "blendshapes_2"]],
     // frankie.glb names the head mesh `blendshapes.001`, so the loader names
@@ -184,6 +188,10 @@ describe("per-model adapters", () => {
    */
   it.each([
     ["hyper3d_afr", ["Character002", "Character002_1"]],
+    // The new hairstyle, still under the `Hair` node (resolved structurally).
+    ["hyper3d_arfv2", ["Character001", "Character001_1"]],
+    // The frozen backup still describes its own, unchanged file.
+    ["hyper3d_romy_backup", ["Character002", "Character002_1"]],
     ["hyper3d_sara", ["Character002", "Character002_1"]],
     ["hyper3d_perm", ["Object_7"]],
     ["hyper3d_frankie", ["Object_7"]],
@@ -333,6 +341,8 @@ describe("per-model adapters", () => {
    */
   it.each([
     ["hyper3d_afr", ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"]],
+    ["hyper3d_arfv2", ["blendshapes", "Teeth", "Character001", "Character001_1", "Lashes"]],
+    ["hyper3d_romy_backup", ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"]],
     ["hyper3d_sara", ["blendshapes", "Teeth", "Character002", "Character002_1", "Lashes"]],
     // `Object_7` is perm's hair sculpt, and it is UNSKINNED: without this entry
     // the head would turn inside a stationary wig.
@@ -357,11 +367,17 @@ describe("per-model adapters", () => {
    * whose materials are `M_Face.001` and `M_Face.002`, and rendered him bald
    * and clean-shaven in the app.
    *
-   * Only afr may take the shared maps: it is the updated female_2291 and its
-   * authored face map is that very texture.
+   * Only afr and Romy's frozen backup may take the shared maps: afr is the
+   * updated female_2291 and its authored face map is that very texture.
+   *
+   * Romy's primary (`arfv2.glb`, 2026-10-27) does NOT: its face map carries the
+   * designer's corrected nostril interior and the dark scalp under the new
+   * hairstyle, and the shared albedo replaced both with a pale nostril.
    */
   it.each([
     ["hyper3d_afr", true],
+    ["hyper3d_arfv2", false],
+    ["hyper3d_romy_backup", true],
     ["hyper3d_sara", false],
     ["hyper3d_perm", false],
     ["hyper3d_frankie", false],
