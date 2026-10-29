@@ -1108,8 +1108,22 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    * none carries the `Face002_4` stub, and each face/scalp map is that person's
    * own. Left unset they would inherit female_2291's defaults — the shared USC
    * albedo, which replaces every one of these faces with female_2291's.
+   *
+   * RE-DELIVERED 2026-10-29 (inside-nose colour and hairstyles). Re-measured
+   * against the 10-23 files through the real loader and engine: head, `Eyes`
+   * and `Teeth` geometry within 3e-6, authoring scales within 4e-9, UVs and
+   * skin identical, so every `scale`, `position`, face name and eye-rest
+   * constant below still holds (eye rest re-read at <= 0.001 deg off the
+   * accepted neutral). The face maps change only in the nostrils and, for
+   * Bianca and Sasha, the scalp under the new hair. No new hair material is
+   * named `Material.005`, so the shared hair passes leave all three as authored.
    */
-  /** `bianca.glb`. Head primitives 9,251 + 2,053 v; hair 54,183 v on `Material.002`. */
+  /**
+   * `bianca.glb`. Head primitives 9,251 + 2,053 v (the back of the head is now
+   * `M_Face.001` with its own map). Hair: the `Hair` node is a five-primitive
+   * mesh (`ludovisions_FC1_mesh_06`..`_4`, 329,090 v, `ludovisions_FC1_mat_*`),
+   * which `getObjectByName("Hair")` attaches as one group.
+   */
   hyper3d_bianca: {
     label: "Hyper3D (bianca — Bianca)",
     scale: [1.272596, 1.272596, 1.272596],
@@ -1122,15 +1136,15 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
     // Her own "Surreal Flattened Face Texture Map". It ships no face normal map,
     // so under `authored` the face keeps none (the shared USC normal is not bound).
     faceMaps: "authored",
-    // A no-op today: her hair material is `Material.002`, which no shared hair
-    // pass targets. Stated so the decision is visible rather than inherited.
+    // A no-op today: her `ludovisions_FC1_mat_*` hair materials are not shared
+    // hair-pass targets. Stated so the decision is visible rather than inherited.
     hairAppearance: "shared-tuning"
   },
   /**
    * `damian.glb`. Head primitives, eyes, teeth, lashes and outfit are
    * byte-for-byte perm's (same names `blendshapes_1/_2`, same authoring scale
-   * 0.00851077400), so the transform equals perm's. Hair is 7,920 v of cards on
-   * `hair-cards.001`. BOTH head materials are `M_Face.*` (`M_Face.003` face,
+   * 0.00851077400), so the transform equals perm's. Hair is 7,440 v of cards on
+   * `hair-cards.001` (restyled 2026-10-29). BOTH head materials are `M_Face.*` (`M_Face.003` face,
    * `M_Face.001` back of head) — the Jordan pattern — so `authored` is what
    * keeps his scalp from being overwritten by a face texture.
    */
@@ -1153,11 +1167,14 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    * `Face.002` (loads as `Face002`..`Face002_3`) with FOUR primitives, so the
    * female_2291 stub `Face002_4` does not exist here and nothing is hidden.
    *
-   * HAIR: 1,102,572 v / 1,449,024 tri on `Material.005` with `hair_o` —
-   * the exact material name the shared hair passes target.
-   * `hairAppearance: "authored"` keeps the approved designer black hair: without it, the passes recolour it
-   * to #241a14, drop its metalness, change its roughness and envMap, switch it
-   * to sorted blending and swap its texture for `hair_o_dense.png`.
+   * HAIR: since 2026-10-29 a 62,769 v mesh named `Hair` on a material named
+   * `Hair` (alpha-blended strand texture plus normal map). The 10-23 hair was
+   * 1,102,572 v on `Material.005` — the exact name the shared hair passes
+   * target — which is why `hairAppearance: "authored"` exists: without it the
+   * passes recolour to #241a14, drop metalness, change roughness and envMap,
+   * switch to sorted blending and swap the texture for `hair_o_dense.png`.
+   * The new material no longer matches that name, so the setting is kept as a
+   * guard: a re-export that reuses `Material.005` cannot restyle her.
    */
   hyper3d_sasha: {
     label: "Hyper3D (sasha — Sasha)",
