@@ -29,8 +29,10 @@ export function initializeGa4(): boolean {
   target.dataLayer = Array.isArray(target.dataLayer) ? target.dataLayer : [];
   target.gtag =
     target.gtag ||
-    function gtag(...args) {
-      target.dataLayer?.push(args);
+    function gtag() {
+      // Match Google's bootstrap exactly: gtag.js expects queued commands as
+      // Arguments objects, not rest-parameter arrays.
+      target.dataLayer?.push(arguments);
     };
 
   deferAnalyticsScriptAppend("ga4:" + gaMeasurementId, () => {

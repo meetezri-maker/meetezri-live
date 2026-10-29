@@ -50,12 +50,20 @@ describe("deferred analytics script loading", () => {
 
     expect(document.querySelector("script[data-solace-ga4]")).toBeNull();
     expect(idleCallbacks).toHaveLength(1);
-    expect(getTestWindow().dataLayer).toEqual([
+    const queuedCommands = getTestWindow().dataLayer ?? [];
+    expect(
+      queuedCommands.map((command) => Array.from(command as ArrayLike<unknown>)),
+    ).toEqual([
       ["js", expect.any(Date)],
       ["config", "G-TEST123", { send_page_view: false }],
       ["event", "page_view", { page_path: "/", page_title: "Home" }],
       ["event", "early_access_cta_click", { origin: "hero" }],
     ]);
+    expect(
+      queuedCommands.every(
+        (command) => Object.prototype.toString.call(command) === "[object Arguments]",
+      ),
+    ).toBe(true);
 
     idleCallbacks[0]();
 
