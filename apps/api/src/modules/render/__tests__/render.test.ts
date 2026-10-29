@@ -12,7 +12,7 @@ import { renderNotFound, renderResourcesIndex, libraryHref } from '../renderReso
 import { canonicalFor, libraryMetadata, pageTitle, resourceMetadata } from '../metadata';
 import { articleTypeFor, faqSchema, serialiseJsonLd } from '../structuredData';
 import { buildRobots, buildSitemap, escapeXml, isIndexable } from '../sitemap';
-import { parseAssets } from '../assetManifest';
+import { parseAssets, RESOURCE_ANALYTICS_SCRIPT_PATH } from '../assetManifest';
 import {
   ALL_SENTINELS,
   FORBIDDEN_TERMS,
@@ -131,7 +131,7 @@ describe('the rendered document', () => {
     expect(serialiseJsonLd({ t: '</script>' })).not.toContain('</script>');
   });
 
-  it('emits the SPA bundle when a manifest resolved, and stays valid when it did not', () => {
+  it('loads only the deferred Resource analytics entry and stays valid without a manifest', () => {
     const withAssets = renderResourceDetail({
       origin: ORIGIN,
       detail: answerDetail(),
@@ -139,9 +139,13 @@ describe('the rendered document', () => {
     });
     expect(withAssets).not.toContain('src="/assets/index-abc.js"');
     expect(withAssets).toContain('href="/assets/index-abc.css"');
+    expect(withAssets).toContain(`src="${RESOURCE_ANALYTICS_SCRIPT_PATH}"`);
+    expect(withAssets.match(/resource-analytics\.js/g)).toHaveLength(1);
+    expect(withAssets).not.toContain('googletagmanager.com');
+    expect(withAssets).not.toContain('G-Z86N4XSSD0');
 
     // Without a manifest the page still has everything that matters.
-    expect(html).not.toContain('<script type="module"');
+    expect(html).toContain(`src="${RESOURCE_ANALYTICS_SCRIPT_PATH}"`);
     expect(html).toContain('<h1');
   });
 });

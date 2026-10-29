@@ -49,6 +49,7 @@ export function renderResourcesIndex({
     assets,
     pathname: '/resources',
     bootstrapScripts: false,
+    resourceAnalytics: true,
     children: (
       <ResourcesLibrary
         items={items}

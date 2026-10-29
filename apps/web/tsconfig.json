@@ -27,6 +27,7 @@
       "@meetezri/shared/defaultAiCompanions": ["../../packages/shared/src/defaultAiCompanions.ts"],
       "@meetezri/shared/crisisHotlines": ["../../packages/shared/src/crisisHotlines.ts"],
       "@meetezri/shared": ["../../packages/shared/src/index.ts"],
+      "@meetezri/public-content/publicSeo": ["../../packages/public-content/src/publicSeo.ts"],
       "@meetezri/public-content": ["../../packages/public-content/src/index.ts"]
     },
     "types": ["vite/client"]

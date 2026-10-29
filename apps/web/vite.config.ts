@@ -47,7 +47,7 @@ function excludeExperimentalAvatars(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   plugins: [
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them
@@ -73,6 +73,10 @@ export default defineConfig({
         '../../packages/shared/src/crisisHotlines.ts'
       ),
       '@meetezri/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
+      '@meetezri/public-content/publicSeo': path.resolve(
+        __dirname,
+        '../../packages/public-content/src/publicSeo.ts'
+      ),
       // Same treatment for the shared public renderer, so the SPA, the admin preview and the
       // server renderer all compile from one source rather than a stale dist.
       '@meetezri/public-content': path.resolve(
@@ -108,8 +112,19 @@ export default defineConfig({
       input: {
         app: path.resolve(__dirname, './index.html'),
         public: path.resolve(__dirname, './src/public-render/entry-client.tsx'),
+        resourceAnalytics: path.resolve(
+          __dirname,
+          './src/resource-render/entry-client.ts'
+        ),
       },
       output: {
+        entryFileNames(chunk) {
+          return chunk.name === 'resourceAnalytics'
+            ? 'assets/resource-analytics.js'
+            : isSsrBuild
+              ? '[name].js'
+              : 'assets/[name]-[hash].js';
+        },
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
           if (id.includes('/node_modules/clsx/')) return 'vendor-utils';
@@ -154,4 +169,4 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
-});
+}));

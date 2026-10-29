@@ -24,7 +24,7 @@ import {
 } from '@meetezri/public-content';
 import type { PageMetadata } from './metadata';
 import { serialiseJsonLd } from './structuredData';
-import type { AssetLinks } from './assetManifest';
+import { RESOURCE_ANALYTICS_SCRIPT_PATH, type AssetLinks } from './assetManifest';
 
 export interface DocumentInput {
   metadata: PageMetadata;
@@ -40,6 +40,8 @@ export interface DocumentInput {
    * would harm layout stability.
    */
   bootstrapScripts?: boolean;
+  /** Load the non-React analytics entry on successful Fastify Resource pages. */
+  resourceAnalytics?: boolean;
   children: ReactNode;
 }
 
@@ -85,6 +87,7 @@ export function renderDocument({
   assets,
   pathname,
   bootstrapScripts = true,
+  resourceAnalytics = false,
   children,
 }: DocumentInput): string {
   const markup = renderToStaticMarkup(
@@ -142,6 +145,9 @@ export function renderDocument({
         {bootstrapScripts ? assets.scripts.map((src) => (
           <script key={src} type="module" src={src} defer />
         )) : null}
+        {resourceAnalytics ? (
+          <script type="module" src={RESOURCE_ANALYTICS_SCRIPT_PATH} defer />
+        ) : null}
       </body>
     </html>
   );

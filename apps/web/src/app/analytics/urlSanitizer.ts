@@ -1,4 +1,4 @@
-import { PUBLIC_ROUTE_PATHS } from "@meetezri/public-content";
+import { PUBLIC_ROUTE_PATHS } from "@meetezri/public-content/publicSeo";
 
 export interface AnalyticsLocationLike {
   pathname: string;

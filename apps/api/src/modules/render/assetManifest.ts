@@ -19,6 +19,9 @@ export interface AssetLinks {
   styles: string[];
 }
 
+/** Stable Vite entry loaded only by successful Fastify Resource documents. */
+export const RESOURCE_ANALYTICS_SCRIPT_PATH = '/assets/resource-analytics.js';
+
 const EMPTY: AssetLinks = { scripts: [], styles: [] };
 
 /** Cached across warm invocations. Short enough that a redeploy is picked up quickly. */

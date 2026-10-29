@@ -65,6 +65,7 @@ describe('/resources/:slug', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.body).toContain('<h1>What should I do when I cannot sleep?</h1>');
+    expect(response.body).toContain('src="/assets/resource-analytics.js"');
     expect(response.body).toContain('<meta name="robots" content="index,follow"/>');
     expect(response.headers['x-robots-tag']).toBeUndefined();
   });
@@ -93,6 +94,7 @@ describe('/resources/:slug', () => {
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.body).toContain('We could not find that page');
     expect(response.body).toContain('<meta name="robots" content="noindex,nofollow"/>');
+    expect(response.body).not.toContain('resource-analytics.js');
     expect(response.headers['x-robots-tag']).toBeUndefined();
   });
 
@@ -138,6 +140,7 @@ describe('/resources', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<h1>Solace Resources</h1>');
     expect(response.body).toContain('href="/resources/what-to-do-when-you-cannot-sleep"');
+    expect(response.body).toContain('src="/assets/resource-analytics.js"');
     expect(response.body).toContain('<meta name="robots" content="index,follow"/>');
     expect(response.headers['x-robots-tag']).toBeUndefined();
   });

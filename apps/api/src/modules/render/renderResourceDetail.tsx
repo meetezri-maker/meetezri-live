@@ -35,6 +35,7 @@ export function renderResourceDetail({
     assets,
     pathname: detail.canonicalPath,
     bootstrapScripts: false,
+    resourceAnalytics: true,
     // `PublicDetail` is the zod-inferred serializer type; `PublicResource` is the view type.
     // `content-hub.render.contract.test.ts` asserts the two agree, so this cast is checked.
     children: <ResourceArticle resource={detail} />,
