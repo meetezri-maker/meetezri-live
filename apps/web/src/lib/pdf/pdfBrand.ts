@@ -29,6 +29,7 @@ export const FOOTER_TEXT = 287;
 export const T_TITLE = 19;
 export const T_SECTION = 13;
 export const T_BODY = 10;
+export const T_TABLE = 9.5;
 export const T_META = 8.5;
 export const T_SMALL = 7.5;
 const PT = 0.3528; // mm per pt

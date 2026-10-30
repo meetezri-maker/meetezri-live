@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { format } from 'date-fns';
 import { parseCsv } from '@/test/parseCsv';
 import {
   SESSION_LIST_LIMIT_CAP,
@@ -131,5 +132,41 @@ describe('buildProgressExportCsv', () => {
 
   it('names the file after the range and date', () => {
     expect(progressExportFileName('last_month', NOW)).toBe('solace-progress-last-month-2026-10-28.csv');
+  });
+
+  it('writes exactly the same bytes as before the shared report model (BOM, CRLF, escaping)', () => {
+    const csv = buildProgressExportCsv(
+      base({
+        journals: { ok: false },
+        stats: { ok: true, data: { weeklyProgress: [{ name: 'Week 1', sessions: 0, mood: 2, wellness: 1 }], wellnessScore: [{ subject: 'Focus', A: 0, fullMark: 100 }], monthlyActivity: [] } },
+      })
+    );
+    const offset = format(NOW, 'xxx');
+    const sel = 'Selected period: This Month (2026-10-01 to 2026-10-28)';
+    expect(csv).toBe(
+      '﻿' +
+        [
+          'Solace Progress Report',
+          `Generated,2026-10-28 15:00 ${offset}`,
+          'Selected period,This Month (2026-10-01 to 2026-10-28)',
+          'Time zone,Asia/Karachi (selected-period counts use this time zone)',
+          'Completeness,Partial: journal entries',
+          '',
+          'Section,Metric,Value,Unit,Scope,Status',
+          `Summary,Talks completed,2,talks,${sel},Complete`,
+          `Summary,Mood check-ins,1,check-ins,${sel},Complete`,
+          `Summary,Journal entries,,entries,${sel},Unavailable: could not be loaded`,
+          'Summary,Current streak,0,days,As of 2026-10-28,Complete',
+          'Weekly activity,Week 1 (oldest): talks started,0,talks,"Last 28 days in 7-day blocks, Week 1 oldest (server time); not the selected period",Complete',
+          'Weekly activity,Week 1 (oldest): mood check-ins,2,check-ins,"Last 28 days in 7-day blocks, Week 1 oldest (server time); not the selected period",Complete',
+          'Weekly activity,Week 1 (oldest): wellness tool sessions completed,1,sessions,"Last 28 days in 7-day blocks, Week 1 oldest (server time); not the selected period",Complete',
+          'Wellness scores,Focus score,0,score (0–100),Scope unknown,Scope unknown',
+          'Wellness tools,"Box Breathing, 4-4-4: wellness tool sessions completed",5,sessions,All time,Complete',
+          'Wellness tools,"Box Breathing, 4-4-4: total time",905,seconds,All time,Complete',
+          `Wellness tools,"'=SUM(1,1) Grounding: wellness tool sessions completed",0,sessions,All time,Complete`,
+          `Wellness tools,"'=SUM(1,1) Grounding: total time",0,seconds,All time,Complete`,
+        ].join('\r\n') +
+        '\r\n'
+    );
   });
 });

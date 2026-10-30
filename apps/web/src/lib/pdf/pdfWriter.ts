@@ -23,7 +23,9 @@ import {
   MUTED,
   RULE,
   T_BODY,
+  T_META,
   T_SMALL,
+  T_TABLE,
   TOP,
   lineMetrics,
   type RGB,
@@ -55,6 +57,24 @@ export interface TextOptions {
 interface Laid {
   text: string;
   family: string;
+}
+
+export interface TableColumn {
+  label: string;
+  /** Width in mm; the columns should add up to the content width (174 mm). */
+  width: number;
+  align?: "left" | "right";
+}
+
+/** One wrapped line of a table cell. */
+interface CellLine {
+  text: string;
+  family: string;
+  /** Right-to-left options for the line's paragraph (undefined: left-to-right). */
+  opts: Record<string, boolean> | undefined;
+  /** Advance from the previous baseline (ascent for the first line). */
+  step: number;
+  descent: number;
 }
 
 export class PdfWriter {
@@ -196,6 +216,126 @@ export class PdfWriter {
       r.draw(this.y);
       this.y += r.h;
     });
+  }
+
+  /** Wrapped lines for a table cell; each `\n` line is a paragraph with its own direction. */
+  private cellLines(text: string, width: number, style: Style, size: number): CellLine[] {
+    const out: CellLine[] = [];
+    for (const para of text.split("\n")) {
+      if (!para.trim()) {
+        const mt = lineMetrics(this.kit.baseFamily, size);
+        out.push({ text: "", family: this.kit.baseFamily, opts: undefined, step: out.length ? mt.lineH : mt.ascent, descent: mt.descent });
+        continue;
+      }
+      const opts = this.kit.textOptions(para);
+      for (const ln of this.layout(para, width, style, size)) {
+        const mt = lineMetrics(ln.family, size);
+        out.push({ text: ln.text, family: ln.family, opts, step: out.length ? mt.lineH : mt.ascent, descent: mt.descent });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * A table with wrapped cells. Rows are measured first and never split across a page unless
+   * taller than a page (then they continue line by line); the header repeats on continuation
+   * pages; `lead` rows (e.g. the section heading and scope) stay with the header and first row;
+   * separators sit below each whole row.
+   */
+  table(columns: TableColumn[], cells: string[][], lead: Row[] = []): void {
+    const padX = 1.5;
+    const padTop = 1.8;
+    const padBottom = 1.8;
+    const xs: number[] = [];
+    columns.reduce((x, c) => (xs.push(x), x + c.width), MARGIN);
+
+    const headMt = lineMetrics(this.kit.baseFamily, T_META);
+    const headerH = padTop + headMt.ascent + headMt.descent + padBottom + 0.6;
+    const drawHeader = () => {
+      this.font("bold", T_META, MUTED);
+      columns.forEach((c, i) => {
+        const baseline = this.y + padTop + headMt.ascent;
+        if (c.align === "right") this.doc.text(c.label, xs[i] + c.width - padX, baseline, { align: "right" });
+        else this.doc.text(c.label, xs[i] + padX, baseline);
+      });
+      this.doc.setDrawColor(RULE[0], RULE[1], RULE[2]);
+      this.doc.setLineWidth(0.4);
+      this.doc.line(MARGIN, this.y + headerH - 0.6, MARGIN + CONTENT_W, this.y + headerH - 0.6);
+      this.y += headerH;
+    };
+
+    // Measure: each row is a sequence of line steps shared by its cells.
+    const measured = cells.map((row) => {
+      const lines = row.map((cell, i) => this.cellLines(cell, columns[i].width - padX * 2, "normal", T_TABLE));
+      const n = Math.max(1, ...lines.map((l) => l.length));
+      const steps = Array.from({ length: n }, (_, k) => Math.max(0, ...lines.map((l) => l[k]?.step ?? 0)));
+      const descent = Math.max(0, ...lines.map((l) => l[l.length - 1]?.descent ?? 0));
+      const height = (from: number, to: number) => padTop + steps.slice(from, to).reduce((s, h) => s + h, 0) + descent + padBottom;
+      return { lines, n, steps, descent, height };
+    });
+
+    const drawSlice = (m: (typeof measured)[number], from: number, to: number) => {
+      m.lines.forEach((lines, i) => {
+        const col = columns[i];
+        let baseline = this.y + padTop;
+        for (let k = from; k < to; k += 1) {
+          baseline += m.steps[k];
+          const ln = lines[k];
+          if (!ln?.text) continue;
+          this.font("normal", T_TABLE, BODY, ln.family);
+          const right = xs[i] + col.width - padX;
+          if (ln.opts) this.doc.text(ln.text, right, baseline, { ...ln.opts, align: "right" });
+          else if (col.align === "right") this.doc.text(ln.text, right, baseline, { align: "right" });
+          else this.doc.text(ln.text, xs[i] + padX, baseline);
+        }
+      });
+      this.y += m.height(from, to);
+    };
+    const separator = () => {
+      this.doc.setDrawColor(RULE[0], RULE[1], RULE[2]);
+      this.doc.setLineWidth(0.2);
+      this.doc.line(MARGIN, this.y, MARGIN + CONTENT_W, this.y);
+    };
+
+    // Keep the lead rows, header and first row together.
+    const leadH = lead.reduce((s, r) => s + r.h, 0);
+    const first = measured[0] ? measured[0].height(0, measured[0].n) : 0;
+    this.ensure(Math.min(leadH + headerH + first, BOTTOM - TOP));
+    for (const r of lead) {
+      r.draw(this.y);
+      this.y += r.h;
+    }
+    drawHeader();
+
+    const prevHook = this.onPageBreak;
+    this.onPageBreak = drawHeader;
+    try {
+      for (const m of measured) {
+        const full = m.height(0, m.n);
+        if (full <= BOTTOM - TOP - headerH) {
+          this.ensure(full);
+          drawSlice(m, 0, m.n);
+        } else {
+          // Taller than a page: continue the row's lines on following pages.
+          let from = 0;
+          while (from < m.n) {
+            let to = from + 1;
+            while (to < m.n && this.y + m.height(from, to + 1) <= BOTTOM) to += 1;
+            if (this.y + m.height(from, to) > BOTTOM && this.y > TOP + headerH) {
+              this.newPage();
+              continue;
+            }
+            drawSlice(m, from, to);
+            from = to;
+            if (from < m.n) this.newPage();
+          }
+        }
+        separator();
+      }
+    } finally {
+      this.onPageBreak = prevHook;
+    }
+    this.y += 2;
   }
 
   /** The Solace wordmark at the top of page 1, or the name in brand colour if it can't load. */

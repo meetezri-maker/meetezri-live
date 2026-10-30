@@ -55,8 +55,17 @@ import {
   SESSION_LIST_LIMIT_CAP,
   buildProgressExportCsv,
   progressExportFileName,
+  type ProgressExportInput,
 } from "./progress/progressExport";
+import { buildProgressReport } from "./progress/progressReportModel";
 import { currentTimeZone } from "@/lib/reportTimeZone";
+import { PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 
 interface ProgressRangeSelectProps {
   value: ProgressTimeRange;
@@ -273,6 +282,24 @@ export function Progress() {
   const [isExporting, setIsExporting] = useState(false);
   const exportContextRef = useRef({ range: timelineRange, userId: user?.id ?? null });
   exportContextRef.current = { range: timelineRange, userId: user?.id ?? null };
+  // Export bookkeeping: the id of the export in progress (a later id supersedes it, so an old
+  // request can never clear a newer export's busy state) and whether the page is still mounted.
+  const exportRequestRef = useRef(0);
+  const exportBusyRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  // A range or account change abandons an export in progress; it will not download.
+  useEffect(() => {
+    if (!exportBusyRef.current) return;
+    exportRequestRef.current += 1;
+    exportBusyRef.current = false;
+    setIsExporting(false);
+  }, [timelineRange, user?.id]);
 
   const loadWellness = useCallback(() => {
     setLoadError(false);
@@ -487,15 +514,32 @@ export function Progress() {
     }));
   }, [activityInput, currentStreak, timelineRange]);
 
-  const handleExportReport = async () => {
-    if (isExporting) return;
+  /**
+   * Both formats share this path: the same checks, the same complete-talk-list retrieval and the
+   * same input snapshot. CSV is built in place; the PDF code (jsPDF + fonts) is loaded on demand.
+   */
+  const handleExportReport = async (exportFormat: "csv" | "pdf") => {
+    if (exportBusyRef.current) return;
+    if (profile?.subscription_plan === "trial") return;
     const range = timelineRange;
     const userId = user?.id ?? null;
     if (loadError || !exportSources || exportSources.userId !== userId) {
       toast.error("Your progress data hasn't loaded for this account yet. Please try again.");
       return;
     }
+    const requestId = ++exportRequestRef.current;
+    exportBusyRef.current = true;
     setIsExporting(true);
+    const stillCurrent = () =>
+      mountedRef.current &&
+      exportRequestRef.current === requestId &&
+      exportContextRef.current.range === range &&
+      exportContextRef.current.userId === userId;
+    const cancelled = () => {
+      if (mountedRef.current) {
+        toast.info("The report period or account changed, so the export was cancelled. Please export again.");
+      }
+    };
     try {
       // The page's list is capped by the API; when it is full, fetch the complete list
       // (GET /sessions without a limit) for the export only.
@@ -515,13 +559,13 @@ export function Progress() {
         }
       }
       // A range or account change while waiting must not produce a mislabelled file.
-      if (exportContextRef.current.range !== range || exportContextRef.current.userId !== userId) {
-        toast.info("The report period changed, so the export was cancelled. Please export again.");
+      if (!stillCurrent()) {
+        cancelled();
         return;
       }
 
       const now = new Date();
-      const csv = buildProgressExportCsv({
+      const input: ProgressExportInput = {
         range,
         now,
         timeZone: currentTimeZone(),
@@ -541,22 +585,54 @@ export function Progress() {
             totalSeconds: wellnessProgressTotalSeconds(p),
           })),
         },
-      });
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = progressExportFileName(range, now);
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      };
+      const save = (blob: Blob, fileName: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      };
+
+      if (exportFormat === "csv") {
+        save(new Blob([buildProgressExportCsv(input)], { type: "text/csv;charset=utf-8" }), progressExportFileName(range, now));
+        toast.success("Progress report downloaded");
+        return;
+      }
+
+      const report = buildProgressReport(input);
+      const { createProgressPdf, progressPdfFileName } = await import("./progress/progressExportPdf");
+      const { doc } = await createProgressPdf(report);
+      if (!stillCurrent()) {
+        cancelled();
+        return;
+      }
+      if (report.issues.length) {
+        toast.warning("Some progress data couldn't be loaded, so the PDF is marked as partial.");
+      }
+      save(doc.output("blob"), progressPdfFileName(range, now));
       toast.success("Progress report downloaded");
     } catch (e) {
+      if (!mountedRef.current) return;
       console.error(e);
-      toast.error("Could not export report");
+      if (e instanceof PdfUnsupportedTextError) {
+        toast.error(
+          e.reason === "font-unavailable"
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the CSV."
+            : `Your progress report contains characters the PDF can't display (${e.characters.join(" ")}), so it wasn't downloaded. You can download the CSV instead.`
+        );
+      } else {
+        toast.error("Could not export report");
+      }
     } finally {
-      setIsExporting(false);
+      // Only the export that is still the current one releases the busy state.
+      if (exportRequestRef.current === requestId) {
+        exportBusyRef.current = false;
+        if (mountedRef.current) setIsExporting(false);
+      }
     }
   };
 
@@ -747,19 +823,30 @@ export function Progress() {
               </p>
             </div>
           </div>
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => void handleExportReport()}
-            disabled={isExporting}
-            aria-busy={isExporting}
-            className="progress-btn-primary hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/20"
-            aria-label="Export progress report as CSV"
-          >
-            <Download className="w-4 h-4" />
-            Export Report
-          </motion.button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isExporting}
+                aria-busy={isExporting}
+                className="progress-btn-primary hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/20"
+                aria-label="Export progress report"
+              >
+                <Download className="w-4 h-4" />
+                Export Report
+              </motion.button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[10rem] border-white/10 bg-[#12122a] text-white">
+              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportReport("pdf")}>
+                Download PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportReport("csv")}>
+                Download CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </motion.div>
 
         {/* Emotional Hero */}
