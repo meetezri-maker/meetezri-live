@@ -46,6 +46,7 @@ import {
   type PdfFontFiles,
   type PdfTextKit,
 } from "./progress-report.pdf-text";
+import { loadLogo, type LogoImage } from "@/lib/pdf/pdfLogo";
 
 type Doc = jsPDF;
 type RGB = [number, number, number];
@@ -750,43 +751,10 @@ function reportStrings(report: ProgressReport): Array<[string, Style]> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Logo (optional — never blocks generation)
+// Logo (optional — never blocks generation): shared with the other report PDFs.
 // ---------------------------------------------------------------------------------------------
 
-export interface LogoImage {
-  dataUrl: string;
-  width: number;
-  height: number;
-}
-
-/** The dark Solace wordmark ("logo white.png" is the variant for white backgrounds). */
-export async function loadLogo(): Promise<LogoImage | null> {
-  try {
-    if (typeof fetch !== "function" || typeof FileReader === "undefined") return null;
-    const res = await fetch("/logos/logo white.png");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.onerror = () => reject(new Error("logo read failed"));
-      reader.readAsDataURL(blob);
-    });
-    if (!dataUrl.startsWith("data:image")) return null;
-    const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
-      if (typeof Image === "undefined") return resolve(null);
-      const img = new Image();
-      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      img.onerror = () => resolve(null);
-      img.src = dataUrl;
-    });
-    const height = 9;
-    const ratio = dims && dims.h > 0 ? dims.w / dims.h : 2.6;
-    return { dataUrl, width: Math.min(height * ratio, 42), height };
-  } catch {
-    return null;
-  }
-}
+export { loadLogo, type LogoImage };
 
 // ---------------------------------------------------------------------------------------------
 // Public API

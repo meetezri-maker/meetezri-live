@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { format } from 'date-fns';
 import { parseCsv } from '@/test/parseCsv';
 import {
   MOOD_EXPORT_COLUMNS,
@@ -128,5 +129,37 @@ describe('buildMoodHistoryExport', () => {
 
   it('names the file after the period', () => {
     expect(moodHistoryExportFileName(WEEK)).toBe('solace-mood-history-2026-10-26-to-2026-11-01.csv');
+  });
+
+  it('writes exactly the same bytes as before the shared report model (BOM, CRLF, escaping)', () => {
+    const result = buildMoodHistoryExport(
+      input({
+        entries: [
+          entry({ id: 'c1', intensity: 0, activities: ['walk', 'family, friends'], notes: 'ok', created_at: local(27, 9).toISOString() }),
+          entry({ id: 'j1', source: 'journal', mood: 'happy', intensity: 9, created_at: local(28, 8).toISOString(), notes: '<p>Good &amp; calm.</p><ul><li>Walked</li></ul>' }),
+          entry({ id: 'c2', mood: 'odd', intensity: 7, activities: [], created_at: local(29, 21).toISOString(), notes: `=SUM(A1) "q", ${URDU}\nline 2` }),
+        ],
+      })
+    );
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    const offset = format(local(28, 9, 30), 'xxx');
+    expect(result.csv).toBe(
+      '﻿' +
+        [
+          'Solace Mood History',
+          `Generated,2026-10-28 09:30 ${offset}`,
+          'Period,Week (Mon–Sun): 2026-10-26 to 2026-11-01',
+          'Time zone,Asia/Karachi',
+          'Includes,Mood check-ins and journal entries that have a mood tag',
+          'Completeness,Complete',
+          'Entries,3',
+          '',
+          'Date,Time,Source,Mood,Mood label,Intensity (1–10),Activities,Notes',
+          '2026-10-27,09:00,Mood check-in,calm,Calm,0,"walk; family, friends",ok',
+          '2026-10-28,08:00,Journal entry,happy,Happy,,,"Good & calm.\n\n- Walked"',
+          `2026-10-29,21:00,Mood check-in,odd,,7,,"'=SUM(A1) ""q"", ${URDU}\nline 2"`,
+        ].join('\r\n') +
+        '\r\n'
+    );
   });
 });

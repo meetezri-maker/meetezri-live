@@ -22,7 +22,7 @@ import {
   BookMarked,
   MoreHorizontal,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import {
@@ -61,8 +61,17 @@ import { toast } from "sonner";
 import {
   buildMoodHistoryExport,
   moodHistoryExportFileName,
+  type MoodHistoryExportInput,
   type SourceStatus,
 } from "@/app/pages/app/mood-history/moodHistoryExport";
+import { buildMoodHistoryReport } from "@/app/pages/app/mood-history/moodHistoryReport";
+import { PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { currentTimeZone } from "@/lib/reportTimeZone";
 import { SolacePanel } from "@/app/solace/SolacePanel";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
@@ -192,20 +201,59 @@ export function MoodHistory() {
   const goToPreviousCalendarMonth = () => setCalendarDate(prev => subMonths(prev, 1));
   const goToNextCalendarMonth = () => setCalendarDate(prev => addMonths(prev, 1));
 
-  const exportCurrentPeriod = () => {
+  // Export: one at a time. A PDF is prepared from a snapshot taken at click time and is only
+  // saved if the account, plan, period and loaded data are still the same when it is ready.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const exportBusyRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const exportContext = {
+    key: `${user?.id ?? ""}|${profile?.subscription_plan ?? ""}|${selectedView}|${getPeriodRange().start.getTime()}`,
+    entries,
+    sources: exportSources,
+  };
+  const exportContextRef = useRef(exportContext);
+  exportContextRef.current = exportContext;
+
+  /** The export input for the selected period, or null (with a message) when it can't be exported. */
+  const exportInput = (): MoodHistoryExportInput | null => {
+    if (profile?.subscription_plan === "trial") return null;
     if (!exportSources || exportSources.userId !== (user?.id ?? null)) {
       toast.error("Your mood history is still loading for this account. Please try again in a moment.");
-      return;
+      return null;
     }
     const period = getPeriodRange();
-    const result = buildMoodHistoryExport({
+    return {
       entries,
       period: { label: selectedView === "week" ? "Week (Mon–Sun)" : selectedView === "month" ? "Month" : "Year", ...period },
       sources: exportSources,
       moodLabel: (mood) => getMoodDisplayInfo(mood)?.label,
       timeZone: currentTimeZone(),
       generatedAt: new Date(),
-    });
+    };
+  };
+
+  const saveFile = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCurrentPeriod = () => {
+    if (exportBusyRef.current) return;
+    const input = exportInput();
+    if (!input) return;
+    const result = buildMoodHistoryExport(input);
     if (result.kind === "source-unavailable") {
       toast.error("We couldn't load your mood check-ins, so no export was created. Please try again.");
       return;
@@ -217,15 +265,54 @@ export function MoodHistory() {
     if (result.partial) {
       toast.warning("Exported without journal entries — they could not be loaded. The file is marked as partial.");
     }
-    const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = moodHistoryExportFileName(period);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    saveFile(new Blob([result.csv], { type: "text/csv;charset=utf-8" }), moodHistoryExportFileName(input.period));
+  };
+
+  const exportCurrentPeriodPdf = async () => {
+    if (exportBusyRef.current) return;
+    const input = exportInput();
+    if (!input) return;
+    const result = buildMoodHistoryReport(input);
+    if (result.kind === "source-unavailable") {
+      toast.error("We couldn't load your mood check-ins, so no export was created. Please try again.");
+      return;
+    }
+    if (result.kind === "empty") {
+      toast.info("There are no mood entries in this period to export.");
+      return;
+    }
+    exportBusyRef.current = true;
+    setPdfBusy(true);
+    const started = exportContextRef.current;
+    try {
+      const { createMoodHistoryPdf, moodHistoryPdfFileName } = await import("./mood-history/moodHistoryExportPdf");
+      const { doc } = await createMoodHistoryPdf(result.report);
+      if (!mountedRef.current) return;
+      const now = exportContextRef.current;
+      if (now.key !== started.key || now.entries !== started.entries || now.sources !== started.sources) {
+        toast.info("Your account or the selected period changed while the PDF was being prepared, so it wasn't downloaded. Please try again.");
+        return;
+      }
+      if (result.report.partial) {
+        toast.warning("Exported without journal entries — they could not be loaded. The file is marked as partial.");
+      }
+      saveFile(doc.output("blob"), moodHistoryPdfFileName(input.period));
+    } catch (error) {
+      if (!mountedRef.current) return;
+      console.error("Mood history PDF export failed", error);
+      if (error instanceof PdfUnsupportedTextError) {
+        toast.error(
+          error.reason === "font-unavailable"
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the CSV."
+            : `Your mood history contains characters the PDF can't display (${error.characters.join(" ")}), so it wasn't downloaded. You can download the CSV instead.`
+        );
+      } else {
+        toast.error("We couldn't create the PDF. Please try again, or download the CSV.");
+      }
+    } finally {
+      exportBusyRef.current = false;
+      if (mountedRef.current) setPdfBusy(false);
+    }
   };
 
   const getEntryKey = (entry: MoodEntry) => `${entry.source}:${entry.id}`;
@@ -343,9 +430,21 @@ export function MoodHistory() {
               <p className="text-[11px] text-zinc-500">Your emotional journey and reflections</p>
             </div>
           </div>
-          <button onClick={exportCurrentPeriod} disabled={entries.length === 0} className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition-all hover:bg-white/[0.06] disabled:opacity-50">
-            <Download className="h-3.5 w-3.5" /> Export
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" disabled={entries.length === 0 || pdfBusy} aria-busy={pdfBusy} className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition-all hover:bg-white/[0.06] disabled:opacity-50">
+                <Download className="h-3.5 w-3.5" /> Export
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[10rem] border-white/10 bg-[#12122a] text-white">
+              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void exportCurrentPeriodPdf()}>
+                Download PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={exportCurrentPeriod}>
+                Download CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </motion.div>
 
         <div className="flex gap-5">
