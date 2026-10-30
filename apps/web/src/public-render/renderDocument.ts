@@ -38,8 +38,19 @@ export function renderPublicDocument(
   const ogImage = definition.openGraph.image
     ? meta('og:image', definition.openGraph.image, true)
     : '';
+  const ogImageDetails = definition.openGraph.image
+    ? [
+        definition.openGraph.imageWidth ? meta('og:image:width', definition.openGraph.imageWidth, true) : '',
+        definition.openGraph.imageHeight ? meta('og:image:height', definition.openGraph.imageHeight, true) : '',
+        definition.openGraph.imageType ? meta('og:image:type', definition.openGraph.imageType, true) : '',
+        definition.openGraph.imageAlt ? meta('og:image:alt', definition.openGraph.imageAlt, true) : '',
+      ].filter(Boolean).join('\n')
+    : '';
   const twitterImage = definition.twitter.image
     ? meta('twitter:image', definition.twitter.image)
+    : '';
+  const twitterImageAlt = definition.twitter.image && definition.twitter.imageAlt
+    ? meta('twitter:image:alt', definition.twitter.imageAlt)
     : '';
 
   return `<!doctype html>
@@ -61,10 +72,12 @@ ${meta('og:title', definition.openGraph.title, true)}
 ${meta('og:description', definition.openGraph.description, true)}
 ${meta('og:url', definition.openGraph.url, true)}
 ${ogImage}
+${ogImageDetails}
 ${meta('twitter:card', definition.twitter.card)}
 ${meta('twitter:title', definition.twitter.title)}
 ${meta('twitter:description', definition.twitter.description)}
 ${twitterImage}
+${twitterImageAlt}
 ${structuredData}
 ${imports}
 ${styles}

@@ -15,7 +15,7 @@ export function PublicFooter() {
       <div className="landing-section py-10 md:py-12">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           <div className="col-span-2 md:col-span-1">
-            <BrandLogo heightClass="h-14" themeAware />
+            <BrandLogo heightClass="h-14" themeAware width={651} height={262} />
             <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
               {SITE_FOOTER_TAGLINE}
             </p>

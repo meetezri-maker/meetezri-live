@@ -362,16 +362,20 @@ const WHAT_HAPPENS_NEXT_REASSURANCE = [
 
 const SAFETY_TRUST_PILLARS = [
   {
-    title: "Private By Design",
-    description: "Your conversations belong to you.",
+    title: "Designed with privacy controls",
+    description: (
+      <>
+        See the <Link to="/privacy">Privacy Policy</Link> for information about how conversation
+        content is processed and stored.
+      </>
+    ),
     icon: Lock,
     glow: "blue" as const,
     iconClass: "from-blue-400/90 to-indigo-600/90",
   },
   {
     title: "Safety First",
-    description:
-      "Built-in safeguards and crisis support resources help support responsible use.",
+    description: "Built-in safeguards may present links to external crisis and emergency resources.",
     icon: Shield,
     glow: "green" as const,
     iconClass: "from-emerald-400/90 to-green-600/90",
@@ -467,9 +471,9 @@ export function Landing() {
               transition={{ delay: 0.1, duration: 0.5 }}
               className="landing-serif landing-hero-title text-white"
             >
-              The place where thoughts go
+              A place to talk through what you&apos;re carrying
               <span className="landing-hero-title-accent bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
-                when you have nobody to&nbsp;talk&nbsp;to.
+                {" "}with Solace.
               </span>
             </motion.h1>
 
@@ -480,8 +484,8 @@ export function Landing() {
               className="flex w-full max-w-6xl flex-col gap-4 px-2 sm:px-0"
             >
               <p className="mx-auto max-w-2xl text-[15px] leading-[1.7] text-white/88 sm:text-lg sm:leading-relaxed">
-                Talk through what&apos;s on your mind with a private AI companion designed to help
-                you express, reflect, and process what&apos;s weighing on you.
+                An AI-assisted conversation experience designed to give you space to express what
+                is on your mind and reflect at your own pace.
               </p>
               <p className="w-full rounded-2xl border border-white/10 bg-black/25 px-5 py-4 text-[13px] leading-snug text-white/62 backdrop-blur-md sm:px-8 sm:text-[15px] sm:leading-snug md:px-10 md:text-base md:leading-snug">
                 Whether you&apos;re replaying a conversation, carrying too much responsibility,
@@ -1039,7 +1043,8 @@ export function Landing() {
                 The usual approach
               </p>
               <p className="mb-5 text-lg font-semibold leading-snug text-white md:text-xl">
-                Most platforms focus on answers, advice, or treatment.
+                Many tools focus on answers or advice. Solace focuses on conversation and everyday
+                reflection.
               </p>
               <div
                 className="mx-auto mb-5 h-px w-16 bg-gradient-to-r from-transparent via-white/25 to-transparent"
@@ -1050,6 +1055,15 @@ export function Landing() {
               </p>
               <p className="landing-serif text-xl leading-snug text-white/92 md:text-2xl md:leading-snug">
                 Giving people a place to talk when they don&apos;t have someone to talk to.
+              </p>
+              <p className="mt-5 text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
+                Looking for informational guidance when no one feels available? Read{" "}
+                <Link
+                  to="/resources/what-should-i-do-when-i-have-nobody-to-talk-to"
+                  className="text-pink-200 underline underline-offset-4 hover:text-white"
+                >
+                  what you can do when you have nobody to talk to
+                </Link>.
               </p>
             </LandingGlowCard>
           </motion.div>
@@ -1406,7 +1420,7 @@ export function Landing() {
                       <div className="mb-5 rounded-xl border border-white/[0.08] bg-white/[0.04] p-3.5">
                         <div className="mb-0.5 flex items-center justify-between">
                           <span className="text-xs font-medium text-violet-100/85">
-                            AI Companion Time
+                            Talk It Out conversation time
                           </span>
                           <Video className="h-3.5 w-3.5 text-violet-300" />
                         </div>

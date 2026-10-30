@@ -13,8 +13,9 @@ export function LandingHeroScene({ children }: LandingHeroSceneProps) {
         src={LANDING_HERO_BG}
         alt=""
         className="absolute inset-0 h-full w-full object-cover object-[center_55%]"
-        width={2400}
-        height={1350}
+        width={1600}
+        height={1067}
+        fetchPriority="high"
       />
       <div
         className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.4)_0%,rgba(5,8,22,0.62)_50%,rgba(5,8,22,0.88)_100%)]"

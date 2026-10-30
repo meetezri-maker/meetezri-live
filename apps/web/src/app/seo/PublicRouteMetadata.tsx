@@ -69,6 +69,18 @@ export function applyPublicMetadata(definition: PublicSeoDefinition) {
       property: 'og:image',
       content: definition.openGraph.image,
     });
+    if (definition.openGraph.imageWidth) {
+      upsert('meta[property="og:image:width"]', 'meta', { property: 'og:image:width', content: definition.openGraph.imageWidth });
+    }
+    if (definition.openGraph.imageHeight) {
+      upsert('meta[property="og:image:height"]', 'meta', { property: 'og:image:height', content: definition.openGraph.imageHeight });
+    }
+    if (definition.openGraph.imageType) {
+      upsert('meta[property="og:image:type"]', 'meta', { property: 'og:image:type', content: definition.openGraph.imageType });
+    }
+    if (definition.openGraph.imageAlt) {
+      upsert('meta[property="og:image:alt"]', 'meta', { property: 'og:image:alt', content: definition.openGraph.imageAlt });
+    }
   }
   upsert('meta[name="twitter:card"]', 'meta', {
     name: 'twitter:card',
@@ -87,6 +99,9 @@ export function applyPublicMetadata(definition: PublicSeoDefinition) {
       name: 'twitter:image',
       content: definition.twitter.image,
     });
+    if (definition.twitter.imageAlt) {
+      upsert('meta[name="twitter:image:alt"]', 'meta', { name: 'twitter:image:alt', content: definition.twitter.imageAlt });
+    }
   }
 
   for (const document of buildPublicStructuredData(definition)) {

@@ -78,7 +78,15 @@ export function ResourceCard({ card }: { card: PublicResourceCard }) {
   );
 }
 
-export function Byline({ person, role }: { person: PublicPerson | null; role: string }) {
+export function Byline({
+  person,
+  role,
+  href,
+}: {
+  person: PublicPerson | null;
+  role: string;
+  href?: string;
+}) {
   if (!person) return null;
 
   return (
@@ -94,7 +102,8 @@ export function Byline({ person, role }: { person: PublicPerson | null; role: st
       ) : null}
       <div>
         <p className="sol-byline-name">
-          <span className="sol-byline-role">{role}</span> {person.name}
+          <span className="sol-byline-role">{role}</span>{' '}
+          {href ? <a href={href}>{person.name}</a> : person.name}
         </p>
         {/* Never manufactured — rendered only when the serializer actually exposes one. */}
         {person.title ? <p className="sol-byline-title">{person.title}</p> : null}
@@ -280,7 +289,7 @@ export function ResourceArticle({ resource }: { resource: PublicResource }) {
 
         {resource.author || resource.reviewer ? (
           <footer className="sol-authors">
-            <Byline person={resource.author} role="Written by" />
+            <Byline person={resource.author} role="Written by" href="/about" />
             <Byline person={resource.reviewer} role="Reviewed by" />
           </footer>
         ) : null}
@@ -394,7 +403,7 @@ export function ResourcesLibrary({
 
       <section className="sol-cta" aria-labelledby="library-cta">
         <h2 id="library-cta">Someone to talk to</h2>
-        <p>Solace is a calm, private space to talk things through whenever you need it.</p>
+        <p>Solace is a calm space to talk things through and reflect at your own pace.</p>
         <a className="sol-btn sol-btn-primary" href="/how-it-works">
           See how Solace works
         </a>

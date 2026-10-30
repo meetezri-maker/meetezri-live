@@ -32,6 +32,21 @@ describe('public route metadata synchronization', () => {
     );
   });
 
+  it('emits accurate fixed social image details', () => {
+    applyPublicMetadata(getPublicSeo('/')!);
+    expect(document.querySelector('meta[property="og:image:width"]')).toHaveAttribute('content', '1600');
+    expect(document.querySelector('meta[property="og:image:height"]')).toHaveAttribute('content', '1067');
+    expect(document.querySelector('meta[property="og:image:type"]')).toHaveAttribute('content', 'image/jpeg');
+    expect(document.querySelector('meta[property="og:image:alt"]')).toHaveAttribute(
+      'content',
+      'Lanterns glowing beside a calm lake at night',
+    );
+    expect(document.querySelector('meta[name="twitter:image:alt"]')).toHaveAttribute(
+      'content',
+      'Lanterns glowing beside a calm lake at night',
+    );
+  });
+
   it('does not leak Early Access noindex or schema to another public route', () => {
     applyPublicMetadata(getPublicSeo('/early-access')!);
     expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');

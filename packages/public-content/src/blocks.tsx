@@ -186,7 +186,14 @@ function Block({ block, index }: { block: PublicBlock; index: number }) {
       if (!src) return null;
       return (
         <figure className="sol-figure">
-          <img src={src} alt={block.alt} width={block.width} height={block.height} loading="lazy" />
+          <img
+            src={src}
+            alt={block.alt}
+            width={block.width}
+            height={block.height}
+            loading="lazy"
+            decoding="async"
+          />
           {block.caption || block.credit ? (
             <figcaption>
               <Inline content={block.caption} />

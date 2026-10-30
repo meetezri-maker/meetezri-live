@@ -1,6 +1,10 @@
 /** Framework-neutral metadata for the fixed public marketing and legal routes. */
 export const PUBLIC_SITE_ORIGIN = 'https://www.talktosolace2.ai' as const;
 export const PUBLIC_SOCIAL_IMAGE_PATH = '/community/hero-lake.jpg' as const;
+export const PUBLIC_SOCIAL_IMAGE_WIDTH = '1600' as const;
+export const PUBLIC_SOCIAL_IMAGE_HEIGHT = '1067' as const;
+export const PUBLIC_SOCIAL_IMAGE_TYPE = 'image/jpeg' as const;
+export const PUBLIC_SOCIAL_IMAGE_ALT = 'Lanterns glowing beside a calm lake at night' as const;
 
 export const PUBLIC_ROUTE_PATHS = [
   '/',
@@ -35,12 +39,17 @@ export interface PublicSeoDefinition {
     url: string;
     type: 'website';
     image?: string;
+    imageWidth?: string;
+    imageHeight?: string;
+    imageType?: string;
+    imageAlt?: string;
   };
   twitter: {
     card: 'summary' | 'summary_large_image';
     title: string;
     description: string;
     image?: string;
+    imageAlt?: string;
   };
   structuredData: readonly PublicStructuredDataDescriptor[];
   sitemap?: { changeFrequency: 'weekly' | 'monthly'; priority: string };
@@ -61,10 +70,22 @@ function define(input: Input): PublicSeoDefinition {
     canonicalPath: input.path,
     canonicalUrl,
     openGraph: {
-      title: input.title, description: input.description, url: canonicalUrl, type: 'website', image,
+      title: input.title,
+      description: input.description,
+      url: canonicalUrl,
+      type: 'website',
+      image,
+      imageWidth: PUBLIC_SOCIAL_IMAGE_WIDTH,
+      imageHeight: PUBLIC_SOCIAL_IMAGE_HEIGHT,
+      imageType: PUBLIC_SOCIAL_IMAGE_TYPE,
+      imageAlt: PUBLIC_SOCIAL_IMAGE_ALT,
     },
     twitter: {
-      card: 'summary_large_image', title: input.title, description: input.description, image,
+      card: 'summary_large_image',
+      title: input.title,
+      description: input.description,
+      image,
+      imageAlt: PUBLIC_SOCIAL_IMAGE_ALT,
     },
   };
 }

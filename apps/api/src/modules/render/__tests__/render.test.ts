@@ -106,6 +106,45 @@ describe('the rendered document', () => {
       output.indexOf('sol-authors'));
   });
 
+  it('links the visible Solace organization byline to About without adding a reviewer', () => {
+    const output = renderResourceDetail({
+      origin: ORIGIN,
+      detail: answerDetail({
+        author: { name: 'Solace', title: null, bio: null, avatarUrl: null },
+        reviewer: null,
+        reviewedAt: null,
+      }),
+      assets: NO_ASSETS,
+    });
+    expect(output).toContain('Written by');
+    expect(output).toContain('<a href="/about">Solace</a>');
+    expect(output).not.toContain('Reviewed by');
+    expect(output).not.toContain('"@type":"Person"');
+  });
+
+  it('lazy-loads and asynchronously decodes Resource body images', () => {
+    const output = renderResourceDetail({
+      origin: ORIGIN,
+      detail: answerDetail({
+        body: {
+          version: 1,
+          blocks: [{
+            id: 'image-1',
+            type: 'image',
+            url: '/resources/example.jpg',
+            alt: 'A calm example scene',
+            width: 640,
+            height: 480,
+          }],
+        },
+      }),
+      assets: NO_ASSETS,
+    });
+    expect(output).toContain(
+      '<img src="/resources/example.jpg" alt="A calm example scene" width="640" height="480" loading="lazy" decoding="async"/>',
+    );
+  });
+
   it('adds intrinsic dimensions to a remaining public avatar', () => {
     expect(html).toContain('class="sol-avatar" width="96" height="96"');
   });
@@ -382,6 +421,8 @@ describe('structured data', () => {
     expect(types).toEqual(['CollectionPage', 'BreadcrumbList']);
     expect(types).not.toContain('Article');
     expect(types).not.toContain('BlogPosting');
+    expect(html).toContain('Solace is a calm space to talk things through and reflect at your own pace.');
+    expect(html).toContain('href="/how-it-works"');
   });
 });
 

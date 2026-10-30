@@ -78,27 +78,27 @@ const TALK_IT_OUT_CLOSING = [
   "But to give you somewhere to begin.",
 ] as const;
 
-const UNDERSTANDING_TALK_IT_OUT = [
+const BEFORE_YOU_BEGIN = [
   {
-    question: "What is Talk It Out?",
+    question: "How do I start?",
     answer:
-      "Talk It Out is a private AI conversation experience that helps people express thoughts, process emotions, and gain clarity through conversation.",
+      "Create your account, choose the available trial or membership path, and begin when you are ready.",
     icon: MessageCircle,
     glow: "pink" as const,
     iconClass: "from-pink-500/90 to-fuchsia-600/90",
   },
   {
-    question: "Who is it for?",
+    question: "What do I need before I begin?",
     answer:
-      "People who are overthinking, carrying something difficult, feeling emotionally overloaded, or simply need someone to talk to when nobody else is available.",
+      "You do not need a plan, a prepared topic, or a polished explanation. You can start with what is on your mind.",
     icon: Users,
     glow: "purple" as const,
     iconClass: "from-violet-500/90 to-fuchsia-600/90",
   },
   {
-    question: "What makes it different?",
+    question: "Where can I explore the full experience?",
     answer:
-      "Talk It Out focuses on expression and reflection rather than answers, advice, or judgment.",
+      "The Talk It Out page explains Solace's flagship conversation experience, including its purpose and boundaries.",
     icon: Sparkles,
     glow: "cyan" as const,
     iconClass: "from-cyan-400/90 to-teal-500/90",
@@ -254,7 +254,7 @@ const FAQ_ITEMS = [
   {
     question: "Is Solace therapy?",
     answer:
-      "No. Solace is not therapy and is not a replacement for professional mental health care. It is a conversation experience designed to support reflection and emotional processing.",
+      "No. Solace is not therapy and is not a replacement for professional mental health care. It is a conversation experience designed to support conversation and everyday reflection.",
   },
   {
     question: "What if I don't know how to explain what I'm feeling?",
@@ -436,12 +436,12 @@ export function HowItWorks() {
           </div>
         </LandingHeroScene>
 
-        {/* What is Talk It Out? */}
+        {/* Before a Talk It Out conversation */}
         <section className="landing-section py-12 md:py-16">
           <SectionHeading
-            title="What is"
-            highlight="Talk It Out?"
-            subtitle="The experience Solace was built around."
+            title="Before a"
+            highlight="Talk It Out Conversation"
+            subtitle="How to start with Solace."
           />
 
           <div className="mx-auto flex max-w-4xl flex-col gap-8 md:gap-10">
@@ -451,8 +451,8 @@ export function HowItWorks() {
               viewport={{ once: true }}
               className="landing-serif mx-auto max-w-2xl text-center text-lg leading-relaxed text-white/88 sm:text-xl md:text-2xl md:leading-snug"
             >
-              When people join Solace, they&apos;re usually carrying something they haven&apos;t been
-              able to fully process.
+              You do not need a polished explanation before you begin. Start with what is on your
+              mind, then take the conversation one step at a time.
             </motion.p>
 
             <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
@@ -492,7 +492,7 @@ export function HowItWorks() {
             >
               <LandingGlowCard glow="pink" className="p-6 sm:p-8">
                 <p className="mb-5 text-center text-sm text-[var(--solace-ds-text-muted)] sm:text-base">
-                  Talk It Out was created for those moments.
+                  Talk It Out is Solace&apos;s flagship conversation experience.
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-2.5">
                   {TALK_IT_OUT_CLOSING.map((line) => (
@@ -505,16 +505,25 @@ export function HowItWorks() {
                   ))}
                 </div>
               </LandingGlowCard>
+              <p className="mt-5 text-center text-sm text-[var(--solace-ds-text-muted)]">
+                For the detailed product experience and its boundaries, visit{" "}
+                <Link
+                  to="/talk-it-out"
+                  className="text-pink-200 underline underline-offset-4 hover:text-white"
+                >
+                  Talk It Out
+                </Link>.
+              </p>
             </motion.div>
           </div>
         </section>
 
-        {/* Understanding Talk It Out */}
+        {/* Before You Begin */}
         <section className="landing-section py-12 md:py-16">
-          <SectionHeading title="Understanding Talk It Out" />
+          <SectionHeading title="Before You Begin" />
 
           <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-3 lg:gap-6">
-            {UNDERSTANDING_TALK_IT_OUT.map((item, index) => (
+            {BEFORE_YOU_BEGIN.map((item, index) => (
               <motion.div
                 key={item.question}
                 initial={{ opacity: 0, y: 16 }}

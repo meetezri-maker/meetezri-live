@@ -57,7 +57,7 @@ const TRIAL_USES = [
 const TRIAL_INCLUDES = [
   "Full Talk It Out Experience",
   "Safety Features",
-  "AI Companion Conversations",
+  "Talk It Out conversations",
   "Guided Reflection Experience",
   "No Credit Card Required",
 ] as const;
@@ -97,7 +97,6 @@ const PRO_INCLUDES = [
   "Journal Export",
   "Full Wellness Library",
   "Detailed Usage Insights",
-  "Priority Handling",
   "Pay-As-You-Go Top Ups",
 ] as const;
 
@@ -121,13 +120,12 @@ const UNDERSTANDING_PLANS = [
 
 const COMPARE_ROWS = [
   { feature: "Talk It Out", trial: true, core: true, pro: true },
-  { feature: "Emergency Detection", trial: true, core: true, pro: true },
+  { feature: "Automated safety resource prompts", trial: true, core: true, pro: true },
   { feature: "Mood History", trial: "—", core: "7/30 Days", pro: "90 Days" },
   { feature: "Journaling", trial: "—", core: true, pro: "✓ + Export" },
   { feature: "Wellness Tools", trial: "—", core: "Curated", pro: "Full Library" },
   { feature: "Usage History", trial: "—", core: true, pro: "Detailed" },
   { feature: "Pay-As-You-Go", trial: "—", core: true, pro: true },
-  { feature: "Priority Handling", trial: "—", core: "—", pro: true },
 ] as const;
 
 const WHY_STAY_LINES = [

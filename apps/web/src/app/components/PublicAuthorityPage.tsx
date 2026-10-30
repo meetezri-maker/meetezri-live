@@ -87,9 +87,11 @@ export function PublicAuthorityPage({
                   <img
                     src={heroImage.src}
                     alt={heroImage.alt}
-                    className="mb-6 aspect-[16/10] w-full rounded-2xl object-cover"
-                    width={1200}
-                    height={750}
+                    className="mb-6 aspect-[1717/916] w-full rounded-2xl object-cover"
+                    width={1717}
+                    height={916}
+                    loading="eager"
+                    decoding="async"
                   />
                 ) : null}
                 <p className="landing-serif text-2xl leading-snug text-white sm:text-3xl">{summary}</p>

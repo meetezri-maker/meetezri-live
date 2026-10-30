@@ -57,7 +57,7 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
       >
         <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="relative z-10 flex shrink-0 items-center">
-            <BrandLogo heightClass="h-10" variant="onDark" />
+            <BrandLogo heightClass="h-10" variant="onDark" width={651} height={262} />
           </Link>
 
           <nav
@@ -137,7 +137,7 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
               whileTap={{ scale: 0.95 }}
               className="flex items-center justify-center"
             >
-              <BrandLogo heightClass="h-10" variant="onLight" />
+              <BrandLogo heightClass="h-10" variant="onLight" width={651} height={262} />
             </motion.div>
           </Link>
 
