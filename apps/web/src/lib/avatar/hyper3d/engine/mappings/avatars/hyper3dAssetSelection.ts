@@ -134,8 +134,9 @@ export const HYPER3D_ARFV2_GLB_URL = "/avatars/hyper3d/arfv2.glb";
  * backup whose adapter has gone stale.
  *
  * The backup is the 19 Oct export (43,260,712 bytes, sha256 c802ad42…). Since
- * the 27 Oct re-delivery (44,039,044 bytes, sha256 2295edec…) the two files
- * differ, so a primary-only failure now lands on this known-good snapshot.
+ * the 27 Oct re-delivery the two files differ (current primary: 30 Oct,
+ * 44,041,224 bytes, sha256 5ca2eb74…), so a primary-only failure now lands on
+ * this known-good snapshot.
  */
 export const HYPER3D_ROMY_BACKUP_GLB_URL = "/avatars/hyper3d/romy-fallback.glb";
 export const HYPER3D_SARA_GLB_URL = "/avatars/hyper3d/sara.glb";
@@ -162,7 +163,7 @@ export const HYPER3D_JORDAN_GLB_URL = "/avatars/hyper3d/jordan.glb";
  * Checksums the adapters were re-verified against (2026-10-29 re-delivery):
  *   bianca.glb  81,381,288 B   sha256 23d9426c…
  *   damian.glb  54,898,968 B   sha256 d9b03d47…
- *   sasha.glb   53,649,340 B   sha256 c9e1ca4b…
+ *   sasha.glb   53,650,384 B   sha256 d390c9fd…  (hair adjusted, 2026-10-30)
  */
 export const HYPER3D_BIANCA_GLB_URL = "/avatars/hyper3d/bianca.glb";
 export const HYPER3D_DAMIAN_GLB_URL = "/avatars/hyper3d/damian.glb";

@@ -953,6 +953,12 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    * replaced it with the USC albedo, whose nostril interior renders pale in the
    * production pipeline, and also discarded the dark scalp painted under the
    * new hair. Romy's frozen backup keeps `usc-shared`.
+   *
+   * RE-DELIVERED 2026-10-30 (44,041,224 bytes, sha256 5ca2eb74…): nostril
+   * colour retouched again. Only the face map changed (pixels confined to the
+   * nostrils); four face vertices moved by at most 4.9e-3 model units, morph
+   * targets, `Eyes`, `Teeth`, hair and every name are unchanged — so this entry,
+   * including `authored`, holds as is (eye rest re-read: 0.002 / 0.003 deg).
    */
   hyper3d_arfv2: {
     label: "Hyper3D (arfv2 — Sara Mitchell)",
@@ -1167,7 +1173,8 @@ const HYPER3D_ASSET_ADAPTERS: Readonly<Partial<Record<Hyper3dAssetId, Hyper3dAss
    * `Face.002` (loads as `Face002`..`Face002_3`) with FOUR primitives, so the
    * female_2291 stub `Face002_4` does not exist here and nothing is hidden.
    *
-   * HAIR: since 2026-10-29 a 62,769 v mesh named `Hair` on a material named
+   * HAIR: since 2026-10-29 a ~62,770 v mesh named `Hair` (re-sculpted slightly
+   * 2026-10-30; `Hair` node transform and material unchanged) on a material named
    * `Hair` (alpha-blended strand texture plus normal map). The 10-23 hair was
    * 1,102,572 v on `Material.005` — the exact name the shared hair passes
    * target — which is why `hairAppearance: "authored"` exists: without it the
