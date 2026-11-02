@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   RECORDED_TIMES_NOTE,
   SAVED_MESSAGES_NOTE,
+  buildSessionTranscriptDocument,
   buildSessionTranscriptText,
   transcriptExportFileName,
   type TranscriptExportInput,
@@ -173,5 +174,44 @@ describe('buildSessionTranscriptText', () => {
     expect(transcriptExportFileName('../../etc/passwd?x', new Date(2026, 9, 27))).toBe(
       'solace-session-etcpasswdx-2026-10-27-transcript.txt'
     );
+  });
+});
+
+describe('buildSessionTranscriptDocument', () => {
+  it('holds the same facts the TXT is written from', () => {
+    const r = buildSessionTranscriptDocument(input());
+    if (r.kind !== 'ok') throw new Error('expected ok');
+    const { doc } = r;
+    expect(doc).toMatchObject({
+      title: 'Evening check-in',
+      sessionId: 'a1b2c3d4-0000-4000-8000-000000000001',
+      companion: 'Maya',
+      duration: '25 min 30 s',
+      timeZone: 'Asia/Karachi',
+      summary: { heading: 'Saved Summary (AI-generated)', body: 'You talked about sleep and work stress.' },
+      fileStem: 'solace-session-a1b2c3d4-0000-4000-8000-000000000001-2026-10-27-transcript',
+    });
+    expect(doc.messages.map((m) => [m.speaker, m.time, m.content])).toEqual([
+      ['You', '21:00:05', 'Hello'],
+      ['Solace', '21:00:09', "Hi, I'm here.\n\nTake your time."],
+      ['You', '21:01:00', `I said "fine, okay", but ${URDU}`],
+    ]);
+    // Every model line appears in the TXT, in order.
+    const { text } = textOf(input());
+    let from = 0;
+    for (const m of doc.messages) {
+      const at = text.indexOf(`[${m.time}] ${m.speaker}:\n${m.content}\n`, from);
+      expect(at).toBeGreaterThanOrEqual(from);
+      from = at + 1;
+    }
+  });
+
+  it('normalises CRLF and keeps missing times and empty results the same as the TXT', () => {
+    const r = buildSessionTranscriptDocument(
+      input({ messages: [{ role: 'user', content: 'a\r\nb\rc', created_at: null }] })
+    );
+    if (r.kind !== 'ok') throw new Error('expected ok');
+    expect(r.doc.messages).toEqual([{ speaker: 'You', at: null, time: 'Time not recorded', content: 'a\nb\nc' }]);
+    expect(buildSessionTranscriptDocument(input({ messages: [] }))).toEqual({ kind: 'empty' });
   });
 });

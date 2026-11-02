@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   getSummary: vi.fn(),
   toggleFavorite: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  createPdf: vi.fn(),
+  pdfModuleLoaded: false,
   auth: {
     current: {
       session: { access_token: 't' },
@@ -31,8 +33,18 @@ vi.mock('@/lib/api', () => ({
 }));
 vi.mock('@/app/contexts/AuthContext', () => ({ useAuth: () => h.auth.current }));
 vi.mock('sonner', () => ({ toast: h.toast }));
+// The PDF module (jsPDF + fonts) is only loaded when a PDF is requested.
+vi.mock('./session-history/sessionTranscriptPdf', () => {
+  h.pdfModuleLoaded = true;
+  return {
+    createSessionTranscriptPdf: h.createPdf,
+    transcriptPdfFileName: (doc: { fileStem: string }) => `${doc.fileStem}.pdf`,
+  };
+});
 
+import userEvent from '@testing-library/user-event';
 import { SessionHistory } from './SessionHistory';
+import { PdfUnsupportedTextError } from '@/lib/pdf/pdfText';
 
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -89,6 +101,8 @@ beforeEach(() => {
   h.get.mockImplementation(async (id: string) => sessionRow(id, id === 's2' ? { title: 'Second talk' } : {}));
   h.getTranscript.mockResolvedValue(messages);
   h.getSummary.mockResolvedValue({ summary: 'AI summary from popup', source: 'ai' });
+  h.createPdf.mockReset();
+  h.createPdf.mockResolvedValue({ doc: { output: () => new Blob(['%PDF'], { type: 'application/pdf' }) } });
   downloads = [];
   URL.createObjectURL = vi.fn((b: Blob) => { lastBlob = b; return 'blob:test'; }) as typeof URL.createObjectURL;
   URL.revokeObjectURL = vi.fn();
@@ -104,12 +118,20 @@ afterEach(() => {
 
 const renderPage = () => render(<MemoryRouter><SessionHistory /></MemoryRouter>);
 const rowButtons = () => screen.findAllByRole('button', { name: 'Download transcript' }, { timeout: 10000 });
+/** Opens an export menu (row icon or popup button) and picks a format, as a user would. */
+async function choose(trigger: HTMLElement, item: 'Download PDF' | 'Download TXT') {
+  const user = userEvent.setup();
+  await user.click(trigger);
+  await user.click(await screen.findByRole('menuitem', { name: item }));
+}
+const pdfDone = (resolve: (v: unknown) => void) => resolve({ doc: { output: () => new Blob(['%PDF']) } });
 
-describe('Session transcript export (page)', () => {
+// Full page renders plus menu interaction; allow for a loaded machine when many test files run together.
+describe('Session transcript export (page)', { timeout: 20000 }, () => {
   it('row icon exports from stored data without calling the summary endpoint', async () => {
     renderPage();
     const [first] = await rowButtons();
-    fireEvent.click(first);
+    await choose(first, 'Download TXT');
 
     await waitFor(() => expect(downloads).toHaveLength(1));
     const text = await downloads[0].text;
@@ -130,7 +152,7 @@ describe('Session transcript export (page)', () => {
   it('popup Export Transcript produces the same file; only opening the popup calls getSummary', async () => {
     renderPage();
     const [first] = await rowButtons();
-    fireEvent.click(first);
+    await choose(first, 'Download TXT');
     await waitFor(() => expect(downloads).toHaveLength(1));
     const fromRow = await downloads[0].text;
 
@@ -141,7 +163,7 @@ describe('Session transcript export (page)', () => {
     await new Promise((r) => setTimeout(r, 100));
     const summaryCallsBeforeExport = h.getSummary.mock.calls.length;
 
-    fireEvent.click(popupButton);
+    await choose(popupButton, 'Download TXT');
     await waitFor(() => expect(downloads).toHaveLength(2));
     expect(h.getSummary.mock.calls.length).toBe(summaryCallsBeforeExport); // export added none
     expect(await downloads[1].text).toBe(fromRow);
@@ -153,9 +175,9 @@ describe('Session transcript export (page)', () => {
     h.getTranscript.mockImplementation(() => new Promise((r) => { release = r; }));
     renderPage();
     const [first] = await rowButtons();
-    fireEvent.click(first);
-    fireEvent.click(first);
-    fireEvent.click(first);
+    await choose(first, 'Download TXT');
+    await choose(first, 'Download TXT'); // again while the first is loading
+    await choose(first, 'Download TXT');
     await act(async () => release(messages));
 
     await waitFor(() => expect(downloads).toHaveLength(1));
@@ -168,7 +190,7 @@ describe('Session transcript export (page)', () => {
       h.getTranscript.mockImplementation(() => new Promise((r) => { release = r; }));
       const { rerender, unmount } = renderPage();
       const [first] = await rowButtons();
-      fireEvent.click(first);
+      await choose(first, 'Download TXT');
 
       h.auth.current = { ...h.auth.current, user: next, profile: next ? { id: next.id, subscription_plan: 'pro' } : null };
       rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
@@ -185,7 +207,7 @@ describe('Session transcript export (page)', () => {
     h.getTranscript.mockImplementationOnce(() => new Promise((r) => { release = r; }));
     renderPage();
     const [first, second] = await rowButtons();
-    fireEvent.click(first);
+    await choose(first, 'Download TXT');
     fireEvent.click(second.closest('.session-history-row')!); // open s2 details while s1 loads
     await act(async () => release(messages));
 
@@ -198,7 +220,7 @@ describe('Session transcript export (page)', () => {
   it('shows a message instead of downloading an empty conversation', async () => {
     h.getTranscript.mockResolvedValue([{ role: 'system', content: 'internal' }]);
     renderPage();
-    fireEvent.click((await rowButtons())[0]);
+    await choose((await rowButtons())[0], 'Download TXT');
     await waitFor(() => expect(h.toast.info).toHaveBeenCalledWith('This talk has no saved conversation to export.'));
     expect(downloads).toHaveLength(0);
   });
@@ -206,7 +228,7 @@ describe('Session transcript export (page)', () => {
   it('shows an error and downloads nothing when retrieval fails', async () => {
     h.getTranscript.mockRejectedValue(new Error('500'));
     renderPage();
-    fireEvent.click((await rowButtons())[0]);
+    await choose((await rowButtons())[0], 'Download TXT');
     await waitFor(() => expect(h.toast.error).toHaveBeenCalledWith("We couldn't load this transcript. Please try again."));
     expect(downloads).toHaveLength(0);
   });
@@ -217,5 +239,142 @@ describe('Session transcript export (page)', () => {
     await act(async () => {});
     expect(screen.queryAllByRole('button', { name: 'Download transcript' })).toHaveLength(0);
     expect(h.get).not.toHaveBeenCalled();
+  });
+
+  it('downloads the TXT without loading the PDF engine or fonts', async () => {
+    renderPage();
+    await choose((await rowButtons())[0], 'Download TXT');
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(h.pdfModuleLoaded).toBe(false);
+  });
+});
+
+describe('Session transcript PDF export (page)', { timeout: 20000 }, () => {
+  type Doc = { sessionId: string; title: string; companion: string | null; messages: Array<{ speaker: string; content: string }>; fileStem: string };
+  const docOf = (call: number) => h.createPdf.mock.calls[call][0] as Doc;
+
+  it('row menu exports a PDF from stored data, without opening the session details or generating a summary', async () => {
+    renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(downloads[0].name).toBe('solace-session-s1-2026-10-27-transcript.pdf');
+    const doc = docOf(0);
+    expect(doc).toMatchObject({ sessionId: 's1', title: 'Talk It Out session' });
+    expect(doc.companion).toMatch(/^Maya/); // the session's stored avatar, not the user's current one (Alex)
+    expect(doc.messages.map((m) => [m.speaker, m.content])).toEqual([['You', 'Hello'], ['Solace', 'Hi there']]);
+    expect(h.getSummary).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Export Transcript/i })).toBeNull(); // details not opened
+  });
+
+  it('popup menu produces the same PDF content as the row menu, adding no summary calls', async () => {
+    renderPage();
+    const [first] = await rowButtons();
+    await choose(first, 'Download PDF');
+    await waitFor(() => expect(downloads).toHaveLength(1));
+
+    fireEvent.click(first.closest('.session-history-row')!);
+    const popupButton = await screen.findByRole('button', { name: /Export Transcript/i });
+    await waitFor(() => expect(h.getSummary).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 100));
+    const before = h.getSummary.mock.calls.length;
+    await choose(popupButton, 'Download PDF');
+    await waitFor(() => expect(downloads).toHaveLength(2));
+    expect(h.getSummary.mock.calls.length).toBe(before);
+    const { exportedAt: _a, ...fromRow } = docOf(0) as Doc & { exportedAt: Date };
+    const { exportedAt: _b, ...fromPopup } = docOf(1) as Doc & { exportedAt: Date };
+    expect(fromPopup).toEqual(fromRow);
+    expect(downloads[1].name).toBe(downloads[0].name);
+  });
+
+  it('runs one export per session while the PDF is being prepared', async () => {
+    let finish: (v: unknown) => void = () => {};
+    h.createPdf.mockImplementation(() => new Promise((r) => { finish = r; }));
+    renderPage();
+    const [first] = await rowButtons();
+    await choose(first, 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(1));
+    expect(first).toHaveAttribute('aria-busy', 'true');
+    await choose(first, 'Download TXT'); // conflicting export for the same session: ignored
+    await act(async () => pdfDone(finish));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(downloads[0].name).toMatch(/\.pdf$/);
+    expect(h.getTranscript).toHaveBeenCalledTimes(1);
+    expect(first).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('keeps the requested session when another one is opened during generation', async () => {
+    let finish: (v: unknown) => void = () => {};
+    h.createPdf.mockImplementation(() => new Promise((r) => { finish = r; }));
+    renderPage();
+    const [first, second] = await rowButtons();
+    await choose(first, 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalled());
+    fireEvent.click(second.closest('.session-history-row')!);
+    await act(async () => pdfDone(finish));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(docOf(0).sessionId).toBe('s1');
+    expect(downloads[0].name).toContain('-s1-');
+  });
+
+  it('cancels on account change or sign-out during generation; an old completion cannot clear a newer export', async () => {
+    const pending: Array<(v: unknown) => void> = [];
+    h.createPdf.mockImplementation(() => new Promise((r) => pending.push(r)));
+    const { rerender } = renderPage();
+    const [first] = await rowButtons();
+    await choose(first, 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(1));
+
+    h.auth.current = { ...h.auth.current, user: { id: 'user-b' }, profile: { id: 'user-b', subscription_plan: 'pro' } };
+    rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
+    const [again] = await rowButtons();
+    await waitFor(() => expect(again).toHaveAttribute('aria-busy', 'false'));
+    await choose(again, 'Download PDF'); // the new account's export
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(2));
+    await act(async () => pdfDone(pending[0])); // old account's PDF finishes first
+    expect(downloads).toHaveLength(0);
+    expect(again).toHaveAttribute('aria-busy', 'true'); // still busy with the newer export
+    await act(async () => pdfDone(pending[1]));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+
+    // Sign-out during generation: nothing downloads.
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(3));
+    h.auth.current = { ...h.auth.current, user: null, profile: null };
+    rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
+    await act(async () => pdfDone(pending[2]));
+    expect(downloads).toHaveLength(1);
+  });
+
+  it('downloads nothing if the page is left during generation', async () => {
+    let finish: (v: unknown) => void = () => {};
+    h.createPdf.mockImplementation(() => new Promise((r) => { finish = r; }));
+    const { unmount } = renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalled());
+    unmount();
+    await act(async () => pdfDone(finish));
+    expect(downloads).toHaveLength(0);
+    expect(h.toast.error).not.toHaveBeenCalled();
+  });
+
+  it('explains text the PDF cannot draw, and keeps empty/failed cases as before', async () => {
+    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError(['你'], 'no-glyph'));
+    renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() =>
+      expect(h.toast.error).toHaveBeenCalledWith(
+        "This transcript contains characters the PDF can't display (你), so it wasn't downloaded. You can download the TXT instead."
+      )
+    );
+    expect(downloads).toHaveLength(0);
+
+    h.getTranscript.mockResolvedValueOnce([{ role: 'system', content: 'internal' }]);
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.toast.info).toHaveBeenCalledWith('This talk has no saved conversation to export.'));
+    h.getTranscript.mockRejectedValueOnce(new Error('500'));
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.toast.error).toHaveBeenCalledWith("We couldn't load this transcript. Please try again."));
+    expect(downloads).toHaveLength(0);
+    expect(h.createPdf).toHaveBeenCalledTimes(1);
   });
 });

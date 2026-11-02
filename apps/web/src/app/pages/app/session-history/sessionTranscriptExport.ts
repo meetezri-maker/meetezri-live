@@ -1,5 +1,6 @@
 /**
- * Session transcript TXT export (Talk It Out History: row download icon and popup button).
+ * Session transcript export (Talk It Out History: row download icon and popup button), as TXT
+ * here and as PDF in sessionTranscriptPdf.ts — both from `buildSessionTranscriptDocument`.
  *
  * Built only from stored data: the session row (GET /sessions/:id) and its messages
  * (GET /sessions/:id/transcript). It never asks for a summary to be generated.
@@ -76,12 +77,45 @@ function summaryBlock(config: TranscriptExportSession['config']): { heading: str
   return { heading: 'Saved Summary', body: raw };
 }
 
-export function transcriptExportFileName(sessionId: string, date: Date): string {
+/** File name stem shared by TXT and PDF, e.g. `solace-session-<id>-2026-10-27-transcript`. */
+export function transcriptFileStem(sessionId: string, date: Date): string {
   const safeId = sessionId.replace(/[^A-Za-z0-9-]/g, '').slice(0, 64) || 'session';
-  return `solace-session-${safeId}-${format(date, 'yyyy-MM-dd')}-transcript.txt`;
+  return `solace-session-${safeId}-${format(date, 'yyyy-MM-dd')}-transcript`;
 }
 
-export function buildSessionTranscriptText(input: TranscriptExportInput): TranscriptExportResult {
+export function transcriptExportFileName(sessionId: string, date: Date): string {
+  return `${transcriptFileStem(sessionId, date)}.txt`;
+}
+
+/** The transcript as structured data; the TXT and the PDF are both written from it. */
+export interface TranscriptDocument {
+  /** Stored session title, or "Talk It Out session" for placeholder/missing titles. */
+  title: string;
+  sessionId: string;
+  /** Companion name stored on the session itself, if any. */
+  companion: string | null;
+  started: Date | null;
+  /** Recorded duration ("20 min", "0 s") or "Not recorded". */
+  duration: string;
+  exportedAt: Date;
+  timeZone: string;
+  summary: { heading: string; body: string };
+  messages: Array<{
+    speaker: 'You' | 'Solace';
+    /** When the message was recorded (saved); null when not recorded or invalid. */
+    at: Date | null;
+    /** Recorded time as shown in both formats ("21:01:00", or with the date when the talk spans days). */
+    time: string;
+    /** Exactly as stored (line endings normalised to \n). */
+    content: string;
+  }>;
+  /** File name stem (without extension). */
+  fileStem: string;
+}
+
+export type TranscriptDocumentResult = { kind: 'ok'; doc: TranscriptDocument } | { kind: 'empty' };
+
+export function buildSessionTranscriptDocument(input: TranscriptExportInput): TranscriptDocumentResult {
   const { session, companionName, exportedAt, timeZone } = input;
 
   // Conversation only; the API already returns messages oldest first (ties keep that order).
@@ -105,38 +139,62 @@ export function buildSessionTranscriptText(input: TranscriptExportInput): Transc
     started && ended && ended.getTime() >= started.getTime()
       ? formatDuration((ended.getTime() - started.getTime()) / 1000)
       : 'Not recorded';
-  const summary = summaryBlock(session.config);
+
+  return {
+    kind: 'ok',
+    doc: {
+      title: title && !GENERIC_TITLES.test(title) ? title : 'Talk It Out session',
+      sessionId: session.id,
+      companion: companionName?.trim() ? companionName.trim() : null,
+      started,
+      duration,
+      exportedAt,
+      timeZone,
+      summary: summaryBlock(session.config),
+      messages: conversation.map((m, i) => ({
+        speaker: SPEAKERS[(m.role as string).toLowerCase()] as 'You' | 'Solace',
+        at: times[i],
+        time: times[i] ? format(times[i] as Date, timeFormat) : 'Time not recorded',
+        content: (m.content as string).replace(/\r\n?/g, '\n'),
+      })),
+      fileStem: transcriptFileStem(session.id, started ?? exportedAt),
+    },
+  };
+}
+
+export function buildSessionTranscriptText(input: TranscriptExportInput): TranscriptExportResult {
+  const result = buildSessionTranscriptDocument(input);
+  if (result.kind === 'empty') return result;
+  const { doc } = result;
 
   const lines: string[] = [
     'Solace | Session Transcript',
     '',
-    `Session: ${title && !GENERIC_TITLES.test(title) ? title : 'Talk It Out session'}`,
-    `Session ID: ${session.id}`,
-    ...(companionName?.trim() ? [`Companion: ${companionName.trim()}`] : []),
-    `Started: ${started ? format(started, 'yyyy-MM-dd HH:mm') : 'Not recorded'}`,
-    `Duration: ${duration}`,
-    `Exported: ${format(exportedAt, 'yyyy-MM-dd HH:mm')}`,
-    `Time zone: ${timeZone}`,
+    `Session: ${doc.title}`,
+    `Session ID: ${doc.sessionId}`,
+    ...(doc.companion ? [`Companion: ${doc.companion}`] : []),
+    `Started: ${doc.started ? format(doc.started, 'yyyy-MM-dd HH:mm') : 'Not recorded'}`,
+    `Duration: ${doc.duration}`,
+    `Exported: ${format(doc.exportedAt, 'yyyy-MM-dd HH:mm')}`,
+    `Time zone: ${doc.timeZone}`,
     '',
-    summary.heading,
-    summary.body,
+    doc.summary.heading,
+    doc.summary.body,
     '',
     'Conversation',
     SAVED_MESSAGES_NOTE,
     RECORDED_TIMES_NOTE,
   ];
 
-  conversation.forEach((m, i) => {
-    const when = times[i];
-    const speaker = SPEAKERS[(m.role as string).toLowerCase()];
-    lines.push('', `[${when ? format(when, timeFormat) : 'Time not recorded'}] ${speaker}:`, m.content as string);
-  });
+  for (const m of doc.messages) {
+    lines.push('', `[${m.time}] ${m.speaker}:`, m.content);
+  }
 
   const text = `${lines.join('\n').replace(/\r\n?/g, '\n')}\n`;
   return {
     kind: 'ok',
     text,
-    messageCount: conversation.length,
-    fileName: transcriptExportFileName(session.id, started ?? exportedAt),
+    messageCount: doc.messages.length,
+    fileName: `${doc.fileStem}.txt`,
   };
 }

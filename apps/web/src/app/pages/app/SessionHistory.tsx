@@ -15,8 +15,18 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { buildSessionTranscriptText } from "@/app/pages/app/session-history/sessionTranscriptExport";
+import {
+  buildSessionTranscriptDocument,
+  buildSessionTranscriptText,
+} from "@/app/pages/app/session-history/sessionTranscriptExport";
 import { currentTimeZone } from "@/lib/reportTimeZone";
+import { PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
@@ -361,6 +371,19 @@ export function SessionHistory() {
   const [exportingIds, setExportingIds] = useState<Set<string>>(() => new Set());
   const currentUserIdRef = useRef<string | null>(null);
   currentUserIdRef.current = user?.id ?? null;
+  const planRef = useRef<string | null>(null);
+  planRef.current = profile?.subscription_plan ?? null;
+  // Bumped when the account changes or the page unmounts: an export started before that never
+  // downloads, and its completion cannot clear the busy state of a newer export.
+  const exportGenerationRef = useRef(0);
+  useEffect(() => {
+    exportGenerationRef.current += 1;
+    exportingIdsRef.current.clear();
+    setExportingIds(new Set());
+  }, [user?.id]);
+  useEffect(() => () => {
+    exportGenerationRef.current += 1;
+  }, []);
 
   const handleToggleFavorite = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -528,8 +551,7 @@ export function SessionHistory() {
     fetchSessions();
   }, [session, profile?.selected_avatar, profile?.selected_environment, isTrialUser]);
 
-  const downloadTextFile = (filename: string, body: string) => {
-    const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const downloadBlob = (filename: string, blob: Blob) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -543,15 +565,20 @@ export function SessionHistory() {
   /**
    * Shared by the row download icon and the popup's Export Transcript button. Read-only: it
    * loads the stored session row and messages for the requested id and never asks for a
-   * summary to be generated. The account is captured at click time; if it changes before the
-   * data arrives, nothing is downloaded.
+   * summary to be generated. The account is captured at click time; if it changes (or the page
+   * is left) before the file is ready, nothing is downloaded. TXT and PDF share this path and
+   * the same loaded data; the PDF code (jsPDF + fonts) is loaded only for a PDF.
    */
-  const handleExportSession = async (sessionId: string) => {
+  const handleExportSession = async (sessionId: string, exportFormat: "txt" | "pdf") => {
     if (exportingIdsRef.current.has(sessionId)) return;
+    if (planRef.current === "trial") return;
     const accountId = currentUserIdRef.current;
     if (!accountId) return;
+    const generation = exportGenerationRef.current;
+    const stillCurrent = () => exportGenerationRef.current === generation && currentUserIdRef.current === accountId;
     exportingIdsRef.current.add(sessionId);
     setExportingIds(new Set(exportingIdsRef.current));
+    let stage: "load" | "pdf" = "load";
     try {
       const [sessionRow, messages] = await Promise.all([
         api.sessions.get(sessionId) as Promise<BackendSession & { config?: { summary_source?: string } }>,
@@ -559,29 +586,57 @@ export function SessionHistory() {
           { role: string; content: string; created_at?: string }[]
         >,
       ]);
-      if (currentUserIdRef.current !== accountId) return;
+      if (!stillCurrent()) return;
 
       const storedCompanion = sessionRow?.config?.avatar?.trim();
-      const result = buildSessionTranscriptText({
+      const input = {
         session: sessionRow,
         messages: Array.isArray(messages) ? messages : [],
         companionName: storedCompanion ? findLobbyAvatar(storedCompanion)?.name ?? storedCompanion : null,
         exportedAt: new Date(),
         timeZone: currentTimeZone(),
-      });
+      };
+
+      if (exportFormat === "txt") {
+        const result = buildSessionTranscriptText(input);
+        if (result.kind === "empty") {
+          toast.info("This talk has no saved conversation to export.");
+          return;
+        }
+        downloadBlob(result.fileName, new Blob([result.text], { type: "text/plain;charset=utf-8" }));
+        return;
+      }
+
+      const result = buildSessionTranscriptDocument(input);
       if (result.kind === "empty") {
         toast.info("This talk has no saved conversation to export.");
         return;
       }
-      downloadTextFile(result.fileName, result.text);
+      stage = "pdf";
+      const { createSessionTranscriptPdf, transcriptPdfFileName } = await import("./session-history/sessionTranscriptPdf");
+      const { doc } = await createSessionTranscriptPdf(result.doc);
+      if (!stillCurrent()) return;
+      downloadBlob(transcriptPdfFileName(result.doc), doc.output("blob"));
     } catch (error) {
       console.error("Transcript export failed", error);
-      if (currentUserIdRef.current === accountId) {
+      if (!stillCurrent()) return;
+      if (error instanceof PdfUnsupportedTextError) {
+        toast.error(
+          error.reason === "font-unavailable"
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the TXT."
+            : `This transcript contains characters the PDF can't display (${error.characters.join(" ")}), so it wasn't downloaded. You can download the TXT instead.`
+        );
+      } else if (stage === "pdf") {
+        toast.error("We couldn't create the PDF. Please try again, or download the TXT.");
+      } else {
         toast.error("We couldn't load this transcript. Please try again.");
       }
     } finally {
-      exportingIdsRef.current.delete(sessionId);
-      setExportingIds(new Set(exportingIdsRef.current));
+      // Only an export from the current generation releases its busy state.
+      if (exportGenerationRef.current === generation) {
+        exportingIdsRef.current.delete(sessionId);
+        setExportingIds(new Set(exportingIdsRef.current));
+      }
     }
   };
 
@@ -1016,18 +1071,32 @@ export function SessionHistory() {
                             <Clock className="w-4 h-4" />
                             <span>{sessionItem.duration}</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleExportSession(sessionItem.id);
-                            }}
-                            className="session-history-row-action flex items-center gap-1.5 rounded-lg p-1 text-slate-400 transition-all hover:bg-slate-700/50 hover:text-white"
-                            aria-label="Download transcript"
-                            aria-busy={exportingIds.has(sessionItem.id)}
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                // The row opens the session details on click; the menu must not.
+                                onClick={(e) => e.stopPropagation()}
+                                className="session-history-row-action flex items-center gap-1.5 rounded-lg p-1 text-slate-400 transition-all hover:bg-slate-700/50 hover:text-white"
+                                aria-label="Download transcript"
+                                aria-busy={exportingIds.has(sessionItem.id)}
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="min-w-[10rem] border-white/10 bg-[#12122a] text-white"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportSession(sessionItem.id, "pdf")}>
+                                Download PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportSession(sessionItem.id, "txt")}>
+                                Download TXT
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1347,15 +1416,31 @@ export function SessionHistory() {
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <Button
-                    onClick={() => void handleExportSession(selectedSession.id)}
-                    aria-busy={exportingIds.has(selectedSession.id)}
-                    variant="outline"
-                    className={cn(modalPrimaryButton, "flex-1 rounded-xl")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Transcript
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        aria-busy={exportingIds.has(selectedSession.id)}
+                        variant="outline"
+                        className={cn(modalPrimaryButton, "flex-1 rounded-xl")}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Export Transcript
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      className="z-[60] min-w-[10rem] border-white/10 bg-[#12122a] text-white"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* The session id is captured here, so opening another session can't change this export. */}
+                      <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportSession(selectedSession.id, "pdf")}>
+                        Download PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportSession(selectedSession.id, "txt")}>
+                        Download TXT
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     onClick={(e) => handleToggleFavorite(selectedSession.id, e)}
                     variant="outline"
