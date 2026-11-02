@@ -31,15 +31,43 @@ import {
   type WellnessChallengeRow,
 } from "@/app/features/wellness/challengesMapper";
 
+// The user app themes via html[data-ezri-theme] (no `.dark` class), so `dark:` variants never
+// apply here. Classes are dark-first with explicit light-theme overrides, as in achievementsUi.ts.
+const PILL_PURPLE =
+  "bg-purple-500/15 text-purple-300 [html[data-ezri-theme=light]_&]:bg-purple-100 [html[data-theme=light]_&]:bg-purple-100 [html[data-ezri-theme=light]_&]:text-purple-700 [html[data-theme=light]_&]:text-purple-700";
+const PILL_INDIGO =
+  "bg-indigo-500/15 text-indigo-300 [html[data-ezri-theme=light]_&]:bg-indigo-100 [html[data-theme=light]_&]:bg-indigo-100 [html[data-ezri-theme=light]_&]:text-indigo-700 [html[data-theme=light]_&]:text-indigo-700";
+const PILL_PINK =
+  "bg-pink-500/15 text-pink-300 [html[data-ezri-theme=light]_&]:bg-pink-100 [html[data-theme=light]_&]:bg-pink-100 [html[data-ezri-theme=light]_&]:text-pink-700 [html[data-theme=light]_&]:text-pink-700";
+const PILL_ORANGE =
+  "bg-orange-500/15 text-orange-300 [html[data-ezri-theme=light]_&]:bg-orange-100 [html[data-theme=light]_&]:bg-orange-100 [html[data-ezri-theme=light]_&]:text-orange-700 [html[data-theme=light]_&]:text-orange-700";
+const PILL_GREEN =
+  "bg-green-500/15 text-green-300 [html[data-ezri-theme=light]_&]:bg-green-100 [html[data-theme=light]_&]:bg-green-100 [html[data-ezri-theme=light]_&]:text-green-700 [html[data-theme=light]_&]:text-green-700";
+const PILL_BLUE =
+  "bg-blue-500/15 text-blue-300 [html[data-ezri-theme=light]_&]:bg-blue-100 [html[data-theme=light]_&]:bg-blue-100 [html[data-ezri-theme=light]_&]:text-blue-700 [html[data-theme=light]_&]:text-blue-700";
+const PILL_AMBER =
+  "bg-amber-500/15 text-amber-300 [html[data-ezri-theme=light]_&]:bg-amber-100 [html[data-theme=light]_&]:bg-amber-100 [html[data-ezri-theme=light]_&]:text-amber-700 [html[data-theme=light]_&]:text-amber-700";
+const PILL_GRAY =
+  "bg-white/[0.06] text-gray-300 [html[data-ezri-theme=light]_&]:bg-gray-100 [html[data-theme=light]_&]:bg-gray-100 [html[data-ezri-theme=light]_&]:text-gray-700 [html[data-theme=light]_&]:text-gray-700";
+
+const COMPLETED_CARD =
+  "border-emerald-500/25 bg-emerald-950/25 [html[data-ezri-theme=light]_&]:border-green-200 [html[data-theme=light]_&]:border-green-200 [html[data-ezri-theme=light]_&]:bg-gradient-to-r [html[data-theme=light]_&]:bg-gradient-to-r [html[data-ezri-theme=light]_&]:from-green-50 [html[data-theme=light]_&]:from-green-50 [html[data-ezri-theme=light]_&]:to-emerald-50 [html[data-theme=light]_&]:to-emerald-50";
+const DIFFICULTY_PILL =
+  "border border-white/10 bg-white/[0.04] text-zinc-300 [html[data-ezri-theme=light]_&]:border-transparent [html[data-theme=light]_&]:border-transparent [html[data-ezri-theme=light]_&]:bg-gray-100 [html[data-theme=light]_&]:bg-gray-100";
+const PROGRESS_TRACK =
+  "bg-white/[0.06] [html[data-ezri-theme=light]_&]:bg-gray-200 [html[data-theme=light]_&]:bg-gray-200";
+const COMPLETED_LABEL =
+  "text-emerald-300 [html[data-ezri-theme=light]_&]:text-emerald-700 [html[data-theme=light]_&]:text-emerald-700";
+
 function formatCategoryBadge(categoryLabel?: string | null) {
   const label = (categoryLabel || "General").trim();
   const key = label.toLowerCase();
-  if (key.includes("mind")) return { label, className: "bg-purple-100 text-purple-700" };
-  if (key.includes("sleep")) return { label, className: "bg-indigo-100 text-indigo-700" };
-  if (key.includes("journal")) return { label, className: "bg-pink-100 text-pink-700" };
-  if (key.includes("habit")) return { label, className: "bg-orange-100 text-orange-700" };
-  if (key.includes("exerc") || key.includes("fitness")) return { label, className: "bg-green-100 text-green-700" };
-  return { label, className: "bg-blue-100 text-blue-700" };
+  if (key.includes("mind")) return { label, className: PILL_PURPLE };
+  if (key.includes("sleep")) return { label, className: PILL_INDIGO };
+  if (key.includes("journal")) return { label, className: PILL_PINK };
+  if (key.includes("habit")) return { label, className: PILL_ORANGE };
+  if (key.includes("exerc") || key.includes("fitness")) return { label, className: PILL_GREEN };
+  return { label, className: PILL_BLUE };
 }
 
 function formatEndDate(endDate?: string | null) {
@@ -62,27 +90,27 @@ function getUserChallengeStatus(challenge: WellnessChallengeRow): {
   if (challenge.isLocked) {
     return {
       label: "Locked",
-      className: "bg-gray-100 text-gray-700",
+      className: PILL_GRAY,
       helperText: "Finish earlier challenges to unlock this one.",
     };
   }
   if (challenge.isCompleted) {
     return {
       label: "Completed",
-      className: "bg-green-100 text-green-700",
+      className: PILL_GREEN,
       helperText: "Great work. Reward points are already counted.",
     };
   }
   if (challenge.isJoined) {
     return {
       label: "In Progress",
-      className: "bg-blue-100 text-blue-700",
+      className: PILL_BLUE,
       helperText: "Keep going to reach the target and complete it.",
     };
   }
   return {
     label: "Not Joined",
-    className: "bg-amber-100 text-amber-700",
+    className: PILL_AMBER,
     helperText: "Join this challenge to start tracking progress.",
   };
 }
@@ -262,7 +290,7 @@ export function Challenges() {
                   {summary.pointsToNextLevel} points needed
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div className={`w-full ${PROGRESS_TRACK} rounded-full h-3 overflow-hidden`}>
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{
@@ -304,7 +332,7 @@ export function Challenges() {
           transition={{ delay: 0.3 }}
           className="mb-6"
         >
-          <div className="flex gap-2 border-b border-gray-200">
+          <div className="flex gap-2 border-b border-border">
             {(["all", "active", "completed"] as const).map((tab) => (
               <button
                 key={tab}
@@ -312,7 +340,7 @@ export function Challenges() {
                 className={`px-4 py-2 font-medium transition-colors relative capitalize ${
                   activeTab === tab
                     ? "text-primary"
-                    : "text-muted-foreground hover:text-gray-900"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab === "all" ? "All Challenges" : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -354,7 +382,7 @@ export function Challenges() {
                     challenge.isLocked
                       ? "opacity-50"
                       : challenge.isCompleted
-                      ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
+                      ? COMPLETED_CARD
                       : "hover:shadow-lg"
                   }`}
                 >
@@ -408,7 +436,7 @@ export function Challenges() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                          <div className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
+                          <div className={`px-2 py-1 ${DIFFICULTY_PILL} rounded-full text-xs font-medium`}>
                             {challenge.difficulty}
                           </div>
                           <div className="flex items-center gap-1 text-amber-500">
@@ -421,7 +449,7 @@ export function Challenges() {
                       {/* Progress Bar */}
                       {!challenge.isLocked && (
                         <>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
+                          <div className={`w-full ${PROGRESS_TRACK} rounded-full h-2.5 mb-2 overflow-hidden`}>
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${progressPercentage}%` }}
@@ -441,7 +469,7 @@ export function Challenges() {
                               <motion.span
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
-                                className="text-xs font-bold text-green-600 flex items-center gap-1"
+                                className={`text-xs font-bold ${COMPLETED_LABEL} flex items-center gap-1`}
                               >
                                 <CheckCircle2 className="w-3 h-3" />
                                 Completed
@@ -515,8 +543,8 @@ export function Challenges() {
             className="text-center py-12"
           >
             <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No challenges found</h3>
-            <p className="text-gray-600">
+            <h3 className="text-xl font-bold text-foreground mb-2">No challenges found</h3>
+            <p className="text-muted-foreground">
               {activeTab === "completed"
                 ? "You haven't completed any challenges yet. Keep working on your active challenges!"
                 : activeTab === "active"
