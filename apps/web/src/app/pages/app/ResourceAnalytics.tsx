@@ -3,10 +3,11 @@
  * Cinematic wellness analytics sanctuary (real interaction data only).
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Eye,
@@ -44,51 +45,59 @@ import {
   WELLNESS_PLAN_HERO_IMG,
 } from '@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi';
 import {
-  getAllResourceAnalytics,
-  getMostUsedResources,
   getResourceEffectivenessScore,
-  getInteractionsByResourceType,
   getInteractionsByTimePeriod,
   exportResourceAnalytics,
   mapServerRowsToInteractions,
   getResourceInteractions,
+  MAX_LOCAL_INTERACTIONS,
   RESOURCE_INTERACTION_SETTLED_EVENT,
 } from '@/app/utils/resourceTracking';
 import { getSafetyResources } from '@/app/utils/safetyResources';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
+import { currentTimeZone } from '@/lib/reportTimeZone';
+import { describeUnsupportedText, PdfUnsupportedTextError } from '@/lib/pdf/pdfText';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/app/components/ui/dropdown-menu';
 import { ResourceAnalyticsRail } from './resource-analytics/ResourceAnalyticsRail';
 import {
   MiniSparkline,
   SupportActivityTimeline,
 } from './resource-analytics/ResourceAnalyticsVisuals';
 import {
-  aggregateBucketsWeekly,
-  buildDailyBuckets,
-  comparePeriods,
-  computeSupportResponseRate,
   effectivenessToStars,
   formatComparisonLine,
-  getActiveDaysInPeriod,
-  getEmotionalEngagementLabel,
-  getEngagementLevel,
-  getMostActivePeriod,
   getResourceTypeColor,
   getResourceTypeForId,
   getResourceTypeLabel,
-  getTopReachOutDays,
   selectResourceAnalyticsInteractions,
   sparklineFromBuckets,
   type ChartInterval,
 } from './resource-analytics/resourceAnalyticsUtils';
+import {
+  buildResourceAnalyticsPdfSnapshot,
+  computeResourceAnalyticsView,
+  RESOURCE_ANALYTICS_SERVER_LIMIT,
+  resourceAnalyticsPdfFileName,
+  TIME_FILTER_LABELS,
+} from './resource-analytics/resourceAnalyticsReport';
 
-const TIME_FILTER_LABELS: Record<'7d' | '30d' | '90d' | 'all', string> = {
-  '7d': 'last 7 days',
-  '30d': 'last 30 days',
-  '90d': 'last 90 days',
-  all: 'all time',
-};
+/** A short message for text the PDF can't draw: scripts by name, at most three symbols. */
+function unsupportedTextMessage(characters: string[]): string {
+  const { scripts, symbols, moreSymbols } = describeUnsupportedText(characters);
+  const tail = "so the PDF wasn't downloaded. You can download the JSON instead.";
+  if (scripts.length) {
+    const named = scripts.length > 2 ? `${scripts.slice(0, 2).join(', ')} and other` : scripts.join(' and ');
+    return `This report includes ${named} text, which the PDF can't display yet, ${tail}`;
+  }
+  return `This report includes ${symbols.length === 1 && !moreSymbols ? 'a symbol' : 'symbols'} the PDF can't display (${symbols.join(' ')}${moreSymbols ? ' …' : ''}), ${tail}`;
+}
 
 interface MetricCardProps {
   label: string;
@@ -221,7 +230,7 @@ export function ResourceAnalyticsPage() {
       const rows = (await api.safetyResourceInteractions.list({
         from: range.from,
         to: range.to,
-        limit: 5000,
+        limit: RESOURCE_ANALYTICS_SERVER_LIMIT,
       })) as Array<Record<string, unknown>>;
       return Array.isArray(rows) ? rows : [];
     },
@@ -269,53 +278,38 @@ export function ResourceAnalyticsPage() {
     [userId, serverInteractions, localInteractionsFiltered, isSuccess, isError]
   );
 
-  const { recentHalfInteractions, priorHalfInteractions } = useMemo(() => {
-    const midMs =
-      periodBounds.start.getTime() +
-      (periodBounds.end.getTime() - periodBounds.start.getTime()) / 2;
-    const mid = new Date(midMs);
-    const prior: typeof interactions = [];
-    const recent: typeof interactions = [];
-    interactions.forEach((ix) => {
-      const t = new Date(ix.timestamp);
-      if (t < mid) prior.push(ix);
-      else recent.push(ix);
-    });
-    return { recentHalfInteractions: recent, priorHalfInteractions: prior };
-  }, [interactions, periodBounds.start, periodBounds.end]);
-
   const dataSourceNote: 'synced' | 'offline' = isError ? 'offline' : 'synced';
 
-  const analytics = useMemo(
-    () => getAllResourceAnalytics(interactions),
-    [interactions]
+  // Every value the page shows (and the PDF reports) for the selected period.
+  const view = useMemo(
+    () => computeResourceAnalyticsView({ interactions, bounds: periodBounds, timeFilter, chartInterval }),
+    [interactions, periodBounds, timeFilter, chartInterval]
   );
-
-  const recentHalfAnalytics = useMemo(
-    () => getAllResourceAnalytics(recentHalfInteractions),
-    [recentHalfInteractions]
+  const {
+    totalInteractions,
+    totalClicks,
+    avgCtr,
+    resourcesExplored,
+    comparisonLabel,
+    mostUsed,
+    dailyBuckets,
+    chartBuckets,
+    engagement,
+    activeDaysInPeriod,
+    emotionalEngagement,
+    topCategory,
+    mostActivePeriod,
+    topDays,
+  } = view;
+  const comparisons = useMemo(
+    () => ({
+      interactions: formatComparisonLine(view.comparisons.interactions, comparisonLabel),
+      engagements: formatComparisonLine(view.comparisons.engagements, comparisonLabel),
+      ctr: formatComparisonLine(view.comparisons.ctr, comparisonLabel),
+      resources: formatComparisonLine(view.comparisons.resources, comparisonLabel),
+    }),
+    [view.comparisons, comparisonLabel]
   );
-
-  const priorHalfAnalytics = useMemo(
-    () => getAllResourceAnalytics(priorHalfInteractions),
-    [priorHalfInteractions]
-  );
-
-  const mostUsed = useMemo(() => getMostUsedResources(4, interactions), [interactions]);
-
-  const byType = useMemo(() => getInteractionsByResourceType(interactions), [interactions]);
-
-  const dailyBuckets = useMemo(
-    () => buildDailyBuckets(interactions, periodBounds.start, periodBounds.end),
-    [interactions, periodBounds.start, periodBounds.end]
-  );
-
-  const chartBuckets = useMemo(() => {
-    if (chartInterval === 'weekly' || timeFilter === '90d' || timeFilter === 'all') {
-      return aggregateBucketsWeekly(dailyBuckets);
-    }
-    return dailyBuckets;
-  }, [chartInterval, dailyBuckets, timeFilter]);
 
   const handleExport = () => {
     const data = exportResourceAnalytics(interactions);
@@ -330,120 +324,6 @@ export function ResourceAnalyticsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const totalInteractions = useMemo(
-    () => Object.values(analytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
-    [analytics]
-  );
-
-  const totalClicks = useMemo(
-    () => Object.values(analytics).reduce((sum, a) => sum + a.totalClicks, 0),
-    [analytics]
-  );
-
-  const recentTotalInteractions = useMemo(
-    () =>
-      Object.values(recentHalfAnalytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
-    [recentHalfAnalytics]
-  );
-
-  const priorTotalInteractions = useMemo(
-    () =>
-      Object.values(priorHalfAnalytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
-    [priorHalfAnalytics]
-  );
-
-  const recentTotalClicks = useMemo(
-    () => Object.values(recentHalfAnalytics).reduce((sum, a) => sum + a.totalClicks, 0),
-    [recentHalfAnalytics]
-  );
-
-  const priorTotalClicks = useMemo(
-    () => Object.values(priorHalfAnalytics).reduce((sum, a) => sum + a.totalClicks, 0),
-    [priorHalfAnalytics]
-  );
-
-  const supportResponseRate = useMemo(
-    () => computeSupportResponseRate(interactions),
-    [interactions]
-  );
-
-  const avgCtr = useMemo(() => {
-    if (interactions.length === 0) return '0';
-    return supportResponseRate.toFixed(1);
-  }, [interactions.length, supportResponseRate]);
-
-  const recentAvgCtr = useMemo(
-    () => computeSupportResponseRate(recentHalfInteractions),
-    [recentHalfInteractions]
-  );
-
-  const priorAvgCtr = useMemo(
-    () => computeSupportResponseRate(priorHalfInteractions),
-    [priorHalfInteractions]
-  );
-
-  const resourcesExplored = Object.keys(analytics).length;
-  const recentResourcesExplored = Object.keys(recentHalfAnalytics).length;
-  const priorResourcesExplored = Object.keys(priorHalfAnalytics).length;
-
-  const comparisonLabel = `first half of ${TIME_FILTER_LABELS[timeFilter]}`;
-
-  const comparisons = useMemo(
-    () => ({
-      interactions: formatComparisonLine(
-        comparePeriods(recentTotalInteractions, priorTotalInteractions),
-        comparisonLabel
-      ),
-      engagements: formatComparisonLine(
-        comparePeriods(recentTotalClicks, priorTotalClicks),
-        comparisonLabel
-      ),
-      ctr: formatComparisonLine(
-        comparePeriods(recentAvgCtr, priorAvgCtr),
-        comparisonLabel
-      ),
-      resources: formatComparisonLine(
-        comparePeriods(recentResourcesExplored, priorResourcesExplored),
-        comparisonLabel
-      ),
-    }),
-    [
-      recentTotalInteractions,
-      priorTotalInteractions,
-      recentTotalClicks,
-      priorTotalClicks,
-      recentAvgCtr,
-      priorAvgCtr,
-      recentResourcesExplored,
-      priorResourcesExplored,
-      comparisonLabel,
-    ]
-  );
-
-  const engagement = useMemo(
-    () => getEngagementLevel(interactions.length, supportResponseRate),
-    [interactions.length, supportResponseRate]
-  );
-
-  const activeDaysInPeriod = useMemo(
-    () => getActiveDaysInPeriod(interactions, periodBounds.start, periodBounds.end),
-    [interactions, periodBounds.start, periodBounds.end]
-  );
-
-  const emotionalEngagement = useMemo(
-    () => getEmotionalEngagementLabel(interactions, supportResponseRate),
-    [interactions, supportResponseRate]
-  );
-
-  const topCategory = useMemo(() => {
-    const entries = Object.entries(byType).sort(([, a], [, b]) => b - a);
-    if (entries.length === 0) return 'Not enough data yet';
-    return getResourceTypeLabel(entries[0][0]);
-  }, [byType]);
-
-  const mostActivePeriod = useMemo(() => getMostActivePeriod(interactions), [interactions]);
-  const topDays = useMemo(() => getTopReachOutDays(interactions), [interactions]);
-
   const getResourceName = useCallback(
     (resourceId: string): string => {
       const fromEvent = interactions.find((i) => i.resourceId === resourceId)?.resourceName;
@@ -454,6 +334,91 @@ export function ResourceAnalyticsPage() {
     },
     [interactions]
   );
+
+  // --- PDF export -----------------------------------------------------------------------------
+  // One PDF export at a time. It is built in a worker from a frozen snapshot of what the page
+  // shows, and cancelled (worker terminated, toast cleared) on account change, sign-out, period
+  // change or unmount; a cancelled or superseded export never downloads or touches newer state.
+  const currentUserIdRef = useRef(userId);
+  currentUserIdRef.current = userId;
+  const pdfJobRef = useRef<{ controller: AbortController; toastId: string | number } | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const cancelPdfExport = useCallback(() => {
+    const job = pdfJobRef.current;
+    if (!job) return;
+    pdfJobRef.current = null;
+    job.controller.abort();
+    toast.dismiss(job.toastId);
+    setPdfBusy(false);
+  }, []);
+  useEffect(() => cancelPdfExport, [userId, timeFilter, cancelPdfExport]);
+
+  const exportDisabled = !userId || isLoading || isFetching || interactions.length === 0 || pdfBusy;
+
+  const handleExportPdf = async () => {
+    if (exportDisabled || pdfJobRef.current) return;
+    const accountId = userId;
+    const snapshot = buildResourceAnalyticsPdfSnapshot({
+      view,
+      interactions,
+      timeFilter,
+      bounds: periodBounds,
+      source: dataSourceNote === 'offline' ? 'browser' : 'server',
+      serverRecordCount: rawRows?.length ?? 0,
+      localRecordLimit: MAX_LOCAL_INTERACTIONS,
+      resourceName: getResourceName,
+      generatedAt: new Date(),
+      timeZone: currentTimeZone(),
+    });
+    const fileName = resourceAnalyticsPdfFileName(timeFilter, periodBounds);
+    const job = { controller: new AbortController(), toastId: toast.loading('Preparing your PDF…') };
+    const isCurrent = () => pdfJobRef.current === job && currentUserIdRef.current === accountId;
+    pdfJobRef.current = job;
+    setPdfBusy(true);
+    try {
+      const { createResourceAnalyticsPdf } = await import('./resource-analytics/resourceAnalyticsPdf');
+      if (!isCurrent()) return;
+      const { bytes } = await createResourceAnalyticsPdf(snapshot, {
+        signal: job.controller.signal,
+        locale: typeof navigator !== 'undefined' ? navigator.language : undefined,
+        onProgress: ({ fontsLoaded, fontsTotal }) => {
+          if (fontsTotal > 0 && isCurrent()) {
+            toast.loading(`Preparing your PDF… downloading fonts (${fontsLoaded} of ${fontsTotal})`, { id: job.toastId });
+          }
+        },
+      });
+      if (!isCurrent()) return;
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      // Cancelled (account change, sign-out, period change or leaving the page): nothing to report.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      // Unsupported text: log the reason only, not the report's characters.
+      console.error('Resource Analytics PDF failed', error instanceof PdfUnsupportedTextError ? `${error.name} (${error.reason})` : error);
+      if (!isCurrent()) return;
+      if (error instanceof PdfUnsupportedTextError) {
+        toast.error(
+          error.reason === 'font-unavailable'
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the JSON."
+            : unsupportedTextMessage(error.characters)
+        );
+      } else {
+        toast.error("We couldn't create the PDF. Please try again, or download the JSON.");
+      }
+    } finally {
+      toast.dismiss(job.toastId);
+      if (pdfJobRef.current === job) {
+        pdfJobRef.current = null;
+        setPdfBusy(false);
+      }
+    }
+  };
 
   if (authLoading) {
     return (
@@ -531,20 +496,32 @@ export function ResourceAnalyticsPage() {
               />
               <span className="hidden sm:inline">Refresh</span>
             </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={interactions.length === 0}
-              className={cn(
-                'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white',
-                'bg-[linear-gradient(135deg,#7c3aed_0%,#db2777_55%,#ec4899_100%)]',
-                'border border-white/10 shadow-[0_0_32px_-8px_rgba(168,85,247,0.55)]',
-                'transition-all hover:brightness-110 disabled:opacity-45'
-              )}
-            >
-              <Download className="h-4 w-4" aria-hidden />
-              Export insights
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={exportDisabled}
+                  aria-busy={pdfBusy}
+                  className={cn(
+                    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white',
+                    'bg-[linear-gradient(135deg,#7c3aed_0%,#db2777_55%,#ec4899_100%)]',
+                    'border border-white/10 shadow-[0_0_32px_-8px_rgba(168,85,247,0.55)]',
+                    'transition-all hover:brightness-110 disabled:opacity-45'
+                  )}
+                >
+                  <Download className="h-4 w-4" aria-hidden />
+                  Export insights
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem] border-white/10 bg-[#12122a] text-white">
+                <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleExportPdf()}>
+                  Download PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={handleExport}>
+                  Download JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

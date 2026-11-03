@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -76,7 +77,9 @@ const displayedTotal = () =>
 let exported: Blob[] = [];
 async function exportJson(): Promise<Record<string, any>> {
   exported = [];
-  fireEvent.click(screen.getByRole('button', { name: /Export insights/i }));
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: /Export insights/i }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Download JSON' }));
   expect(exported).toHaveLength(1);
   const text = await new Promise<string>((resolve) => {
     const fr = new FileReader();

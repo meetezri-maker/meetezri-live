@@ -49,7 +49,7 @@ type InteractionSet = ResourceInteraction[];
  */
 const LOCAL_KEY_PREFIX = 'ezri_resource_interactions:';
 const ANONYMOUS_BUCKET = 'anonymous';
-const MAX_LOCAL_INTERACTIONS = 500;
+export const MAX_LOCAL_INTERACTIONS = 500;
 
 /** Fired on `window` when a tracked write settles; `detail.userId` is the account it belongs to. */
 export const RESOURCE_INTERACTION_SETTLED_EVENT = 'ezri:resource-interaction-settled';

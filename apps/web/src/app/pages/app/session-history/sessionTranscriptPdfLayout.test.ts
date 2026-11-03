@@ -7,8 +7,8 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import zlib from 'zlib';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
+import { readShapedPdf } from '@/lib/pdf/shaped/readShapedPdf.testing';
 import { createShapingRuntime, FontLoadError, UnsupportedCharactersError, type FontManifest, type ShapingAssets, type ShapingRuntime } from '@/lib/pdf/shaped/shapedPdf';
 import { buildSessionTranscriptDocument, buildSessionTranscriptText, type TranscriptExportInput } from './sessionTranscriptExport';
 import { buildShapedTranscriptPdf } from './sessionTranscriptPdfLayout';
@@ -54,42 +54,7 @@ const docOf = (i: TranscriptExportInput) => {
   return r.doc;
 };
 
-interface Span { text: string; glyphs: Array<{ x: number; y: number; gid: number; font: string }> }
-/** Every /ActualText span per page, with the glyphs drawn inside it and their font's BaseFont. */
-async function readPdf(bytes: Uint8Array) {
-  const pdf = await PDFDocument.load(bytes);
-  return pdf.getPages().map((page) => {
-    const fonts = new Map<string, string>();
-    const res = page.node.Resources();
-    const fontDict = res?.lookupMaybe(PDFName.of('Font'), PDFDict);
-    for (const [key, ref] of fontDict?.entries() ?? []) {
-      const f = pdf.context.lookup(ref as PDFRef, PDFDict);
-      fonts.set(key.decodeText(), f.lookup(PDFName.of('BaseFont'), PDFName).decodeText());
-    }
-    const contents = page.node.get(PDFName.of('Contents'));
-    const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
-    let ops = '';
-    for (const r of refs) {
-      const s = pdf.context.lookup(r as PDFRef) as PDFRawStream;
-      const raw = Buffer.from(s.contents);
-      try { ops += zlib.inflateSync(raw).toString('latin1'); } catch { ops += raw.toString('latin1'); }
-    }
-    const spans: Span[] = [];
-    const re = /\/ActualText <FEFF([0-9A-F]*)>[\s\S]*?BDC([\s\S]*?)EMC/g;
-    for (let m = re.exec(ops); m; m = re.exec(ops)) {
-      let text = '';
-      for (let i = 0; i < m[1].length; i += 4) text += String.fromCharCode(parseInt(m[1].slice(i, i + 4), 16));
-      const glyphs: Span['glyphs'] = [];
-      let font = '';
-      for (const g of m[2].matchAll(/\/(F\d+) [\d.]+ Tf|1 0 0 1 ([\d.-]+) ([\d.-]+) Tm\s*<([0-9a-f]{4})> Tj/gi)) {
-        if (g[1]) font = fonts.get(g[1]) ?? g[1];
-        else glyphs.push({ x: Number(g[2]), y: Number(g[3]), gid: parseInt(g[4], 16), font });
-      }
-      spans.push({ text, glyphs });
-    }
-    return { spans, text: spans.map((s) => s.text) };
-  });
-}
+const readPdf = readShapedPdf;
 
 describe('Session Transcript PDF (shaped, real engine)', () => {
   it('draws the confirmed failing Bengali characters with shaping (conjuncts, pre-base vowels)', async () => {
@@ -232,8 +197,8 @@ describe('Session Transcript PDF font assets', () => {
   });
 
   it('loads fonts from the folder of the manifest version', () => {
-    const worker = fs.readFileSync(path.join(WEB, 'src/app/pages/app/session-history/sessionTranscriptPdf.worker.ts'), 'utf8');
-    expect(worker).toContain('fonts/pdf/noto/v1`');
+    const workerAssets = fs.readFileSync(path.join(WEB, 'src/lib/pdf/shaped/workerAssets.ts'), 'utf8');
+    expect(workerAssets).toContain('fonts/pdf/noto/v1`');
     const vercel = JSON.parse(fs.readFileSync(path.join(WEB, 'vercel.json'), 'utf8')) as { headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }> };
     expect(vercel.headers.find((h) => h.source === '/fonts/pdf/noto/v1/(.*)')?.headers).toEqual([
       { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },

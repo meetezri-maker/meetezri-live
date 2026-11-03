@@ -13,7 +13,7 @@
  * A version folder is write-once: it is served with immutable caching (vercel.json), so browsers
  * may keep any file in it for a year. Re-running only confirms identical files; a change to any
  * font, licence, manifest.json or SOURCES.md fails here. To change fonts, bump VERSION (and
- * FONT_BASE in sessionTranscriptPdf.worker.ts) so the new files are served from a new path.
+ * FONT_BASE in src/lib/pdf/shaped/workerAssets.ts) so the new files are served from a new path.
  */
 import fs from "node:fs";
 import path from "node:path";
