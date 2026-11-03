@@ -8,7 +8,7 @@ const h = vi.hoisted(() => ({
   getTranscript: vi.fn(),
   getSummary: vi.fn(),
   toggleFavorite: vi.fn(),
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), loading: vi.fn(), dismiss: vi.fn() },
   createPdf: vi.fn(),
   pdfModuleLoaded: false,
   auth: {
@@ -33,7 +33,7 @@ vi.mock('@/lib/api', () => ({
 }));
 vi.mock('@/app/contexts/AuthContext', () => ({ useAuth: () => h.auth.current }));
 vi.mock('sonner', () => ({ toast: h.toast }));
-// The PDF module (jsPDF + fonts) is only loaded when a PDF is requested.
+// The PDF module (worker client) is only loaded when a PDF is requested.
 vi.mock('./session-history/sessionTranscriptPdf', () => {
   h.pdfModuleLoaded = true;
   return {
@@ -102,7 +102,8 @@ beforeEach(() => {
   h.getTranscript.mockResolvedValue(messages);
   h.getSummary.mockResolvedValue({ summary: 'AI summary from popup', source: 'ai' });
   h.createPdf.mockReset();
-  h.createPdf.mockResolvedValue({ doc: { output: () => new Blob(['%PDF'], { type: 'application/pdf' }) } });
+  h.createPdf.mockResolvedValue({ bytes: new TextEncoder().encode('%PDF'), pages: 1, emojiReplacedCount: 0 });
+  h.toast.loading.mockReturnValue('pdf-toast');
   downloads = [];
   URL.createObjectURL = vi.fn((b: Blob) => { lastBlob = b; return 'blob:test'; }) as typeof URL.createObjectURL;
   URL.revokeObjectURL = vi.fn();
@@ -124,7 +125,9 @@ async function choose(trigger: HTMLElement, item: 'Download PDF' | 'Download TXT
   await user.click(trigger);
   await user.click(await screen.findByRole('menuitem', { name: item }));
 }
-const pdfDone = (resolve: (v: unknown) => void) => resolve({ doc: { output: () => new Blob(['%PDF']) } });
+const pdfDone = (resolve: (v: unknown) => void) => resolve({ bytes: new TextEncoder().encode('%PDF'), pages: 1, emojiReplacedCount: 0 });
+/** The AbortSignal the page passed for the n-th PDF export. */
+const signalOf = (call: number) => (h.createPdf.mock.calls[call][1] as { signal: AbortSignal }).signal;
 
 // Full page renders plus menu interaction; allow for a loaded machine when many test files run together.
 describe('Session transcript export (page)', { timeout: 20000 }, () => {
@@ -326,6 +329,8 @@ describe('Session transcript PDF export (page)', { timeout: 20000 }, () => {
 
     h.auth.current = { ...h.auth.current, user: { id: 'user-b' }, profile: { id: 'user-b', subscription_plan: 'pro' } };
     rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
+    // The old account's export is cancelled (its worker is terminated).
+    await waitFor(() => expect(signalOf(0).aborted).toBe(true));
     const [again] = await rowButtons();
     await waitFor(() => expect(again).toHaveAttribute('aria-busy', 'false'));
     await choose(again, 'Download PDF'); // the new account's export
@@ -341,8 +346,10 @@ describe('Session transcript PDF export (page)', { timeout: 20000 }, () => {
     await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(3));
     h.auth.current = { ...h.auth.current, user: null, profile: null };
     rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
+    await waitFor(() => expect(signalOf(2).aborted).toBe(true));
     await act(async () => pdfDone(pending[2]));
     expect(downloads).toHaveLength(1);
+    expect(signalOf(1).aborted).toBe(false); // the completed export was not cancelled
   });
 
   it('downloads nothing if the page is left during generation', async () => {
@@ -352,21 +359,141 @@ describe('Session transcript PDF export (page)', { timeout: 20000 }, () => {
     await choose((await rowButtons())[0], 'Download PDF');
     await waitFor(() => expect(h.createPdf).toHaveBeenCalled());
     unmount();
+    expect(signalOf(0).aborted).toBe(true); // worker terminated, transcript data released
     await act(async () => pdfDone(finish));
     expect(downloads).toHaveLength(0);
     expect(h.toast.error).not.toHaveBeenCalled();
   });
 
-  it('explains text the PDF cannot draw, and keeps empty/failed cases as before', async () => {
-    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError(['你'], 'no-glyph'));
+  it('shows a preparation state with font download progress, then clears it', async () => {
+    let finish: (v: unknown) => void = () => {};
+    let progress: (p: { fontsLoaded: number; fontsTotal: number }) => void = () => {};
+    h.createPdf.mockImplementation((_doc: unknown, options: { onProgress: typeof progress }) => {
+      progress = options.onProgress;
+      return new Promise((r) => { finish = r; });
+    });
+    renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.toast.loading).toHaveBeenCalledWith('Preparing your PDF…'));
+    expect(h.createPdf.mock.calls[0][1]).toMatchObject({ locale: navigator.language });
+    act(() => progress({ fontsLoaded: 1, fontsTotal: 3 }));
+    expect(h.toast.loading).toHaveBeenLastCalledWith('Preparing your PDF… downloading fonts (1 of 3)', { id: 'pdf-toast' });
+    expect(h.toast.dismiss).not.toHaveBeenCalled();
+    await act(async () => pdfDone(finish));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(h.toast.dismiss).toHaveBeenCalledWith('pdf-toast');
+  });
+
+  it('cancellation clears its own preparation state; an old export cannot clear a newer one', async () => {
+    // As the real client: aborting rejects at once with an AbortError (the worker is terminated).
+    const pending: Array<(v: unknown) => void> = [];
+    let progressOf: Array<(p: { fontsLoaded: number; fontsTotal: number }) => void> = [];
+    h.createPdf.mockImplementation((_doc: unknown, options: { signal: AbortSignal; onProgress: (p: { fontsLoaded: number; fontsTotal: number }) => void }) => {
+      progressOf.push(options.onProgress);
+      return new Promise((resolve, reject) => {
+        pending.push(resolve);
+        options.signal.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+      });
+    });
+    h.toast.loading.mockReturnValueOnce('toast-old').mockReturnValueOnce('toast-new').mockReturnValue('toast-later');
+    const { rerender, unmount } = renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.toast.loading).toHaveBeenCalledWith('Preparing your PDF…'));
+    const oldProgress = progressOf[0];
+
+    // Account change: the old export is cancelled and its toast cleared, with no error shown.
+    h.auth.current = { ...h.auth.current, user: { id: 'user-b' }, profile: { id: 'user-b', subscription_plan: 'pro' } };
+    rerender(<MemoryRouter><SessionHistory /></MemoryRouter>);
+    await waitFor(() => expect(h.toast.dismiss).toHaveBeenCalledWith('toast-old'));
+    expect(h.toast.error).not.toHaveBeenCalled();
+
+    // The new account's export for the same session.
+    const [again] = await rowButtons();
+    await waitFor(() => expect(again).toHaveAttribute('aria-busy', 'false'));
+    await choose(again, 'Download PDF');
+    await waitFor(() => expect(h.createPdf).toHaveBeenCalledTimes(2));
+    expect(again).toHaveAttribute('aria-busy', 'true');
+
+    // Late events from the old export touch neither the new toast nor the busy state.
+    const loadingCalls = h.toast.loading.mock.calls.length;
+    act(() => oldProgress({ fontsLoaded: 2, fontsTotal: 4 }));
+    await act(async () => pdfDone(pending[0])); // already settled by the abort: ignored
+    expect(h.toast.loading).toHaveBeenCalledTimes(loadingCalls);
+    expect(h.toast.dismiss).not.toHaveBeenCalledWith('toast-new');
+    expect(again).toHaveAttribute('aria-busy', 'true');
+    expect(downloads).toHaveLength(0);
+
+    // The new export reports progress on its own toast, and leaving the page clears it.
+    act(() => progressOf[1]({ fontsLoaded: 1, fontsTotal: 2 }));
+    expect(h.toast.loading).toHaveBeenLastCalledWith('Preparing your PDF… downloading fonts (1 of 2)', { id: 'toast-new' });
+    unmount();
+    expect(signalOf(1).aborted).toBe(true);
+    await waitFor(() => expect(h.toast.dismiss).toHaveBeenCalledWith('toast-new'));
+    expect(h.toast.dismiss).toHaveBeenCalledTimes(2);
+    expect(h.toast.error).not.toHaveBeenCalled();
+    expect(downloads).toHaveLength(0);
+    progressOf = [];
+  });
+
+  it('fails cleanly when fonts, WebAssembly or the worker fail, and keeps the TXT available', async () => {
+    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError([], 'font-unavailable'));
     renderPage();
     await choose((await rowButtons())[0], 'Download PDF');
     await waitFor(() =>
       expect(h.toast.error).toHaveBeenCalledWith(
-        "This transcript contains characters the PDF can't display (你), so it wasn't downloaded. You can download the TXT instead."
+        "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the TXT."
+      )
+    );
+    h.createPdf.mockRejectedValueOnce(new Error('The PDF worker failed to start or crashed.'));
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() => expect(h.toast.error).toHaveBeenLastCalledWith("We couldn't create the PDF. Please try again, or download the TXT."));
+    expect(downloads).toHaveLength(0);
+    expect(h.toast.dismiss).toHaveBeenCalledTimes(2); // the preparation state is cleared each time
+    expect((await rowButtons())[0]).toHaveAttribute('aria-busy', 'false');
+    await choose((await rowButtons())[0], 'Download TXT');
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(downloads[0].name).toMatch(/\.txt$/);
+  });
+
+  it('explains text the PDF cannot draw, and keeps empty/failed cases as before', async () => {
+    const errorLog = vi.spyOn(console, 'error');
+    // A whole script with no bundled font: named once, not listed letter by letter.
+    const odia = Array.from('ଆଜି ମୁଁ ଭଲ ଅଛି ଧନ୍ୟବାଦ').filter((c) => c.trim());
+    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError([...new Set(odia)], 'no-glyph'));
+    renderPage();
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() =>
+      expect(h.toast.error).toHaveBeenCalledWith(
+        "This transcript includes Odia text, which the PDF can't display yet, so the PDF wasn't downloaded. You can download the TXT instead."
       )
     );
     expect(downloads).toHaveLength(0);
+    // The transcript's characters are not written to the console.
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(/[଀-୿]/);
+
+    // Other characters: at most three shown, invisible ones as code points.
+    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError(['☐', 'ߒ', 'Ꮳ', '　', '⌘', '⍟'], 'no-glyph'));
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() =>
+      expect(h.toast.error).toHaveBeenLastCalledWith(
+        "This transcript includes N'Ko and Cherokee text, which the PDF can't display yet, so the PDF wasn't downloaded. You can download the TXT instead."
+      )
+    );
+    h.createPdf.mockRejectedValueOnce(new PdfUnsupportedTextError(['☐', '　', '⌘', '⍟'], 'no-glyph'));
+    await choose((await rowButtons())[0], 'Download PDF');
+    await waitFor(() =>
+      expect(h.toast.error).toHaveBeenLastCalledWith(
+        "This transcript includes symbols the PDF can't display (☐ U+3000 ⌘ …), so the PDF wasn't downloaded. You can download the TXT instead."
+      )
+    );
+    expect(downloads).toHaveLength(0);
+    // The TXT stays available.
+    await choose((await rowButtons())[0], 'Download TXT');
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(downloads[0].name).toMatch(/\.txt$/);
+    downloads.length = 0;
+    h.createPdf.mockClear();
+    errorLog.mockRestore();
 
     h.getTranscript.mockResolvedValueOnce([{ role: 'system', content: 'internal' }]);
     await choose((await rowButtons())[0], 'Download PDF');
@@ -375,6 +502,6 @@ describe('Session transcript PDF export (page)', { timeout: 20000 }, () => {
     await choose((await rowButtons())[0], 'Download PDF');
     await waitFor(() => expect(h.toast.error).toHaveBeenCalledWith("We couldn't load this transcript. Please try again."));
     expect(downloads).toHaveLength(0);
-    expect(h.createPdf).toHaveBeenCalledTimes(1);
+    expect(h.createPdf).not.toHaveBeenCalled();
   });
 });

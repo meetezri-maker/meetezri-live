@@ -20,7 +20,7 @@ import {
   buildSessionTranscriptText,
 } from "@/app/pages/app/session-history/sessionTranscriptExport";
 import { currentTimeZone } from "@/lib/reportTimeZone";
-import { PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import { PdfUnsupportedTextError, describeUnsupportedText } from "@/lib/pdf/pdfText";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -317,6 +317,17 @@ function periodTalkSuffix(period: TimePeriod): string {
   return "talks total";
 }
 
+/** A short message for text the transcript PDF can't draw: scripts by name, at most three symbols. */
+function unsupportedTextMessage(characters: string[]): string {
+  const { scripts, symbols, moreSymbols } = describeUnsupportedText(characters);
+  const tail = "so the PDF wasn't downloaded. You can download the TXT instead.";
+  if (scripts.length) {
+    const named = scripts.length > 2 ? `${scripts.slice(0, 2).join(", ")} and other` : scripts.join(" and ");
+    return `This transcript includes ${named} text, which the PDF can't display yet, ${tail}`;
+  }
+  return `This transcript includes ${symbols.length === 1 && !moreSymbols ? "a symbol" : "symbols"} the PDF can't display (${symbols.join(" ")}${moreSymbols ? " …" : ""}), ${tail}`;
+}
+
 interface SessionHistoryPeriodSelectProps {
   value: TimePeriod;
   onValueChange: (value: TimePeriod) => void;
@@ -376,13 +387,21 @@ export function SessionHistory() {
   // Bumped when the account changes or the page unmounts: an export started before that never
   // downloads, and its completion cannot clear the busy state of a newer export.
   const exportGenerationRef = useRef(0);
+  // PDF exports in progress: aborting one terminates its worker and releases the transcript data.
+  const pdfJobsRef = useRef(new Set<AbortController>());
+  const cancelPdfJobs = () => {
+    for (const job of pdfJobsRef.current) job.abort();
+    pdfJobsRef.current.clear();
+  };
   useEffect(() => {
     exportGenerationRef.current += 1;
+    cancelPdfJobs();
     exportingIdsRef.current.clear();
     setExportingIds(new Set());
   }, [user?.id]);
   useEffect(() => () => {
     exportGenerationRef.current += 1;
+    cancelPdfJobs();
   }, []);
 
   const handleToggleFavorite = async (sessionId: string, e: React.MouseEvent) => {
@@ -567,7 +586,8 @@ export function SessionHistory() {
    * loads the stored session row and messages for the requested id and never asks for a
    * summary to be generated. The account is captured at click time; if it changes (or the page
    * is left) before the file is ready, nothing is downloaded. TXT and PDF share this path and
-   * the same loaded data; the PDF code (jsPDF + fonts) is loaded only for a PDF.
+   * the same loaded data; the PDF is built in a worker (shaping WebAssembly + the fonts the
+   * transcript needs), loaded only for a PDF and cancelled with the export.
    */
   const handleExportSession = async (sessionId: string, exportFormat: "txt" | "pdf") => {
     if (exportingIdsRef.current.has(sessionId)) return;
@@ -614,17 +634,37 @@ export function SessionHistory() {
       }
       stage = "pdf";
       const { createSessionTranscriptPdf, transcriptPdfFileName } = await import("./session-history/sessionTranscriptPdf");
-      const { doc } = await createSessionTranscriptPdf(result.doc);
       if (!stillCurrent()) return;
-      downloadBlob(transcriptPdfFileName(result.doc), doc.output("blob"));
+      const job = new AbortController();
+      pdfJobsRef.current.add(job);
+      const progressToast = toast.loading("Preparing your PDF…");
+      try {
+        const { bytes } = await createSessionTranscriptPdf(result.doc, {
+          signal: job.signal,
+          locale: typeof navigator !== "undefined" ? navigator.language : undefined,
+          onProgress: ({ fontsLoaded, fontsTotal }) => {
+            if (fontsTotal > 0 && stillCurrent()) {
+              toast.loading(`Preparing your PDF… downloading fonts (${fontsLoaded} of ${fontsTotal})`, { id: progressToast });
+            }
+          },
+        });
+        if (!stillCurrent()) return;
+        downloadBlob(transcriptPdfFileName(result.doc), new Blob([bytes], { type: "application/pdf" }));
+      } finally {
+        toast.dismiss(progressToast);
+        pdfJobsRef.current.delete(job);
+      }
     } catch (error) {
-      console.error("Transcript export failed", error);
+      // Cancelled (account change, sign-out or leaving the page): nothing to report.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      // Unsupported text: log the reason only, not the transcript's characters.
+      console.error("Transcript export failed", error instanceof PdfUnsupportedTextError ? `${error.name} (${error.reason})` : error);
       if (!stillCurrent()) return;
       if (error instanceof PdfUnsupportedTextError) {
         toast.error(
           error.reason === "font-unavailable"
             ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the TXT."
-            : `This transcript contains characters the PDF can't display (${error.characters.join(" ")}), so it wasn't downloaded. You can download the TXT instead.`
+            : unsupportedTextMessage(error.characters)
         );
       } else if (stage === "pdf") {
         toast.error("We couldn't create the PDF. Please try again, or download the TXT.");

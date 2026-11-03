@@ -87,6 +87,59 @@ export class PdfUnsupportedTextError extends Error {
   }
 }
 
+/** Readable script names for messages about characters a PDF could not draw. */
+const SCRIPT_NAMES: Array<[RegExp, string]> = [
+  [/\p{Script=Nko}/u, "N'Ko"],
+  [/\p{Script=Cherokee}/u, "Cherokee"],
+  [/\p{Script=Syriac}/u, "Syriac"],
+  [/\p{Script=Thaana}/u, "Thaana"],
+  [/\p{Script=Mongolian}/u, "Mongolian"],
+  [/\p{Script=Tifinagh}/u, "Tifinagh"],
+  [/\p{Script=Ol_Chiki}/u, "Ol Chiki"],
+  [/\p{Script=Javanese}/u, "Javanese"],
+  [/\p{Script=Canadian_Aboriginal}/u, "Canadian Aboriginal syllabics"],
+  [/\p{Script=Yi}/u, "Yi"],
+  [/\p{Script=Devanagari}/u, "Devanagari (Hindi)"],
+  [/\p{Script=Gurmukhi}/u, "Gurmukhi (Punjabi)"],
+  [/\p{Script=Bengali}/u, "Bengali"],
+  [/\p{Script=Gujarati}/u, "Gujarati"],
+  [/\p{Script=Oriya}/u, "Odia"],
+  [/\p{Script=Tamil}/u, "Tamil"],
+  [/\p{Script=Telugu}/u, "Telugu"],
+  [/\p{Script=Kannada}/u, "Kannada"],
+  [/\p{Script=Malayalam}/u, "Malayalam"],
+  [/\p{Script=Sinhala}/u, "Sinhala"],
+  [/\p{Script=Thai}/u, "Thai"],
+  [/\p{Script=Han}/u, "Chinese/Japanese"],
+  [/[\p{Script=Hiragana}\p{Script=Katakana}]/u, "Japanese"],
+  [/\p{Script=Hangul}/u, "Korean"],
+  [/\p{Script=Hebrew}/u, "Hebrew"],
+  [/\p{Script=Greek}/u, "Greek"],
+  [/\p{Script=Cyrillic}/u, "Cyrillic"],
+  [/\p{Script=Armenian}/u, "Armenian"],
+  [/\p{Script=Georgian}/u, "Georgian"],
+  [/\p{Script=Ethiopic}/u, "Ethiopic"],
+  [/\p{Script=Khmer}/u, "Khmer"],
+  [/\p{Script=Myanmar}/u, "Myanmar"],
+  [/\p{Script=Tibetan}/u, "Tibetan"],
+];
+
+/**
+ * A short, readable account of characters the PDF could not draw, for user messages: the scripts
+ * by name (e.g. "Odia", "N'Ko"), and up to three other characters (symbols), with invisible
+ * or combining characters shown as code points.
+ */
+export function describeUnsupportedText(characters: string[]): { scripts: string[]; symbols: string[]; moreSymbols: boolean } {
+  const scripts = new Set<string>();
+  const symbols: string[] = [];
+  for (const ch of characters) {
+    const named = SCRIPT_NAMES.find(([re]) => re.test(ch));
+    if (named) scripts.add(named[1]);
+    else symbols.push(/[\p{M}\p{C}\p{Z}]/u.test(ch) ? `U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}` : ch);
+  }
+  return { scripts: [...scripts], symbols: symbols.slice(0, 3), moreSymbols: symbols.length > 3 };
+}
+
 /** Characters Helvetica (WinAnsi) can draw: printable ASCII, Latin-1 and the cp1252 extras. */
 const WIN_ANSI_EXTRAS = new Set("€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ".split("").map((c) => c.codePointAt(0)!));
 const winAnsiHas = (cp: number) => (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) || WIN_ANSI_EXTRAS.has(cp);

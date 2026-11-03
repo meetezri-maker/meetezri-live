@@ -1,129 +1,100 @@
 /**
  * Session Transcript PDF (row download menu / popup "Export Transcript" → Download PDF): the same
- * transcript document as the TXT, as a branded A4 reading document.
+ * transcript document as the TXT, as a branded A4 reading document (see sessionTranscriptPdfLayout).
  *
- *   Title block  — logo, "Session Transcript", session title and ID, recorded companion, recorded
- *                  start and duration, export time and time zone
- *   Summary      — the saved summary under its provenance heading (or "No saved summary available.")
- *   Conversation — the saved-messages and recorded-times notes, then every user/assistant message
- *                  with its speaker and recorded time, word for word, in a single column
- *
- * Long messages continue on following pages under a "(continued)" label; nothing is truncated.
- * Loaded on demand, so the TXT download never loads jsPDF or the fonts.
+ * Built in a Web Worker with HarfBuzz text shaping, so scripts such as Bengali, Devanagari, Arabic
+ * and CJK are drawn correctly. Each export uses its own worker, which is terminated when the
+ * export finishes, fails or is cancelled (releasing the transcript data); the PDF code, WebAssembly
+ * and fonts are loaded only for a PDF, and only the fonts the transcript needs are downloaded.
  */
-import type { jsPDF } from "jspdf";
-import { format } from "date-fns";
-import { ARABIC_SCRIPT, EMOJI_MARKER, loadPdfFonts, setupPdfText, type PdfFontFiles } from "@/lib/pdf/pdfText";
-import { loadLogo, type LogoImage } from "@/lib/pdf/pdfLogo";
-import { PdfWriter, stampPages, type Row } from "@/lib/pdf/pdfWriter";
-import { BODY, BRAND, INK, MUTED, NBSP, T_BODY, T_META, T_SECTION, T_TITLE } from "@/lib/pdf/pdfBrand";
-import { RECORDED_TIMES_NOTE, SAVED_MESSAGES_NOTE, type TranscriptDocument } from "./sessionTranscriptExport";
-
-export const TRANSCRIPT_PDF_TITLE = "Session Transcript";
+import { PUBLIC_BRAND_LOGO_ON_LIGHT_PATH } from "@meetezri/public-content";
+import { PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import type { TranscriptDocument } from "./sessionTranscriptExport";
 
 /** e.g. `solace-session-<id>-2026-10-27-transcript.pdf` (same safe stem as the TXT). */
 export function transcriptPdfFileName(doc: Pick<TranscriptDocument, "fileStem">): string {
   return `${doc.fileStem}.pdf`;
 }
 
-/** "27 Oct 2026, 21:00" in local time (no-break spaces keep the date on one line). */
-const dateTime = (d: Date) => `${format(d, "d MMM yyyy").replace(/ /g, NBSP)}, ${format(d, "HH:mm")}`;
+export interface TranscriptPdfWorkerRequest {
+  doc: TranscriptDocument;
+  locale?: string;
+  logoUrl: string;
+}
+export type TranscriptPdfWorkerResponse =
+  | { type: "progress"; loaded: number; total: number }
+  | { type: "done"; bytes: Uint8Array; pages: number; emojiReplacedCount: number; fonts: string[] }
+  | { type: "error"; kind: "unsupported"; characters: string[] }
+  | { type: "error"; kind: "fonts" | "failed" };
 
-/** Every string drawn from the stored session, for font choice and the coverage check. */
-function sessionStrings(doc: TranscriptDocument): string[] {
-  const lines = [doc.title, doc.companion ?? "", doc.summary.body, ...doc.messages.map((m) => m.content)];
-  return lines.flatMap((s) => s.split("\n")).filter((s) => s.trim());
+export interface TranscriptPdfProgress {
+  /** Fonts downloaded so far, and how many this transcript needs. */
+  fontsLoaded: number;
+  fontsTotal: number;
 }
 
-export function transcriptNeedsArabicFont(doc: TranscriptDocument): boolean {
-  return sessionStrings(doc).some((s) => ARABIC_SCRIPT.test(s));
-}
-
-export interface TranscriptPdfBuildOptions {
-  fonts: PdfFontFiles;
-  logo?: LogoImage | null;
-}
-
-export interface BuiltTranscriptPdf {
-  doc: jsPDF;
+export interface TranscriptPdf {
+  bytes: Uint8Array<ArrayBuffer>;
+  pages: number;
   emojiReplacedCount: number;
-  usedUnicodeFont: boolean;
 }
 
-export async function buildSessionTranscriptPdf(t: TranscriptDocument, options: TranscriptPdfBuildOptions): Promise<BuiltTranscriptPdf> {
-  const { jsPDF: JsPdf } = await import("jspdf");
-  const doc = new JsPdf({ unit: "mm", format: "a4" });
-  doc.setProperties({ title: TRANSCRIPT_PDF_TITLE, creator: "Solace" });
-  const kit = setupPdfText(doc, options.fonts);
-  const w = new PdfWriter(doc, kit);
-
-  // Fail before drawing anything if some text cannot be drawn faithfully; count emoji markers.
-  let emoji = 0;
-  for (const s of sessionStrings(t)) emoji += kit.prepare(s).emojiReplaced;
-
-  // --- Title block ------------------------------------------------------------------------------
-  w.logo(options.logo ?? null);
-  const header: Row[] = [
-    ...w.textRows(TRANSCRIPT_PDF_TITLE, { style: "bold", size: T_TITLE, color: INK }),
-    w.space(2.5),
-    ...w.textRows(`Session: ${t.title}`, { size: T_BODY, color: INK }),
-    ...w.textRows(`Session ID: ${t.sessionId}`, { size: T_BODY, color: MUTED, padTop: 0.8 }),
-  ];
-  if (t.companion) header.push(...w.textRows(`Companion: ${t.companion}`, { size: T_BODY, color: BODY, padTop: 0.8 }));
-  header.push(
-    ...w.textRows(`Started: ${t.started ? dateTime(t.started) : "Not recorded"}`, { size: T_BODY, color: BODY, padTop: 0.8 }),
-    ...w.textRows(`Duration: ${t.duration}`, { size: T_BODY, color: BODY, padTop: 0.8 }),
-    ...w.textRows(`Exported: ${dateTime(t.exportedAt)} (${t.timeZone})`, { size: T_BODY, color: MUTED, padTop: 0.8 }),
-    ...w.textRows(
-      [`Dates and times are in ${t.timeZone}.`, emoji > 0 ? `Emoji can't be shown in this PDF; each appears as ${EMOJI_MARKER}.` : ""].filter(Boolean).join(" "),
-      { size: T_META, color: MUTED, padTop: 2.5 }
-    )
-  );
-  w.place(header);
-
-  const section = (title: string): Row[] => [
-    w.space(5),
-    ...w.textRows(title, { style: "bold", size: T_SECTION, color: INK, keepWithNext: true }),
-    w.rule(BRAND, 0.5, 1.6, 4),
-  ];
-
-  // --- Saved summary ----------------------------------------------------------------------------
-  const summary = w.textRows(t.summary.body, { size: T_BODY, color: BODY });
-  w.place([...section(t.summary.heading), ...summary], [...section(t.summary.heading), ...summary.slice(0, 2)].reduce((s, r) => s + r.h, 0));
-
-  // --- Conversation -----------------------------------------------------------------------------
-  const notes = w.textRows(`${SAVED_MESSAGES_NOTE} ${RECORDED_TIMES_NOTE}`, { size: T_META, color: MUTED });
-  w.place([...section("Conversation"), ...notes, w.space(3)], 40);
-
-  t.messages.forEach((m, index) => {
-    const label = `${m.speaker}  ·  ${m.time}`;
-    // Speakers differ by label and colour only (restrained): Solace in brand violet, you in ink.
-    const heading = w.textRows(label, { style: "bold", size: T_BODY, color: m.speaker === "Solace" ? BRAND : INK, padTop: index ? 3 : 0 });
-    const body = w.textRows(m.content, { size: T_BODY, color: BODY, padTop: 1 });
-    // Keep the speaker/time heading with the first lines of the message.
-    w.place(heading, [...heading, ...body.slice(0, 2)].reduce((s, r) => s + r.h, 0));
-    const cont = w.textRows(`${label} (continued)`, { size: T_META, color: MUTED });
-    w.setPageBreakHook(() => {
-      for (const r of cont) {
-        r.draw(w.y);
-        w.y += r.h;
-      }
-      w.y += 2;
-    });
-    w.place(body);
-    w.setPageBreakHook(null);
-  });
-
-  const headerText = `${TRANSCRIPT_PDF_TITLE}  ·  ${t.started ? format(t.started, "d MMM yyyy") : "Start not recorded"}`;
-  stampPages(doc, kit, headerText);
-  return { doc, emojiReplacedCount: emoji, usedUnicodeFont: kit.unicode };
+export interface CreateTranscriptPdfOptions {
+  signal?: AbortSignal;
+  onProgress?: (p: TranscriptPdfProgress) => void;
+  /** Reader's locale, used only to choose Han glyph forms (see shapedPdf.hanFamilyForRun). */
+  locale?: string;
 }
+
+const abortError = () => new DOMException("The PDF export was cancelled.", "AbortError");
 
 /**
- * Loads the PDF fonts (the Urdu font only when the transcript needs it) and the logo, then builds
- * the PDF. Throws `PdfUnsupportedTextError` when text cannot be drawn faithfully.
+ * Builds the PDF in a dedicated worker. Rejects with `PdfUnsupportedTextError` ("no-glyph" for text
+ * no bundled font can draw, "font-unavailable" when fonts cannot be loaded), an `AbortError` when
+ * `signal` aborts (the worker is terminated at once), or an Error when the worker fails.
  */
-export async function createSessionTranscriptPdf(t: TranscriptDocument): Promise<BuiltTranscriptPdf> {
-  const [fonts, logo] = await Promise.all([loadPdfFonts(transcriptNeedsArabicFont(t)), loadLogo()]);
-  return buildSessionTranscriptPdf(t, { fonts, logo });
+export function createSessionTranscriptPdf(t: TranscriptDocument, options: CreateTranscriptPdfOptions = {}): Promise<TranscriptPdf> {
+  const { signal, onProgress, locale } = options;
+  return new Promise<TranscriptPdf>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+    const worker = new Worker(new URL("./sessionTranscriptPdf.worker.ts", import.meta.url), { type: "module" });
+    let settled = false;
+    const finish = () => {
+      settled = true;
+      worker.terminate();
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      finish();
+      reject(abortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    worker.onmessage = ({ data }: MessageEvent<TranscriptPdfWorkerResponse>) => {
+      if (settled) return;
+      if (data.type === "progress") {
+        onProgress?.({ fontsLoaded: data.loaded, fontsTotal: data.total });
+        return;
+      }
+      finish();
+      // Bytes received from a worker are always backed by a plain ArrayBuffer (transferred or cloned).
+      if (data.type === "done") resolve({ bytes: data.bytes as Uint8Array<ArrayBuffer>, pages: data.pages, emojiReplacedCount: data.emojiReplacedCount });
+      else if (data.kind === "unsupported") reject(new PdfUnsupportedTextError(data.characters, "no-glyph"));
+      else if (data.kind === "fonts") reject(new PdfUnsupportedTextError([], "font-unavailable"));
+      else reject(new Error("The PDF could not be created."));
+    };
+    const onFailure = (event: Event) => {
+      event.preventDefault?.();
+      if (settled) return;
+      finish();
+      reject(new Error("The PDF worker failed to start or crashed."));
+    };
+    worker.onerror = onFailure;
+    worker.onmessageerror = onFailure;
+    const request: TranscriptPdfWorkerRequest = { doc: t, locale, logoUrl: PUBLIC_BRAND_LOGO_ON_LIGHT_PATH };
+    worker.postMessage(request);
+  });
 }
