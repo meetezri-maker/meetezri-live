@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 const { exportUserData, toast, auth, safety } = vi.hoisted(() => ({
   exportUserData: vi.fn(),
-  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
+  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() },
   // Stable objects: the page's effects depend on `profile`, so a new object per render would loop.
   auth: { profile: { id: 'user-a', privacy_settings: {} }, refreshProfile: vi.fn() },
   safety: { updateConsent: vi.fn() },
@@ -22,7 +23,7 @@ vi.mock('@/lib/supabase', () => {
   const deep = (): unknown =>
     new Proxy(function () {}, {
       get: (_t, k) => (k === 'then' ? undefined : deep()),
-      apply: () => Promise.resolve({ data: { session: null, sessions: [] }, error: null }),
+      apply: () => Promise.resolve({ data: { session: { access_token: 'tok-a', user: { id: 'user-a' } }, sessions: [] }, error: null }),
     });
   return { supabase: deep() };
 });
@@ -81,6 +82,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+async function chooseCsv() {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Export data' }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Download CSV' }));
+}
+
 const renderPage = () =>
   render(
     <MemoryRouter>
@@ -103,7 +110,7 @@ describe('Privacy Settings data export', () => {
       contentType: 'application/json; charset=utf-8',
     });
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+    await chooseCsv();
 
     await waitFor(() => expect(downloads).toHaveLength(1));
     expect(downloads[0].name).toMatch(/^solace-account-data-\d{4}-\d{2}-\d{2}\.csv$/);
@@ -123,7 +130,7 @@ describe('Privacy Settings data export', () => {
       contentType: 'application/json',
     });
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+    await chooseCsv();
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to download your data. Please try again.'));
     expect(downloads).toHaveLength(0);

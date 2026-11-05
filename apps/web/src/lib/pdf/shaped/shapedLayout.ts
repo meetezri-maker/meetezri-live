@@ -47,7 +47,7 @@ export interface TableColumn {
 
 /** Strings a table draws (for ensureFonts): header labels are bold, cells regular. */
 export function tableStrings(columns: TableColumn[], rows: string[][]): { regular: string[]; bold: string[] } {
-  return { regular: rows.flat(), bold: columns.map((c) => c.label) };
+  return { regular: [...rows.flat(), "(continued)"], bold: columns.map((c) => c.label) };
 }
 
 /** Strings the running header and footer draw (for ensureFonts). */
@@ -141,42 +141,90 @@ export class ShapedReportLayout {
   }
 
   /**
-   * A table: one row per entry, never split across pages; the header row repeats at the top of
-   * each page the table continues on. Cells wrap within their column.
+   * A table: one row per entry; the header row repeats at the top of each page the table
+   * continues on. Cells wrap within their column, and "\n" in a cell starts a new line. A row
+   * too tall for a page continues on the next one, its first cell repeated with "(continued)".
    */
-  table(columns: TableColumn[], rows: string[][], o: { keepWithPrevious?: number } = {}): void {
+  table(columns: TableColumn[], rows: string[][], o: { keepWithPrevious?: number; lead?: Row[] } = {}): void {
     const PAD = 1.4;
     // Text cells keep a 4 mm gutter on the right, so right-to-left text (aligned to the cell's
     // right edge) stays clear of the next column.
     const GUTTER = 4;
-    const rowOf = (cells: string[], bold: boolean, color: RGB): Row => {
+    const LINE = (T_TABLE * 1.45) / MM;
+    const blank: ShapedLine = { height: T_TABLE * 1.45, ascent: T_TABLE, draw: () => undefined };
+    const layCell = (text: string, col: TableColumn, bold: boolean): ShapedLine[] => {
+      const width = (col.width - (col.align === "right" ? 1 : GUTTER)) * MM;
+      const lay = (para: string) => this.w.layoutParagraph(para, { size: T_TABLE, bold, width });
+      if (!text.includes("\n")) return text.trim() ? lay(text) : [];
+      return text.split("\n").flatMap((para) => (para.trim() ? lay(para) : [blank]));
+    };
+    const rowsOf = (cells: string[], bold: boolean, color: RGB): Row[] => {
       const laid = cells.map((text, i) => {
         const col = columns[i];
-        const lines = text.trim() ? this.w.layoutParagraph(text, { size: T_TABLE, bold, width: (col.width - (col.align === "right" ? 1 : GUTTER)) * MM }) : [];
-        return { lines, col, text, h: lines.reduce((s, l) => s + l.height / MM, 0) };
+        let at = 0;
+        const lines = layCell(text, col, bold).map((line) => {
+          const top = at;
+          at += line.height / MM;
+          return { line, top, bottom: at };
+        });
+        return { lines, col, text, h: at };
       });
-      const h = Math.max(T_TABLE * 1.45 / MM, ...laid.map((c) => c.h)) + PAD * 2;
-      return {
-        h,
-        draw: (top) => {
-          let x = MARGIN;
-          for (const cell of laid) {
-            let lineTop = top + PAD;
-            for (const line of cell.lines) {
-              const left = cell.col.align === "right" ? x + cell.col.width - 1 - this.w.measure(cell.text, T_TABLE, bold) / MM : x;
-              line.draw(this.page!, left * MM, lineTop * MM, color);
-              lineTop += line.height / MM;
-            }
-            x += cell.col.width;
-          }
-          this.rule(top + h, RULE, bold ? 0.35 : 0.2);
-        },
+      const drawCell = (cell: (typeof laid)[number], x: number, lines: typeof cell.lines, from: number, top: number) => {
+        for (const { line, top: lineTop } of lines) {
+          const left = cell.col.align === "right" ? x + cell.col.width - 1 - this.w.measure(cell.text, T_TABLE, bold) / MM : x;
+          line.draw(this.page!, left * MM, (top + PAD + lineTop - from) * MM, color);
+        }
       };
+      const chunkRow = (from: number, to: number, continued: typeof laid[number]["lines"] | null): Row => {
+        const parts = laid.map((cell, i) => (i === 0 && continued ? continued : cell.lines.filter((l) => l.top >= from && l.top < to)));
+        const offsets = parts.map((_, i) => (i === 0 && continued ? 0 : from));
+        const contentH = Math.max(LINE, ...parts.map((p, i) => (p.length ? p[p.length - 1].bottom - offsets[i] : 0)));
+        const h = contentH + PAD * 2;
+        return {
+          h,
+          draw: (top) => {
+            let x = MARGIN;
+            laid.forEach((cell, i) => {
+              drawCell(cell, x, parts[i], offsets[i], top);
+              x += cell.col.width;
+            });
+            this.rule(top + h, RULE, bold ? 0.35 : 0.2);
+          },
+        };
+      };
+      const total = Math.max(LINE, ...laid.map((c) => c.h));
+      const room = BOTTOM - TOP - 2 * (LINE + PAD * 2) - PAD * 2;
+      if (total <= room) return [chunkRow(0, Infinity, null)];
+      // Split at line boundaries; later parts repeat the first cell with "(continued)".
+      const all = laid.flatMap((c) => c.lines);
+      const out: Row[] = [];
+      let cont: (typeof laid)[number]["lines"] | null = null;
+      let from = 0;
+      for (;;) {
+        // This part ends before the first line that would not fit (always at least one line).
+        const overflow = all.filter((l) => l.top >= from && l.bottom - from > room).map((l) => l.top);
+        const to = overflow.length ? Math.max(Math.min(...overflow), from + 1e-6) : Infinity;
+        out.push(chunkRow(from, to, cont));
+        if (to === Infinity) break;
+        from = to;
+        if (!cont) {
+          let at = 0;
+          cont = layCell(`${cells[0]} (continued)`, laid[0].col, bold).map((line) => {
+            const top = at;
+            at += line.height / MM;
+            return { line, top, bottom: at };
+          });
+        }
+      }
+      return out;
     };
-    const header = rowOf(columns.map((c) => c.label), true, INK);
-    const body = rows.map((cells) => rowOf(cells, false, INK));
-    // Start on a new page unless the header and the first rows fit here.
-    this.place([], Math.max(o.keepWithPrevious ?? 0, this.height([header, ...body.slice(0, 2)])));
+    const [header] = rowsOf(columns.map((c) => c.label), true, INK);
+    const body = rows.flatMap((cells) => rowsOf(cells, false, INK));
+    // Start on a new page unless the lead rows (e.g. a section heading), the header and the
+    // first rows fit here.
+    const lead = o.lead ?? [];
+    this.place([], Math.max(o.keepWithPrevious ?? 0, this.height([...lead, header, ...body.slice(0, 2)])));
+    if (lead.length) this.place(lead);
     this.place([header]);
     this.onPageBreak = () => { header.draw(this.y); this.y += header.h; };
     this.place(body);

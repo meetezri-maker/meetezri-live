@@ -997,11 +997,13 @@ export const api = {
     return handleResponse(res, 'Failed to activate account');
   },
 
-  async exportUserData() {
-    const headers = await getHeaders();
+  /** `accessToken` pins the request to one session; `signal` cancels it. Both optional. */
+  async exportUserData(options: { accessToken?: string; signal?: AbortSignal } = {}) {
+    const headers = await getHeaders(options.accessToken);
     const res = await fetch(`${API_URL}/users/export`, {
       method: 'GET',
       headers,
+      signal: options.signal,
     });
     const blob = await handleBlobResponse(res, 'Failed to export user data');
     const contentDisposition = res.headers.get('content-disposition');

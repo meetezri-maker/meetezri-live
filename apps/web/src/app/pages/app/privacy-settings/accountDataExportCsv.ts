@@ -1,5 +1,6 @@
 /**
- * CSV layout for the Privacy Settings "Export your data" download (GET /users/export).
+ * Layout for the Privacy Settings "Export your data" downloads (GET /users/export), shared by the
+ * CSV and the PDF.
  *
  * Rows are produced only from the fields listed below, in this order, so anything else the
  * server might send is never written. Missing values are left blank; false and 0 are kept.
@@ -10,8 +11,11 @@ import { buildCsv, type CsvValue } from '@/lib/csv';
 export const ACCOUNT_DATA_EXPORT_CONTENTS =
   'Account details, profile answers, wellness preferences, privacy and notification settings, emergency contacts and membership.';
 
+/** What the download leaves out. */
+export const ACCOUNT_DATA_EXPORT_EXCLUSIONS = 'It does not include journals, mood check-ins or conversation history.';
+
 export const ACCOUNT_DATA_EXPORT_CARD_TEXT =
-  'Download a CSV of your account details, profile answers, wellness preferences, privacy and notification settings, emergency contacts and membership. It does not include journals, mood check-ins or conversation history.';
+  `Download a PDF or CSV of your account details, profile answers, wellness preferences, privacy and notification settings, emergency contacts and membership. ${ACCOUNT_DATA_EXPORT_EXCLUSIONS}`;
 
 type Fields = Record<string, unknown>;
 
@@ -128,12 +132,25 @@ const CONTACT_FIELDS: Array<[field: string, label: string]> = [
   ['trustedContact', 'Trusted contact'],
 ];
 
-function cell(value: unknown): CsvValue {
-  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string').join('; ');
+/** A value as exported: scalars as stored, lists of text, or null when there is none. */
+export type AccountDataValue = string | number | boolean | string[] | null;
+
+export interface AccountDataRow {
+  section: string;
+  label: string;
+  value: AccountDataValue;
+}
+
+function valueOf(value: unknown): AccountDataValue {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
   }
   return null;
+}
+
+function cell(value: AccountDataValue): CsvValue {
+  return Array.isArray(value) ? value.join('; ') : value;
 }
 
 function isObject(value: unknown): value is Fields {
@@ -146,47 +163,56 @@ function isExportPayload(value: unknown): value is AccountDataExportPayload {
   return SECTIONS.every((s) => isObject(p[s.key])) && isObject(p.emergencyContacts);
 }
 
-/** Builds the CSV text; throws if the response is not the expected export shape. */
-export function buildAccountDataExportCsv(payload: unknown): string {
+/**
+ * Every exported row, in file order (the "Export" rows first); throws if the response is not the
+ * expected export shape. Both the CSV and the PDF are built from these rows only.
+ */
+export function accountDataExportRows(payload: unknown): AccountDataRow[] {
   if (!isExportPayload(payload)) {
     throw new Error('Unexpected data export format');
   }
   const p = payload.profile;
-  const rows: CsvValue[][] = [['Section', 'Field', 'Value']];
-
-  rows.push(['Export', 'Generated', cell(payload.generatedAt)]);
-  rows.push(['Export', 'Contents', ACCOUNT_DATA_EXPORT_CONTENTS]);
+  const rows: AccountDataRow[] = [
+    { section: 'Export', label: 'Generated', value: valueOf(payload.generatedAt) },
+    { section: 'Export', label: 'Contents', value: ACCOUNT_DATA_EXPORT_CONTENTS },
+  ];
 
   for (const section of SECTIONS) {
     // Emergency contacts are a list, so they are written separately, just before Membership.
     if (section.key === 'membership') pushEmergencyContacts(rows, p.emergencyContacts);
     for (const [field, label] of section.fields) {
-      rows.push([section.title, label, cell(p[section.key][field])]);
+      rows.push({ section: section.title, label, value: valueOf(p[section.key][field]) });
     }
   }
+  return rows;
+}
 
+/** Builds the CSV text; throws if the response is not the expected export shape. */
+export function buildAccountDataExportCsv(payload: unknown): string {
+  const rows: CsvValue[][] = [['Section', 'Field', 'Value']];
+  for (const row of accountDataExportRows(payload)) rows.push([row.section, row.label, cell(row.value)]);
   return buildCsv(rows);
 }
 
 function pushEmergencyContacts(
-  rows: CsvValue[][],
+  rows: AccountDataRow[],
   emergency: AccountDataExportPayload['profile']['emergencyContacts']
 ): void {
-  const title = 'Emergency contacts';
+  const section = 'Emergency contacts';
   const contacts = Array.isArray(emergency.contacts) ? emergency.contacts.filter(isObject) : [];
-  rows.push([title, 'Consent to contact in an emergency', cell(emergency.consentToContact)]);
-  rows.push([title, 'Contacts saved', contacts.length]);
+  rows.push({ section, label: 'Consent to contact in an emergency', value: valueOf(emergency.consentToContact) });
+  rows.push({ section, label: 'Contacts saved', value: contacts.length });
   contacts.forEach((contact, i) => {
     for (const [field, label] of CONTACT_FIELDS) {
-      rows.push([title, `Contact ${i + 1} – ${label}`, cell(contact[field])]);
+      rows.push({ section, label: `Contact ${i + 1} – ${label}`, value: valueOf(contact[field]) });
     }
   });
 }
 
-/** `solace-account-data-YYYY-MM-DD.csv` in the user's local calendar. */
-export function accountDataExportFileName(now: Date = new Date()): string {
+/** `solace-account-data-YYYY-MM-DD.csv` (or `.pdf`) in the user's local calendar. */
+export function accountDataExportFileName(now: Date = new Date(), extension: 'csv' | 'pdf' = 'csv'): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
-  return `solace-account-data-${y}-${m}-${d}.csv`;
+  return `solace-account-data-${y}-${m}-${d}.${extension}`;
 }

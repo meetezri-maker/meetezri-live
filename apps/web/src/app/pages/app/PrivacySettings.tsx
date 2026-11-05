@@ -18,7 +18,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from "react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -76,8 +76,29 @@ import {
 import {
   ACCOUNT_DATA_EXPORT_CARD_TEXT,
   accountDataExportFileName,
+  accountDataExportRows,
   buildAccountDataExportCsv,
 } from "@/app/pages/app/privacy-settings/accountDataExportCsv";
+import { buildAccountDataPdfSnapshot } from "@/app/pages/app/privacy-settings/accountDataPdfSnapshot";
+import { currentTimeZone } from "@/lib/reportTimeZone";
+import { describeUnsupportedText, PdfUnsupportedTextError } from "@/lib/pdf/pdfText";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
+
+/** A short message for text the PDF can't draw: scripts by name, at most three symbols. */
+function unsupportedTextMessage(characters: string[]): string {
+  const { scripts, symbols, moreSymbols } = describeUnsupportedText(characters);
+  const tail = "so the PDF wasn't downloaded. You can download the CSV instead.";
+  if (scripts.length) {
+    const named = scripts.length > 2 ? `${scripts.slice(0, 2).join(", ")} and other` : scripts.join(" and ");
+    return `Your account data includes ${named} text, which the PDF can't display yet, ${tail}`;
+  }
+  return `Your account data includes ${symbols.length === 1 && !moreSymbols ? "a symbol" : "symbols"} the PDF can't display (${symbols.join(" ")}${moreSymbols ? " …" : ""}), ${tail}`;
+}
 
 interface PrivacySettingsState {
   profileVisibility: string;
@@ -221,7 +242,7 @@ function PrivacyControlRow({ icon, tone, title, description, control }: PrivacyR
 
 export function PrivacySettings() {
   const { updateConsent } = useSafetyConsent();
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   const [settings, setSettings] = useState<PrivacySettingsState>(DEFAULT_PRIVACY_SETTINGS);
   const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
@@ -392,27 +413,107 @@ export function PrivacySettings() {
     }
   };
 
-  const handleDownloadData = async () => {
-    toast.info("Preparing your data for download...");
-    try {
-      const { blob } = await api.exportUserData();
-      // Only the documented fields are written; an unexpected response fails instead of
-      // falling back to a raw dump.
-      const csvContent = buildAccountDataExportCsv(JSON.parse(await blob.text()));
-      const blobToDownload = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+  // --- Data export (CSV or PDF) -------------------------------------------------------------
+  // One export at a time, for the account signed in when it starts: the request is sent with that
+  // account's session, and an account change, sign-out or leaving the page cancels it (request
+  // aborted, PDF worker terminated, preparation toast cleared). A cancelled or superseded export
+  // never downloads and never touches a newer export's state.
+  const accountId: string | null = user?.id ?? profile?.id ?? null;
+  const accountIdRef = useRef(accountId);
+  accountIdRef.current = accountId;
+  const exportJobRef = useRef<{ controller: AbortController; toastId: string | number | null } | null>(null);
+  const [isExportingData, setIsExportingData] = useState(false);
+  const cancelDataExport = useCallback(() => {
+    const job = exportJobRef.current;
+    if (!job) return;
+    exportJobRef.current = null;
+    job.controller.abort();
+    if (job.toastId !== null) toast.dismiss(job.toastId);
+    setIsExportingData(false);
+  }, []);
+  useEffect(() => cancelDataExport, [accountId, cancelDataExport]);
 
-      const url = window.URL.createObjectURL(blobToDownload);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = accountDataExportFileName();
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      toast.success("Your data has been downloaded successfully!");
+  const downloadFile = (name: string, blob: Blob) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  };
+
+  const handleDownloadData = async (format: "csv" | "pdf") => {
+    const owner = accountId;
+    if (!owner || exportJobRef.current) return;
+    const job: { controller: AbortController; toastId: string | number | null } = { controller: new AbortController(), toastId: null };
+    const isCurrent = () => exportJobRef.current === job && accountIdRef.current === owner;
+    exportJobRef.current = job;
+    setIsExportingData(true);
+    if (format === "pdf") job.toastId = toast.loading("Preparing your PDF…");
+    else toast.info("Preparing your data for download...");
+    let stage: "data" | "pdf" = "data";
+    try {
+      // Send the request with the session of the account that started the export.
+      const { data } = await supabase.auth.getSession();
+      if (!isCurrent()) return;
+      const session = data.session;
+      if (!session?.access_token || session.user?.id !== owner) throw new Error("Session does not match the account");
+      const { blob } = await api.exportUserData({ accessToken: session.access_token, signal: job.controller.signal });
+      const payload: unknown = JSON.parse(await blob.text());
+      if (!isCurrent()) return;
+      // Only the documented fields are exported; an unexpected response fails instead of
+      // falling back to a raw dump.
+      if (format === "csv") {
+        const csvContent = buildAccountDataExportCsv(payload);
+        downloadFile(accountDataExportFileName(), new Blob([csvContent], { type: "text/csv;charset=utf-8" }));
+        toast.success("Your data has been downloaded successfully!");
+        return;
+      }
+      const snapshot = buildAccountDataPdfSnapshot(accountDataExportRows(payload), currentTimeZone());
+      const fileName = accountDataExportFileName(new Date(), "pdf");
+      stage = "pdf";
+      const { createAccountDataPdf } = await import("@/app/pages/app/privacy-settings/accountDataPdf");
+      if (!isCurrent()) return;
+      const { bytes } = await createAccountDataPdf(snapshot, {
+        signal: job.controller.signal,
+        locale: typeof navigator !== "undefined" ? navigator.language : undefined,
+        onProgress: ({ fontsLoaded, fontsTotal }) => {
+          if (fontsTotal > 0 && isCurrent() && job.toastId !== null) {
+            toast.loading(`Preparing your PDF… downloading fonts (${fontsLoaded} of ${fontsTotal})`, { id: job.toastId });
+          }
+        },
+      });
+      if (!isCurrent()) return;
+      downloadFile(fileName, new Blob([bytes], { type: "application/pdf" }));
+      toast.success("Your PDF has been downloaded.");
     } catch (error) {
-      console.error("Failed to download user data:", error);
-      toast.error("Failed to download your data. Please try again.");
+      // Cancelled (account change, sign-out or leaving the page): nothing to report.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      // Log the kind of failure only, never account values.
+      console.error(
+        "Failed to download user data:",
+        error instanceof PdfUnsupportedTextError ? `${error.name} (${error.reason})` : error instanceof Error ? error.name : "unknown"
+      );
+      if (!isCurrent()) return;
+      if (error instanceof PdfUnsupportedTextError) {
+        toast.error(
+          error.reason === "font-unavailable"
+            ? "The fonts needed for this PDF couldn't be loaded, so it wasn't downloaded. Please check your connection and try again, or download the CSV."
+            : unsupportedTextMessage(error.characters)
+        );
+      } else if (stage === "pdf") {
+        toast.error("We couldn't create the PDF. Please try again, or download the CSV.");
+      } else {
+        toast.error("Failed to download your data. Please try again.");
+      }
+    } finally {
+      if (job.toastId !== null) toast.dismiss(job.toastId);
+      if (exportJobRef.current === job) {
+        exportJobRef.current = null;
+        setIsExportingData(false);
+      }
     }
   };
 
@@ -795,9 +896,26 @@ export function PrivacySettings() {
                       {ACCOUNT_DATA_EXPORT_CARD_TEXT}
                     </p>
                   </div>
-                  <button type="button" onClick={handleDownloadData} className={privacyBtnPrimary}>
-                    Export data
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={!accountId || isExportingData}
+                        aria-busy={isExportingData}
+                        className={privacyBtnPrimary}
+                      >
+                        Export data
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[10rem] border-white/10 bg-[#12122a] text-white">
+                      <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleDownloadData("pdf")}>
+                        Download PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="cursor-pointer focus:bg-violet-500/15 focus:text-white" onSelect={() => void handleDownloadData("csv")}>
+                        Download CSV
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div
