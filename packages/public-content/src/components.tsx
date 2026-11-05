@@ -128,8 +128,15 @@ export function RelatedResources({ items }: { items: PublicResourceCard[] }) {
   );
 }
 
+// The public read seam supplies contextual links in stored sort order. Four is the approved
+// presentation maximum: it accommodates two protected route links plus two Resource links without
+// turning this compact navigation into an unbounded link list.
+const MAX_CONTEXTUAL_RESOURCE_LINKS = 4;
+
 export function ContextualResourceLinks({ links }: { links: PublicResource['links'] }) {
-  const contextual = (links ?? []).filter((link) => link.relation === 'contextual').slice(0, 3);
+  const contextual = (links ?? [])
+    .filter((link) => link.relation === 'contextual')
+    .slice(0, MAX_CONTEXTUAL_RESOURCE_LINKS);
   if (contextual.length === 0) return null;
 
   return (

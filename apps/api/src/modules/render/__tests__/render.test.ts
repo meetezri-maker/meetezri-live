@@ -106,6 +106,58 @@ describe('the rendered document', () => {
       output.indexOf('sol-authors'));
   });
 
+  it('renders four contextual links in stored order and keeps the presentation maximum deterministic', () => {
+    const output = renderResourceDetail({
+      origin: ORIGIN,
+      detail: answerDetail({
+        slug: 'what-to-say-when-someone-shares-a-small-win',
+        canonicalPath: '/resources/what-to-say-when-someone-shares-a-small-win',
+        links: [
+          { label: 'Learn how SOLACE works', href: '/how-it-works', relation: 'contextual' },
+          { label: 'SOLACE', href: '/', relation: 'contextual' },
+          {
+            label: 'how to share a small win naturally',
+            href: '/resources/how-to-share-small-wins',
+            relation: 'contextual',
+          },
+          {
+            label: 'understanding small wins and positive moments',
+            href: '/resources/small-wins-positive-moments-reflection',
+            relation: 'contextual',
+          },
+          {
+            label: 'outside the approved presentation maximum',
+            href: '/resources/not-rendered',
+            relation: 'contextual',
+          },
+        ],
+      }),
+      assets: NO_ASSETS,
+    });
+    const contextual = output.slice(
+      output.indexOf('<nav class="sol-contextual-links"'),
+      output.indexOf('<footer class="sol-authors"'),
+    );
+    const orderedHrefs = [
+      'href="/how-it-works"',
+      'href="/"',
+      'href="/resources/how-to-share-small-wins"',
+      'href="/resources/small-wins-positive-moments-reflection"',
+    ];
+
+    for (const href of orderedHrefs) {
+      expect(contextual.split(href)).toHaveLength(2);
+    }
+    expect(orderedHrefs.map((href) => contextual.indexOf(href))).toEqual(
+      [...orderedHrefs].map((href) => contextual.indexOf(href)).sort((a, b) => a - b),
+    );
+    expect(contextual).toContain('understanding small wins and positive moments');
+    expect(contextual).not.toContain('/resources/not-rendered');
+    expect(contextual).not.toContain(
+      'href="/resources/what-to-say-when-someone-shares-a-small-win"',
+    );
+  });
+
   it('links the visible Solace organization byline to About without adding a reviewer', () => {
     const output = renderResourceDetail({
       origin: ORIGIN,
