@@ -7,7 +7,7 @@ export const TALK_IT_OUT_CONTENT: PublicAuthorityPageProps = {
   summary: "You do not need the perfect words. Begin with what is on your mind, speak naturally, and reflect at your own pace.",
   heroImage: {
     src: "/talk-it-out/talk-it-out.jpg",
-    alt: "A calm space representing the Talk It Out conversation experience",
+    alt: "A stream flowing beneath a wooden bridge toward a cabin at sunset.",
   },
   notice: {
     title: "A conversation product, not professional care",

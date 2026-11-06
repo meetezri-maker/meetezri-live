@@ -4,7 +4,7 @@ export const PUBLIC_SOCIAL_IMAGE_PATH = '/community/hero-lake.jpg' as const;
 export const PUBLIC_SOCIAL_IMAGE_WIDTH = '1600' as const;
 export const PUBLIC_SOCIAL_IMAGE_HEIGHT = '1067' as const;
 export const PUBLIC_SOCIAL_IMAGE_TYPE = 'image/jpeg' as const;
-export const PUBLIC_SOCIAL_IMAGE_ALT = 'Lanterns glowing beside a calm lake at night' as const;
+export const PUBLIC_SOCIAL_IMAGE_ALT = 'Mountains above a cloud-filled valley at sunset.' as const;
 
 export const PUBLIC_ROUTE_PATHS = [
   '/',

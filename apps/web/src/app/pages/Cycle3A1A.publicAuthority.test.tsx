@@ -55,6 +55,7 @@ describe('Cycle 3A-1A public authority intent', () => {
     expect(h1Count(html)).toBe(1);
     expect(html).toContain('>Talk It Out</h1>');
     expect(html).toContain('Talk It Out cannot provide professional judgment, diagnosis, treatment, or emergency intervention.');
+    expect(html).toContain('alt="A stream flowing beneath a wooden bridge toward a cabin at sunset."');
     expect(html).toMatch(/talk-it-out\.jpg[^>]+width="1717"[^>]+height="916"[^>]+loading="eager"[^>]+decoding="async"/);
     expect(getPublicSeo('/talk-it-out')).toMatchObject({
       canonicalUrl: 'https://www.talktosolace2.ai/talk-it-out',

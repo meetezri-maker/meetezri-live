@@ -146,4 +146,23 @@ describe('public document hydration', () => {
     expect(background).toHaveAttribute('alt', '');
     expect(background).not.toHaveAttribute('loading', 'lazy');
   });
+
+  it('keeps the approved Talk It Out image description through server rendering', () => {
+    const markup = renderToString(
+      <PublicMarketingApp Page={TalkItOut} pathname="/talk-it-out" mode="server" />,
+    );
+    document.body.innerHTML = `<div id="root">${markup}</div>`;
+
+    const image = document.querySelector<HTMLImageElement>(
+      'img[src="/talk-it-out/talk-it-out.jpg"]',
+    );
+    expect(image).toHaveAttribute(
+      'alt',
+      'A stream flowing beneath a wooden bridge toward a cabin at sunset.',
+    );
+    expect(image).toHaveAttribute('width', '1717');
+    expect(image).toHaveAttribute('height', '916');
+    expect(image).toHaveAttribute('loading', 'eager');
+    expect(image).toHaveAttribute('decoding', 'async');
+  });
 });

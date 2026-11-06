@@ -36,17 +36,24 @@ describe('public route metadata synchronization', () => {
 
   it('emits accurate fixed social image details', () => {
     applyPublicMetadata(getPublicSeo('/')!);
+    applyPublicMetadata(getPublicSeo('/pricing')!);
     expect(document.querySelector('meta[property="og:image:width"]')).toHaveAttribute('content', '1600');
     expect(document.querySelector('meta[property="og:image:height"]')).toHaveAttribute('content', '1067');
     expect(document.querySelector('meta[property="og:image:type"]')).toHaveAttribute('content', 'image/jpeg');
+    expect(count('meta[property="og:image:alt"]')).toBe(1);
     expect(document.querySelector('meta[property="og:image:alt"]')).toHaveAttribute(
       'content',
-      'Lanterns glowing beside a calm lake at night',
+      'Mountains above a cloud-filled valley at sunset.',
     );
+    expect(count('meta[name="twitter:image:alt"]')).toBe(1);
     expect(document.querySelector('meta[name="twitter:image:alt"]')).toHaveAttribute(
       'content',
-      'Lanterns glowing beside a calm lake at night',
+      'Mountains above a cloud-filled valley at sunset.',
     );
+
+    applyPrivateMetadata();
+    expect(count('meta[property="og:image:alt"]')).toBe(0);
+    expect(count('meta[name="twitter:image:alt"]')).toBe(0);
   });
 
   it('does not leak Early Access noindex or schema to another public route', () => {
@@ -143,9 +150,21 @@ describe('designer homepage review route', () => {
     expect(home.robots).toBe('index,follow');
     expect(document.title).toBe(home.title);
     expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', home.canonicalUrl);
+    expect(count('meta[property="og:image:alt"]')).toBe(1);
+    expect(document.querySelector('meta[property="og:image:alt"]')).toHaveAttribute(
+      'content',
+      'Mountains above a cloud-filled valley at sunset.',
+    );
+    expect(count('meta[name="twitter:image:alt"]')).toBe(1);
+    expect(document.querySelector('meta[name="twitter:image:alt"]')).toHaveAttribute(
+      'content',
+      'Mountains above a cloud-filled valley at sunset.',
+    );
 
     fireEvent.click(screen.getByRole('link', { name: 'Designer homepage' }));
     await waitFor(() => expect(robots()).toHaveAttribute('content', 'noindex,nofollow'));
     expect(count('link[rel="canonical"]')).toBe(0);
+    expect(count('meta[property="og:image:alt"]')).toBe(0);
+    expect(count('meta[name="twitter:image:alt"]')).toBe(0);
   });
 });
