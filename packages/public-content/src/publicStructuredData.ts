@@ -3,11 +3,24 @@ import {
   type PublicSeoDefinition,
   type PublicStructuredDataDescriptor,
 } from './publicSeo';
+import { PUBLIC_BRAND_LOGO_ON_DARK_PATH } from './siteShell';
 
 type JsonDocument = Record<string, unknown>;
 
-export const PUBLIC_ORGANIZATION_ID = `${PUBLIC_SITE_ORIGIN}/#organization` as const;
-export const PUBLIC_WEBSITE_ID = `${PUBLIC_SITE_ORIGIN}/#website` as const;
+function publicRoot(origin: string): string {
+  return new URL('/', origin).toString();
+}
+
+export function publicOrganizationId(origin: string = PUBLIC_SITE_ORIGIN): string {
+  return new URL('/#organization', publicRoot(origin)).toString();
+}
+
+export function publicWebsiteId(origin: string = PUBLIC_SITE_ORIGIN): string {
+  return new URL('/#website', publicRoot(origin)).toString();
+}
+
+export const PUBLIC_ORGANIZATION_ID = publicOrganizationId();
+export const PUBLIC_WEBSITE_ID = publicWebsiteId();
 
 function compact(input: JsonDocument): JsonDocument {
   return Object.fromEntries(
@@ -15,22 +28,25 @@ function compact(input: JsonDocument): JsonDocument {
   );
 }
 
-function organization(): JsonDocument {
+export function buildSolaceOrganization(origin: string = PUBLIC_SITE_ORIGIN): JsonDocument {
+  const root = publicRoot(origin);
   return {
     '@type': 'Organization',
-    '@id': PUBLIC_ORGANIZATION_ID,
+    '@id': publicOrganizationId(root),
     name: 'Solace',
-    url: `${PUBLIC_SITE_ORIGIN}/`,
+    url: root,
+    logo: new URL(PUBLIC_BRAND_LOGO_ON_DARK_PATH, root).toString(),
   };
 }
 
-function website(): JsonDocument {
+export function buildSolaceWebsite(origin: string = PUBLIC_SITE_ORIGIN): JsonDocument {
+  const root = publicRoot(origin);
   return {
     '@type': 'WebSite',
-    '@id': PUBLIC_WEBSITE_ID,
+    '@id': publicWebsiteId(root),
     name: 'Solace',
-    url: `${PUBLIC_SITE_ORIGIN}/`,
-    publisher: { '@id': PUBLIC_ORGANIZATION_ID },
+    url: root,
+    publisher: { '@id': publicOrganizationId(root) },
   };
 }
 
@@ -68,14 +84,21 @@ function breadcrumb(
 
 export function buildPublicStructuredData(definition: PublicSeoDefinition): JsonDocument[] {
   if (!definition.indexable) return [];
-  const graph = definition.structuredData.map((descriptor) => {
+  const graph: JsonDocument[] = [buildSolaceOrganization(), buildSolaceWebsite()];
+  for (const descriptor of definition.structuredData) {
     switch (descriptor.kind) {
-      case 'organization': return organization();
-      case 'website': return website();
-      case 'web-page': return webPage(definition, descriptor);
-      case 'breadcrumb': return breadcrumb(descriptor);
+      // Organization and WebSite are always emitted once for every indexable fixed page.
+      case 'organization':
+      case 'website':
+        break;
+      case 'web-page':
+        graph.push(webPage(definition, descriptor));
+        break;
+      case 'breadcrumb':
+        graph.push(breadcrumb(descriptor));
+        break;
     }
-  });
+  }
   return graph.length > 0 ? [{ '@context': 'https://schema.org', '@graph': graph }] : [];
 }
 

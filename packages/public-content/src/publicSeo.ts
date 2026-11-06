@@ -34,6 +34,7 @@ export interface PublicSeoDefinition {
   indexable: boolean;
   robots: PublicRobotsPolicy;
   openGraph: {
+    siteName: 'Solace';
     title: string;
     description: string;
     url: string;
@@ -70,6 +71,7 @@ function define(input: Input): PublicSeoDefinition {
     canonicalPath: input.path,
     canonicalUrl,
     openGraph: {
+      siteName: 'Solace',
       title: input.title,
       description: input.description,
       url: canonicalUrl,

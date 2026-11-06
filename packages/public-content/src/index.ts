@@ -95,6 +95,10 @@ export type {
 export {
   PUBLIC_ORGANIZATION_ID,
   PUBLIC_WEBSITE_ID,
+  buildSolaceOrganization,
+  buildSolaceWebsite,
   buildPublicStructuredData,
+  publicOrganizationId,
+  publicWebsiteId,
   serialisePublicJsonLd,
 } from './publicStructuredData';

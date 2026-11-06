@@ -52,6 +52,10 @@ export function applyPublicMetadata(definition: PublicSeoDefinition) {
     property: 'og:type',
     content: definition.openGraph.type,
   });
+  upsert('meta[property="og:site_name"]', 'meta', {
+    property: 'og:site_name',
+    content: definition.openGraph.siteName,
+  });
   upsert('meta[property="og:title"]', 'meta', {
     property: 'og:title',
     content: definition.openGraph.title,

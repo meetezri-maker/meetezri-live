@@ -19,9 +19,14 @@
  * narrowed FAQ rich results.
  */
 
-import { absoluteUrl } from '@meetezri/public-content';
+import {
+  absoluteUrl,
+  buildSolaceOrganization,
+  buildSolaceWebsite,
+  publicOrganizationId,
+  publicWebsiteId,
+} from '@meetezri/public-content';
 import type { PublicDetail } from '../content-hub/content-hub.public.schema';
-import { SITE_NAME } from './metadata';
 
 type Json = Record<string, unknown>;
 
@@ -37,13 +42,8 @@ function compact(input: Json): Json {
   return out;
 }
 
-function publisher(origin: string): Json {
-  return {
-    '@type': 'Organization',
-    '@id': absoluteUrl(origin, '/#organization'),
-    name: SITE_NAME,
-    url: absoluteUrl(origin, '/'),
-  };
+function entityDocument(entity: Json): Json {
+  return { '@context': 'https://schema.org', ...entity };
 }
 
 export function breadcrumbList(origin: string, trail: Array<{ name: string; path?: string }>): Json {
@@ -77,8 +77,8 @@ export function articleSchema(origin: string, detail: PublicDetail, canonical: s
       description: detail.typeFields.snippetAnswer ?? detail.description,
       datePublished: detail.publishedAt,
       dateModified: detail.updatedAt ?? detail.publishedAt,
-      author: publisher(origin),
-      publisher: publisher(origin),
+      author: { '@id': publicOrganizationId(origin) },
+      publisher: { '@id': publicOrganizationId(origin) },
       mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
       image: detail.featuredImageUrl ?? undefined,
       inLanguage: 'en',
@@ -121,6 +121,8 @@ export function resourceStructuredData(
   canonical: string
 ): Json[] {
   const documents: Json[] = [
+    entityDocument(buildSolaceOrganization(origin)),
+    entityDocument(buildSolaceWebsite(origin)),
     articleSchema(origin, detail, canonical),
     breadcrumbList(origin, [
       { name: 'Home', path: '/' },
@@ -138,12 +140,14 @@ export function resourceStructuredData(
 /** `/resources` gets a breadcrumb and a collection node — never an Article node. */
 export function libraryStructuredData(origin: string, canonical: string): Json[] {
   return [
+    entityDocument(buildSolaceOrganization(origin)),
+    entityDocument(buildSolaceWebsite(origin)),
     {
       '@context': 'https://schema.org',
       '@type': 'CollectionPage',
       name: 'Solace Resources',
       url: canonical,
-      isPartOf: publisher(origin),
+      isPartOf: { '@id': publicWebsiteId(origin) },
     },
     breadcrumbList(origin, [{ name: 'Home', path: '/' }, { name: 'Resources' }]),
   ];

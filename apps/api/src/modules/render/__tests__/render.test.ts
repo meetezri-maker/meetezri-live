@@ -217,8 +217,8 @@ describe('the rendered document', () => {
     const output = renderResourceDetail({ origin: ORIGIN, detail: hostile, assets: NO_ASSETS });
 
     const scripts = output.match(/<script type="application\/ld\+json">/g) ?? [];
-    // Three documents: Article, BreadcrumbList, FAQPage — and no injected fourth.
-    expect(scripts).toHaveLength(3);
+    // Five documents: Organization, WebSite, Article, BreadcrumbList and FAQPage.
+    expect(scripts).toHaveLength(5);
     expect(serialiseJsonLd({ t: '</script>' })).not.toContain('</script>');
   });
 
@@ -374,23 +374,40 @@ describe('structured data', () => {
     expect(article.headline).toBe('What should I do when I cannot sleep?');
     expect(article.datePublished).toBe('2026-03-12T09:00:00.000Z');
     expect(article.dateModified).toBe('2026-03-14T09:00:00.000Z');
-    expect(article.author).toEqual({
-      '@type': 'Organization',
-      '@id': 'https://meetezri.com/#organization',
-      name: 'Solace',
-      url: 'https://meetezri.com/',
-    });
-    expect(article.publisher).toEqual({
-      '@type': 'Organization',
-      '@id': 'https://meetezri.com/#organization',
-      name: 'Solace',
-      url: 'https://meetezri.com/',
-    });
+    expect(article.author).toEqual({ '@id': 'https://meetezri.com/#organization' });
+    expect(article.publisher).toEqual({ '@id': 'https://meetezri.com/#organization' });
     expect(article.mainEntityOfPage).toEqual({
       '@type': 'WebPage',
       '@id': 'https://meetezri.com/resources/what-to-do-when-you-cannot-sleep',
     });
     expect(article.image).toBe('https://cdn.example.com/sleep.png');
+  });
+
+  it('emits one narrow origin-aware Organization and WebSite authority pair', () => {
+    const html = renderResourceDetail({ origin: ORIGIN, detail: answerDetail(), assets: NO_ASSETS });
+    const documents = jsonLdFrom(html);
+    const organizations = documents.filter((document) => document['@type'] === 'Organization');
+    const websites = documents.filter((document) => document['@type'] === 'WebSite');
+    const ids = documents.flatMap((document) => typeof document['@id'] === 'string' ? [document['@id']] : []);
+
+    expect(organizations).toEqual([{
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': 'https://meetezri.com/#organization',
+      name: 'Solace',
+      url: 'https://meetezri.com/',
+      logo: 'https://meetezri.com/logos/logo%20black.png',
+    }]);
+    expect(websites).toEqual([{
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      '@id': 'https://meetezri.com/#website',
+      name: 'Solace',
+      url: 'https://meetezri.com/',
+      publisher: { '@id': 'https://meetezri.com/#organization' },
+    }]);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(JSON.stringify(documents)).not.toMatch(/\"(?:founder|sameAs|contactPoint|reviewedBy)\"/);
   });
 
   it('prefers the snippet answer as the Article description for an Answer', () => {
@@ -468,11 +485,15 @@ describe('structured data', () => {
       label: null,
       assets: NO_ASSETS,
     });
-    const types = jsonLdFrom(html).map((document) => document['@type']);
+    const documents = jsonLdFrom(html);
+    const types = documents.map((document) => document['@type']);
 
-    expect(types).toEqual(['CollectionPage', 'BreadcrumbList']);
+    expect(types).toEqual(['Organization', 'WebSite', 'CollectionPage', 'BreadcrumbList']);
     expect(types).not.toContain('Article');
     expect(types).not.toContain('BlogPosting');
+    expect(documents.find((document) => document['@type'] === 'CollectionPage')).toMatchObject({
+      isPartOf: { '@id': 'https://meetezri.com/#website' },
+    });
     expect(html).toContain('Solace is a calm space to talk things through and reflect at your own pace.');
     expect(html).toContain('href="/how-it-works"');
   });

@@ -24,6 +24,7 @@ describe('public SEO registry', () => {
     for (const entry of PUBLIC_SEO_REGISTRY) {
       expect(entry.canonicalUrl).toBe(new URL(entry.canonicalPath, `${PUBLIC_SITE_ORIGIN}/`).toString());
       expect(entry.openGraph.url).toBe(entry.canonicalUrl);
+      expect(entry.openGraph.siteName).toBe('Solace');
       if (!entry.indexable) expect(entry.robots).toMatch(/^noindex/);
     }
     expect(getPublicSeo('/early-access')).toMatchObject({
@@ -66,21 +67,39 @@ describe('public SEO registry', () => {
     }
   });
 
-  it('owns Organization and WebSite on the homepage and references stable IDs elsewhere', () => {
-    const homepageGraph = buildPublicStructuredData(getPublicSeo('/')!)[0]['@graph'] as Array<Record<string, unknown>>;
-    expect(homepageGraph).toEqual(expect.arrayContaining([
-      expect.objectContaining({ '@type': 'Organization', '@id': PUBLIC_ORGANIZATION_ID }),
-      expect.objectContaining({ '@type': 'WebSite', '@id': PUBLIC_WEBSITE_ID }),
-    ]));
+  it('owns exactly one narrow Organization and WebSite node on every indexable route', () => {
+    for (const entry of PUBLIC_SEO_REGISTRY.filter((definition) => definition.indexable)) {
+      const graph = buildPublicStructuredData(entry)[0]['@graph'] as Array<Record<string, unknown>>;
+      const organizations = graph.filter((node) => node['@type'] === 'Organization');
+      const websites = graph.filter((node) => node['@type'] === 'WebSite');
+      const ids = graph.flatMap((node) => typeof node['@id'] === 'string' ? [node['@id']] : []);
 
-    for (const path of ['/talk-it-out', '/about', '/safety'] as const) {
-      const graph = buildPublicStructuredData(getPublicSeo(path)!)[0]['@graph'] as Array<Record<string, unknown>>;
-      expect(graph).not.toEqual(expect.arrayContaining([expect.objectContaining({ '@type': 'Organization' })]));
-      expect(JSON.stringify(graph)).toContain(PUBLIC_ORGANIZATION_ID);
-      expect(JSON.stringify(graph)).toContain(PUBLIC_WEBSITE_ID);
+      expect(organizations).toEqual([{
+        '@type': 'Organization',
+        '@id': PUBLIC_ORGANIZATION_ID,
+        name: 'Solace',
+        url: 'https://www.talktosolace2.ai/',
+        logo: 'https://www.talktosolace2.ai/logos/logo%20black.png',
+      }]);
+      expect(websites).toEqual([{
+        '@type': 'WebSite',
+        '@id': PUBLIC_WEBSITE_ID,
+        name: 'Solace',
+        url: 'https://www.talktosolace2.ai/',
+        publisher: { '@id': PUBLIC_ORGANIZATION_ID },
+      }]);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(JSON.stringify(graph)).not.toMatch(/\"(?:founder|sameAs|contactPoint|reviewedBy)\"/);
     }
+
     const aboutGraph = buildPublicStructuredData(getPublicSeo('/about')!)[0]['@graph'] as Array<Record<string, unknown>>;
-    expect(aboutGraph).toEqual(expect.arrayContaining([expect.objectContaining({ '@type': 'AboutPage' })]));
+    expect(aboutGraph).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        '@type': 'AboutPage',
+        about: { '@id': PUBLIC_ORGANIZATION_ID },
+        isPartOf: { '@id': PUBLIC_WEBSITE_ID },
+      }),
+    ]));
   });
 
   it('escapes script-closing input safely', () => {

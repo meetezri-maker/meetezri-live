@@ -68,6 +68,7 @@ ${meta('description', definition.description)}
 <link rel="canonical" href="${escapeHtml(definition.canonicalUrl)}" data-solace-public-seo="true">
 ${meta('robots', definition.robots)}
 ${meta('og:type', definition.openGraph.type, true)}
+${meta('og:site_name', definition.openGraph.siteName, true)}
 ${meta('og:title', definition.openGraph.title, true)}
 ${meta('og:description', definition.openGraph.description, true)}
 ${meta('og:url', definition.openGraph.url, true)}

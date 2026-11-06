@@ -25,6 +25,8 @@ describe('public route metadata synchronization', () => {
     expect(count('link[rel="canonical"]')).toBe(1);
     expect(count('meta[name="robots"]')).toBe(1);
     expect(count('meta[property="og:title"]')).toBe(1);
+    expect(count('meta[property="og:site_name"]')).toBe(1);
+    expect(document.querySelector('meta[property="og:site_name"]')).toHaveAttribute('content', 'Solace');
     expect(count('meta[name="twitter:title"]')).toBe(1);
     expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
       'href',
