@@ -79,6 +79,17 @@
   padding-block: 80px;
 }
 
+/*
+ * How It Works stacked below 1024px: the section's heading clears the floating navigation by at
+ * least 8px when the section sits at the top of the viewport, as a native anchor jump leaves it.
+ * The pinned rules set their own padding and win on specificity, so this applies only in flow.
+ */
+@media (max-width: 1023px) {
+  .solace-home .home-pin--how-it-works > .home-pin-stage {
+    padding-top: calc(var(--home-header-clearance) + 8px);
+  }
+}
+
 .solace-home .home-pinned-only {
   display: none;
 }
@@ -128,9 +139,9 @@
 
 /*
  * How It Works also stays in flow when an in-app motion setting is on, and when the section has
- * measured that its stage does not fit (`data-hiw-fit="none"`, set only at ≥1024px wide). In that
- * last case the stage stays laid out but invisible, so it can be measured again without
- * switching layouts; it cannot be seen, focused or read.
+ * measured that its stage does not fit (`data-hiw-fit="none"`, at any width: these queries are
+ * only the lower bound). In that last case the stage stays laid out but invisible, so it can be
+ * measured again without switching layouts; it cannot be seen, focused or read.
  *
  * At ≥1024px the left column shows each step's title and description, so the card's copy of them
  * is hidden, and the header tightens to leave the room to the image. The card offset, the gap and

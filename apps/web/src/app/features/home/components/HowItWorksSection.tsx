@@ -10,6 +10,7 @@ import {
 import {
   HIW_STAGE,
   PIN_QUERIES,
+  howItWorksCompactHeightNeeded,
   howItWorksStageMetrics,
   useMotionDisabled,
   usePinned,
@@ -62,17 +63,21 @@ const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLay
 
 const heightOf = (el: Element | null) => el?.getBoundingClientRect().height ?? 0;
 
+/** What the section learned from measuring itself; `sized` is for the ≥1024px stage only. */
+type HowItWorksGeometry =
+  | (HowItWorksStageMetrics & { sized: true })
+  | { fits: boolean; sized: false };
+
 /**
- * Sizes the ≥1024px pinned stage to the viewport, or reports that it does not fit. Measures the
- * rendered header, stepper and text column, which keep their size in both layouts, so switching
- * to flow cannot change the result that caused it. Measures again after fonts and images load,
- * on resize, and when the app's text settings change. `null` where this does not apply (server,
- * first render, below 1024px, or while a motion setting keeps the stage hidden).
+ * Decides whether the pinned stage fits. At ≥1024px it also sizes the stage to the viewport; below
+ * that it only answers fit, so the cards and images keep their own sizes. Measures the rendered
+ * header, stepper, text column and cards, which keep their size in both layouts, so switching to
+ * flow cannot change the result that caused it. Measures again after fonts and images load, on
+ * resize, and when the app's text settings change. `null` where this does not apply (server, first
+ * render, outside the pin query, or while a motion setting keeps the stage hidden).
  */
-function useHowItWorksGeometry(
-  sectionRef: RefObject<HTMLElement | null>,
-): HowItWorksStageMetrics | null {
-  const [geometry, setGeometry] = useState<HowItWorksStageMetrics | null>(null);
+function useHowItWorksGeometry(sectionRef: RefObject<HTMLElement | null>): HowItWorksGeometry | null {
+  const [geometry, setGeometry] = useState<HowItWorksGeometry | null>(null);
   useClientLayoutEffect(() => {
     const section = sectionRef.current;
     if (!section || typeof window.matchMedia !== "function") return;
@@ -83,33 +88,53 @@ function useHowItWorksGeometry(
       const stepper = find(".home-hiw-stepper");
       const column = find(".home-hiw-text");
       const slides = find(".home-hiw-slides");
-      let next: HowItWorksStageMetrics | null = null;
-      if (
-        query.matches &&
-        window.innerWidth >= HIW_STAGE.minWidth &&
-        stepper?.offsetHeight &&
-        column &&
-        slides
-      ) {
+      const cards = Array.from(section.querySelectorAll<HTMLElement>(".home-hiw-card"));
+      let next: HowItWorksGeometry | null = null;
+      if (query.matches && stepper?.offsetHeight) {
         const clearance = parseFloat(
           getComputedStyle(section).getPropertyValue("--home-header-clearance"),
         );
-        next = howItWorksStageMetrics({
-          viewportHeight: window.innerHeight,
-          headerClearance: Number.isFinite(clearance) ? clearance : 96,
-          headerHeight:
-            heightOf(find(".home-hiw-badge")) +
-            heightOf(find(".home-hiw-heading")) +
-            heightOf(find(".home-hiw-subtitle")) +
-            heightOf(find(".home-hiw-bar")),
-          stepperHeight: stepper.offsetHeight,
-          textColumnHeight:
-            slides.getBoundingClientRect().top -
-            column.getBoundingClientRect().top +
-            Math.max(...Array.from(slides.children, (slide) => slide.scrollHeight)),
-        });
+        const headerClearance = Number.isFinite(clearance) ? clearance : 96;
+        const headerHeight =
+          heightOf(find(".home-hiw-badge")) +
+          heightOf(find(".home-hiw-heading")) +
+          heightOf(find(".home-hiw-subtitle")) +
+          heightOf(find(".home-hiw-bar"));
+        if (window.innerWidth >= HIW_STAGE.minWidth) {
+          if (column && slides) {
+            next = {
+              sized: true,
+              ...howItWorksStageMetrics({
+                viewportHeight: window.innerHeight,
+                headerClearance,
+                headerHeight,
+                stepperHeight: stepper.offsetHeight,
+                textColumnHeight:
+                  slides.getBoundingClientRect().top -
+                  column.getBoundingClientRect().top +
+                  Math.max(...Array.from(slides.children, (slide) => slide.scrollHeight)),
+              }),
+            };
+          }
+        } else if (cards.length > 0) {
+          // Cards are transformed between steps, so their layout sizes are read, not their rects.
+          // offsetHeight rounds to the nearest pixel; +0.5 keeps the tallest card from under-reading.
+          next = {
+            sized: false,
+            fits:
+              window.innerHeight >=
+              howItWorksCompactHeightNeeded({
+                headerClearance,
+                headerHeight,
+                stepperHeight: heightOf(stepper),
+                cardsBoxHeight: cards[0].parentElement?.offsetHeight ?? 0,
+                cardTop: cards[0].offsetTop,
+                tallestCardHeight: Math.max(...cards.map((card) => card.offsetHeight)) + 0.5,
+              }),
+          };
+        }
       }
-      const key = next ? `${next.fits}|${next.imageHeight}` : "null";
+      const key = next ? `${next.sized}|${next.fits}|${next.sized ? next.imageHeight : ""}` : "null";
       if (key === lastKey) return;
       lastKey = key;
       setGeometry(next);
@@ -133,6 +158,8 @@ function useHowItWorksGeometry(
       if (el) sizes?.observe(el);
     }
     for (const slide of Array.from(find(".home-hiw-slides")?.children ?? [])) sizes?.observe(slide);
+    // Transforms do not resize a card, so stepping through the cards does not fire this.
+    section.querySelectorAll(".home-hiw-card").forEach((card) => sizes?.observe(card));
     // The app applies its text settings as classes and custom properties on <html>.
     const settings = typeof MutationObserver === "function" ? new MutationObserver(measure) : null;
     settings?.observe(document.documentElement, {
@@ -632,9 +659,9 @@ export default function HowItWorksSection() {
   const geometry = useHowItWorksGeometry(containerRef);
   const doesNotFit = geometry !== null && !geometry.fits;
   /* The same three conditions gate the pin in home.css: the pin query, no in-app motion setting,
-     and (≥1024px) the stage fitting. */
+     and the stage fitting. */
   const pinned = usePinned("howItWorks") && !reduce && !doesNotFit;
-  const fitted = geometry?.fits ? geometry : null;
+  const fitted = geometry?.sized && geometry.fits ? geometry : null;
   const imageSize = fitted ? { width: fitted.imageWidth, height: fitted.imageHeight } : undefined;
 
   const { scrollYProgress } = useScroll({

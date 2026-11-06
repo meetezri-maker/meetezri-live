@@ -1,6 +1,6 @@
 import { renderToString } from "react-dom/server";
 import { MemoryRouter, Route, Routes, StaticRouter, useLocation } from "react-router";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SUBSCRIPTION_PLANS } from "@/app/utils/subscriptionPlans";
 
@@ -15,11 +15,13 @@ import {
   FEATURE_SLOTS,
   FEATURES_BUBBLE,
   FEATURES_STAGE,
+  HIW_COMPACT,
   HIW_STAGE,
   PIN_QUERIES,
   bubbleReach,
   clusterClears,
   featuresStageMetrics,
+  howItWorksCompactHeightNeeded,
   howItWorksStageMetrics,
   movingGap,
   placeFeatureBubbles,
@@ -769,6 +771,81 @@ describe("How It Works layout", () => {
     ).toBe(false);
   });
 
+  describe("below 1024px", () => {
+    it("clears the floating navigation in flow, and only below 1024px", () => {
+      const rule =
+        /@media \(max-width: 1023px\) \{\s*\.solace-home \.home-pin--how-it-works > \.home-pin-stage \{\s*padding-top: calc\(var\(--home-header-clearance\) \+ 8px\);\s*\}\s*\}/;
+      expect(homeCss).toMatch(rule);
+      // The pinned rules keep their own padding at every width.
+      expect(block()).toContain("padding-block: var(--home-header-clearance) 16px;");
+      // No other section's stage is touched.
+      expect(homeCss.match(/padding-top: calc\(var\(--home-header-clearance\)/g)).toHaveLength(1);
+    });
+
+    /** Measured in the browser with fonts loaded. */
+    const compact = {
+      "390 default": { clearance: 76, header: 140.5, stepper: 125.3, box: 400, card: 368 },
+      "390 loose": { clearance: 76, header: 172.9, stepper: 137.9, box: 400, card: 400.8 },
+      "768 default": { clearance: 96, header: 118, stepper: 126, box: 520, card: 515.5 },
+      "768 loose": { clearance: 96, header: 144.4, stepper: 138.8, box: 520, card: 542.3 },
+    };
+    const needed = (key: keyof typeof compact) => {
+      const m = compact[key];
+      return howItWorksCompactHeightNeeded({
+        headerClearance: m.clearance,
+        headerHeight: m.header,
+        stepperHeight: m.stepper,
+        cardsBoxHeight: m.box,
+        cardTop: 40,
+        tallestCardHeight: m.card,
+      });
+    };
+
+    it("matches the heights where the tallest card reached the bottom padding in the browser", () => {
+      expect(needed("390 default")).toBe(842);
+      expect(needed("390 loose")).toBe(953);
+      expect(needed("768 default")).toBe(1015);
+      expect(needed("768 loose")).toBe(1108);
+    });
+
+    it("counts the bottom padding and the header clearance", () => {
+      const base = {
+        headerHeight: 100,
+        stepperHeight: 100,
+        cardsBoxHeight: 400,
+        cardTop: 40,
+        tallestCardHeight: 300,
+      };
+      const content = 100 + 44 + 16 + 100 + 8 + 400;
+      expect(howItWorksCompactHeightNeeded({ ...base, headerClearance: 76 })).toBe(76 + 16 + content);
+      expect(howItWorksCompactHeightNeeded({ ...base, headerClearance: 96 })).toBe(96 + 16 + content);
+    });
+
+    it("needs a card's spill from its box twice, because the stage centres the box", () => {
+      const fitting = {
+        headerClearance: 76,
+        headerHeight: 100,
+        stepperHeight: 100,
+        cardsBoxHeight: 400,
+        cardTop: 40,
+        tallestCardHeight: 360,
+      };
+      const base = howItWorksCompactHeightNeeded(fitting);
+      expect(howItWorksCompactHeightNeeded({ ...fitting, tallestCardHeight: 370 })).toBe(base + 20);
+      expect(howItWorksCompactHeightNeeded({ ...fitting, tallestCardHeight: 300 })).toBe(base);
+    });
+
+    it("keeps the margins it assumes in the section's classes", () => {
+      const source = readFileSync(join(__dirname, "components/HowItWorksSection.tsx"), "utf8");
+      expect(source).toContain('className="home-hiw-heading mt-4 ');
+      expect(source).toContain('className="home-hiw-subtitle mt-3 ');
+      expect(source).toContain('className="home-hiw-bar mt-4 ');
+      expect(source).toContain('className="home-pinned-only relative mt-4 ');
+      expect(source).toContain('className="relative mt-2 h-[400px]');
+      expect(HIW_COMPACT.headerMargins).toBe(44);
+    });
+  });
+
   describe("in the page", () => {
     const setViewport = (width: number, height: number) => {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
@@ -901,6 +978,105 @@ describe("How It Works layout", () => {
         "Step 03: Wellness Toolkit",
       ]);
       expect(buttons[0]).toHaveAttribute("aria-current", "step");
+    });
+
+    it("stacks below 1024px when the measured stage does not fit, and pins again when it does", async () => {
+      giveStepperAHeight();
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(768, 1024);
+        const { container } = renderHome();
+        const section = container.querySelector<HTMLElement>("#how-it-works")!;
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+
+        setViewport(768, 300);
+        fireEvent(window, new Event("resize"));
+        await waitFor(() => expect(section).toHaveAttribute("data-hiw-fit", "none"));
+
+        setViewport(768, 1024);
+        fireEvent(window, new Event("resize"));
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+      } finally {
+        restore();
+      }
+    });
+
+    it("applies no measured sizes below 1024px, so cards and images keep their own", async () => {
+      giveStepperAHeight();
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(390, 900);
+        const { container } = renderHome();
+        const section = container.querySelector<HTMLElement>("#how-it-works")!;
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+        const image = section.querySelector<HTMLElement>(".home-hiw-card img")!.parentElement!;
+        expect(image.style.height).toBe("");
+        expect(image.style.width).toBe("");
+        expect(section.querySelector<HTMLElement>(".home-hiw-card")!.parentElement!.style.height).toBe("");
+      } finally {
+        restore();
+      }
+    });
+
+    it("observes the cards, and re-measures when a card changes size", async () => {
+      giveStepperAHeight();
+      const callbacks: ResizeObserverCallback[] = [];
+      const observed: Element[] = [];
+      const original = globalThis.ResizeObserver;
+      globalThis.ResizeObserver = class {
+        constructor(callback: ResizeObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe(el: Element) {
+          observed.push(el);
+        }
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver;
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(768, 1024);
+        const { container } = renderHome();
+        const section = container.querySelector<HTMLElement>("#how-it-works")!;
+        const cards = [...section.querySelectorAll(".home-hiw-card")];
+        expect(cards).toHaveLength(3);
+        for (const card of cards) expect(observed).toContain(card);
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+          configurable: true,
+          get: () => 900,
+        });
+        act(() => {
+          for (const callback of callbacks) callback([], {} as ResizeObserver);
+        });
+        await waitFor(() => expect(section).toHaveAttribute("data-hiw-fit", "none"));
+      } finally {
+        globalThis.ResizeObserver = original;
+        restore();
+      }
+    });
+
+    it("never re-renders on a re-measure that gives the same answer", async () => {
+      giveStepperAHeight();
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(768, 1024);
+        const { container } = renderHome();
+        const section = container.querySelector<HTMLElement>("#how-it-works")!;
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+        const changes: string[] = [];
+        const watcher = new MutationObserver((records) => {
+          for (const r of records) changes.push(r.attributeName ?? "");
+        });
+        watcher.observe(section, { attributes: true });
+        for (let i = 0; i < 20; i++) fireEvent(window, new Event("resize"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        watcher.disconnect();
+        expect(changes).toEqual([]);
+      } finally {
+        restore();
+      }
     });
 
     it("disconnects everything it observes on unmount", () => {

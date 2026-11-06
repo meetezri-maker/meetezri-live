@@ -530,3 +530,45 @@ export function howItWorksStageMetrics(input: {
     cardsHeight: S.cardTop + S.cardChrome + Math.max(0, imageHeight),
   };
 }
+
+/** How It Works below 1024px: the margins of the stage, which must match the section's classes. */
+export const HIW_COMPACT = {
+  /** Header margins: h2 mt-4, subtitle mt-3, accent bar mt-4. */
+  headerMargins: 16 + 12 + 16,
+  /** Between the header and the stage (mt-4), and the stepper and the cards (mt-2). */
+  stageGap: 16,
+  stepperGap: 8,
+  /** The pinned stage's bottom padding. */
+  stageBottom: 16,
+} as const;
+
+/**
+ * The viewport height the pinned stage needs below 1024px, from what the page measured. Nothing
+ * here depends on which layout is showing, so the answer cannot flip because the layout switched.
+ *
+ * The stage centres its content between the header clearance and the bottom padding, and the
+ * cards' fixed-height box does not grow with them. A card that spills out of the box therefore
+ * needs that room twice: centring only hands half of any spare height to the bottom edge. At this
+ * height the tallest settled card ends at the bottom padding and the header sits below the
+ * clearance. Incoming cards that wait below the stage at opacity 0 are not part of this.
+ */
+export function howItWorksCompactHeightNeeded(input: {
+  headerClearance: number;
+  /** The header's own height, without margins. */
+  headerHeight: number;
+  stepperHeight: number;
+  cardsBoxHeight: number;
+  cardTop: number;
+  tallestCardHeight: number;
+}): number {
+  const C = HIW_COMPACT;
+  const content =
+    input.headerHeight +
+    C.headerMargins +
+    C.stageGap +
+    input.stepperHeight +
+    C.stepperGap +
+    input.cardsBoxHeight;
+  const spill = Math.max(0, input.cardTop + input.tallestCardHeight - input.cardsBoxHeight);
+  return Math.ceil(input.headerClearance + C.stageBottom + content + 2 * spill);
+}
