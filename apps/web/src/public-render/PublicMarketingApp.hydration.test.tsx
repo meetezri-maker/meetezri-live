@@ -131,4 +131,19 @@ describe('public document hydration', () => {
       );
     },
   );
+
+  it('keeps the Terms decorative background at its exact intrinsic dimensions', () => {
+    const markup = renderToString(
+      <PublicMarketingApp Page={Terms} pathname="/terms" mode="server" />,
+    );
+    document.body.innerHTML = `<div id="root">${markup}</div>`;
+
+    const background = document.querySelector<HTMLImageElement>(
+      'img[src="/community/hero-lake.jpg"]',
+    );
+    expect(background).toHaveAttribute('width', '1600');
+    expect(background).toHaveAttribute('height', '1067');
+    expect(background).toHaveAttribute('alt', '');
+    expect(background).not.toHaveAttribute('loading', 'lazy');
+  });
 });

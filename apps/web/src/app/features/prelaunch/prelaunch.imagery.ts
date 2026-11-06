@@ -77,11 +77,18 @@ export const PRELAUNCH_TRUST_BG = "/community/early-access-bg4.png";
  * marked decorative with empty alt text and the moment title and narrative
  * remain available as text.
  */
-export const PRELAUNCH_MOMENT_IMAGES: Record<string, string> = {
-  "quiet-day": "/community/scene-bedroom.jpg",
-  "small-win": "/community/scene-stars.jpg",
-  "big-decision": "/solace/companion-selection-calm-mountain.jpg",
-  "everyday-life": "/community/scene-water.jpg",
+export const PRELAUNCH_MOMENT_IMAGES: Record<
+  string,
+  { src: string; width: number; height: number }
+> = {
+  "quiet-day": { src: "/community/scene-bedroom.jpg", width: 800, height: 533 },
+  "small-win": { src: "/community/scene-stars.jpg", width: 800, height: 534 },
+  "big-decision": {
+    src: "/solace/companion-selection-calm-mountain.jpg",
+    width: 2400,
+    height: 1600,
+  },
+  "everyday-life": { src: "/community/scene-water.jpg", width: 800, height: 533 },
 };
 
 /*

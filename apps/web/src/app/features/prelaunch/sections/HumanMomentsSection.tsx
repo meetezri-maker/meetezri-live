@@ -64,13 +64,13 @@ export function HumanMomentsSection() {
               >
                 <div className="relative aspect-[16/10] w-full overflow-hidden">
                   <img
-                    src={PRELAUNCH_MOMENT_IMAGES[moment.id]}
+                    src={PRELAUNCH_MOMENT_IMAGES[moment.id].src}
                     // Decorative: the title and narrative below carry the meaning.
                     alt=""
                     loading="lazy"
                     decoding="async"
-                    width={1920}
-                    height={1200}
+                    width={PRELAUNCH_MOMENT_IMAGES[moment.id].width}
+                    height={PRELAUNCH_MOMENT_IMAGES[moment.id].height}
                     className="h-full w-full object-cover"
                   />
                   <div

@@ -195,8 +195,8 @@ export function SectionBackdrop({
         alt=""
         loading={eager ? "eager" : "lazy"}
         decoding="async"
-        width={2400}
-        height={1350}
+        width={1536}
+        height={1024}
         className="h-full w-full object-cover object-center"
       />
       <div

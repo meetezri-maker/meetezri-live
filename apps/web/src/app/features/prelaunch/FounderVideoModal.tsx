@@ -153,6 +153,8 @@ export function FounderVideoThumbnail({
             alt=""
             loading="lazy"
             decoding="async"
+            width={1536}
+            height={1024}
             className="h-full w-full object-cover"
           />
         ) : (

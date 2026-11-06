@@ -77,6 +77,13 @@ import {
   SECTION_IDS,
   TRUST,
 } from "./prelaunch.content";
+import {
+  FOUNDER_VIDEO_POSTER,
+  PRELAUNCH_HERO_BG,
+  PRELAUNCH_HERO_SIZES,
+  PRELAUNCH_HERO_WEBP_SRCSET,
+  PRELAUNCH_MOMENT_IMAGES,
+} from "./prelaunch.imagery";
 
 /** The final section order. Every section maps to an approved document page,
  *  except the retained Founding Circle conversion section. */
@@ -253,6 +260,48 @@ describe("pre-launch landing page structure", () => {
       expect(img).toHaveAttribute("width");
       expect(img).toHaveAttribute("height");
     }
+  });
+
+  it("renders exact intrinsic dimensions without changing decorative loading behavior", () => {
+    renderPage();
+
+    const expected = [
+      ["/community/early-access-bg1.png", 1536, 1024],
+      ["/community/early-access-bg2.png", 1536, 1024],
+      ["/community/early-access-bg3.png", 1536, 1024],
+      ["/community/early-access-bg4.png", 1536, 1024],
+      ["/community/early-access-bg5.png", 1536, 1024],
+      ["/community/early-access-bg6.png", 1536, 1024],
+      ...Object.values(PRELAUNCH_MOMENT_IMAGES).map(({ src, width, height }) => [src, width, height]),
+      [FOUNDER_VIDEO_POSTER, 1536, 1024],
+    ] as const;
+
+    for (const [src, width, height] of expected) {
+      const images = [...document.querySelectorAll<HTMLImageElement>(`img[src="${src}"]`)];
+      expect(images.length, `Missing image: ${src}`).toBeGreaterThan(0);
+      for (const image of images) {
+        expect(image).toHaveAttribute("width", String(width));
+        expect(image).toHaveAttribute("height", String(height));
+        expect(image).toHaveAttribute("alt", "");
+        expect(image).toHaveAttribute("loading", "lazy");
+        expect(image).toHaveAttribute("decoding", "async");
+      }
+    }
+
+    const hero = document.querySelector<HTMLImageElement>(`img[src="${PRELAUNCH_HERO_BG}"]`);
+    expect(hero).toHaveAttribute("width", "1402");
+    expect(hero).toHaveAttribute("height", "1122");
+    expect(hero).toHaveAttribute("alt", "");
+    expect(hero).toHaveAttribute("loading", "eager");
+    expect(hero).toHaveAttribute("fetchpriority", "high");
+    expect(hero).toHaveAttribute("decoding", "async");
+    expect(hero?.closest("picture")?.querySelector("source")).toMatchObject({
+      srcset: PRELAUNCH_HERO_WEBP_SRCSET,
+      sizes: PRELAUNCH_HERO_SIZES,
+    });
+
+    expect(screen.getByRole("button", { name: `Play the founder video: ${FOUNDER.videoTitle}` }))
+      .toBeInTheDocument();
   });
 
   it("keeps the Human Moments conversion on the existing Founding Circle flow", async () => {

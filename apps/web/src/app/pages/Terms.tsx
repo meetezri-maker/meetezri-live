@@ -400,8 +400,8 @@ export function Terms() {
           src={LANDING_HERO_BG}
           alt=""
           className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[center_40%] opacity-[0.22] blur-[1.5px]"
-          width={2400}
-          height={1350}
+          width={1600}
+          height={1067}
         />
         <motion.div className="absolute inset-0 bg-[rgba(5,8,20,0.52)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_12%,rgba(88,28,135,0.14)_0%,transparent_62%)]" />
