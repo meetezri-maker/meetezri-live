@@ -15,10 +15,12 @@
  *   Report notes (the backend's closing summary)
  *
  * Layout: every block is measured before it is drawn, separators sit below the full row,
- * tables repeat their header on continuation pages, and anything taller than a page flows
- * line by line instead of being clipped. Text uses the export-only Unicode font when it
- * loads (see progress-report.pdf-text.ts); text the font cannot draw is replaced by a visible
- * notice, never silently dropped.
+ * tables repeat their header on continuation pages, headings stay with what follows them, and
+ * anything taller than a page flows line by line instead of being clipped. Urdu lines get the
+ * taller line metrics they need (as in the Journal PDF). Text uses the export-only Unicode font
+ * when it loads (see progress-report.pdf-text.ts); text the font cannot draw is replaced by a
+ * visible notice, never silently dropped. Brand geometry, palette, running header and footer
+ * come from the shared report brand (lib/pdf).
  */
 import type { jsPDF } from "jspdf";
 import {
@@ -41,56 +43,59 @@ import type {
 import {
   ARABIC_SCRIPT,
   EMOJI_MARKER,
+  PDF_ARABIC_FONT_FAMILY,
   loadPdfFonts,
   setupPdfText,
   type PdfFontFiles,
   type PdfTextKit,
 } from "./progress-report.pdf-text";
 import { loadLogo, type LogoImage } from "@/lib/pdf/pdfLogo";
+import {
+  BODY,
+  BOTTOM,
+  BRAND,
+  CAUTION,
+  CONTENT_W,
+  FIRST_TOP,
+  INK,
+  MARGIN as M,
+  MUTED,
+  NBSP,
+  RULE,
+  T_META,
+  T_SECTION,
+  T_TITLE,
+  TOP,
+  lineMetrics,
+  type RGB,
+} from "@/lib/pdf/pdfBrand";
+import { stampPages } from "@/lib/pdf/pdfWriter";
 
 type Doc = jsPDF;
-type RGB = [number, number, number];
 type Style = "normal" | "bold";
 
-// --- Geometry (A4, millimetres) ---------------------------------------------------------------
-const PAGE_W = 210;
-const PAGE_H = 297;
-const M = 18;
-const CONTENT_W = PAGE_W - M * 2; // 174
-const FIRST_TOP = 20;
-const TOP = 27; // below the running header on continuation pages
-const BOTTOM = 274; // content never goes below this
-const FOOTER_RULE = 281;
-const FOOTER_TEXT = 287;
 /** Blocks up to this height (mm) are moved whole to the next page rather than split. */
 const KEEP_TOGETHER_MAX = 90;
 
-// --- Type (pt) --------------------------------------------------------------------------------
-const T_TITLE = 19;
-const T_SECTION = 13;
+// --- Type (pt): this report's own sizes; the rest come from the shared brand ----------------------
 const T_SUB = 10.5;
 const T_BODY = 9.5;
-const T_META = 8.5;
-const T_SMALL = 7.5;
 const PT = 0.3528; // mm per pt
 
 const lineH = (size: number) => size * PT * 1.42;
 const ascent = (size: number) => size * PT * 0.78;
 const descent = (size: number) => size * PT * 0.24;
 
-// --- Print-friendly palette ---------------------------------------------------------------------
-const INK: RGB = [17, 24, 39];
-const BODY: RGB = [40, 46, 58];
-const MUTED: RGB = [96, 104, 117];
-const BRAND: RGB = [109, 40, 217];
-const RULE: RGB = [221, 223, 230];
-const TRACK: RGB = [232, 229, 243];
-const CAUTION: RGB = [154, 72, 6];
+/** Line metrics per font: Amiri's tall marks and deep descenders need more room than DejaVu. */
+function metrics(family: string, size: number): { lineH: number; ascent: number; descent: number } {
+  return family === PDF_ARABIC_FONT_FAMILY
+    ? lineMetrics(family, size)
+    : { lineH: lineH(size), ascent: ascent(size), descent: descent(size) };
+}
+
+const TRACK: RGB = [232, 229, 243]; // progress bar background
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** No-break space: keeps "27 Oct 2026" on one line when text wraps. */
-const NBSP = " ";
 
 /** "2026-10-27" → "27 Oct 2026" from the calendar parts (no time-zone conversion). */
 export function formatReportDay(value: string | null | undefined): string | null {
@@ -158,6 +163,8 @@ interface Line {
 class Writer {
   y = FIRST_TOP;
   private onPageBreak: (() => void) | null = null;
+  /** Headings waiting for their content, so that both land on the same page. */
+  private pendingHeadings: Array<{ rows: Row[]; minFollowing: number }> = [];
 
   constructor(readonly d: Doc, readonly kit: PdfTextKit) {}
 
@@ -256,14 +263,34 @@ class Writer {
    */
   block(rows: Row[], gapAfter = 0): void {
     const total = rows.reduce((s, r) => s + r.h, 0);
-    if (total <= KEEP_TOGETHER_MAX) this.ensure(total);
-    else this.ensure(rows.slice(0, 2).reduce((s, r) => s + r.h, 0));
+    const keep = total <= KEEP_TOGETHER_MAX ? total : rows.slice(0, 2).reduce((s, r) => s + r.h, 0);
+    this.placeHeadings(keep);
+    this.ensure(keep);
     for (const r of rows) {
       this.ensure(r.h);
       r.draw(this.y);
       this.y += r.h;
     }
     this.y += gapAfter;
+  }
+
+  /** Draws waiting headings on the page that also holds the first `following` mm of their content. */
+  private placeHeadings(following: number): void {
+    if (this.pendingHeadings.length === 0) return;
+    let headingsH = 0;
+    let need = 0;
+    for (const { rows, minFollowing } of this.pendingHeadings) {
+      headingsH += rows.reduce((s, r) => s + r.h, 0);
+      need = Math.max(need, headingsH + minFollowing);
+    }
+    this.ensure(Math.min(Math.max(need, headingsH + following), BOTTOM - TOP));
+    for (const { rows } of this.pendingHeadings) {
+      for (const r of rows) {
+        r.draw(this.y);
+        this.y += r.h;
+      }
+    }
+    this.pendingHeadings = [];
   }
 
   /** Rows for a wrapped paragraph (one row per line, so long text can cross pages). */
@@ -278,14 +305,13 @@ class Writer {
     const width = opts.width ?? CONTENT_W;
     const lines = this.layout(text, width, style, size);
     return lines.map((ln, i) => {
-      const first = i === 0;
-      const h = (first ? (opts.padTop ?? 0) + ascent(size) : lineH(size)) + (i === lines.length - 1 ? descent(size) : 0);
+      const mt = metrics(ln.family, size);
+      const baseline = i === 0 ? (opts.padTop ?? 0) + mt.ascent : mt.lineH;
       return {
-        h,
+        h: baseline + (i === lines.length - 1 ? mt.descent : 0),
         draw: (top: number) => {
           this.font(style, size, color, ln.family);
-          const baseline = top + (first ? (opts.padTop ?? 0) + ascent(size) : lineH(size));
-          this.line(ln.text, x, baseline, width);
+          this.line(ln.text, x, top + baseline, width);
         },
       };
     });
@@ -306,18 +332,15 @@ class Writer {
     };
   }
 
-  /** Section heading kept with at least `minFollowing` mm of the content after it. */
+  /** Section heading: placed with the content after it, and at least `minFollowing` mm of room. */
   section(title: string, minFollowing = 24): void {
     const rows = [this.space(this.y > TOP + 1 ? 5 : 0), ...this.textRows(title, { style: "bold", size: T_SECTION, color: INK }), this.rule(BRAND, 0.5, 1.6, 4)];
-    const h = rows.reduce((s, r) => s + r.h, 0);
-    this.ensure(h + minFollowing);
-    this.block(rows);
+    this.pendingHeadings.push({ rows, minFollowing });
   }
 
   subheading(title: string, minFollowing = 10): void {
     const rows = [this.space(2), ...this.textRows(title, { style: "bold", size: T_SUB, color: INK }), this.space(1.5)];
-    this.ensure(rows.reduce((s, r) => s + r.h, 0) + minFollowing);
-    this.block(rows);
+    this.pendingHeadings.push({ rows, minFollowing });
   }
 
   muted(text: string, gapAfter = 2): void {
@@ -357,56 +380,61 @@ class Writer {
     };
 
     const headerH = padTop + ascent(T_META) + descent(T_META) + padBottom + 0.6;
+    const base = metrics(this.kit.baseFamily, T_BODY);
     const measured = rows.map((cells) => {
       const wrapped = cells.map((cell, i) => this.layout(cell, columns[i].width - padX * 2, "normal", T_BODY));
       const n = Math.max(1, ...wrapped.map((w) => w.length));
-      return { wrapped, n, rowH: padTop + ascent(T_BODY) + (n - 1) * lineH(T_BODY) + descent(T_BODY) + padBottom };
+      // Each line of the row is as tall as its tallest cell line (Urdu needs more room).
+      const lineMt = Array.from({ length: n }, (_, k) => wrapped.flatMap((w) => (w[k] ? [metrics(w[k].family, T_BODY)] : [])));
+      const asc = lineMt.map((mts) => Math.max(base.ascent, ...mts.map((mt) => mt.ascent)));
+      const step = lineMt.map((mts) => Math.max(base.lineH, ...mts.map((mt) => mt.lineH)));
+      const desc = lineMt.map((mts) => Math.max(base.descent, ...mts.map((mt) => mt.descent)));
+      /** Baseline of line `k` below the top of a slice starting at line `from`. */
+      const offset = (from: number, k: number) => asc[from] + step.slice(from + 1, k + 1).reduce((s, h) => s + h, 0);
+      const height = (from: number, to: number) => padTop + offset(from, to - 1) + desc[to - 1] + padBottom;
+      return { wrapped, n, offset, height };
     });
+    const firstRowH = measured[0] ? measured[0].height(0, measured[0].n) : 0;
     // Never leave a header alone at the bottom of a page: keep it with its first row.
-    this.ensure(headerH + Math.min(measured[0]?.rowH ?? 0, BOTTOM - TOP - headerH));
+    const keep = headerH + Math.min(firstRowH, BOTTOM - TOP - headerH);
+    this.placeHeadings(keep);
+    this.ensure(keep);
     drawHeader();
 
+    const drawSlice = (m: (typeof measured)[number], from: number, to: number) => {
+      m.wrapped.forEach((lines, i) => {
+        for (let k = from; k < Math.min(to, lines.length); k += 1) {
+          this.font("normal", T_BODY, BODY, lines[k].family);
+          this.line(lines[k].text, xs[i] + padX, this.y + padTop + m.offset(from, k), columns[i].width - padX * 2, columns[i].align);
+        }
+      });
+      this.y += m.height(from, to);
+    };
+
     this.withPageBreakHook(drawHeader, () => {
-      for (const { wrapped, n, rowH } of measured) {
-        if (rowH <= BOTTOM - TOP - headerH) {
-          this.ensure(rowH);
-          this.drawRow(wrapped, columns, xs, padX, padTop, 0, n);
-          this.y += rowH;
-          this.separator();
+      for (const m of measured) {
+        if (m.height(0, m.n) <= BOTTOM - TOP - headerH) {
+          this.ensure(m.height(0, m.n));
+          drawSlice(m, 0, m.n);
         } else {
           // Taller than a page: continue the row's lines on following pages.
           let from = 0;
-          while (from < n) {
-            const avail = BOTTOM - this.y - padTop - ascent(T_BODY) - descent(T_BODY) - padBottom;
-            const fit = Math.max(1, Math.floor(avail / lineH(T_BODY)) + 1);
-            const to = Math.min(n, from + fit);
-            this.drawRow(wrapped, columns, xs, padX, padTop, from, to);
-            this.y += padTop + ascent(T_BODY) + (to - from - 1) * lineH(T_BODY) + descent(T_BODY) + padBottom;
+          while (from < m.n) {
+            let to = from + 1;
+            while (to < m.n && this.y + m.height(from, to + 1) <= BOTTOM) to += 1;
+            if (this.y + m.height(from, to) > BOTTOM && this.y > TOP + headerH) {
+              this.newPage();
+              continue;
+            }
+            drawSlice(m, from, to);
             from = to;
-            if (from < n) this.newPage();
+            if (from < m.n) this.newPage();
           }
-          this.separator();
         }
+        this.separator();
       }
     });
     this.y += 2;
-  }
-
-  private drawRow(
-    wrapped: Line[][],
-    columns: Array<{ width: number; align?: "left" | "right" }>,
-    xs: number[],
-    padX: number,
-    padTop: number,
-    from: number,
-    to: number
-  ): void {
-    wrapped.forEach((lines, i) => {
-      lines.slice(from, to).forEach((ln, k) => {
-        this.font("normal", T_BODY, BODY, ln.family);
-        this.line(ln.text, xs[i] + padX, this.y + padTop + ascent(T_BODY) + k * lineH(T_BODY), columns[i].width - padX * 2, columns[i].align);
-      });
-    });
   }
 
   private separator(): void {
@@ -438,8 +466,8 @@ function cover(w: Writer, report: ProgressReport, logo: LogoImage | null, genera
   w.block(w.textRows("Goals & Achievements Progress Report", { style: "bold", size: T_TITLE, color: INK }), 2.5);
   const name = w.safe(report.user.displayName);
   if (name) w.block(w.textRows(name, { size: T_SUB, color: BODY }), 1.5);
-  w.block(w.textRows(`Reporting period: ${formatReportPeriod(report)} (dates inclusive)`, { size: T_BODY, color: BODY }), 0.5);
-  w.block(w.textRows(`Generated: ${generated.text} (${generated.timeZone || "time zone not recorded"})`, { size: T_BODY, color: MUTED }), 0.5);
+  w.block(w.textRows(`Reporting period: ${formatReportPeriod(report)} (dates inclusive)`, { size: T_BODY, color: BODY }), 0.8);
+  w.block(w.textRows(`Generated: ${generated.text} (${generated.timeZone || "time zone not recorded"})`, { size: T_BODY, color: MUTED }), 0.8);
   if (emojiReplaced > 0) {
     w.block(
       w.textRows(
@@ -702,30 +730,6 @@ function reportNotes(w: Writer, report: ProgressReport): void {
   }
 }
 
-/** Running header (continuation pages) and footer (every page), stamped once totals are known. */
-function stampPages(d: Doc, kit: PdfTextKit, report: ProgressReport): void {
-  const total = d.getNumberOfPages();
-  for (let page = 1; page <= total; page += 1) {
-    d.setPage(page);
-    d.setFont(kit.baseFamily, "normal");
-    if (page > 1) {
-      d.setFontSize(T_SMALL);
-      d.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      d.text(`Goals & Achievements Progress Report  ·  ${formatReportPeriod(report)}`, M, 14);
-      d.setDrawColor(RULE[0], RULE[1], RULE[2]);
-      d.setLineWidth(0.25);
-      d.line(M, 17, M + CONTENT_W, 17);
-    }
-    d.setDrawColor(RULE[0], RULE[1], RULE[2]);
-    d.setLineWidth(0.25);
-    d.line(M, FOOTER_RULE, M + CONTENT_W, FOOTER_RULE);
-    d.setFontSize(T_SMALL);
-    d.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    d.text("Solace", M, FOOTER_TEXT);
-    d.text(`Page ${page} of ${total}`, M + CONTENT_W, FOOTER_TEXT, { align: "right" });
-  }
-}
-
 /** Every string a user (or the backend) authored: checked before drawing, and scanned for Arabic script. */
 function reportStrings(report: ProgressReport): Array<[string, Style]> {
   const out: Array<[string, Style]> = [];
@@ -796,7 +800,7 @@ export async function buildProgressReportPdf(report: ProgressReport, options: Bu
   checkInNotes(w, report);
   pointsHistory(w, report);
   reportNotes(w, report);
-  stampPages(d, kit, report);
+  stampPages(d, kit, `Goals & Achievements Progress Report  ·  ${formatReportPeriod(report)}`);
 
   return { doc: d, emojiReplacedCount: emojiReplaced, usedUnicodeFont: kit.unicode };
 }

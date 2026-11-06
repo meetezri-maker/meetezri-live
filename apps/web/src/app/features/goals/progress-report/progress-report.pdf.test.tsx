@@ -312,6 +312,167 @@ describe("multilingual text", () => {
   });
 });
 
+describe("branding and line spacing", () => {
+  const PT = 0.3528;
+  /** Drawn lines with their position (mm from the page top) and font size. */
+  const placed = (doc: jsPDF) => {
+    const texts = drawnPages(doc);
+    return (doc.internal as unknown as Internal).pages.slice(1).map((ops, p) =>
+      [...ops.join("\n").matchAll(/\/F\d+\s+([\d.]+)\s+Tf[\s\S]*?([\d.-]+)\s+([\d.-]+)\s+Td/g)].map((m, i) => ({
+        text: texts[p][i],
+        size: +m[1],
+        left: +m[2] * PT,
+        top: (841.89 - +m[3]) * PT,
+      }))
+    );
+  };
+  const content = (lines: ReturnType<typeof placed>[number]) => lines.filter((l) => l.top > 18 && l.top < 278).sort((a, b) => a.top - b.top);
+  const SECTION_HEADINGS = ["Summary", "Goal progress", "Completed during this period", "Needs attention", "Check-in notes", "Points history", "Report notes"];
+  const SUBHEADINGS = ["Active Goals", "Active Personal Achievements", "Wins", "Challenges", "Reflections", "Notes", "Moods noted in check-ins"];
+
+  it("uses the approved footer and running header on every page", async () => {
+    const tx = Array.from({ length: 60 }, (_, i) => ({ id: `t${i}`, sourceType: "personal_goal_completion", sourceItemId: "g", points: i, reason: null, createdAt: "2026-07-01T00:00:00Z", date: "2026-07-01" }));
+    const { pages } = await build(makeReport({ rewards: { pointsEarned: 1, transactions: tx } }));
+    expect(pages.length).toBeGreaterThan(1);
+    pages.forEach((lines, i) => {
+      expect(lines).toContain("Solace · Personal & confidential");
+      expect(lines).toContain(`Page ${i + 1} of ${pages.length}`);
+      if (i > 0) {
+        expect(lines.includes("Solace")).toBe(false); // page 1 has the text mark when no logo is supplied
+        expect(lines).toContain("Goals & Achievements Progress Report  ·  Last 30 days: 24 Jun 2026 – 23 Jul 2026");
+      }
+    });
+  });
+
+  it("gives wrapped Urdu the Journal line spacing, and leaves English spacing as it was", async () => {
+    const urdu = Array.from({ length: 6 }, () => URDU_FULL).join(" ");
+    const english = "Steady progress on small daily things ".repeat(14);
+    const { doc } = await build(withNotes([urdu, english]));
+    const lines = placed(doc).flat();
+    const stepsOf = (test: (t: string) => boolean) => {
+      const tops = lines.filter((l) => l.size === 9.5 && test(l.text)).map((l) => l.top);
+      return tops.slice(1).map((t, i) => t - tops[i]);
+    };
+    const urduSteps = stepsOf((t) => /[؀-ۿ]/.test(t));
+    expect(urduSteps.length).toBeGreaterThanOrEqual(2);
+    for (const s of urduSteps) expect(s).toBeCloseTo(9.5 * PT * 1.95, 1);
+    const englishSteps = stepsOf((t) => t.includes("Steady progress") || t.startsWith("daily things") || t.startsWith("small daily"));
+    expect(englishSteps.length).toBeGreaterThanOrEqual(2);
+    for (const s of englishSteps) expect(s).toBeCloseTo(9.5 * PT * 1.42, 1);
+  });
+
+  it("measures Urdu table rows with the taller lines, keeping them inside their row", async () => {
+    const tx = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, sourceType: "personal_goal_completion", sourceItemId: "g", points: i, reason: `${URDU_FULL} ${URDU_FULL} ${URDU_FULL} ${URDU_FULL} ${URDU_FULL}`, createdAt: "2026-07-01T00:00:00Z", date: "2026-07-01" }));
+    const { doc } = await build(makeReport({ rewards: { pointsEarned: 1, transactions: tx } }));
+    for (const ops of (doc.internal as unknown as Internal).pages.slice(1)) {
+      const body = ops.join("\n");
+      const rows = [...body.matchAll(/([\d.]+)\s+([\d.]+)\s+m\s+([\d.]+)\s+([\d.]+)\s+l\s+S/g)].filter((m) => m[2] === m[4]).map((m) => +m[2]);
+      const texts = [...body.matchAll(/\/F\d+\s+([\d.]+)\s+Tf[\s\S]*?([\d.-]+)\s+([\d.-]+)\s+Td/g)].map((m) => +m[3]);
+      for (const y of rows) for (const t of texts) expect(Math.abs(y - t)).toBeGreaterThan(1.5); // pt: no rule on a baseline
+    }
+  });
+
+  it("never leaves a heading alone at the foot of a page, across report sizes", async () => {
+    const reports: ProgressReport[] = [];
+    for (let goals = 1; goals <= 7; goals += 1) {
+      for (const title of ["Morning walk", "روزانہ صبح کی سیر"]) {
+        for (const wins of [0, 2, 9]) {
+          reports.push({
+            ...withNotes(wins ? [URDU_FULL] : []),
+            activeGoals: Array.from({ length: goals }, (_, i) => goal({ id: `g${i}`, title })),
+            wellbeingEntries: {
+              ...makeReport().wellbeingEntries,
+              wins: Array.from({ length: wins }, (_, i) => ({ text: i % 2 ? Array.from({ length: 5 }, () => URDU_FULL).join(" ") : "Ran my first 5k", date: "2026-07-19", itemId: "g1", itemType: "goal" as const, itemTitle: "Morning walk" })),
+            },
+          });
+        }
+      }
+    }
+    for (const report of reports) {
+      const { doc, pages } = await build(report);
+      placed(doc).forEach((lines, p) => {
+        const body = content(lines);
+        expect(body.length, `page ${p + 1} is blank`).toBeGreaterThan(0);
+        if (p === pages.length - 1) return;
+        const last = body[body.length - 1];
+        expect([...SECTION_HEADINGS, ...SUBHEADINGS].includes(last.text) && last.size >= 10.5, `"${last.text}" stranded on page ${p + 1}`).toBe(false);
+      });
+    }
+  }, 60000);
+
+  it("moves an oversized row to the next page when its first line does not fit, then continues it intact", async () => {
+    const BOTTOM = 274;
+    const reasons = Array.from({ length: 90 }, (_, i) => (i % 10 === 9 ? URDU_COVERED : `Reason line ${i}`));
+    const tx = (id: string, points: number, reason: string | null) => ({ id, sourceType: "personal_goal_completion", sourceItemId: "g", points, reason, createdAt: "2026-07-01T00:00:00Z", date: "2026-07-01" });
+    const bodyPad = 2; // the table's top and bottom cell padding
+    const firstLineH = bodyPad * 2 + 9.5 * PT * (0.78 + 0.24);
+    const expected = ["1 Jul 2026", "Goal completion", "+999", ...reasons.map((r) => (r === URDU_COVERED ? rtlVisual(r) : r))];
+
+    // Filler rows are as tall as the oversized row's first line, so one count leaves too little room for it.
+    let exercised = 0;
+    for (let fillers = 1; fillers <= 36; fillers += 1) {
+      const transactions = [
+        ...Array.from({ length: fillers }, (_, i) => tx(`f${i}`, i + 1, null)),
+        tx("oversized", 999, reasons.join("\n")),
+        tx("after", 1000, null),
+      ];
+      const { doc } = await build(makeReport({ rewards: { pointsEarned: 1, transactions } }));
+      const pages = placed(doc);
+
+      // No blank pages, and nothing below the content limit (or a rule through the footer).
+      pages.forEach((lines, p) => {
+        expect(lines.filter((l) => l.top > 18 && l.top < 280).length, `page ${p + 1} is blank`).toBeGreaterThan(0);
+        for (const l of lines) if (l.top < 280) expect(l.top, `"${l.text}" on page ${p + 1}`).toBeLessThanOrEqual(BOTTOM);
+      });
+
+      const pageOf = (text: string) => pages.findIndex((lines) => lines.some((l) => l.text === text));
+      const startPage = pageOf("+999");
+      const endPage = pageOf("+1000");
+      const start = pages[startPage].find((l) => l.text === "+999")!;
+      const previousPage = pageOf(`+${fillers}`);
+      const previous = pages[previousPage].find((l) => l.text === `+${fillers}`)!;
+
+      // The row: every value once, in reading order, across all its pages.
+      const rowLines = pages.flatMap((lines, p) =>
+        lines
+          .filter((l) => p >= startPage && p <= endPage && l.top >= 18 && l.top < 280)
+          .filter((l) => (p > startPage || l.top >= start.top) && (p < endPage || l.top < pages[endPage].find((x) => x.text === "+1000")!.top))
+          .filter((l) => !["Date", "Source", "Points"].includes(l.text))
+          .sort((a, b) => a.top - b.top || a.left - b.left)
+      );
+      expect(rowLines.map((l) => l.text)).toEqual(expected);
+      // Date, source and points share the first line.
+      expect(rowLines.slice(0, 3).every((l) => l.top === start.top)).toBe(true);
+      // The header repeats on every page the row touches.
+      for (let p = startPage; p <= endPage; p += 1) {
+        for (const label of ["Date", "Source", "Points"]) expect(pages[p].map((l) => l.text), `page ${p + 1}`).toContain(label);
+      }
+
+      const room = BOTTOM - (previous.top + 9.5 * PT * 0.24 + bodyPad);
+      if (previousPage === startPage - 1 && room < firstLineH) {
+        exercised += 1;
+        // It moved: the first content under the repeated header, and it continues onto a further page.
+        const header = pages[startPage].find((l) => l.text === "Points")!;
+        expect(pages[startPage].filter((l) => l.top < 280 && l.top > header.top).sort((a, b) => a.top - b.top)[0].text).toBe("1 Jul 2026");
+        expect(endPage).toBeGreaterThan(startPage);
+      }
+    }
+    expect(exercised).toBeGreaterThan(0);
+  }, 60000);
+
+  it("draws the logo at its own proportions, 9 mm high", async () => {
+    const png = fs.readFileSync(path.resolve(process.cwd(), "public/logos/logo white.png"));
+    const ratio = png.readUInt32BE(16) / png.readUInt32BE(20);
+    const logo = { dataUrl: `data:image/png;base64,${png.toString("base64")}`, width: Math.min(9 * ratio, 42), height: 9 };
+    const { doc } = await buildProgressReportPdf(makeReport(), { fonts, logo });
+    const m = /([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm\s+\/I\d+ Do/.exec((doc.internal as unknown as Internal).pages[1].join("\n"));
+    expect(m).not.toBeNull();
+    expect(+m![2] * PT).toBeCloseTo(9, 1);
+    expect(+m![1] / +m![2]).toBeCloseTo(logo.width / logo.height, 1);
+    expect(+m![3] * PT).toBeCloseTo(18, 1);
+  });
+});
+
 describe("font loading", () => {
   it("falls back to Helvetica for text it can draw when the Latin font cannot load", async () => {
     const built = await buildProgressReportPdf(makeReport(), { fonts: { latin: null, arabic: null }, logo: null });
