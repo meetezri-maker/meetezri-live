@@ -83,45 +83,106 @@
   display: none;
 }
 
-@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 1045px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (max-width: 1279px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 1280px) and (min-height: 970px) {
-  .solace-home .home-pin--features {
+/*
+ * Features also stays in flow when an in-app motion setting is on (`reduced-motion`,
+ * `appearance-no-animations`; see APP_REDUCED_MOTION_CLASSES), and when the section has measured
+ * that its bubbles do not fit (`data-features-fit="none"`, set only at ≥1280px wide).
+ */
+@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 1045px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (max-width: 1279px) and (min-height: 1090px), (prefers-reduced-motion: no-preference) and (min-width: 1280px) and (min-height: 708px) {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--features:not([data-features-fit="none"]) {
     height: 650vh;
   }
-  .solace-home .home-pin--features > .home-pin-stage {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--features:not([data-features-fit="none"]) > .home-pin-stage {
     position: sticky;
     top: 0;
     height: 100vh;
     overflow: hidden;
     padding-block: var(--home-header-clearance) 16px;
   }
-  .solace-home .home-pin--features .home-pinned-only {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--features:not([data-features-fit="none"]) .home-pinned-only {
     display: revert-layer;
   }
-  .solace-home .home-pin--features .home-flow-only {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--features:not([data-features-fit="none"]) .home-flow-only {
     display: none;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 840px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 945px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 1000px) {
-  .solace-home .home-pin--how-it-works {
+/*
+ * Features at ≥1280px: the arc shrinks with the viewport height so the bubbles keep their room.
+ * Must match FEATURES_STAGE in layoutModes.ts. Below 900px tall the heading sits on one line
+ * ("Highlighted Features", the space is in the markup) in both layouts, so the heading the
+ * section measures is the one either layout shows.
+ */
+@media (min-width: 1280px) {
+  .solace-home .home-features-arc {
+    height: clamp(96px, 12vh, 130px);
+    margin-top: clamp(28px, 4.5vh, 48px);
+  }
+}
+
+@media (min-width: 1280px) and (max-height: 899px) {
+  .solace-home .home-features-heading-break {
+    display: none;
+  }
+}
+
+/*
+ * How It Works also stays in flow when an in-app motion setting is on, and when the section has
+ * measured that its stage does not fit (`data-hiw-fit="none"`, set only at ≥1024px wide). In that
+ * last case the stage stays laid out but invisible, so it can be measured again without
+ * switching layouts; it cannot be seen, focused or read.
+ *
+ * At ≥1024px the left column shows each step's title and description, so the card's copy of them
+ * is hidden, and the header tightens to leave the room to the image. The card offset, the gap and
+ * the header margins must match HIW_STAGE in layoutModes.ts.
+ */
+@media (prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 840px), (prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 945px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 725px) {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) {
     height: 400vh;
   }
-  .solace-home .home-pin--how-it-works > .home-pin-stage {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) > .home-pin-stage {
     position: sticky;
     top: 0;
     height: 100vh;
     overflow: hidden;
     padding-block: var(--home-header-clearance) 16px;
   }
-  .solace-home .home-pin--how-it-works .home-pinned-only {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-pinned-only {
     display: revert-layer;
   }
-  .solace-home .home-pin--how-it-works .home-flow-only {
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-flow-only {
     display: none;
   }
+  :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works[data-hiw-fit="none"] .home-pinned-only {
+    display: revert-layer;
+    position: absolute;
+    visibility: hidden;
+    height: 0;
+    overflow: hidden;
+    margin: 0;
+    pointer-events: none;
+  }
   @media (max-width: 1023px) {
-    .solace-home .home-pin--how-it-works .home-hiw-text {
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-text {
       display: none;
+    }
+  }
+  @media (min-width: 1024px) {
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-card-text {
+      display: none;
+    }
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-card {
+      top: 24px;
+    }
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-heading,
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-subtitle {
+      margin-top: 8px;
+    }
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-hiw-bar {
+      margin-top: 12px;
+    }
+    :root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--how-it-works:not([data-hiw-fit="none"]) .home-pinned-only {
+      margin-top: clamp(16px, 3vh, 48px);
     }
   }
 }

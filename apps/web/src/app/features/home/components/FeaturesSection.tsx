@@ -1,7 +1,17 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { motion } from "motion/react";
-import { useHomeReducedMotion } from "../useHomeReducedMotion";
-import { usePinned } from "../layoutModes";
+import {
+  FEATURE_SLOTS,
+  FEATURES_BUBBLE,
+  FEATURES_STAGE,
+  PIN_QUERIES,
+  featuresStageMetrics,
+  placeFeatureBubbles,
+  useMotionDisabled,
+  usePinned,
+  type FeaturesBubbleLayout,
+  type FeaturesStageMetrics,
+} from "../layoutModes";
 import imgHome from "../assets/app-dashboard.webp";
 import imgTalkItOut from "../assets/app-talk-it-out.webp";
 import imgWellness from "../assets/app-wellness.webp";
@@ -161,116 +171,113 @@ const ARC_POINTS = [
 const BUBBLE_GRAD =
   "linear-gradient(135deg, #ffffff 0%, #fde7f1 38%, #f5e8fa 75%, #ece3f9 100%)";
 
-/* Sizes: varied bubble sizes for organic feel */
-const BUBBLE_SIZES = [170, 144, 158, 136];
+/*
+ * Bubble sizes, float rhythm and the designer's slot coordinates live in `layoutModes.ts`
+ * (FEATURES_BUBBLE, FEATURE_SLOTS) so the renderer and the placement maths share one copy.
+ */
 
-/* Float offsets per index — gentle unique y rhythm */
-const FLOAT_Y = [-12, 9, -8, 11];
-const FLOAT_DUR = [4.2, 5.0, 4.6, 5.4];
+/** Client-only layout effect (React 18 warns about `useLayoutEffect` during server rendering). */
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-/* ── Static slot coordinate data — at module scope so they are never re-created per render ── */
-type SlotCoord = { top: number; pos: number; index: number; isUp: boolean; gi: number };
+type FeaturesGeometry = FeaturesStageMetrics & {
+  /** Bubble placements, or `null` when they cannot fit (the section then uses the flow layout). */
+  layout: FeaturesBubbleLayout | null;
+};
 
-// LEFT column: pos = left offset in the 400px panel
-// pos ~5-40  → outer edge (far from center device)
-// pos ~150-220 → mid/inner area of the panel
-const LEFT_SLOT_COORDS: SlotCoord[][] = [
-  // Step 0 — Journal: Z-spread (outer-top, inner-top, outer-bottom, inner-bottom)
-  [
-    { top: 10, pos: 8,   index: 0, isUp: true,  gi: 0 },
-    { top: 60, pos: 200, index: 1, isUp: true,  gi: 1 },
-    { top: 270, pos: 190, index: 2, isUp: false, gi: 0 },
-    { top: 340, pos: 12,  index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 1 — Talk: diagonal inner-top to outer-bottom
-  [
-    { top: 20, pos: 195, index: 0, isUp: true,  gi: 0 },
-    { top: 10, pos: 15,  index: 1, isUp: true,  gi: 1 },
-    { top: 275, pos: 12,  index: 2, isUp: false, gi: 0 },
-    { top: 310, pos: 210, index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 2 — Wellness: four-corner spread (no overlaps)
-  [
-    { top: 8,   pos: 8,   index: 0, isUp: true,  gi: 0 },
-    { top: 15,  pos: 215, index: 1, isUp: true,  gi: 1 },
-    { top: 280, pos: 205, index: 2, isUp: false, gi: 0 },
-    { top: 315, pos: 10,  index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 3 — Insights: outer-top, inner-mid, inner-mid, outer-bottom (X pattern)
-  [
-    { top: 8,   pos: 12,  index: 0, isUp: true,  gi: 0 },
-    { top: 90,  pos: 200, index: 1, isUp: true,  gi: 1 },
-    { top: 265, pos: 195, index: 2, isUp: false, gi: 0 },
-    { top: 340, pos: 8,   index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 4 — Rest: asymmetric scatter
-  [
-    { top: 30,  pos: 180, index: 0, isUp: true,  gi: 0 },
-    { top: 15,  pos: 15,  index: 1, isUp: true,  gi: 1 },
-    { top: 280, pos: 20,  index: 2, isUp: false, gi: 0 },
-    { top: 315, pos: 195, index: 3, isUp: false, gi: 1 },
-  ],
-];
-
-// RIGHT column: pos = right offset in the 400px panel
-// pos ~5-40  → outer edge (far from center device)
-// pos ~150-220 → mid/inner area of the panel
-const RIGHT_SLOT_COORDS: SlotCoord[][] = [
-  // Step 0 — Journal: mirrored Z (inner-top, outer-top, inner-bottom, outer-bottom)
-  [
-    { top: 10,  pos: 195, index: 0, isUp: true,  gi: 0 },
-    { top: 60,  pos: 10,  index: 1, isUp: true,  gi: 1 },
-    { top: 270, pos: 15,  index: 2, isUp: false, gi: 0 },
-    { top: 340, pos: 200, index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 1 — Talk: outer-top, inner-top, outer-bottom, inner-bottom
-  [
-    { top: 10,  pos: 12,  index: 0, isUp: true,  gi: 0 },
-    { top: 50,  pos: 200, index: 1, isUp: true,  gi: 1 },
-    { top: 265, pos: 205, index: 2, isUp: false, gi: 0 },
-    { top: 325, pos: 10,  index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 2 — Wellness: outer-heavy layout
-  [
-    { top: 15,  pos: 10,  index: 0, isUp: true,  gi: 0 },
-    { top: 80,  pos: 200, index: 1, isUp: true,  gi: 1 },
-    { top: 270, pos: 190, index: 2, isUp: false, gi: 0 },
-    { top: 330, pos: 12,  index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 3 — Insights: inner-top, outer-top, outer-bottom, inner-bottom
-  [
-    { top: 15,  pos: 205, index: 0, isUp: true,  gi: 0 },
-    { top: 10,  pos: 12,  index: 1, isUp: true,  gi: 1 },
-    { top: 265, pos: 8,   index: 2, isUp: false, gi: 0 },
-    { top: 325, pos: 210, index: 3, isUp: false, gi: 1 },
-  ],
-  // Step 4 — Rest: spread all four corners
-  [
-    { top: 12,  pos: 15,  index: 0, isUp: true,  gi: 0 },
-    { top: 70,  pos: 195, index: 1, isUp: true,  gi: 1 },
-    { top: 275, pos: 12,  index: 2, isUp: false, gi: 0 },
-    { top: 330, pos: 200, index: 3, isUp: false, gi: 1 },
-  ],
-];
-
-
+/**
+ * Sizes the ≥1280px arc-and-bubble stage to the viewport. Measures the section heading (so web
+ * fonts and the line-height setting count) and places the bubbles in the room left. `null` while
+ * the Features pin query does not match at ≥1280px (server, first render, narrower viewports and
+ * the other layouts keep their markup unchanged).
+ *
+ * The heading is laid out the same in both layouts, so switching to flow when the bubbles do not
+ * fit cannot change the measurement that caused it.
+ */
+function useFeaturesGeometry(
+  sectionRef: RefObject<HTMLElement | null>,
+  headingStartRef: RefObject<HTMLElement | null>,
+  headingEndRef: RefObject<HTMLElement | null>,
+): FeaturesGeometry | null {
+  const [geometry, setGeometry] = useState<FeaturesGeometry | null>(null);
+  useClientLayoutEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(PIN_QUERIES.features);
+    let lastKey = "null";
+    const measure = () => {
+      const section = sectionRef.current;
+      const start = headingStartRef.current;
+      const end = headingEndRef.current;
+      let next: FeaturesGeometry | null = null;
+      if (section && start && end && query.matches && window.innerWidth >= FEATURES_STAGE.minWidth) {
+        const clearance = parseFloat(
+          getComputedStyle(section).getPropertyValue("--home-header-clearance"),
+        );
+        const metrics = featuresStageMetrics({
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          headerClearance: Number.isFinite(clearance) ? clearance : 96,
+          headingBlockHeight: end.getBoundingClientRect().bottom - start.getBoundingClientRect().top,
+        });
+        next = {
+          ...metrics,
+          layout: placeFeatureBubbles(FEATURE_SLOTS, metrics.clusterWidth, metrics.clusterHeight),
+        };
+      }
+      const key = next
+        ? `${next.rowHeight}|${next.clusterWidth}|${next.clusterHeight}|${next.screenMaxWidth}|${Boolean(next.layout)}`
+        : "null";
+      if (key === lastKey) return;
+      lastKey = key;
+      setGeometry(next);
+    };
+    measure();
+    query.addEventListener("change", measure);
+    window.addEventListener("resize", measure);
+    // Every part of the heading block: the app's calm-transitions setting animates line-height,
+    // so the final size can arrive a few frames after the setting changes.
+    const heading = headingStartRef.current?.parentElement?.querySelector("h2");
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    for (const el of [headingStartRef.current, heading, headingEndRef.current]) {
+      if (el) observer?.observe(el);
+    }
+    // The app applies its text settings (line height, letter spacing, font) as classes and
+    // custom properties on <html>; re-measure as soon as they change rather than a frame later.
+    const settings = typeof MutationObserver === "function" ? new MutationObserver(measure) : null;
+    settings?.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    let alive = true;
+    fonts?.ready.then(() => alive && measure());
+    fonts?.addEventListener?.("loadingdone", measure);
+    return () => {
+      alive = false;
+      query.removeEventListener("change", measure);
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+      settings?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", measure);
+    };
+  }, [sectionRef, headingStartRef, headingEndRef]);
+  return geometry;
+}
 
 const BubbleCard = memo(function BubbleCard({
   item,
   side,
   index,
+  size,
+  reduce,
   isActive = false,
 }: {
   item: TabItem;
   side: "left" | "right";
   index: number;
+  size: number;
+  reduce: boolean;
   isActive?: boolean;
 }) {
-  const reduce = useHomeReducedMotion();
   const shouldAnimate = isActive && !reduce;
-  const size = BUBBLE_SIZES[index] ?? 136;
-  const floatY = FLOAT_Y[index] ?? -8;
-  const floatDur = FLOAT_DUR[index] ?? 4.8;
+  const floatY = FEATURES_BUBBLE.floatY[index] ?? -8;
+  const floatDur = FEATURES_BUBBLE.floatDur[index] ?? 4.8;
 
   return (
     <motion.div
@@ -286,10 +293,10 @@ const BubbleCard = memo(function BubbleCard({
               ease: "easeInOut",
               repeatType: "mirror",
             }
-          : { duration: 0.3, ease: "easeOut" }
+          : { duration: reduce ? 0 : 0.3, ease: "easeOut" }
       }
       whileHover={
-        isActive
+        isActive && !reduce
           ? {
               scale: 1.07,
               transition: { type: "spring", stiffness: 260, damping: 18 },
@@ -446,8 +453,15 @@ const BubbleCard = memo(function BubbleCard({
 
 export default function FeaturesSection() {
   const sectionRef = useRef<HTMLElement>(null);
-  const reduce = useHomeReducedMotion();
-  const pinned = usePinned("features");
+  const headingStartRef = useRef<HTMLSpanElement>(null);
+  const headingEndRef = useRef<HTMLDivElement>(null);
+  const reduce = useMotionDisabled();
+  const geometry = useFeaturesGeometry(sectionRef, headingStartRef, headingEndRef);
+  const bubbleLayout = geometry?.layout ?? null;
+  /* The same three conditions gate the pin in home.css: the pin query, no in-app reduced
+     motion, and (≥1280px) the bubbles fitting. */
+  const doesNotFit = geometry !== null && bubbleLayout === null;
+  const pinned = usePinned("features") && !reduce && !doesNotFit;
 
   const [activeIdx, setActiveIdx] = useState(0);
 
@@ -508,6 +522,7 @@ export default function FeaturesSection() {
       ref={sectionRef}
       id="features"
       className="home-pin home-pin--features relative bg-white"
+      data-features-fit={doesNotFit ? "none" : undefined}
     >
       <div className="home-pin-stage flex flex-col items-center justify-center px-6">
         {/* Background Solace Emblem */}
@@ -517,6 +532,7 @@ export default function FeaturesSection() {
 
         {/* Section Header */}
         <span
+          ref={headingStartRef}
           className="rounded-[12px] border border-[#e91e63] px-4 py-[5px] text-[11px] font-semibold uppercase"
           style={{
             fontFamily: "'Montserrat', sans-serif",
@@ -535,8 +551,8 @@ export default function FeaturesSection() {
           className="mt-2 text-center text-[clamp(26px,3.2vw,42px)] leading-[1.05] tracking-[-1px] text-black"
           style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}
         >
-          Highlighted
-          <br />
+          Highlighted{" "}
+          <br className="home-features-heading-break" />
           <span
             className="bg-clip-text text-transparent"
             style={{ backgroundImage: GRAD }}
@@ -545,6 +561,7 @@ export default function FeaturesSection() {
           </span>
         </h2>
         <div
+          ref={headingEndRef}
           className="mt-1.5 h-[4px] w-[52px] rounded-full"
           style={{ background: GRAD }}
         />
@@ -552,7 +569,7 @@ export default function FeaturesSection() {
         {/* Pinned layout: one feature at a time, stepped by the page scroll. */}
         <div className="home-pinned-only flex w-full flex-col items-center">
         {/* ───── D-Shaped 180-Degree Arc Controller with 5 Milestone Points ───── */}
-        <div className="relative mt-8 xl:mt-12 mb-3 h-[170px] w-[min(620px,94vw)] sm:h-[130px]">
+        <div className="home-features-arc relative mt-8 xl:mt-12 mb-3 h-[170px] w-[min(620px,94vw)] sm:h-[130px]">
           {/* Central Glowing Sphere & Pointer Ring */}
           <div className="absolute left-1/2 bottom-[-20px] -translate-x-1/2">
             {/* Halo */}
@@ -562,16 +579,17 @@ export default function FeaturesSection() {
                 background:
                   "radial-gradient(circle, rgba(233,30,99,0.35), rgba(156,39,176,0) 70%)",
               }}
+              /* A still target (not `undefined`) so switching reduced motion on stops the loop at once. */
               animate={
                 reduce
-                  ? undefined
+                  ? { scale: 1, opacity: 0.6 }
                   : { scale: [1, 1.15, 1], opacity: [0.6, 0.9, 0.6] }
               }
-              transition={{
-                duration: 3.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
+              transition={
+                reduce
+                  ? { duration: 0 }
+                  : { duration: 3.5, repeat: Infinity, ease: "easeInOut" }
+              }
             />
 
             {/* Rotating Pointer Arrow Indicator */}
@@ -626,8 +644,10 @@ export default function FeaturesSection() {
                 boxShadow:
                   "inset -6px -8px 14px rgba(74,20,140,0.35), inset 5px 6px 12px rgba(255,255,255,0.85), 0 10px 24px rgba(233,30,99,0.28)",
               }}
-              animate={reduce ? undefined : { y: [0, -3, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              animate={reduce ? { y: 0 } : { y: [0, -3, 0] }}
+              transition={
+                reduce ? { duration: 0 } : { duration: 4, repeat: Infinity, ease: "easeInOut" }
+              }
             >
               <span className="text-[13px] font-extrabold text-slate-900 tracking-wider">
                 {FEATURES[activeIdx].num}
@@ -710,58 +730,23 @@ export default function FeaturesSection() {
         </div>
 
         {/* ───── Stage: Freely-scattered Bubble Clusters & Central Screen ───── */}
-        <div className="relative mt-1 flex w-full max-w-[1520px] flex-col xl:flex-row xl:h-[500px] items-center justify-between px-2 sm:px-4">
-          {/* ── LEFT cluster — uses static LEFT_SLOT_COORDS (no per-render object creation) ── */}
-          <div className="relative z-20 hidden xl:block w-[400px] lg:w-[440px] h-[490px] shrink-0">
-            {FEATURES.map((feat, fIdx) => {
-              const isActive = activeIdx === fIdx;
-              const ease = [0.22, 1, 0.36, 1] as const;
-              const slots = LEFT_SLOT_COORDS[fIdx] ?? LEFT_SLOT_COORDS[0];
-
-              return (
-                <div
-                  key={`${feat.key}-left-col`}
-                  className="absolute inset-0 pointer-events-none"
-                >
-                  {slots.map(({ top, pos, index, isUp, gi }, si) => {
-                    const group = isUp ? feat.leftUp : feat.leftDown;
-                    return (
-                      <motion.div
-                        key={`${feat.key}-l-${si}`}
-                        className="absolute"
-                        aria-hidden={!isActive}
-                        style={{
-                          top,
-                          left: pos,
-                          pointerEvents: isActive ? "auto" : "none",
-                        }}
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{
-                          opacity: isActive ? 1 : 0,
-                          scale: isActive ? 1 : 0.5,
-                        }}
-                        transition={{
-                          duration: 0.55,
-                          ease,
-                          delay: isActive ? si * 0.07 : 0,
-                        }}
-                      >
-                        <BubbleCard
-                          item={group[gi]}
-                          side="left"
-                          index={index}
-                          isActive={isActive}
-                        />
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+        <div
+          className="relative mt-1 flex w-full max-w-[1520px] flex-col xl:flex-row xl:h-[500px] items-center justify-between px-2 sm:px-4"
+          style={bubbleLayout ? { height: geometry!.rowHeight } : undefined}
+        >
+          <BubbleCluster
+            side="left"
+            activeIdx={activeIdx}
+            layout={bubbleLayout}
+            height={bubbleLayout ? geometry!.clusterHeight : undefined}
+            reduce={reduce}
+          />
 
           {/* Central Screen Frame */}
-          <div className="relative z-10 mx-auto w-full max-w-[560px] lg:max-w-[610px] mt-4 xl:mt-8 rounded-[22px] bg-[#0b0b14] p-2 shadow-[0px_32px_80px_rgba(20,10,40,0.32)] shrink">
+          <div
+            className="relative z-10 mx-auto w-full max-w-[560px] lg:max-w-[610px] mt-4 xl:mt-8 rounded-[22px] bg-[#0b0b14] p-2 shadow-[0px_32px_80px_rgba(20,10,40,0.32)] shrink"
+            style={bubbleLayout ? { maxWidth: geometry!.screenMaxWidth } : undefined}
+          >
             <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[16px]">
               {FEATURES.map((feat, i) => {
                 const isActive = activeIdx === i;
@@ -780,7 +765,7 @@ export default function FeaturesSection() {
                       scale: isActive ? 1 : 0.97,
                       zIndex: isActive ? 2 : 1,
                     }}
-                    transition={{ duration: 0.55, ease: EASE }}
+                    transition={{ duration: reduce ? 0 : 0.55, ease: EASE }}
                   />
                 );
               })}
@@ -791,54 +776,13 @@ export default function FeaturesSection() {
               feature's highlights render as a compact list underneath it instead. */}
           <HighlightPills feature={FEATURES[activeIdx]} className="mt-5 max-w-[560px] xl:hidden" />
 
-          {/* ── RIGHT cluster — uses static RIGHT_SLOT_COORDS (no per-render object creation) ── */}
-          <div className="relative z-20 hidden xl:block w-[400px] lg:w-[440px] h-[490px] shrink-0">
-            {FEATURES.map((feat, fIdx) => {
-              const isActive = activeIdx === fIdx;
-              const ease = [0.22, 1, 0.36, 1] as const;
-              const slots = RIGHT_SLOT_COORDS[fIdx] ?? RIGHT_SLOT_COORDS[0];
-
-              return (
-                <div
-                  key={`${feat.key}-right-col`}
-                  className="absolute inset-0 pointer-events-none"
-                >
-                  {slots.map(({ top, pos, index, isUp, gi }, si) => {
-                    const group = isUp ? feat.rightUp : feat.rightDown;
-                    return (
-                      <motion.div
-                        key={`${feat.key}-r-${si}`}
-                        className="absolute"
-                        aria-hidden={!isActive}
-                        style={{
-                          top,
-                          right: pos,
-                          pointerEvents: isActive ? "auto" : "none",
-                        }}
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{
-                          opacity: isActive ? 1 : 0,
-                          scale: isActive ? 1 : 0.5,
-                        }}
-                        transition={{
-                          duration: 0.55,
-                          ease,
-                          delay: isActive ? si * 0.07 : 0,
-                        }}
-                      >
-                        <BubbleCard
-                          item={group[gi]}
-                          side="right"
-                          index={index}
-                          isActive={isActive}
-                        />
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          <BubbleCluster
+            side="right"
+            activeIdx={activeIdx}
+            layout={bubbleLayout}
+            height={bubbleLayout ? geometry!.clusterHeight : undefined}
+            reduce={reduce}
+          />
         </div>
         </div>
 
@@ -883,6 +827,79 @@ export default function FeaturesSection() {
         </ol>
       </div>
     </section>
+  );
+}
+
+/**
+ * One side's floating highlight bubbles (≥1280px, pinned). Renders the designer positions until
+ * the section has measured itself, then the placements sized to the viewport.
+ */
+function BubbleCluster({
+  side,
+  activeIdx,
+  layout,
+  height,
+  reduce,
+}: {
+  side: "left" | "right";
+  activeIdx: number;
+  layout: FeaturesBubbleLayout | null;
+  height: number | undefined;
+  reduce: boolean;
+}) {
+  return (
+    <div
+      className="relative z-20 hidden xl:block w-[clamp(300px,26vw,440px)] h-[490px] shrink-0"
+      style={height !== undefined ? { height } : undefined}
+    >
+      {FEATURES.map((feat, fIdx) => {
+        const isActive = activeIdx === fIdx;
+        const slots = FEATURE_SLOTS[side][fIdx] ?? FEATURE_SLOTS[side][0];
+        const placed = layout?.[side][fIdx];
+        return (
+          <div key={`${feat.key}-${side}-col`} className="absolute inset-0 pointer-events-none">
+            {slots.map(({ top, pos, index, isUp, gi }, si) => {
+              const group =
+                side === "left"
+                  ? isUp ? feat.leftUp : feat.leftDown
+                  : isUp ? feat.rightUp : feat.rightDown;
+              const at = placed?.[si];
+              return (
+                <motion.div
+                  key={`${feat.key}-${side === "left" ? "l" : "r"}-${si}`}
+                  className="absolute"
+                  aria-hidden={!isActive}
+                  style={{
+                    top: at?.top ?? top,
+                    [side]: at?.offset ?? pos,
+                    pointerEvents: isActive ? "auto" : "none",
+                  }}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{
+                    opacity: isActive ? 1 : 0,
+                    scale: isActive ? 1 : 0.5,
+                  }}
+                  transition={{
+                    duration: reduce ? 0 : 0.55,
+                    ease: EASE,
+                    delay: isActive && !reduce ? si * 0.07 : 0,
+                  }}
+                >
+                  <BubbleCard
+                    item={group[gi]}
+                    side={side}
+                    index={index}
+                    size={at?.size ?? FEATURES_BUBBLE.sizes[index] ?? FEATURES_BUBBLE.minSize}
+                    reduce={reduce}
+                    isActive={isActive}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import {
   motion,
   useMotionValue,
@@ -7,8 +7,14 @@ import {
   useSpring,
   type MotionValue,
 } from "motion/react";
-import { useHomeReducedMotion } from "../useHomeReducedMotion";
-import { usePinned } from "../layoutModes";
+import {
+  HIW_STAGE,
+  PIN_QUERIES,
+  howItWorksStageMetrics,
+  useMotionDisabled,
+  usePinned,
+  type HowItWorksStageMetrics,
+} from "../layoutModes";
 import imgPlaceholder from "../assets/app-rest.webp";
 import SolaceEmblem from "./SolaceEmblem";
 import { SUBSCRIPTION_PLANS } from "@/app/utils/subscriptionPlans";
@@ -50,6 +56,105 @@ const MODULES = [
     img: imgPlaceholder,
   },
 ];
+
+/** Client-only layout effect (React 18 warns about `useLayoutEffect` during server rendering). */
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+const heightOf = (el: Element | null) => el?.getBoundingClientRect().height ?? 0;
+
+/**
+ * Sizes the ≥1024px pinned stage to the viewport, or reports that it does not fit. Measures the
+ * rendered header, stepper and text column, which keep their size in both layouts, so switching
+ * to flow cannot change the result that caused it. Measures again after fonts and images load,
+ * on resize, and when the app's text settings change. `null` where this does not apply (server,
+ * first render, below 1024px, or while a motion setting keeps the stage hidden).
+ */
+function useHowItWorksGeometry(
+  sectionRef: RefObject<HTMLElement | null>,
+): HowItWorksStageMetrics | null {
+  const [geometry, setGeometry] = useState<HowItWorksStageMetrics | null>(null);
+  useClientLayoutEffect(() => {
+    const section = sectionRef.current;
+    if (!section || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(PIN_QUERIES.howItWorks);
+    const find = (selector: string) => section.querySelector<HTMLElement>(selector);
+    let lastKey = "null";
+    const measure = () => {
+      const stepper = find(".home-hiw-stepper");
+      const column = find(".home-hiw-text");
+      const slides = find(".home-hiw-slides");
+      let next: HowItWorksStageMetrics | null = null;
+      if (
+        query.matches &&
+        window.innerWidth >= HIW_STAGE.minWidth &&
+        stepper?.offsetHeight &&
+        column &&
+        slides
+      ) {
+        const clearance = parseFloat(
+          getComputedStyle(section).getPropertyValue("--home-header-clearance"),
+        );
+        next = howItWorksStageMetrics({
+          viewportHeight: window.innerHeight,
+          headerClearance: Number.isFinite(clearance) ? clearance : 96,
+          headerHeight:
+            heightOf(find(".home-hiw-badge")) +
+            heightOf(find(".home-hiw-heading")) +
+            heightOf(find(".home-hiw-subtitle")) +
+            heightOf(find(".home-hiw-bar")),
+          stepperHeight: stepper.offsetHeight,
+          textColumnHeight:
+            slides.getBoundingClientRect().top -
+            column.getBoundingClientRect().top +
+            Math.max(...Array.from(slides.children, (slide) => slide.scrollHeight)),
+        });
+      }
+      const key = next ? `${next.fits}|${next.imageHeight}` : "null";
+      if (key === lastKey) return;
+      lastKey = key;
+      setGeometry(next);
+    };
+    measure();
+    query.addEventListener("change", measure);
+    window.addEventListener("resize", measure);
+    // Images have fixed boxes today, but a load can still reflow what is measured.
+    section.addEventListener("load", measure, true);
+    // Every measured part: the app's calm-transitions setting animates line-height, so the final
+    // size can arrive a few frames after the setting changes.
+    const sizes = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    for (const selector of [
+      ".home-hiw-badge",
+      ".home-hiw-heading",
+      ".home-hiw-subtitle",
+      ".home-hiw-bar",
+      ".home-hiw-stepper",
+    ]) {
+      const el = find(selector);
+      if (el) sizes?.observe(el);
+    }
+    for (const slide of Array.from(find(".home-hiw-slides")?.children ?? [])) sizes?.observe(slide);
+    // The app applies its text settings as classes and custom properties on <html>.
+    const settings = typeof MutationObserver === "function" ? new MutationObserver(measure) : null;
+    settings?.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+    const fonts = document.fonts;
+    let alive = true;
+    fonts?.ready.then(() => alive && measure());
+    fonts?.addEventListener?.("loadingdone", measure);
+    return () => {
+      alive = false;
+      query.removeEventListener("change", measure);
+      window.removeEventListener("resize", measure);
+      section.removeEventListener("load", measure, true);
+      sizes?.disconnect();
+      settings?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", measure);
+    };
+  }, [sectionRef]);
+  return geometry;
+}
 
 /* ── Sub-components ── */
 
@@ -132,11 +237,25 @@ function TextSlide({
 function UniqueDockStepper({
   scrollYProgress,
   onSelectStep,
+  reduce,
 }: {
   scrollYProgress: MotionValue<number>;
   onSelectStep: (idx: number) => void;
+  reduce: boolean;
 }) {
   const [activeStep, setActiveStep] = useState(0);
+
+  /* Still targets, not `undefined`, so turning motion off stops a running loop at once. */
+  const waveBar = (heights: string[], duration: number) =>
+    reduce
+      ? { animate: { height: "8px" }, transition: { duration: 0 } }
+      : {
+          animate: { height: heights },
+          transition: { duration, repeat: Infinity, ease: "easeInOut" as const },
+        };
+  const glide = reduce
+    ? { duration: 0 }
+    : { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const };
 
   useEffect(() => {
     return scrollYProgress.on("change", (latest) => {
@@ -183,7 +302,7 @@ function UniqueDockStepper({
         animate={{
           left: activeStep === 0 ? "0%" : activeStep === 1 ? "34%" : "66%",
         }}
-        transition={{ type: "spring", stiffness: 220, damping: 28 }}
+        transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 220, damping: 28 }}
       />
 
       {/* Floating Timeline Track & Interactive Step Nodes (No background box) */}
@@ -201,14 +320,14 @@ function UniqueDockStepper({
               boxShadow: "0 0 12px rgba(233,30,99,0.55)",
             }}
             animate={{ width: progressPercent }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={glide}
           />
 
           {/* Gliding Glowing Spark Head at the front edge */}
           <motion.div
             className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_10px_2.5px_rgba(233,30,99,0.85),0_0_3px_#fff]"
             animate={{ left: progressPercent }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={glide}
           />
         </div>
 
@@ -230,7 +349,7 @@ function UniqueDockStepper({
                 {/* Node Orb Marker */}
                 <div className="relative flex h-[50px] w-[50px] items-center justify-center">
                   {/* Active Luminous Radar Rings */}
-                  {isActive && (
+                  {isActive && !reduce && (
                     <>
                       <motion.div
                         className="absolute inset-0 rounded-full"
@@ -270,7 +389,9 @@ function UniqueDockStepper({
                       isActive || isCompleted ? { background: GRAD } : undefined
                     }
                     animate={isActive ? { scale: 1.06 } : { scale: 1 }}
-                    transition={{ type: "spring", stiffness: 380, damping: 24 }}
+                    transition={
+                      reduce ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 24 }
+                    }
                   >
                     {isCompleted ? (
                       <svg aria-hidden
@@ -328,7 +449,7 @@ function UniqueDockStepper({
                   <div className="mt-1.5 flex items-center">
                     {isActive ? (
                       <motion.div
-                        initial={{ opacity: 0, y: 3 }}
+                        initial={reduce ? false : { opacity: 0, y: 3 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] shadow-sm"
                         style={{
@@ -341,30 +462,15 @@ function UniqueDockStepper({
                         <div className="flex h-2.5 items-end gap-[2px]">
                           <motion.span
                             className="w-[2px] rounded-full bg-[#e91e63]"
-                            animate={{ height: ["3px", "10px", "3px"] }}
-                            transition={{
-                              duration: 0.75,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
+                            {...waveBar(["3px", "10px", "3px"], 0.75)}
                           />
                           <motion.span
                             className="w-[2px] rounded-full bg-[#e91e63]"
-                            animate={{ height: ["9px", "3px", "9px"] }}
-                            transition={{
-                              duration: 0.85,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
+                            {...waveBar(["9px", "3px", "9px"], 0.85)}
                           />
                           <motion.span
                             className="w-[2px] rounded-full bg-[#9c27b0]"
-                            animate={{ height: ["4px", "10px", "4px"] }}
-                            transition={{
-                              duration: 0.65,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
+                            {...waveBar(["4px", "10px", "4px"], 0.65)}
                           />
                         </div>
                         <span
@@ -408,10 +514,13 @@ function StepCard({
   mod,
   index,
   smoothProgress,
+  imageSize,
 }: {
   mod: typeof MODULES[number];
   index: number;
   smoothProgress: MotionValue<number>;
+  /** Measured image size at ≥1024px, always in the design's proportions. */
+  imageSize?: { width: number; height: number };
 }) {
   const isLast = index === MODULES.length - 1;
   const start = index === 0 ? 0 : (index - 0.15) / MODULES.length;
@@ -452,7 +561,7 @@ function StepCard({
 
   return (
     <motion.div
-      className="absolute inset-x-0 top-10 flex flex-col items-center overflow-hidden rounded-[30px] p-[2px] shadow-2xl"
+      className="home-hiw-card absolute inset-x-0 top-10 flex flex-col items-center overflow-hidden rounded-[30px] p-[2px] shadow-2xl"
       style={{
         scale,
         y,
@@ -467,7 +576,10 @@ function StepCard({
         {/* Gradient top accent bar */}
         <div className="h-[3px] w-full" style={{ background: GRAD }} />
         <div className="flex w-full flex-col items-center p-5 pt-4 sm:p-8 sm:pt-6">
-          <div className="relative h-[170px] w-full max-w-[460px] overflow-hidden rounded-[16px] sm:h-[320px]">
+          <div
+            className="relative h-[170px] w-full max-w-[460px] overflow-hidden rounded-[16px] sm:h-[320px]"
+            style={imageSize}
+          >
             <img
               src={mod.img}
               loading="lazy"
@@ -477,7 +589,8 @@ function StepCard({
             />
             <div className="absolute inset-x-0 bottom-0 h-[60px] bg-gradient-to-t from-white/40 to-transparent" />
           </div>
-          <div className="mt-6 flex flex-col items-center text-center">
+          {/* Hidden in home.css exactly where the left column shows this title and description. */}
+          <div className="home-hiw-card-text mt-6 flex flex-col items-center text-center">
             <h4
               className="text-[22px] tracking-[-0.5px]"
               style={{
@@ -515,8 +628,14 @@ const stepProgress = (idx: number) => (idx + 0.45) / MODULES.length;
 
 export default function HowItWorksSection() {
   const containerRef = useRef<HTMLElement>(null);
-  const pinned = usePinned("howItWorks");
-  const reduce = useHomeReducedMotion();
+  const reduce = useMotionDisabled();
+  const geometry = useHowItWorksGeometry(containerRef);
+  const doesNotFit = geometry !== null && !geometry.fits;
+  /* The same three conditions gate the pin in home.css: the pin query, no in-app motion setting,
+     and (≥1024px) the stage fitting. */
+  const pinned = usePinned("howItWorks") && !reduce && !doesNotFit;
+  const fitted = geometry?.fits ? geometry : null;
+  const imageSize = fitted ? { width: fitted.imageWidth, height: fitted.imageHeight } : undefined;
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -561,6 +680,7 @@ export default function HowItWorksSection() {
       ref={containerRef}
       id="how-it-works"
       className="home-pin home-pin--how-it-works relative bg-white"
+      data-hiw-fit={doesNotFit ? "none" : undefined}
     >
       <div className="home-pin-stage flex w-full flex-col items-center justify-center">
         {/* Floating emblem in lower-right empty space */}
@@ -571,7 +691,7 @@ export default function HowItWorksSection() {
         {/* Header */}
         <div className="flex w-full max-w-[1260px] flex-col items-center px-6 text-center">
           <span
-            className="rounded-[12px] border border-[#e91e63] px-4 py-[6px] text-[11px] font-semibold uppercase backdrop-blur-[4px]"
+            className="home-hiw-badge rounded-[12px] border border-[#e91e63] px-4 py-[6px] text-[11px] font-semibold uppercase backdrop-blur-[4px]"
             style={{
               fontFamily: "'Montserrat', sans-serif",
               backgroundImage:
@@ -586,7 +706,7 @@ export default function HowItWorksSection() {
             </span>
           </span>
           <h2
-            className="mt-4 text-[clamp(40px,4.4vw,56px)] leading-[1] tracking-[-1.7px] text-black"
+            className="home-hiw-heading mt-4 text-[clamp(40px,4.4vw,56px)] leading-[1] tracking-[-1.7px] text-black"
             style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 400 }}
           >
             Meet{" "}
@@ -598,13 +718,13 @@ export default function HowItWorksSection() {
             </span>
           </h2>
           <p
-            className="mt-3 max-w-[440px] text-[15px] leading-[1.6] text-[#666]"
+            className="home-hiw-subtitle mt-3 max-w-[440px] text-[15px] leading-[1.6] text-[#666]"
             style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}
           >
             Your companion for every step of the journey
           </p>
           <div
-            className="mt-4 h-[5px] w-[57px] rounded-full"
+            className="home-hiw-bar mt-4 h-[5px] w-[57px] rounded-full"
             style={{ background: GRAD }}
           />
         </div>
@@ -632,7 +752,7 @@ export default function HowItWorksSection() {
               </span>
             </div>
 
-            <div className="relative mt-8 min-h-[200px] w-full">
+            <div className="home-hiw-slides relative mt-8 min-h-[200px] w-full">
               {MODULES.map((mod, i) => (
                 <TextSlide
                   key={`text-${i}`}
@@ -647,19 +767,26 @@ export default function HowItWorksSection() {
           {/* Right Column */}
           <div className="relative w-full max-w-[620px]">
             {/* Unique Liquid Glass Dock Stepper */}
-            <UniqueDockStepper
-              scrollYProgress={progress}
-              onSelectStep={handleSelectModule}
-            />
+            <div className="home-hiw-stepper">
+              <UniqueDockStepper
+                scrollYProgress={progress}
+                onSelectStep={handleSelectModule}
+                reduce={reduce}
+              />
+            </div>
 
             {/* Stacking Cards */}
-            <div className="relative mt-2 h-[400px] w-full pt-6 sm:h-[520px]">
+            <div
+              className="relative mt-2 h-[400px] w-full pt-6 sm:h-[520px]"
+              style={fitted ? { height: fitted.cardsHeight } : undefined}
+            >
               {MODULES.map((mod, i) => (
                 <StepCard
                   key={`card-${i}`}
                   mod={mod}
                   index={i}
                   smoothProgress={smoothProgress}
+                  imageSize={imageSize}
                 />
               ))}
             </div>

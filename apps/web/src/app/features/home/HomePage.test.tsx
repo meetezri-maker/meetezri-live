@@ -11,7 +11,19 @@ vi.mock("@/lib/api", () => ({
 
 import { HomePage } from "./HomePage";
 import { createGuestCheckoutUrl } from "./homeActions";
-import { PIN_QUERIES } from "./layoutModes";
+import {
+  FEATURE_SLOTS,
+  FEATURES_BUBBLE,
+  FEATURES_STAGE,
+  HIW_STAGE,
+  PIN_QUERIES,
+  bubbleReach,
+  clusterClears,
+  featuresStageMetrics,
+  howItWorksStageMetrics,
+  movingGap,
+  placeFeatureBubbles,
+} from "./layoutModes";
 import { measureTrack, trackX } from "./components/EverydayLifeSection";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -384,4 +396,540 @@ describe("everyday life carousel geometry", () => {
       });
     });
   }
+});
+
+describe("Features layout queries", () => {
+  it("leaves every other section's pin query exactly as it was", () => {
+    expect(PIN_QUERIES.moments).toBe(
+      "(prefers-reduced-motion: no-preference) and (max-width: 1023px) and (min-height: 780px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 700px)",
+    );
+    expect(PIN_QUERIES.carousel).toBe(
+      "(prefers-reduced-motion: no-preference) and (max-width: 767px) and (min-height: 855px), (prefers-reduced-motion: no-preference) and (min-width: 768px) and (min-height: 820px)",
+    );
+    expect(PIN_QUERIES.journey).toBe(
+      "(prefers-reduced-motion: no-preference) and (max-width: 1023px) and (min-height: 885px), (prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 640px)",
+    );
+    expect(PIN_QUERIES.conversation).toBe(
+      "(prefers-reduced-motion: no-preference) and (min-width: 1024px) and (min-height: 700px)",
+    );
+  });
+
+  it("changes only the ≥1280px Features branch; phone, tablet and 1024–1279px stay as they were", () => {
+    expect(PIN_QUERIES.features.split(", ")).toEqual([
+      "(prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 1090px)",
+      "(prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 1045px)",
+      "(prefers-reduced-motion: no-preference) and (min-width: 1024px) and (max-width: 1279px) and (min-height: 1090px)",
+      "(prefers-reduced-motion: no-preference) and (min-width: 1280px) and (min-height: 708px)",
+    ]);
+  });
+
+  it("guards every Features pin rule with the in-app motion classes and the fit fallback, and no other section", () => {
+    const start = homeCss.indexOf(`@media ${PIN_QUERIES.features} {`);
+    const end = homeCss.indexOf("\n}\n", start);
+    const block = homeCss.slice(start, end);
+    const selectors = [...block.matchAll(/^ {2}([^\s{}][^{}]*)\{/gm)].map((m) => m[1].trim());
+    expect(selectors).toHaveLength(4);
+    for (const selector of selectors) {
+      expect(selector.startsWith(
+        ':root:not(.reduced-motion):not(.appearance-no-animations) .solace-home .home-pin--features:not([data-features-fit="none"])',
+      )).toBe(true);
+    }
+    // How It Works has its own guards (tested below); no other section has any.
+    const hiwStart = homeCss.indexOf(`@media ${PIN_QUERIES.howItWorks} {`);
+    const hiwEnd = homeCss.indexOf("\n}\n", hiwStart);
+    const outside = (
+      homeCss.slice(0, start) + homeCss.slice(end, hiwStart) + homeCss.slice(hiwEnd)
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(outside).not.toContain(".reduced-motion");
+    expect(outside).not.toContain("data-features-fit");
+    expect(outside).not.toContain("data-hiw-fit");
+  });
+
+  it("sizes the arc in CSS with the same numbers the placement maths uses", () => {
+    const S = FEATURES_STAGE;
+    expect(homeCss).toContain(`height: clamp(${S.arcMin}px, ${S.arcVh * 100}vh, ${S.arcMax}px);`);
+    expect(homeCss).toContain(
+      `margin-top: clamp(${S.arcTopMin}px, ${S.arcTopVh * 100}vh, ${S.arcTopMax}px);`,
+    );
+  });
+});
+
+describe("Features bubble placement", () => {
+  /** Badge (28.5) + gap (8) + heading lines + accent bar and its margin (10). */
+  const headingBlock = (viewportHeight: number, lineHeight: number) =>
+    28.5 + 8 + (viewportHeight < 900 ? 1 : 2) * 42 * lineHeight + 10;
+  const layoutAt = (width: number, height: number, lineHeight: number) => {
+    const metrics = featuresStageMetrics({
+      viewportWidth: width,
+      viewportHeight: height,
+      headerClearance: 96,
+      headingBlockHeight: headingBlock(height, lineHeight),
+    });
+    return { metrics, layout: placeFeatureBubbles(FEATURE_SLOTS, metrics.clusterWidth, metrics.clusterHeight) };
+  };
+
+  it("arranges every designer step as one outer and one inner bubble in each of two rows, with all eight highlights", () => {
+    for (const side of ["left", "right"] as const) {
+      FEATURE_SLOTS[side].forEach((slots, step) => {
+        expect(slots, `${side} step ${step + 1}`).toHaveLength(4);
+        expect(new Set(slots.map((s) => `${s.isUp}-${s.gi}`)).size).toBe(4);
+        for (const isUp of [true, false]) {
+          const row = slots.filter((s) => s.isUp === isUp);
+          expect(row.filter((s) => s.pos < 100), `${side} step ${step + 1}`).toHaveLength(1);
+        }
+      });
+    }
+  });
+
+  const cases: [number, number, number][] = [
+    [1366, 768, 1.5], [1366, 768, 1.9],
+    [1440, 900, 1.5], [1440, 900, 1.9],
+    [1536, 864, 1.5], [1536, 864, 1.9],
+    [1920, 955, 1.5], [1920, 955, 1.9],
+    [1920, 1080, 1.5], [1920, 1080, 1.9],
+    [1280, 708, 1.5], [1280, 725, 1.9],
+    [2560, 1440, 1.5],
+  ];
+  for (const [width, height, lineHeight] of cases) {
+    it(`fits all eight bubbles per step with full float clearance at ${width}×${height}, line height ${lineHeight}`, () => {
+      const { metrics, layout } = layoutAt(width, height, lineHeight);
+      expect(layout).not.toBeNull();
+      for (const side of ["left", "right"] as const) {
+        expect(layout![side]).toHaveLength(5);
+        layout![side].forEach((step, i) => {
+          expect(step, `${side} step ${i + 1}`).toHaveLength(4);
+          expect(clusterClears(step, metrics.clusterWidth, metrics.clusterHeight)).toBe(true);
+          for (const bubble of step) {
+            expect(bubble.size).toBeGreaterThanOrEqual(FEATURES_BUBBLE.minSize);
+            const reach = bubbleReach(bubble.size, bubble.index);
+            // Float and satellites stay inside the cluster, which sits inside the stage row.
+            expect(bubble.top - reach.up).toBeGreaterThanOrEqual(0);
+            expect(bubble.top + bubble.size + reach.down).toBeLessThanOrEqual(metrics.clusterHeight);
+          }
+          for (let a = 0; a < 4; a++) {
+            for (let b = a + 1; b < 4; b++) {
+              expect(movingGap(step[a], step[b])).toBeGreaterThanOrEqual(FEATURES_BUBBLE.gap);
+            }
+          }
+        });
+      }
+      // The screen frame fits the row too.
+      const screenHeight = (metrics.screenMaxWidth - 16) / 1.6 + 16;
+      expect(screenHeight + FEATURES_STAGE.screenTop).toBeLessThanOrEqual(metrics.rowHeight);
+    });
+  }
+
+  /** The shortest viewport height (at 1280px wide) where the bubbles fit at `lineHeight`. */
+  const shortestFit = (lineHeight: number) => {
+    for (let height = 600; height <= 900; height++) {
+      if (layoutAt(1280, height, lineHeight).layout) return height;
+    }
+    return Infinity;
+  };
+
+  it("pins from exactly the height where the default line height fits", () => {
+    const pinFrom = Number(PIN_QUERIES.features.match(/\(min-width: 1280px\) and \(min-height: (\d+)px\)/)![1]);
+    expect(pinFrom).toBe(shortestFit(1.5));
+    // Wider viewports do not need more height.
+    for (const width of [1366, 1440, 1536, 1920]) {
+      expect(layoutAt(width, pinFrom, 1.5).layout, `${width}px`).not.toBeNull();
+    }
+  });
+
+  it("falls back (no layout) where the loose line height leaves too little room", () => {
+    const pinFrom = Number(PIN_QUERIES.features.match(/\(min-width: 1280px\) and \(min-height: (\d+)px\)/)![1]);
+    const loose = shortestFit(1.9);
+    expect(loose).toBeGreaterThan(pinFrom);
+    expect(layoutAt(1280, loose - 1, 1.9).layout).toBeNull();
+    expect(layoutAt(1280, loose, 1.9).layout).not.toBeNull();
+    console.info(`Features pins from ${pinFrom}px (default line height); loose line height fits from ${loose}px.`);
+  });
+});
+
+describe("Features section behaviour", () => {
+  const setViewport = (width: number, height: number) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+  };
+  const original = { width: window.innerWidth, height: window.innerHeight };
+  afterEach(() => {
+    setViewport(original.width, original.height);
+    document.documentElement.classList.remove("reduced-motion", "appearance-no-animations");
+  });
+
+  it("keeps the visible space in “Highlighted Features”", () => {
+    const { container } = renderHome();
+    const heading = container.querySelector("#features h2")!;
+    expect(heading.textContent).toBe("Highlighted Features");
+    expect(heading.querySelector("br.home-features-heading-break")).not.toBeNull();
+  });
+
+  for (const appClass of ["reduced-motion", "appearance-no-animations"]) {
+    it(`stops pinning live when the in-app ${appClass} class is added, and pins again when removed`, async () => {
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.features);
+      const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+      try {
+        const { container } = renderHome();
+        const arc = (label: string) =>
+          container.querySelector<HTMLButtonElement>(`#features button[aria-label="${label}"]`)!;
+
+        scrollTo.mockClear();
+        fireEvent.click(arc("Talk It Out"));
+        expect(scrollTo).toHaveBeenCalledTimes(1); // pinned: a step is a scroll position
+
+        document.documentElement.classList.add(appClass);
+        await waitFor(() => {
+          scrollTo.mockClear();
+          fireEvent.click(arc("Wellness Tools"));
+          expect(scrollTo).not.toHaveBeenCalled();
+          expect(arc("Wellness Tools")).toHaveAttribute("aria-pressed", "true");
+        });
+
+        document.documentElement.classList.remove(appClass);
+        await waitFor(() => {
+          scrollTo.mockClear();
+          fireEvent.click(arc("Rest & Habits"));
+          expect(scrollTo).toHaveBeenCalledTimes(1);
+        });
+      } finally {
+        restore();
+      }
+    });
+  }
+
+  it("does not pin when the OS asks for reduced motion", async () => {
+    const restore = mockMatchMedia(
+      (q) => q === PIN_QUERIES.features || q === "(prefers-reduced-motion: reduce)",
+    );
+    const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+    try {
+      const { container } = renderHome();
+      const button = container.querySelector<HTMLButtonElement>('#features button[aria-label="Insights & Growth"]')!;
+      await waitFor(() => {
+        scrollTo.mockClear();
+        fireEvent.click(button);
+        expect(scrollTo).not.toHaveBeenCalled();
+        expect(button).toHaveAttribute("aria-pressed", "true");
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("disconnects its observers and listeners on unmount", () => {
+    const listeners = new Map<string, Set<unknown>>();
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === PIN_QUERIES.features,
+      media: query,
+      addEventListener: (_: string, fn: unknown) => {
+        if (!listeners.has(query)) listeners.set(query, new Set());
+        listeners.get(query)!.add(fn);
+      },
+      removeEventListener: (_: string, fn: unknown) => listeners.get(query)?.delete(fn),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
+    try {
+      setViewport(1366, 768);
+      const { unmount } = renderHome();
+      expect(listeners.get("(prefers-reduced-motion: reduce)")?.size).toBeGreaterThan(0);
+      expect(listeners.get(PIN_QUERIES.features)?.size).toBeGreaterThan(0);
+      disconnect.mockClear();
+      unmount();
+      expect(disconnect).toHaveBeenCalled();
+      for (const [query, set] of listeners) expect(set.size, query).toBe(0);
+    } finally {
+      disconnect.mockRestore();
+      window.matchMedia = original;
+    }
+  });
+
+  it("places sized bubbles at ≥1280px, and hands over to the flow layout where they cannot fit", async () => {
+    const restore = mockMatchMedia((q) => q === PIN_QUERIES.features);
+    try {
+      setViewport(1366, 768);
+      const { container, unmount } = renderHome();
+      const section = container.querySelector<HTMLElement>("#features")!;
+      await waitFor(() => {
+        const row = section.querySelector<HTMLElement>(".home-pinned-only > div:nth-child(2)")!;
+        expect(row.style.height).not.toBe("");
+      });
+      expect(section).not.toHaveAttribute("data-features-fit");
+      unmount();
+
+      setViewport(1366, 560);
+      const second = renderHome();
+      await waitFor(() =>
+        expect(second.container.querySelector("#features")).toHaveAttribute("data-features-fit", "none"),
+      );
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("How It Works layout", () => {
+  /** Measured in the browser at ≥1272px wide (the header's own height, without margins). */
+  const measured = {
+    default: { headerHeight: 142, stepperHeight: 126, textColumnHeight: 421 },
+    loose: { headerHeight: 175, stepperHeight: 139, textColumnHeight: 477 },
+  };
+  const metricsAt = (viewportHeight: number, lineHeight: keyof typeof measured) =>
+    howItWorksStageMetrics({ viewportHeight, headerClearance: 96, ...measured[lineHeight] });
+  const pinFrom = () =>
+    Number(PIN_QUERIES.howItWorks.match(/\(min-width: 1024px\) and \(min-height: (\d+)px\)/)![1]);
+  const block = () => {
+    const start = homeCss.indexOf(`@media ${PIN_QUERIES.howItWorks} {`);
+    return homeCss.slice(start, homeCss.indexOf("\n}\n", start));
+  };
+
+  it("changes only the ≥1024px branch; phone and tablet stay as they were", () => {
+    expect(PIN_QUERIES.howItWorks.split(", ").slice(0, 2)).toEqual([
+      "(prefers-reduced-motion: no-preference) and (max-width: 639px) and (min-height: 840px)",
+      "(prefers-reduced-motion: no-preference) and (min-width: 640px) and (max-width: 1023px) and (min-height: 945px)",
+    ]);
+  });
+
+  it("guards every pin rule with the in-app motion classes", () => {
+    const selectors = [...block().matchAll(/^\s+(:root[^{]*)\{/gm)].map((m) => m[1]);
+    expect(selectors.length).toBeGreaterThan(8);
+    for (const selector of selectors) {
+      expect(selector).toContain(":root:not(.reduced-motion):not(.appearance-no-animations)");
+    }
+  });
+
+  it("keeps the unfitted stage measurable but invisible, unfocusable and unread", () => {
+    const rule = block().match(/\[data-hiw-fit="none"\] \.home-pinned-only \{([^}]*)\}/)![1];
+    expect(rule).toContain("visibility: hidden");
+    expect(rule).toContain("display: revert-layer");
+    expect(rule).toContain("height: 0");
+  });
+
+  it("hides the card's copy of the text only where the left column shows it", () => {
+    const css = block();
+    const hide = css.indexOf(".home-hiw-card-text {");
+    const desktop = css.indexOf("@media (min-width: 1024px)");
+    expect(desktop).toBeGreaterThan(-1);
+    expect(hide).toBeGreaterThan(desktop);
+    // Below 1024px the left column is what is hidden, and the card keeps the text.
+    const mobile = css.slice(css.indexOf("@media (max-width: 1023px)"), desktop);
+    expect(mobile).toContain(".home-hiw-text");
+    expect(mobile).not.toContain(".home-hiw-card-text");
+  });
+
+  it("uses the same numbers in CSS and the fit maths", () => {
+    const S = HIW_STAGE;
+    expect(block()).toContain(`margin-top: clamp(${S.gapMin}px, ${S.gapVh * 100}vh, ${S.gapMax}px);`);
+    expect(block()).toContain(`top: ${S.cardTop}px;`);
+  });
+
+  it("fits the laptop sizes that were measured, with the image in the design's proportions", () => {
+    const cases: [number, keyof typeof measured, number][] = [
+      [768, "default", 241],
+      [900, "default", 320],
+      [864, "default", 320],
+      [900, "loose", 320],
+      [864, "loose", 289],
+    ];
+    for (const [height, lineHeight, image] of cases) {
+      const m = metricsAt(height, lineHeight);
+      expect(m.fits, `${height} ${lineHeight}`).toBe(true);
+      expect(m.imageHeight, `${height} ${lineHeight}`).toBe(image);
+      expect(m.imageWidth / m.imageHeight).toBeCloseTo(460 / 320, 2);
+      expect(m.cardsHeight).toBe(HIW_STAGE.cardTop + HIW_STAGE.cardChrome + m.imageHeight);
+    }
+  });
+
+  it("never sizes the image outside 200–320px", () => {
+    for (let height = 500; height <= 1600; height++) {
+      const m = metricsAt(height, "default");
+      expect(m.imageHeight).toBeLessThanOrEqual(HIW_STAGE.imageMax);
+      if (m.fits) expect(m.imageHeight).toBeGreaterThanOrEqual(HIW_STAGE.imageMin);
+    }
+  });
+
+  it("pins from exactly the height where the default line height fits", () => {
+    expect(metricsAt(pinFrom(), "default").fits).toBe(true);
+    expect(metricsAt(pinFrom() - 1, "default").fits).toBe(false);
+  });
+
+  it("does not fit at 1366×768 with the loose line height, or when the text column is too tall", () => {
+    expect(metricsAt(768, "loose").fits).toBe(false);
+    expect(
+      howItWorksStageMetrics({
+        viewportHeight: 800,
+        headerClearance: 96,
+        headerHeight: 125.6,
+        stepperHeight: 126,
+        textColumnHeight: 534, // 1024px wide: the left column wraps taller than the cards
+      }).fits,
+    ).toBe(false);
+  });
+
+  describe("in the page", () => {
+    const setViewport = (width: number, height: number) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+    };
+    const original = { width: window.innerWidth, height: window.innerHeight };
+    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
+    const stepButton = (root: HTMLElement, name: string) =>
+      root.querySelector<HTMLButtonElement>(`#how-it-works button[aria-label="${name}"]`)!;
+    const STEP_2 = "Step 02: Journal Thoughts";
+
+    afterEach(() => {
+      setViewport(original.width, original.height);
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetHeight);
+      document.documentElement.classList.remove("reduced-motion", "appearance-no-animations");
+    });
+
+    /** jsdom has no layout: give the stepper a size so the section can measure itself. */
+    const giveStepperAHeight = () =>
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+        configurable: true,
+        get: () => 126,
+      });
+
+    it("lists all three steps, each with its text and image, in reading order when stacked", () => {
+      const { container } = renderHome();
+      const steps = container.querySelectorAll("#how-it-works .home-flow-only > li");
+      expect(steps).toHaveLength(3);
+      for (const step of steps) {
+        const [text, image] = [...step.children];
+        expect(text.querySelector("h3")?.textContent?.trim()).not.toBe("");
+        expect(text.querySelector("p + h3 + p")?.textContent?.trim()).not.toBe("");
+        expect(image.querySelector("img")?.getAttribute("alt")).toBeTruthy();
+      }
+    });
+
+    it("sizes the cards from what it measured, keeping the image proportions", async () => {
+      giveStepperAHeight();
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(1366, 768);
+        const { container } = renderHome();
+        const image = container.querySelector<HTMLElement>("#how-it-works .home-hiw-card img")!
+          .parentElement!;
+        await waitFor(() => expect(image.style.height).not.toBe(""));
+        expect(parseFloat(image.style.width) / parseFloat(image.style.height)).toBeCloseTo(460 / 320, 1);
+        expect(container.querySelector("#how-it-works")).not.toHaveAttribute("data-hiw-fit");
+      } finally {
+        restore();
+      }
+    });
+
+    it("re-measures after a resize, an image load and a settings change, and back again", async () => {
+      giveStepperAHeight();
+      const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+      try {
+        setViewport(1366, 768);
+        const { container } = renderHome();
+        const section = container.querySelector<HTMLElement>("#how-it-works")!;
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+
+        setViewport(1366, 400);
+        fireEvent(window, new Event("resize"));
+        await waitFor(() => expect(section).toHaveAttribute("data-hiw-fit", "none"));
+
+        setViewport(1366, 768);
+        fireEvent.load(section.querySelector("img")!);
+        await waitFor(() => expect(section).not.toHaveAttribute("data-hiw-fit"));
+
+        setViewport(1366, 400);
+        document.documentElement.classList.add("a11y-lh-loose");
+        await waitFor(() => expect(section).toHaveAttribute("data-hiw-fit", "none"));
+        document.documentElement.classList.remove("a11y-lh-loose");
+      } finally {
+        restore();
+      }
+    });
+
+    for (const appClass of ["reduced-motion", "appearance-no-animations"]) {
+      it(`stops pinning and removes the looping rings live with ${appClass}`, async () => {
+        const restore = mockMatchMedia((q) => q === PIN_QUERIES.howItWorks);
+        const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+        const rings = (root: HTMLElement) =>
+          root.querySelectorAll("#how-it-works .home-hiw-stepper .blur-sm").length;
+        try {
+          const { container } = renderHome();
+          expect(rings(container)).toBe(1);
+          scrollTo.mockClear();
+          fireEvent.click(stepButton(container, STEP_2));
+          expect(scrollTo).toHaveBeenCalledTimes(1);
+
+          document.documentElement.classList.add(appClass);
+          await waitFor(() => expect(rings(container)).toBe(0));
+          scrollTo.mockClear();
+          fireEvent.click(stepButton(container, STEP_2));
+          expect(scrollTo).not.toHaveBeenCalled();
+
+          document.documentElement.classList.remove(appClass);
+          await waitFor(() => expect(rings(container)).toBe(1));
+        } finally {
+          restore();
+        }
+      });
+    }
+
+    it("does not pin, or loop, when the OS asks for reduced motion", async () => {
+      const restore = mockMatchMedia(
+        (q) => q === PIN_QUERIES.howItWorks || q === "(prefers-reduced-motion: reduce)",
+      );
+      const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+      try {
+        const { container } = renderHome();
+        await waitFor(() =>
+          expect(container.querySelectorAll("#how-it-works .home-hiw-stepper .blur-sm")).toHaveLength(0),
+        );
+        scrollTo.mockClear();
+        fireEvent.click(stepButton(container, STEP_2));
+        expect(scrollTo).not.toHaveBeenCalled();
+      } finally {
+        restore();
+      }
+    });
+
+    it("keeps the step controls as named buttons with the current step marked", () => {
+      const { container } = renderHome();
+      const buttons = [...container.querySelectorAll<HTMLButtonElement>("#how-it-works .home-hiw-stepper button")];
+      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Step 01: Talk It Out",
+        "Step 02: Journal Thoughts",
+        "Step 03: Wellness Toolkit",
+      ]);
+      expect(buttons[0]).toHaveAttribute("aria-current", "step");
+    });
+
+    it("disconnects everything it observes on unmount", () => {
+      const listeners = new Map<string, Set<unknown>>();
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query === PIN_QUERIES.howItWorks,
+        media: query,
+        addEventListener: (_: string, fn: unknown) => {
+          if (!listeners.has(query)) listeners.set(query, new Set());
+          listeners.get(query)!.add(fn);
+        },
+        removeEventListener: (_: string, fn: unknown) => listeners.get(query)?.delete(fn),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+      const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
+      try {
+        const { unmount } = renderHome();
+        expect(listeners.get(PIN_QUERIES.howItWorks)?.size).toBeGreaterThan(0);
+        disconnect.mockClear();
+        unmount();
+        expect(disconnect).toHaveBeenCalled();
+        for (const [query, set] of listeners) expect(set.size, query).toBe(0);
+      } finally {
+        disconnect.mockRestore();
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+  });
 });
