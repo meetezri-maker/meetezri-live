@@ -4,6 +4,14 @@
  */
 export const LANDING_HERO_BG = "/community/hero-lake.jpg";
 
+export const LANDING_HERO_AVIF_SRC_SET = [640, 960, 1280, 1600]
+  .map((width) => `/community/hero-lake-${width}.avif ${width}w`)
+  .join(", ");
+
+export const LANDING_HERO_WEBP_SRC_SET = [640, 960, 1280, 1600]
+  .map((width) => `/community/hero-lake-${width}.webp ${width}w`)
+  .join(", ");
+
 /** Background image inside the “Ready to Start” CTA card only */
 export const LANDING_CTA_CARD_BG = "/talk-it-out/5.png";
 

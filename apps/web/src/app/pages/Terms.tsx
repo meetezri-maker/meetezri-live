@@ -7,7 +7,7 @@ import {
 import { PublicNav } from "../components/PublicNav";
 import { PublicFooter } from "../components/PublicFooter";
 import { LandingBackground } from "../landing/LandingBackground";
-import { LANDING_HERO_BG } from "../landing/landingImagery";
+import { HeroLakePicture } from "../landing/HeroLakePicture";
 import { cn } from "@/lib/utils";
 
 type TermsIconVisual =
@@ -396,12 +396,8 @@ export function Terms() {
       <LandingBackground />
 
       <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
-        <img
-          src={LANDING_HERO_BG}
-          alt=""
+        <HeroLakePicture
           className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[center_40%] opacity-[0.22] blur-[1.5px]"
-          width={1600}
-          height={1067}
         />
         <motion.div className="absolute inset-0 bg-[rgba(5,8,20,0.52)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_12%,rgba(88,28,135,0.14)_0%,transparent_62%)]" />

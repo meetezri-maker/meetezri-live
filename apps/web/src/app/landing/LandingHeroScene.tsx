@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LANDING_HERO_BG } from "./landingImagery";
+import { HeroLakePicture } from "./HeroLakePicture";
 
 interface LandingHeroSceneProps {
   children: ReactNode;
@@ -9,13 +9,9 @@ interface LandingHeroSceneProps {
 export function LandingHeroScene({ children }: LandingHeroSceneProps) {
   return (
     <section className="relative flex min-h-[min(88vh,900px)] items-center justify-center overflow-hidden py-8 sm:py-12">
-      <img
-        src={LANDING_HERO_BG}
-        alt=""
+      <HeroLakePicture
         className="absolute inset-0 h-full w-full object-cover object-[center_55%]"
-        width={1600}
-        height={1067}
-        fetchPriority="high"
+        highPriority
       />
       <div
         className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.4)_0%,rgba(5,8,22,0.62)_50%,rgba(5,8,22,0.88)_100%)]"

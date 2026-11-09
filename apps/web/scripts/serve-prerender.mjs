@@ -47,6 +47,7 @@ const mimeTypes = new Map([
   ['.png', 'image/png'],
   ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'],
+  ['.avif', 'image/avif'],
   ['.webp', 'image/webp'],
   ['.woff2', 'font/woff2'],
   ['.mp4', 'video/mp4'],
