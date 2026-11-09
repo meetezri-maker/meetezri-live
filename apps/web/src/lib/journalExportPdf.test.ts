@@ -84,10 +84,26 @@ describe("journal PDF content", () => {
     const { pages } = await build(input([entry("a"), entry("b"), entry("c")]));
     const all = pages.flat();
     expect(all).toContain("Journal Export");
-    expect(all).toContain("Dates: 1 Oct 2026 – 28 Oct 2026 (inclusive)");
+    expect(all).toContain("Reporting period: 1 Oct 2026 – 28 Oct 2026 (inclusive)");
+    expect(all.some((l) => l.startsWith("Dates:"))).toBe(false);
     expect(all).toContain("Generated: 28 Oct 2026, 15:00 (Asia/Karachi)");
     expect(all).toContain("3 entries");
-    pages.forEach((lines, i) => expect(lines).toContain(`Page ${i + 1} of ${pages.length}`));
+    pages.forEach((lines, i) => {
+      expect(lines).toContain(`Page ${i + 1} of ${pages.length}`);
+      expect(lines).toContain("Solace · Personal & confidential");
+    });
+  });
+
+  it("repeats the approved running header and footer on every continuation page", async () => {
+    const content = Array.from({ length: 40 }, (_, i) => `<p>Paragraph ${i}: ${"steady progress on small daily things ".repeat(9)}</p>`).join("");
+    const { pages } = await build(input([entry("a", { content })]));
+    expect(pages.length).toBeGreaterThan(1);
+    pages.slice(1).forEach((lines, i) => {
+      expect(lines).toContain("Journal Export  ·  1 Oct 2026 – 28 Oct 2026 (inclusive)");
+      expect(lines).toContain("Solace · Personal & confidential");
+      expect(lines).toContain(`Page ${i + 2} of ${pages.length}`);
+      expect(lines.includes("Solace")).toBe(false);
+    });
   });
 
   it("labels partial ranges and no range", () => {

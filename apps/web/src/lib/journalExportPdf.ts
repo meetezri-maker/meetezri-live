@@ -1,7 +1,7 @@
 /**
  * Journal Export PDF: a single-column, print-friendly reading document.
  *
- *   Header — logo, "Journal Export", selected dates, generated time and time zone, entry count
+ *   Header — logo, "Journal Export", reporting period, generated time and time zone, entry count
  *   Entries — title, recorded date · mood · favorite, then the entry text with its paragraphs,
  *             line breaks, headings, lists and quotes (see journalRichText.ts)
  *
@@ -16,7 +16,6 @@ import type { jsPDF } from "jspdf";
 import {
   ARABIC_SCRIPT,
   EMOJI_MARKER,
-  PDF_ARABIC_FONT_FAMILY,
   loadPdfFonts,
   setupPdfText,
   type PdfFontFiles,
@@ -30,55 +29,40 @@ import {
   sortJournalEntries,
   type JournalExportEntry,
 } from "./journalExport";
+import { loadLogo, type LogoImage } from "@/lib/pdf/pdfLogo";
+import {
+  BODY,
+  BOTTOM,
+  BRAND,
+  CAUTION,
+  CONTENT_W,
+  FIRST_TOP,
+  INK,
+  MARGIN as M,
+  MUTED,
+  NBSP,
+  RULE,
+  T_BODY,
+  T_META,
+  T_TITLE,
+  TOP,
+  lineMetrics,
+  type RGB,
+} from "@/lib/pdf/pdfBrand";
+import { stampPages } from "@/lib/pdf/pdfWriter";
 
 type Doc = jsPDF;
-type RGB = [number, number, number];
 type Style = "normal" | "bold";
 
-// --- Geometry (A4, millimetres) — as in the Goals report ----------------------------------------
-const PAGE_W = 210;
-const M = 18;
-const CONTENT_W = PAGE_W - M * 2; // 174
-const FIRST_TOP = 20;
-const TOP = 27; // below the running header on continuation pages
-const BOTTOM = 274;
-const FOOTER_RULE = 281;
-const FOOTER_TEXT = 287;
+// --- This report's own layout; everything else comes from the shared report brand ---------------
 const LIST_INDENT = 6;
 const QUOTE_INDENT = 5;
-
-// --- Type (pt) ----------------------------------------------------------------------------------
-const T_TITLE = 19;
 const T_ENTRY = 12.5;
-const T_BODY = 10;
-const T_META = 8.5;
-const T_SMALL = 7.5;
 /** Headings inside an entry stay smaller than the entry title (T_ENTRY). */
 const HEADING_SIZES = [0, 11.5, 11, 10.5, 10, 10, 10];
-const PT = 0.3528;
-
-const lineH = (size: number) => size * PT * 1.45;
-const ascent = (size: number) => size * PT * 0.78;
-const descent = (size: number) => size * PT * 0.24;
-
-/** Line metrics per font: Amiri's tall marks and deep descenders need more room than DejaVu. */
-function metrics(family: string, size: number) {
-  return family === PDF_ARABIC_FONT_FAMILY
-    ? { lineH: size * PT * 1.95, ascent: size * PT * 1.02, descent: size * PT * 0.6 }
-    : { lineH: lineH(size), ascent: ascent(size), descent: descent(size) };
-}
-
-// --- Print-friendly palette ---------------------------------------------------------------------
-const INK: RGB = [17, 24, 39];
-const BODY: RGB = [40, 46, 58];
-const MUTED: RGB = [96, 104, 117];
-const BRAND: RGB = [109, 40, 217];
-const RULE: RGB = [221, 223, 230];
 const QUOTE_BAR: RGB = [196, 181, 253];
-const CAUTION: RGB = [154, 72, 6];
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const NBSP = " ";
 const LIST_BULLETS = ["•", "–", "·"];
 
 /** "2026-10-27" → "27 Oct 2026" from the calendar parts (no time-zone conversion). */
@@ -207,7 +191,7 @@ class Writer {
     const lines = this.layout(text, width, style, size);
     // One base direction for the whole paragraph (from its first strong character).
     const opts = this.kit.textOptions(o.rtlOf ?? text);
-    const mt = metrics(lines[0]?.family ?? this.kit.baseFamily, size);
+    const mt = lineMetrics(lines[0]?.family ?? this.kit.baseFamily, size);
     return lines.map((ln, i) => {
       const baseline = i === 0 ? (o.padTop ?? 0) + mt.ascent : mt.lineH;
       return {
@@ -240,16 +224,17 @@ class Writer {
 
 function bodyRows(w: Writer, lines: JournalLine[]): Row[] {
   const rows: Row[] = [];
+  const bodyLineH = lineMetrics(w.kit.baseFamily, T_BODY).lineH;
   for (const l of lines) {
     const size = l.kind === "heading" ? HEADING_SIZES[l.level ?? 3] : T_BODY;
-    if (l.paragraphBefore) rows.push({ h: lineH(T_BODY) * 0.55, draw: () => undefined });
+    if (l.paragraphBefore) rows.push({ h: bodyLineH * 0.55, draw: () => undefined });
 
     if (l.kind === "rule") {
       rows.push(w.rule(RULE, 0.3, 2, 2.5));
       continue;
     }
     if (!l.text && !l.marker) {
-      rows.push({ h: lineH(T_BODY), draw: () => undefined }); // an empty line in the entry
+      rows.push({ h: bodyLineH, draw: () => undefined }); // an empty line in the entry
       continue;
     }
 
@@ -265,7 +250,7 @@ function bodyRows(w: Writer, lines: JournalLine[]): Row[] {
         first.draw = (top) => {
           drawText(top);
           w.font("normal", size, MUTED);
-          const baseline = top + (first.baseline ?? ascent(size));
+          const baseline = top + (first.baseline ?? 0);
           if (rtl) w.d.text(marker, M + CONTENT_W - depthIndent, baseline, { align: "right" });
           else w.d.text(marker, M + depthIndent, baseline);
         };
@@ -317,12 +302,6 @@ export interface JournalPdfInput {
   generatedAt: Date;
   /** Time zone for entry dates/times (the device zone used by the date filter). */
   timeZone: string;
-}
-
-export interface LogoImage {
-  dataUrl: string;
-  width: number;
-  height: number;
 }
 
 export interface JournalPdfBuildOptions {
@@ -398,7 +377,7 @@ export async function buildJournalPdf(input: JournalPdfInput, options: JournalPd
   header.push(...w.textRows("Journal Export", { style: "bold", size: T_TITLE, color: INK }), { h: 2.5, draw: () => undefined });
   const generated = formatJournalDateTime(input.generatedAt, input.timeZone) ?? "Not recorded";
   header.push(
-    ...w.textRows(`Dates: ${formatJournalRange(input.dateFrom, input.dateTo)}`, { size: T_BODY }),
+    ...w.textRows(`Reporting period: ${formatJournalRange(input.dateFrom, input.dateTo)}`, { size: T_BODY }),
     ...w.textRows(`Generated: ${generated} (${input.timeZone})`, { size: T_BODY, color: MUTED, padTop: 0.8 }),
     ...w.textRows(`${entries.length} ${entries.length === 1 ? "entry" : "entries"}`, { size: T_BODY, color: MUTED, padTop: 0.8 }),
     ...w.textRows(`Entry days and times use the ${input.timeZone} time zone, as in the date filter.`, { size: T_META, color: MUTED, padTop: 1.2 })
@@ -445,28 +424,8 @@ export async function buildJournalPdf(input: JournalPdfInput, options: JournalPd
     if (index < entries.length - 1 && w.y + separator.h <= BOTTOM) w.place([separator]);
   });
 
-  stampPages(d, kit, input);
+  stampPages(d, kit, `Journal Export  ·  ${formatJournalRange(input.dateFrom, input.dateTo)}`);
   return { doc: d, emojiReplacedCount: emoji, imageCount: images, usedUnicodeFont: kit.unicode };
-}
-
-/** Running header (continuation pages) and footer (every page), once totals are known. */
-function stampPages(d: Doc, kit: PdfTextKit, input: JournalPdfInput): void {
-  const total = d.getNumberOfPages();
-  for (let page = 1; page <= total; page += 1) {
-    d.setPage(page);
-    d.setFont(kit.baseFamily, "normal");
-    d.setFontSize(T_SMALL);
-    d.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    d.setDrawColor(RULE[0], RULE[1], RULE[2]);
-    d.setLineWidth(0.25);
-    if (page > 1) {
-      d.text(`Journal Export  ·  ${formatJournalRange(input.dateFrom, input.dateTo)}`, M, 14);
-      d.line(M, 17, M + CONTENT_W, 17);
-    }
-    d.line(M, FOOTER_RULE, M + CONTENT_W, FOOTER_RULE);
-    d.text("Solace", M, FOOTER_TEXT);
-    d.text(`Page ${page} of ${total}`, M + CONTENT_W, FOOTER_TEXT, { align: "right" });
-  }
 }
 
 /** True when any entry text uses Arabic script (the Urdu font is then loaded). */
@@ -484,7 +443,6 @@ export function journalNeedsArabicFont(entries: JournalExportEntry[]): boolean {
  * Throws `PdfUnsupportedTextError` when text cannot be drawn faithfully.
  */
 export async function createJournalPdf(input: JournalPdfInput): Promise<BuiltJournalPdf> {
-  const { loadLogo } = await import("@/app/features/goals/progress-report/progress-report.pdf");
   const [fonts, logo] = await Promise.all([loadPdfFonts(journalNeedsArabicFont(input.entries)), loadLogo()]);
   return buildJournalPdf(input, { fonts, logo });
 }
