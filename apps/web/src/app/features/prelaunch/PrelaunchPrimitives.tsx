@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PRIMARY_CTA_LABEL } from "./prelaunch.content";
+import type { PrelaunchResponsiveBackground } from "./prelaunch.imagery";
 
 /**
  * Shared building blocks for the pre-launch sections.
@@ -178,27 +179,29 @@ export function CtaSupportingText({ children }: { children: ReactNode }) {
  * scrim so text keeps AA contrast regardless of the underlying image.
  */
 export function SectionBackdrop({
-  src,
+  background,
   className,
   overlayClassName,
-  eager = false,
 }: {
-  src: string;
+  background: PrelaunchResponsiveBackground;
   className?: string;
   overlayClassName?: string;
-  eager?: boolean;
 }) {
   return (
     <div className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)} aria-hidden>
-      <img
-        src={src}
-        alt=""
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-        width={1536}
-        height={1024}
-        className="h-full w-full object-cover object-center"
-      />
+      <picture className="block h-full w-full">
+        <source type="image/avif" srcSet={background.avifSrcSet} sizes={background.sizes} />
+        <source type="image/webp" srcSet={background.webpSrcSet} sizes={background.sizes} />
+        <img
+          src={background.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={1536}
+          height={1024}
+          className="h-full w-full object-cover object-center"
+        />
+      </picture>
       <div
         className={cn(
           "absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.82)_0%,rgba(5,8,22,0.9)_55%,rgba(5,8,22,0.96)_100%)]",

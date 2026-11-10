@@ -44,7 +44,7 @@ export function TrustSection() {
       aria-labelledby="prelaunch-trust-heading"
       className="relative overflow-hidden py-20 md:py-10"
     >
-      <SectionBackdrop src={PRELAUNCH_TRUST_BG} />
+      <SectionBackdrop background={PRELAUNCH_TRUST_BG} />
 
       <div
         className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(6,10,28,0.6)_0%,rgba(5,8,22,0.85)_100%)]"

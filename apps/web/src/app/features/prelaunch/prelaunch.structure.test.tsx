@@ -304,6 +304,57 @@ describe("pre-launch landing page structure", () => {
       .toBeInTheDocument();
   });
 
+
+  it("renders responsive section backgrounds without changing loading or priority", () => {
+    renderPage();
+
+    const backgroundPaths = [1, 2, 3, 4, 5, 6].map(
+      (index) => `/community/early-access-bg${index}.png`,
+    );
+    const widths = [640, 960, 1280, 1536];
+
+    for (const src of backgroundPaths) {
+      const images = [...document.querySelectorAll<HTMLImageElement>(`img[src="${src}"]`)];
+      expect(images).toHaveLength(src.endsWith("bg6.png") ? 2 : 1);
+
+      for (const image of images) {
+        const base = src.slice(0, -4);
+        const picture = image.closest("picture");
+        const sources = picture?.querySelectorAll("source");
+
+        expect(sources).toHaveLength(2);
+        expect(sources?.[0]).toHaveAttribute("type", "image/avif");
+        expect(sources?.[0]).toHaveAttribute(
+          "srcset",
+          widths.map((width) => `${base}-${width}.avif ${width}w`).join(", "),
+        );
+        expect(sources?.[0]).toHaveAttribute("sizes", "100vw");
+        expect(sources?.[1]).toHaveAttribute("type", "image/webp");
+        expect(sources?.[1]).toHaveAttribute(
+          "srcset",
+          widths.map((width) => `${base}-${width}.webp ${width}w`).join(", "),
+        );
+        expect(sources?.[1]).toHaveAttribute("sizes", "100vw");
+        expect(image).toHaveAttribute("alt", "");
+        expect(image).toHaveAttribute("loading", "lazy");
+        expect(image).toHaveAttribute("decoding", "async");
+        expect(image).toHaveAttribute("width", "1536");
+        expect(image).toHaveAttribute("height", "1024");
+        expect(image).not.toHaveAttribute("fetchpriority");
+      }
+    }
+
+    const repeatedBg6Pictures = [
+      ...document.querySelectorAll<HTMLImageElement>(
+        'img[src="/community/early-access-bg6.png"]',
+      ),
+    ].map((image) => image.closest("picture")?.innerHTML);
+    expect(new Set(repeatedBg6Pictures)).toHaveLength(1);
+    expect(document.querySelectorAll('img[fetchpriority="high"]')).toHaveLength(1);
+    expect(document.querySelector<HTMLImageElement>('img[fetchpriority="high"]'))
+      .toHaveAttribute("src", PRELAUNCH_HERO_BG);
+  });
+
   it("keeps the Human Moments conversion on the existing Founding Circle flow", async () => {
     const user = userEvent.setup();
     renderPage();

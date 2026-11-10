@@ -23,7 +23,7 @@ export function FoundingCircleSection() {
     >
       {/* Warmest plate on the page — the sunrise after the calm night. */}
       <SectionBackdrop
-        src={PRELAUNCH_FOUNDING_CIRCLE_BG}
+        background={PRELAUNCH_FOUNDING_CIRCLE_BG}
         overlayClassName="bg-[linear-gradient(180deg,rgba(10,7,18,0.86)_0%,rgba(8,7,20,0.9)_50%,rgba(5,8,22,0.94)_100%)]"
       />
       <div

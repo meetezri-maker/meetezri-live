@@ -17,6 +17,31 @@ export const PRELAUNCH_HERO_WEBP_SRCSET = [
 ].join(", ");
 export const PRELAUNCH_HERO_SIZES = "100vw";
 
+const PRELAUNCH_BACKGROUND_WIDTHS = [640, 960, 1280, 1536] as const;
+
+export interface PrelaunchResponsiveBackground {
+  src: string;
+  avifSrcSet: string;
+  webpSrcSet: string;
+  sizes: "100vw";
+}
+
+function definePrelaunchBackground(
+  index: 1 | 2 | 3 | 4 | 5 | 6,
+): PrelaunchResponsiveBackground {
+  const base = `/community/early-access-bg${index}`;
+  return {
+    src: `${base}.png`,
+    avifSrcSet: PRELAUNCH_BACKGROUND_WIDTHS
+      .map((width) => `${base}-${width}.avif ${width}w`)
+      .join(", "),
+    webpSrcSet: PRELAUNCH_BACKGROUND_WIDTHS
+      .map((width) => `${base}-${width}.webp ${width}w`)
+      .join(", "),
+    sizes: "100vw",
+  };
+}
+
 /*
  * The former recognition backdrop (`/community/scene-forest.jpg`) was retired
  * with that section. Despite the filename it is a desert highway, which the
@@ -32,7 +57,7 @@ export const PRELAUNCH_HERO_SIZES = "100vw";
  */
 
 /** Founding circle. Warmest plate on the page. */
-export const PRELAUNCH_FOUNDING_CIRCLE_BG = "/community/early-access-bg2.png";
+export const PRELAUNCH_FOUNDING_CIRCLE_BG = definePrelaunchBackground(2);
 /**
  * Section 5 — founder. Twilight lake with blossom, mountains, and a mirrored
  * reflection.
@@ -42,28 +67,28 @@ export const PRELAUNCH_FOUNDING_CIRCLE_BG = "/community/early-access-bg2.png";
  * It was invisible under this section's heavy scrim, but a product UI screen is
  * not scenery and should never have been the backdrop.
  */
-export const PRELAUNCH_FOUNDER_BG = "/community/early-access-bg3.png";
+export const PRELAUNCH_FOUNDER_BG = definePrelaunchBackground(3);
 
 /**
  * Human Moments section backdrop. Six people around a firepit on a lake jetty at
  * twilight — string lights, lanterns, distant lit houses. The one genuinely
  * human, everyday-life plate in the library, matching this chapter's subject.
  */
-export const PRELAUNCH_HUMAN_MOMENTS_BG = "/community/early-access-bg1.png";
+export const PRELAUNCH_HUMAN_MOMENTS_BG = definePrelaunchBackground(1);
 
 
-export const PRELAUNCH_MEET_SOLACE_BG = "/community/early-access-bg5.png";
+export const PRELAUNCH_MEET_SOLACE_BG = definePrelaunchBackground(5);
 
-export const PRELAUNCH_FAQ_BG = "/community/early-access-bg6.png";
+export const PRELAUNCH_FAQ_BG = definePrelaunchBackground(6);
 
-export const PRELAUNCH_JOURNEY_BG = "/community/early-access-bg6.png";
+export const PRELAUNCH_JOURNEY_BG = PRELAUNCH_FAQ_BG;
 
 /**
  * Trust section backdrop. Alpine peaks at dawn above a still sea of cloud:
  * calm, spacious, cool natural tones. Deliberately scenery — Blueprint 8.3
  * excludes padlock, shield, and certification imagery from this section.
  */
-export const PRELAUNCH_TRUST_BG = "/community/early-access-bg4.png";
+export const PRELAUNCH_TRUST_BG = definePrelaunchBackground(4);
 
 /**
  * Section 2 — Human Moments. One approved plate per moment, keyed by moment id.

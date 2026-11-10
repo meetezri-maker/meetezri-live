@@ -62,7 +62,7 @@ export function FaqSection() {
       aria-labelledby="prelaunch-faq-heading"
       className="relative overflow-hidden py-20 md:py-8"
     >
-      <SectionBackdrop src={PRELAUNCH_FAQ_BG} />
+      <SectionBackdrop background={PRELAUNCH_FAQ_BG} />
       <div className="landing-section relative z-10">
         <SectionHeader
           badge={FAQ.badge}

@@ -42,7 +42,7 @@ export function YourJourneySection() {
       aria-labelledby="prelaunch-your-journey-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
-      <SectionBackdrop src={PRELAUNCH_JOURNEY_BG} />
+      <SectionBackdrop background={PRELAUNCH_JOURNEY_BG} />
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_10%,rgba(88,28,135,0.16)_0%,transparent_60%)]"
         aria-hidden

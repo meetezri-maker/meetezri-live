@@ -43,7 +43,7 @@ export function HumanMomentsSection() {
       aria-labelledby="prelaunch-human-moments-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
-      <SectionBackdrop src={PRELAUNCH_HUMAN_MOMENTS_BG} />
+      <SectionBackdrop background={PRELAUNCH_HUMAN_MOMENTS_BG} />
 
       <div className="landing-section relative z-10">
         <SectionHeader

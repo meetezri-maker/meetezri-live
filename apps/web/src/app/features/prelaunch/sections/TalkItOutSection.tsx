@@ -37,7 +37,7 @@ export function TalkItOutSection() {
       aria-labelledby="prelaunch-talk-it-out-heading"
       className="relative overflow-hidden py-20 md:py-28"
     >
-      <SectionBackdrop src={PRELAUNCH_MEET_SOLACE_BG} />
+      <SectionBackdrop background={PRELAUNCH_MEET_SOLACE_BG} />
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(88,28,135,0.18)_0%,transparent_60%)]"
         aria-hidden
