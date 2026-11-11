@@ -10,6 +10,17 @@ describe("findActiveNavPath", () => {
     expect(findActiveNavPath("/app/user-profile")).toBe("/app/user-profile");
     expect(findActiveNavPath("/app/community")).toBe("/app/community");
     expect(findActiveNavPath("/app/dashboard")).toBe("/app/dashboard");
+    expect(findActiveNavPath("/app/challenges")).toBe("/app/challenges");
+  });
+
+  it("lists Wellness Challenges directly below Wellness Tools", () => {
+    const paths = MEMBER_NAV_ITEMS.map((item) => item.path);
+    const toolsIndex = paths.indexOf("/app/wellness-tools");
+    expect(toolsIndex).toBeGreaterThanOrEqual(0);
+    expect(MEMBER_NAV_ITEMS[toolsIndex + 1]).toMatchObject({
+      path: "/app/challenges",
+      label: "Wellness Challenges",
+    });
   });
 
   it("prefers the longest match when nested items overlap", () => {

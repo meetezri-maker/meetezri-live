@@ -36,6 +36,7 @@ export const MEMBER_NAV_ITEMS: MemberNavItem[] = [
   { path: "/app/progress", label: "Progress", icon: TrendingUp },
   { path: "/app/session-history", label: "Talk It Out History", icon: Clock },
   { path: "/app/wellness-tools", label: "Wellness Tools", icon: Sparkles },
+  { path: "/app/challenges", label: "Wellness Challenges", icon: Trophy },
   { path: "/app/community", label: "Community", icon: Users },
   { path: "/app/billing", label: "Billing & Credits", icon: CreditCard },
   { path: "/app/settings/achievements", label: "Achievements", icon: Trophy },
