@@ -102,18 +102,54 @@ export const PRELAUNCH_TRUST_BG = definePrelaunchBackground(4);
  * marked decorative with empty alt text and the moment title and narrative
  * remain available as text.
  */
-export const PRELAUNCH_MOMENT_IMAGES: Record<
-  string,
-  { src: string; width: number; height: number }
-> = {
-  "quiet-day": { src: "/community/scene-bedroom.jpg", width: 800, height: 533 },
-  "small-win": { src: "/community/scene-stars.jpg", width: 800, height: 534 },
+export const PRELAUNCH_MOMENT_IMAGE_SIZES =
+  "(min-width: 1152px) 534px, (min-width: 1024px) calc(50vw - 50px), (min-width: 640px) calc(50vw - 46px), calc(100vw - 49px)";
+
+const PRELAUNCH_MOMENT_IMAGE_WIDTHS = [320, 480, 640, 800] as const;
+
+interface PrelaunchMomentImage {
+  src: string;
+  width: number;
+  height: number;
+  responsive?: {
+    avifSrcSet: string;
+    webpSrcSet: string;
+    sizes: string;
+  };
+}
+
+function defineResponsiveMomentImage(
+  src: string,
+  width: number,
+  height: number,
+): PrelaunchMomentImage {
+  const base = src.slice(0, -4);
+  const srcSet = (format: "avif" | "webp") =>
+    PRELAUNCH_MOMENT_IMAGE_WIDTHS.map(
+      (candidateWidth) => `${base}-${candidateWidth}.${format} ${candidateWidth}w`,
+    ).join(", ");
+
+  return {
+    src,
+    width,
+    height,
+    responsive: {
+      avifSrcSet: srcSet("avif"),
+      webpSrcSet: srcSet("webp"),
+      sizes: PRELAUNCH_MOMENT_IMAGE_SIZES,
+    },
+  };
+}
+
+export const PRELAUNCH_MOMENT_IMAGES: Record<string, PrelaunchMomentImage> = {
+  "quiet-day": defineResponsiveMomentImage("/community/scene-bedroom.jpg", 800, 533),
+  "small-win": defineResponsiveMomentImage("/community/scene-stars.jpg", 800, 534),
   "big-decision": {
     src: "/solace/companion-selection-calm-mountain.jpg",
     width: 2400,
     height: 1600,
   },
-  "everyday-life": { src: "/community/scene-water.jpg", width: 800, height: 533 },
+  "everyday-life": defineResponsiveMomentImage("/community/scene-water.jpg", 800, 533),
 };
 
 /*
@@ -141,5 +177,21 @@ export const FOUNDER_VIDEO_SRC: string | null = "/community/founder_video.mp4";
  */
 export const FOUNDER_VIDEO_POSTER: string | null =
   "/solace/onboarding-complete-twilight-lake.jpg";
+export const FOUNDER_VIDEO_POSTER_SIZES =
+  "(min-width: 1152px) 579px, (min-width: 1024px) calc(55vw - 63px), (min-width: 640px) calc(100vw - 65px), calc(100vw - 49px)";
+
+const FOUNDER_VIDEO_POSTER_WIDTHS = [480, 768, 1024, 1536] as const;
+
+function founderVideoPosterSrcSet(format: "avif" | "webp") {
+  const base = "/solace/onboarding-complete-twilight-lake";
+  return FOUNDER_VIDEO_POSTER_WIDTHS.map(
+    (width) => `${base}-${width}.${format} ${width}w`,
+  ).join(", ");
+}
+
+export const FOUNDER_VIDEO_POSTER_AVIF_SRCSET =
+  founderVideoPosterSrcSet("avif");
+export const FOUNDER_VIDEO_POSTER_WEBP_SRCSET =
+  founderVideoPosterSrcSet("webp");
 export const FOUNDER_VIDEO_CAPTIONS_SRC: string | null = null;
 export const FOUNDER_PORTRAIT_SRC: string | null = null;

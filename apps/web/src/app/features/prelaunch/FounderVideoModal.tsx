@@ -11,7 +11,10 @@ import { cn } from "@/lib/utils";
 import { FOUNDER } from "./prelaunch.content";
 import {
   FOUNDER_VIDEO_CAPTIONS_SRC,
+  FOUNDER_VIDEO_POSTER_AVIF_SRCSET,
   FOUNDER_VIDEO_POSTER,
+  FOUNDER_VIDEO_POSTER_SIZES,
+  FOUNDER_VIDEO_POSTER_WEBP_SRCSET,
   FOUNDER_VIDEO_SRC,
 } from "./prelaunch.imagery";
 
@@ -148,15 +151,27 @@ export function FounderVideoThumbnail({
     >
       <div className="relative aspect-video w-full">
         {FOUNDER_VIDEO_POSTER ? (
-          <img
-            src={FOUNDER_VIDEO_POSTER}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            width={1536}
-            height={1024}
-            className="h-full w-full object-cover"
-          />
+          <picture className="block h-full w-full">
+            <source
+              type="image/avif"
+              srcSet={FOUNDER_VIDEO_POSTER_AVIF_SRCSET}
+              sizes={FOUNDER_VIDEO_POSTER_SIZES}
+            />
+            <source
+              type="image/webp"
+              srcSet={FOUNDER_VIDEO_POSTER_WEBP_SRCSET}
+              sizes={FOUNDER_VIDEO_POSTER_SIZES}
+            />
+            <img
+              src={FOUNDER_VIDEO_POSTER}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              width={1536}
+              height={1024}
+              className="h-full w-full object-cover"
+            />
+          </picture>
         ) : (
           <div
             className="h-full w-full bg-[linear-gradient(160deg,rgba(52,24,74,0.95),rgba(8,10,26,0.98))]"

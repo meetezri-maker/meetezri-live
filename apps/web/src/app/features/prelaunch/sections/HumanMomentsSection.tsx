@@ -15,6 +15,40 @@ import {
 } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
 
+function HumanMomentImage({ momentId }: { momentId: string }) {
+  const image = PRELAUNCH_MOMENT_IMAGES[momentId];
+  const fallback = (
+    <img
+      src={image.src}
+      // Decorative: the title and narrative below carry the meaning.
+      alt=""
+      loading="lazy"
+      decoding="async"
+      width={image.width}
+      height={image.height}
+      className="h-full w-full object-cover"
+    />
+  );
+
+  if (!image.responsive) return fallback;
+
+  return (
+    <picture className="block h-full w-full">
+      <source
+        type="image/avif"
+        srcSet={image.responsive.avifSrcSet}
+        sizes={image.responsive.sizes}
+      />
+      <source
+        type="image/webp"
+        srcSet={image.responsive.webpSrcSet}
+        sizes={image.responsive.sizes}
+      />
+      {fallback}
+    </picture>
+  );
+}
+
 /**
  * Section 2 — Human Moments.
  *
@@ -63,16 +97,7 @@ export function HumanMomentsSection() {
                 className="flex h-full w-full flex-col overflow-hidden"
               >
                 <div className="relative aspect-[16/10] w-full overflow-hidden">
-                  <img
-                    src={PRELAUNCH_MOMENT_IMAGES[moment.id].src}
-                    // Decorative: the title and narrative below carry the meaning.
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    width={PRELAUNCH_MOMENT_IMAGES[moment.id].width}
-                    height={PRELAUNCH_MOMENT_IMAGES[moment.id].height}
-                    className="h-full w-full object-cover"
-                  />
+                  <HumanMomentImage momentId={moment.id} />
                   <div
                     className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.2)_0%,rgba(5,8,22,0.55)_100%)]"
                     aria-hidden
