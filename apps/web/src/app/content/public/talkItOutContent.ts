@@ -1,5 +1,16 @@
 import type { PublicAuthorityPageProps } from "@/app/components/PublicAuthorityPage";
 
+export const TALK_IT_OUT_HERO_SIZES =
+  "(min-width: 1152px) 388px, (min-width: 1024px) calc(42.5vw - 101px), (min-width: 640px) calc(100vw - 112px), calc(100vw - 80px)";
+
+const TALK_IT_OUT_HERO_WIDTHS = [480, 768, 1024, 1400] as const;
+
+function talkItOutHeroSrcSet(format: "avif" | "webp") {
+  return TALK_IT_OUT_HERO_WIDTHS.map(
+    (width) => `/talk-it-out/talk-it-out-${width}.${format} ${width}w`,
+  ).join(", ");
+}
+
 export const TALK_IT_OUT_CONTENT: PublicAuthorityPageProps = {
   eyebrow: "The conversation experience at the heart of Solace",
   title: "Talk It Out",
@@ -8,6 +19,11 @@ export const TALK_IT_OUT_CONTENT: PublicAuthorityPageProps = {
   heroImage: {
     src: "/talk-it-out/talk-it-out.jpg",
     alt: "A stream flowing beneath a wooden bridge toward a cabin at sunset.",
+    responsive: {
+      avifSrcSet: talkItOutHeroSrcSet("avif"),
+      webpSrcSet: talkItOutHeroSrcSet("webp"),
+      sizes: TALK_IT_OUT_HERO_SIZES,
+    },
   },
   notice: {
     title: "A conversation product, not professional care",

@@ -26,7 +26,15 @@ export interface PublicAuthorityPageProps {
   lead: string;
   summary: string;
   notice?: { title: string; body: string };
-  heroImage?: { src: string; alt: string };
+  heroImage?: {
+    src: string;
+    alt: string;
+    responsive?: {
+      avifSrcSet: string;
+      webpSrcSet: string;
+      sizes: string;
+    };
+  };
   sections: readonly PublicAuthoritySection[];
   cta: { title: string; body: string; links: readonly PublicAuthorityLink[] };
 }
@@ -84,15 +92,31 @@ export function PublicAuthorityPage({
               </div>
               <LandingGlowCard glow="purple" className="overflow-hidden p-6 sm:p-8">
                 {heroImage ? (
-                  <img
-                    src={heroImage.src}
-                    alt={heroImage.alt}
-                    className="mb-6 aspect-[1717/916] w-full rounded-2xl object-cover"
-                    width={1717}
-                    height={916}
-                    loading="eager"
-                    decoding="async"
-                  />
+                  <picture>
+                    {heroImage.responsive ? (
+                      <>
+                        <source
+                          type="image/avif"
+                          srcSet={heroImage.responsive.avifSrcSet}
+                          sizes={heroImage.responsive.sizes}
+                        />
+                        <source
+                          type="image/webp"
+                          srcSet={heroImage.responsive.webpSrcSet}
+                          sizes={heroImage.responsive.sizes}
+                        />
+                      </>
+                    ) : null}
+                    <img
+                      src={heroImage.src}
+                      alt={heroImage.alt}
+                      className="mb-6 aspect-[1717/916] w-full rounded-2xl object-cover"
+                      width={1717}
+                      height={916}
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </picture>
                 ) : null}
                 <p className="landing-serif text-2xl leading-snug text-white sm:text-3xl">{summary}</p>
               </LandingGlowCard>
