@@ -3,7 +3,12 @@ import { motion, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HERO, PRIMARY_CTA_LABEL, SECTION_IDS } from "../prelaunch.content";
-import { PRELAUNCH_HERO_BG, PRELAUNCH_HERO_SIZES, PRELAUNCH_HERO_WEBP_SRCSET } from "../prelaunch.imagery";
+import {
+  PRELAUNCH_HERO_AVIF_SRCSET,
+  PRELAUNCH_HERO_BG,
+  PRELAUNCH_HERO_SIZES,
+  PRELAUNCH_HERO_WEBP_SRCSET,
+} from "../prelaunch.imagery";
 import { SectionBadge } from "../PrelaunchPrimitives";
 import { useFoundingMemberSignup } from "../FoundingMemberSignupContext";
 import { FounderVideoModal } from "../FounderVideoModal";
@@ -47,6 +52,11 @@ export function HeroSection() {
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <picture className="block h-full w-full">
+          <source
+            type="image/avif"
+            srcSet={PRELAUNCH_HERO_AVIF_SRCSET}
+            sizes={PRELAUNCH_HERO_SIZES}
+          />
           <source
             type="image/webp"
             srcSet={PRELAUNCH_HERO_WEBP_SRCSET}

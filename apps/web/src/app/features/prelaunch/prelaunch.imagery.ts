@@ -9,6 +9,12 @@
 
 /** Section 1 — hero. Night lake, same plate the main site hero uses. */
 export const PRELAUNCH_HERO_BG = "/community/hero-early.png";
+export const PRELAUNCH_HERO_AVIF_SRCSET = [
+  "/community/hero-early-640.avif 640w",
+  "/community/hero-early-960.avif 960w",
+  "/community/hero-early-1200.avif 1200w",
+  "/community/hero-early-1402.avif 1402w",
+].join(", ");
 export const PRELAUNCH_HERO_WEBP_SRCSET = [
   "/community/hero-early-640.webp 640w",
   "/community/hero-early-960.webp 960w",

@@ -79,6 +79,7 @@ import {
 } from "./prelaunch.content";
 import {
   FOUNDER_VIDEO_POSTER,
+  PRELAUNCH_HERO_AVIF_SRCSET,
   PRELAUNCH_HERO_BG,
   PRELAUNCH_HERO_SIZES,
   PRELAUNCH_HERO_WEBP_SRCSET,
@@ -295,7 +296,15 @@ describe("pre-launch landing page structure", () => {
     expect(hero).toHaveAttribute("loading", "eager");
     expect(hero).toHaveAttribute("fetchpriority", "high");
     expect(hero).toHaveAttribute("decoding", "async");
-    expect(hero?.closest("picture")?.querySelector("source")).toMatchObject({
+    const heroSources = hero?.closest("picture")?.querySelectorAll("source");
+    expect(heroSources).toHaveLength(2);
+    expect(heroSources?.[0]).toMatchObject({
+      type: "image/avif",
+      srcset: PRELAUNCH_HERO_AVIF_SRCSET,
+      sizes: PRELAUNCH_HERO_SIZES,
+    });
+    expect(heroSources?.[1]).toMatchObject({
+      type: "image/webp",
       srcset: PRELAUNCH_HERO_WEBP_SRCSET,
       sizes: PRELAUNCH_HERO_SIZES,
     });
