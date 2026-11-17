@@ -14,10 +14,10 @@ import {
   Palette,
   Loader2,
 } from "lucide-react";
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { api } from "@/lib/api";
+import { api, isApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
 import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
@@ -64,11 +64,13 @@ import {
   modalOptionCardMeta,
   modalOptionCardSelected,
   modalOverlay,
+  modalOverlayAboveNav,
   modalPanel,
   modalPanelBody,
   modalPanelHeader,
   modalPanelLg,
   modalPanelMd,
+  modalPanelViewportMax,
   modalPrimaryButton,
   modalSecondaryButton,
   modalSectionTitle,
@@ -155,6 +157,13 @@ const VOICE_CATALOGUE = [
  */
 const SHOW_VOICE_DESCRIPTIONS: boolean = false;
 
+/**
+ * How long a session start may be pending before the picker says it is still working. Purely a
+ * message: the request is not timed out or cancelled, because the server may still create the
+ * session and the lobby would then navigate to it.
+ */
+const SLOW_START_NOTICE_MS = 10_000;
+
 declare global {
   interface Window {
     sessionLobbyDiagnostics?: {
@@ -219,6 +228,16 @@ export function SessionLobby() {
   const [scheduleComment, setScheduleComment] = useState("");
   const [scheduleIcon, setScheduleIcon] = useState("💬");
   const [isStarting, setIsStarting] = useState(false);
+  /**
+   * Synchronous twin of `isStarting`: set before the first await so a second entry point (a fast
+   * repeat click, the minutes-held toast's Retry, a scheduled "Start Now") cannot begin another
+   * start before React re-renders the disabled controls.
+   */
+  const startInFlightRef = useRef(false);
+  /** Shown inside the duration picker after a failed start that left the user on this page. */
+  const [startError, setStartError] = useState<string | null>(null);
+  /** Startup has been pending long enough to reassure the user it is still working. */
+  const [isSlowStart, setIsSlowStart] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -385,6 +404,9 @@ export function SessionLobby() {
   }, [minutesAvailable, durations]);
 
   useEffect(() => {
+    // The pending request already carries the selected length; a balance refresh mid-start must
+    // not change what the picker shows. Re-applies once the start settles.
+    if (isStarting) return;
     if (minutesAvailable <= 0) return;
     if (sessionLengthKind === "free") {
       setSelectedDuration((prev) => {
@@ -400,16 +422,95 @@ export function SessionLobby() {
     } else {
       setSelectedDuration(Math.max(1, Math.floor(minutesAvailable)));
     }
-  }, [minutesAvailable, selectedDuration, sessionLengthKind, durations]);
+  }, [isStarting, minutesAvailable, selectedDuration, sessionLengthKind, durations]);
+
+  /**
+   * Every way of dismissing the duration picker goes through here. While a start is in flight the
+   * request cannot be cancelled and will still navigate on success, so the picker stays open to
+   * show its progress instead of hiding it.
+   */
+  const closeMinutesPicker = useCallback(() => {
+    if (startInFlightRef.current) return;
+    setShowMinutesPicker(false);
+  }, []);
+
+  /**
+   * The lobby layout opens and closes the picker through this. Opening clears the previous
+   * attempt's error in the same update, so it is never painted (or announced) on reopen; closing
+   * goes through the startup guard.
+   */
+  const setMinutesPickerOpen = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        closeMinutesPicker();
+        return;
+      }
+      setStartError(null);
+      setShowMinutesPicker(true);
+    },
+    [closeMinutesPicker],
+  );
+
+  const minutesPickerPanelRef = useRef<HTMLDivElement | null>(null);
+  const startButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * Keyboard focus while a start is pending. Every control in the picker is disabled then, so the
+   * browser would drop focus to the page and Tab would reach the lobby behind the overlay. Focus
+   * moves to the dialog itself and stays there until the start settles.
+   */
+  const pickerStarting = isStarting && showMinutesPicker && selectedMode === "now";
+  useLayoutEffect(() => {
+    if (!pickerStarting) return;
+    const panel = minutesPickerPanelRef.current;
+    if (!panel) return;
+    if (!panel.contains(document.activeElement) || document.activeElement === startButtonRef.current) {
+      panel.focus({ preventScroll: true });
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      panel.focus({ preventScroll: true });
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      if (e.target instanceof Node && !panel.contains(e.target)) panel.focus({ preventScroll: true });
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, [pickerStarting]);
+
+  // After a failed start the picker's controls come back: return focus to the Start button so a
+  // keyboard user can retry straight away. The inline error is announced by its alert role.
+  const wasPickerStartingRef = useRef(false);
+  useEffect(() => {
+    const wasStarting = wasPickerStartingRef.current;
+    wasPickerStartingRef.current = pickerStarting;
+    if (wasStarting && !pickerStarting && showMinutesPicker && startError) {
+      startButtonRef.current?.focus();
+    }
+  }, [pickerStarting, showMinutesPicker, startError]);
+
+  useEffect(() => {
+    if (!isStarting) {
+      setIsSlowStart(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setIsSlowStart(true), SLOW_START_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [isStarting]);
 
   useEffect(() => {
     if (!showMinutesPicker) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowMinutesPicker(false);
+      if (e.key === "Escape") closeMinutesPicker();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showMinutesPicker]);
+  }, [showMinutesPicker, closeMinutesPicker]);
 
   useEffect(() => {
     if (!showMinutesPicker) return;
@@ -425,6 +526,7 @@ export function SessionLobby() {
     customMinutesValue <= minutesAvailable;
 
   const applyCustomMinutes = () => {
+    if (startInFlightRef.current) return;
     if (!isCustomMinutesValid) {
       toast.error(`Enter minutes between 1 and ${minutesAvailable}.`);
       return;
@@ -545,7 +647,16 @@ export function SessionLobby() {
     /** When set, activates this scheduled row instead of creating a new instant session */
     scheduledSessionId?: string;
   }) => {
+    if (startInFlightRef.current) return;
+    startInFlightRef.current = true;
     setIsStarting(true);
+    setStartError(null);
+    // Only the duration picker shows the inline error; the scheduled flow keeps its toasts.
+    const showInlineError = () => {
+      if (!opts?.scheduledSessionId) {
+        setStartError("Your session didn't start. Your selection is saved, so you can try again.");
+      }
+    };
     try {
       const avatarToUse = opts?.avatarOverride || selectedAvatar;
       const voiceForSession = resolveVoiceLabelForCompanion(
@@ -609,6 +720,15 @@ export function SessionLobby() {
       });
 
     } catch (err: any) {
+      // The account has the minutes, so this is not a billing problem: explain and let them retry.
+      if (isApiError(err) && err.code === "MINUTES_HELD_BY_ANOTHER_SESSION") {
+        toast.error(err.message, {
+          duration: 15_000,
+          action: { label: "Retry", onClick: () => void handleStartSession(opts) },
+        });
+        showInlineError();
+        return;
+      }
       const message = err?.message || "Failed to start session";
       if (message.includes("trial has expired")) {
         navigate("/error/trial-expired");
@@ -620,7 +740,9 @@ export function SessionLobby() {
         return;
       }
       toast.error(message);
+      showInlineError();
     } finally {
+      startInFlightRef.current = false;
       setIsStarting(false);
     }
   };
@@ -906,6 +1028,7 @@ export function SessionLobby() {
   }, [selectedCompanionPreview]);
 
   const applyDurationPreset = useCallback((d: number) => {
+    if (startInFlightRef.current) return;
     setSessionLengthKind("fixed");
     setSelectedDuration(d);
   }, []);
@@ -963,6 +1086,7 @@ export function SessionLobby() {
   ]);
 
   const selectFreeFlow = useCallback(() => {
+    if (startInFlightRef.current) return;
     setSessionLengthKind("free");
     setSelectedDuration(Math.max(1, minutesAvailable));
   }, [minutesAvailable]);
@@ -987,6 +1111,8 @@ export function SessionLobby() {
   );
 
   const openScheduleFlow = useCallback(() => {
+    // Leaving "now" mode hides the duration picker, so it must not happen mid-start.
+    if (startInFlightRef.current) return;
     setEditingScheduledSessionId(null);
     setScheduleAvatarOverride(null);
     setShowMinutesPicker(false);
@@ -1054,7 +1180,7 @@ export function SessionLobby() {
         onSelectFreeFlow={selectFreeFlow}
         selectedMode={selectedMode}
         setSelectedMode={setSelectedMode}
-        setShowMinutesPicker={setShowMinutesPicker}
+        setShowMinutesPicker={setMinutesPickerOpen}
         isStarting={isStarting}
         showCarveoutBanner={showCarveoutBanner}
         checklistItems={checklistItems}
@@ -1076,17 +1202,17 @@ export function SessionLobby() {
         onStartFreely={() => {
           setConnectMode("voice");
           setSelectedMode("now");
-          setShowMinutesPicker(true);
+          setMinutesPickerOpen(true);
         }}
         onStartGuided={() => {
           setSelectedMode("now");
-          setShowMinutesPicker(true);
+          setMinutesPickerOpen(true);
           toast("We'll begin with a few gentle questions when you're ready.");
         }}
         onStartDeep={() => {
           setConnectMode("deep");
           setSelectedMode("now");
-          setShowMinutesPicker(true);
+          setMinutesPickerOpen(true);
         }}
         onQuickCheckInNavigate={() => navigate("/app/mood-checkin")}
       />
@@ -1097,10 +1223,12 @@ export function SessionLobby() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowMinutesPicker(false)}
+              onClick={closeMinutesPicker}
+              data-testid="talk-duration-overlay"
               className={cn(
                 modalOverlay,
-                "left-0 top-0 h-[100dvh] w-screen items-center justify-center px-4 pb-[5.5rem] pt-4 sm:pb-4",
+                modalOverlayAboveNav,
+                "left-0 top-0 h-[100dvh] w-screen items-center justify-center",
               )}
             >
               <motion.div
@@ -1110,11 +1238,15 @@ export function SessionLobby() {
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
                   modalPanel,
-                  "flex max-h-[calc(100dvh-7rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] sm:max-h-[calc(100dvh-2rem)]",
+                  modalPanelViewportMax,
+                  "flex w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] focus:outline-none",
                 )}
+                ref={minutesPickerPanelRef}
+                tabIndex={-1}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="talk-duration-title"
+                aria-busy={isStarting}
               >
                 <div className={cn(modalPanelHeader, "shrink-0 px-4 py-3 sm:px-6 sm:py-5")}>
                   <div className="flex items-start justify-between gap-2 sm:gap-3">
@@ -1137,8 +1269,12 @@ export function SessionLobby() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowMinutesPicker(false)}
-                      className={cn(modalCloseButton, "shrink-0 rounded-full p-1.5 sm:p-2")}
+                      onClick={closeMinutesPicker}
+                      disabled={isStarting}
+                      className={cn(
+                        modalCloseButton,
+                        "shrink-0 rounded-full p-1.5 sm:p-2 disabled:pointer-events-none disabled:opacity-40",
+                      )}
                       aria-label="Close"
                     >
                       <X className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
@@ -1149,7 +1285,7 @@ export function SessionLobby() {
                 <div
                   className={cn(
                     modalPanelBody,
-                    "space-y-3 overflow-hidden p-4 sm:space-y-5 sm:p-6",
+                    "solace-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-0 sm:space-y-5 sm:p-6 sm:pb-0",
                   )}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
@@ -1163,7 +1299,8 @@ export function SessionLobby() {
 
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {durations.map((duration, index) => {
-                      const isDisabled = !!durationDisabled.get(duration);
+                      const isUnavailable = !!durationDisabled.get(duration);
+                      const isDisabled = isUnavailable || isStarting;
                       const isSelected =
                         selectedDuration === duration && sessionLengthKind === "fixed";
                       return (
@@ -1181,7 +1318,10 @@ export function SessionLobby() {
                           aria-pressed={isSelected}
                           className={cn(
                             "relative min-h-0 rounded-xl px-2 py-2.5 text-center sm:rounded-2xl sm:p-4 sm:text-left",
-                            isDisabled
+                            // While starting, the chosen card keeps its selected look so the
+                            // user can still see what is being started.
+                            isStarting && !isUnavailable && "cursor-not-allowed",
+                            isUnavailable
                               ? modalOptionCardDisabled
                               : isSelected
                                 ? modalOptionCardSelected
@@ -1218,6 +1358,7 @@ export function SessionLobby() {
                         step={1}
                         inputMode="numeric"
                         value={customMinutesInput}
+                        disabled={isStarting}
                         onChange={(e) => setCustomMinutesInput(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") applyCustomMinutes();
@@ -1233,7 +1374,7 @@ export function SessionLobby() {
                         variant="outline"
                         className={cn(modalSecondaryButton, "h-9 flex-none px-3 text-xs sm:h-11 sm:px-4 sm:text-sm")}
                         onClick={applyCustomMinutes}
-                        disabled={!isCustomMinutesValid}
+                        disabled={!isCustomMinutesValid || isStarting}
                       >
                         Apply
                       </Button>
@@ -1248,7 +1389,7 @@ export function SessionLobby() {
                   <button
                     type="button"
                     onClick={() => selectFreeFlow()}
-                    disabled={minutesAvailable <= 0}
+                    disabled={minutesAvailable <= 0 || isStarting}
                     aria-pressed={isOnOwnPace}
                     className={cn(
                       isOnOwnPace ? modalFreeFlowCardSelected : modalFreeFlowCard,
@@ -1275,7 +1416,25 @@ export function SessionLobby() {
                       </span>
                     </div>
                   </button>
+                </div>
 
+                <div className={cn(modalPanelBody, "shrink-0 space-y-0 px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5")}>
+                  {startError && !isStarting ? (
+                    <p
+                      role="alert"
+                      className="mb-2 text-xs text-rose-500 sm:mb-3 sm:text-right sm:text-sm"
+                    >
+                      {startError}
+                    </p>
+                  ) : null}
+                  {/* Announces startup progress; the visible label below says the same. */}
+                  <span role="status" aria-live="polite" className="sr-only">
+                    {isStarting
+                      ? isSlowStart
+                        ? "Still starting your session..."
+                        : "Starting your session..."
+                      : ""}
+                  </span>
                   <div className="flex flex-row gap-2 pt-0.5 sm:flex-row sm:justify-end sm:pt-1">
                     <Button
                       type="button"
@@ -1284,18 +1443,36 @@ export function SessionLobby() {
                         modalSecondaryButton,
                         "hidden h-10 flex-none px-4 sm:inline-flex sm:h-11",
                       )}
-                      onClick={() => setShowMinutesPicker(false)}
+                      onClick={closeMinutesPicker}
+                      disabled={isStarting}
                     >
                       Cancel
                     </Button>
                     <Button
+                      ref={startButtonRef}
                       type="button"
                       onClick={() => void handleStartSession()}
                       disabled={sessionLobbyButtonDisabled}
-                      className={cn(modalPrimaryButton, "h-10 flex-1 px-4 text-sm sm:h-11 sm:flex-none sm:px-6")}
+                      isLoading={isStarting}
+                      aria-busy={isStarting}
+                      className={cn(
+                        modalPrimaryButton,
+                        // Wraps instead of overflowing when the longer progress label meets a narrow phone.
+                        "h-auto min-h-[2.5rem] flex-1 whitespace-normal px-4 text-center text-sm sm:h-11 sm:flex-none sm:px-6",
+                      )}
                     >
-                      <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
-                      Let&apos;s Talk Now
+                      {isStarting ? (
+                        isSlowStart ? (
+                          "Still starting your session..."
+                        ) : (
+                          "Starting your session..."
+                        )
+                      ) : (
+                        <>
+                          <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                          Let&apos;s Talk Now
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -1312,8 +1489,7 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowCustomizeModal(false)}
-              // className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen")}
-              className={cn(modalOverlay, "left-0 top-0 h-[100dvh] w-screen pb-[88px] md:pb-0")}
+              className={cn(modalOverlay, modalOverlayAboveNav, "left-0 top-0 h-[100dvh] w-screen md:pb-0")}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.94 }}
@@ -1321,7 +1497,11 @@ export function SessionLobby() {
                 exit={{ opacity: 0, scale: 0.94 }}
                 onClick={(e) => e.stopPropagation()}
                 // className={cn(modalPanelLg, "flex max-h-[85vh] flex-col rounded-[1.25rem]")}
-                className={cn(modalPanelLg, "flex max-h-[calc(90dvh-88px)] flex-col overflow-hidden rounded-[1.25rem]")}
+                className={cn(
+                  modalPanelLg,
+                  modalPanelViewportMax,
+                  "flex flex-col overflow-hidden rounded-[1.25rem] [@media(min-height:700px)]:max-h-[calc(90dvh-88px)]",
+                )}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="customize-voice-avatar-title"
@@ -1348,7 +1528,7 @@ export function SessionLobby() {
                   </motion.button>
                 </div>
 
-                <div className={cn(modalPanelBody, "solace-scroll min-h-0 flex-1 overflow-y-auto pb-28")}>
+                <div className={cn(modalPanelBody, "solace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain")}>
                       {/* Voice Selection */}
                       <div ref={voiceSectionRef} className="mb-8 scroll-mt-4">
                         <div className="mb-4 flex items-center gap-2">
@@ -1650,17 +1830,20 @@ export function SessionLobby() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={closeScheduleModal}
-                className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                className={cn(
+                  "fixed left-0 top-0 flex h-[100dvh] w-screen items-center justify-center bg-black/60 backdrop-blur-sm",
+                  modalOverlayAboveNav,
+                )}
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex max-h-[85vh] w-full max-w-2xl flex-col"
+                  className={cn(modalPanelViewportMax, "flex w-full max-w-2xl flex-col [@media(min-height:700px)]:max-h-[85dvh]")}
                 >
-                  <Card className="flex max-h-[85vh] flex-col overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
-                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] bg-black/35 px-6 py-5">
+                  <Card className={cn(modalPanelViewportMax, "flex flex-col overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl [@media(min-height:700px)]:max-h-[85dvh]")}>
+                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] bg-black/35 px-6 py-5 [@media(max-height:500px)]:py-3">
                       <div>
                         <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-50">
                           {editingScheduledSessionId ? "Edit Scheduled Talk" : "Schedule a Talk"}
@@ -1681,7 +1864,7 @@ export function SessionLobby() {
                       </motion.button>
                     </div>
 
-                    <div className="solace-scroll overflow-y-auto p-6">
+                    <div className="solace-scroll overflow-y-auto overscroll-contain p-6">
                       <div className="mb-8">
                         <div className="mb-4 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
@@ -1779,7 +1962,7 @@ export function SessionLobby() {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/[0.06] bg-black/35 p-6">
+                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/[0.06] bg-black/35 p-6 [@media(max-height:500px)]:p-3">
                       <Button
                         type="button"
                         variant="outline"

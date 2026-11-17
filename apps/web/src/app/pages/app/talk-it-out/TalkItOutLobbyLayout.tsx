@@ -425,16 +425,14 @@ export function TalkItOutLobbyLayout({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="button"
-                  disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
+                  disabled={isStarting || minutesAvailable <= 0 || selectedDuration > minutesAvailable}
                   className={cn(
                     "solace-cta-gradient min-h-[48px] w-full cursor-pointer rounded-[1rem] border border-violet-400/35 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-[14px] text-white shadow-[0_14px_36px_-12px_rgba(109,40,217,0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300/65 hover:from-violet-500 hover:via-fuchsia-500 hover:to-indigo-600 hover:opacity-95 hover:shadow-[0_20px_48px_-14px_rgba(139,92,246,0.65)] disabled:cursor-not-allowed sm:w-auto",
                     "hover:from-violet-500 hover:to-indigo-600"
                   )}
-                  onClick={() => {
-                    setSelectedMode("schedule");
-                    setShowMinutesPicker(false);
-                    onOpenSchedule();
-                  }}
+                  // `onOpenSchedule` switches the lobby to schedule mode and closes the duration
+                  // picker itself, and refuses while a session is starting.
+                  onClick={onOpenSchedule}
                 >
                   <Calendar className="mr-2 h-5 w-5 opacity-95" aria-hidden />
                   Schedule a Talk
