@@ -199,6 +199,16 @@ export type LiveChunkAppendInput = {
    * inter-sentence silence. Read only in the `sentence-relative` domain.
    */
   digitalSilence?: boolean;
+  /**
+   * `sentence-relative` only: where this chunk's SPEECH ENERGY ends, in seconds
+   * from its audible start (`measureAudibleSpeechEnd`). A number is that end;
+   * `null` means the chunk has no sustained speech energy; `undefined` means it
+   * was not measured, and the whole chunk counts as speech, as before.
+   *
+   * PLACEMENT ONLY. It moves where a sentence's phonemes end and nothing else:
+   * `audio_duration`, the clock, chunk offsets and the audio never read it.
+   */
+  speechEndSeconds?: number | null;
 };
 
 export type LiveChunkAppendResult =
@@ -311,8 +321,18 @@ export function createLiveSpeechTimeline() {
     bEnd: number[];
     /** Backend span: the last backend end. */
     span: number;
-    /** End of the sentence's last NON-silent chunk. */
+    /**
+     * Where the sentence's SPEECH has ended so far: the end of its last chunk
+     * with speech energy, minus any measured quiet tail. Unmeasured chunks count
+     * whole, which is the previous "end of the last non-silent chunk".
+     */
     audioEnd: number;
+    /**
+     * A chunk of this sentence has shown measured speech energy. Until then a
+     * chunk without energy still counts whole, so a very quiet voice keeps the
+     * previous behaviour instead of collapsing onto its first chunk.
+     */
+    energySeen: boolean;
     /** Where the sentence's last phoneme currently ends. */
     estEnd: number;
     /** False until the first placement; after it, the freeze window is respected. */
@@ -377,6 +397,18 @@ export function createLiveSpeechTimeline() {
       cursor = stop;
     }
     return sentence.labels.length;
+  }
+
+  /**
+   * Where a chunk's speech ends on the response clock. `null` only when the chunk
+   * was measured and carries no speech energy; an unmeasured chunk ends where its
+   * audio ends, exactly as before.
+   */
+  function speechEndOf(input: LiveChunkAppendInput, offset: number): number | null {
+    const measured = input.speechEndSeconds;
+    if (measured === null) return null;
+    if (typeof measured !== "number" || !Number.isFinite(measured)) return offset + input.durationSeconds;
+    return offset + Math.min(input.durationSeconds, Math.max(0, measured));
   }
 
   /** The open sentence's speech has ended at `audioEnd`: fit it there and close it. */
@@ -571,7 +603,14 @@ export function createLiveSpeechTimeline() {
           if (input.digitalSilence) {
             placeOpenSentence(openSentence, now, openSentence.audioEnd, true);
           } else {
-            openSentence.audioEnd = Math.max(openSentence.audioEnd, offset + input.durationSeconds);
+            // Speech reaches the end of this chunk's energy, not of its PCM. A chunk
+            // with no energy is a pause or the tail and extends nothing, once the
+            // sentence has shown energy; later speech extends again (`max`).
+            if (typeof input.speechEndSeconds === "number") openSentence.energySeen = true;
+            const reach =
+              speechEndOf(input, offset) ??
+              (openSentence.energySeen ? openSentence.audioEnd : offset + input.durationSeconds);
+            openSentence.audioEnd = Math.max(openSentence.audioEnd, reach);
             if (openSentence.audioEnd > openSentence.estEnd) {
               placeOpenSentence(openSentence, now, openSentence.audioEnd, false);
             }
@@ -734,7 +773,8 @@ export function createLiveSpeechTimeline() {
             bStart: backend.map((b) => b.start),
             bEnd: backend.map((b) => b.end),
             span,
-            audioEnd: input.digitalSilence ? chunkOffset : chunkEnd,
+            audioEnd: input.digitalSilence ? chunkOffset : (speechEndOf(input, chunkOffset) ?? chunkEnd),
+            energySeen: typeof input.speechEndSeconds === "number",
             estEnd: chunkEnd,
             placed: false,
           };

@@ -708,6 +708,76 @@ function isDigitalSilence(buffer: Hyper3dScheduledChunk["audioBuffer"]): boolean
   return true;
 }
 
+/**
+ * TRAILING QUIET — where a streamed chunk's SPEECH ends, as opposed to where its
+ * non-zero PCM ends.
+ *
+ * The streaming TTS ends a sentence's last chunk with a few hundred ms of quiet,
+ * non-zero audio before the injected all-zero chunk. A live capture measured
+ * 254 ms and 433 ms of it, and sentence placement laid the phonemes across it, so
+ * the mouth kept articulating after the voice stopped.
+ *
+ * The detector mirrors `EzriWsAudioScheduler.computeLeadInSec` from the other
+ * end: 10 ms RMS windows on channel 0, the same 0.01 floor and 3 consecutive
+ * windows to count as sustained speech, and the same 50 ms safety pad.
+ *
+ * It does not change audio. `source.start()` has already run, and the result
+ * only moves where the timeline ends the sentence's phonemes. A tail is cut only
+ * when at least `MIN_TRAILING_QUIET_SECONDS` of quiet remains after the pad, so
+ * a short, soft final consonant is never treated as a tail.
+ *
+ * Returns seconds from the chunk's AUDIBLE start (lead-in already skipped);
+ * `null` when no sustained speech energy exists anywhere in the chunk (for a
+ * chunk shorter than three windows: when its whole-chunk RMS is below the
+ * floor); and `undefined` when the buffer cannot be measured, which keeps the
+ * whole chunk as speech, as before.
+ */
+const SPEECH_RMS_WINDOW_SECONDS = 0.01;
+const SPEECH_RMS_THRESHOLD = 0.01;
+const SPEECH_REQUIRED_WINDOWS = 3;
+const SPEECH_END_PAD_SECONDS = 0.05;
+const MIN_TRAILING_QUIET_SECONDS = 0.1;
+export function measureAudibleSpeechEnd(
+  buffer: Hyper3dScheduledChunk["audioBuffer"],
+  leadInSeconds: number,
+  audibleSeconds: number,
+): number | null | undefined {
+  if (!buffer || buffer.length === 0 || !(buffer.sampleRate > 0) || buffer.numberOfChannels < 1) return undefined;
+  if (!(audibleSeconds > 0) || !Number.isFinite(leadInSeconds)) return undefined;
+  const sampleRate = buffer.sampleRate;
+  const samples = buffer.getChannelData(0);
+  const start = Math.min(samples.length, Math.max(0, Math.round(leadInSeconds * sampleRate)));
+  const end = Math.min(samples.length, start + Math.round(audibleSeconds * sampleRate));
+  const window = Math.max(1, Math.round(sampleRate * SPEECH_RMS_WINDOW_SECONDS));
+  if (end <= start) return undefined;
+  if (end - start < window * SPEECH_REQUIRED_WINDOWS) {
+    // Too short for three windows (a live reply ended a sentence with a 22 ms
+    // chunk). Judge it by whole-chunk RMS: quiet does not extend the sentence;
+    // anything at or above the floor keeps the whole chunk, as before.
+    let sumSq = 0;
+    for (let i = start; i < end; i += 1) sumSq += samples[i] * samples[i];
+    return Math.sqrt(sumSq / (end - start)) < SPEECH_RMS_THRESHOLD ? null : audibleSeconds;
+  }
+
+  let consecutive = 0;
+  let runEnd = -1;
+  for (let hi = end; hi - window >= start; hi -= window) {
+    let sumSq = 0;
+    for (let i = hi - window; i < hi; i += 1) sumSq += samples[i] * samples[i];
+    if (Math.sqrt(sumSq / window) >= SPEECH_RMS_THRESHOLD) {
+      if (consecutive === 0) runEnd = hi;
+      consecutive += 1;
+      if (consecutive >= SPEECH_REQUIRED_WINDOWS) break;
+    } else {
+      consecutive = 0;
+    }
+  }
+  if (consecutive < SPEECH_REQUIRED_WINDOWS) return null;
+
+  const speechEnd = Math.min(audibleSeconds, (runEnd - start) / sampleRate + SPEECH_END_PAD_SECONDS);
+  return audibleSeconds - speechEnd < MIN_TRAILING_QUIET_SECONDS ? audibleSeconds : speechEnd;
+}
+
 export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
   const now = deps.now ?? (() => performance.now());
   const timeline: LiveSpeechTimeline = createLiveSpeechTimeline();
@@ -1661,17 +1731,22 @@ export function createHyper3dLiveSpeechAdapter(deps: Hyper3dLiveAdapterDeps) {
       const contextTimeAtAppend = deps.getContextTime() ?? chunk.audioContextStartTime;
 
       const phonemeTimeDomain = phonemeTimeDomainForAssociation(chunk.associationMethod, chunk.audioFormat);
+      const sentenceRelative = phonemeTimeDomain === "sentence-relative";
+      // Only the streamed path reads it, and only phoneme-less chunks need it.
+      const digitalSilence =
+        sentenceRelative && !chunk.timeline?.phonemes.length ? isDigitalSilence(chunk.audioBuffer) : false;
       const result = timeline.appendScheduledChunk({
         audioContextStartTime: chunk.audioContextStartTime,
         durationSeconds: chunk.durationMs / 1000,
         leadInSeconds: chunk.leadInSec,
         // Transport decides the clock domain; see the function's own note.
         phonemeTimeDomain,
-        // Only the streamed path reads it, and only phoneme-less chunks need it.
-        digitalSilence:
-          phonemeTimeDomain === "sentence-relative" && !chunk.timeline?.phonemes.length
-            ? isDigitalSilence(chunk.audioBuffer)
-            : false,
+        digitalSilence,
+        // Streamed path only: where this chunk's speech ends, for phoneme placement.
+        speechEndSeconds:
+          sentenceRelative && !digitalSilence
+            ? measureAudibleSpeechEnd(chunk.audioBuffer, chunk.leadInSec, chunk.durationMs / 1000)
+            : undefined,
         timeline: chunk.timeline,
         chunkIndex: chunk.chunkIndex,
         sentence: chunk.sentence,
