@@ -1,4 +1,4 @@
-import type { LipBaseline, LipBaselineAssetId } from "./hyper3dLipBaseline";
+import type { LipBaseline, LipBaselineAssetId, LipRow } from "./hyper3dLipBaseline";
 
 /**
  * STAGE 2, STEP 1 — RECORDED LIP-GEOMETRY BASELINE. GENERATED 2026-11-17.
@@ -9,6 +9,10 @@ import type { LipBaseline, LipBaselineAssetId } from "./hyper3dLipBaseline";
  * and compares; a mismatch means a GLB, the phoneme table or the calibration
  * changed. Re-record ONLY with approval — this file is the "before" column for
  * every later Stage 2 step.
+ *
+ * STAGE 2, STEP 2 (2026-11-18): the F and V rows were re-recorded after the
+ * approved labiodental correction (`LABIODENTAL_POSES`). Every other row is the
+ * Step 1 recording, unchanged. The Step 1 F/V rows are kept below.
  */
 export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseline>> = {
   female_2291: {
@@ -34,8 +38,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [3.69, 53.57, 0.58, -0.77, -2.81],
       B: [3.72, 53.57, 0.56, -0.77, -2.77],
       M: [1.96, 53.45, 0.47, -1.11, -4.19],
-      F: [12.08, 55.05, -0.67, 1.37, 3.43],
-      V: [11.12, 54.64, -0.5, 1.13, 2.71],
+      F: [8.14, 55.25, -0.79, 1.41, -0.56],
+      V: [8.03, 54.79, -0.58, 1.17, -0.42],
       TH: [10.98, 55.42, -0.7, 0.16, 3.54],
       DH: [10.27, 55.1, -0.54, 0.12, 2.87],
       T: [7.17, 56.61, -0.63, -0.04, -0.08],
@@ -92,8 +96,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [3.05, 53.57, 0.57, -0.77, -2.91],
       B: [3.09, 53.57, 0.55, -0.77, -2.87],
       M: [1.27, 53.45, 0.46, -1.11, -4.34],
-      F: [11.46, 55.05, -0.68, 1.37, 3.36],
-      V: [10.52, 54.64, -0.5, 1.13, 2.65],
+      F: [7.57, 55.25, -0.78, 1.41, -0.58],
+      V: [7.46, 54.79, -0.58, 1.17, -0.44],
       TH: [10.44, 55.42, -0.7, 0.16, 3.54],
       DH: [9.73, 55.1, -0.54, 0.12, 2.86],
       T: [6.64, 56.61, -0.63, -0.04, -0.07],
@@ -150,8 +154,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [2.46, 51.79, 0.63, -0.88, -2.76],
       B: [2.5, 51.78, 0.61, -0.89, -2.72],
       M: [0.67, 51.48, 0.57, -1.26, -4.15],
-      F: [11.2, 53.36, -0.66, 1.46, 3.63],
-      V: [10.19, 53.01, -0.49, 1.21, 2.87],
+      F: [7.2, 53.67, -0.73, 1.49, -0.4],
+      V: [7.05, 53.25, -0.54, 1.23, -0.29],
       TH: [10.09, 53.8, -0.65, 0.17, 3.8],
       DH: [9.32, 53.5, -0.51, 0.13, 3.07],
       T: [6.16, 54.98, -0.55, -0.08, 0.12],
@@ -208,8 +212,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [2.98, 52.03, 0.8, -0.59, -2.86],
       B: [3.02, 52.02, 0.78, -0.6, -2.82],
       M: [1.36, 51.94, 0.8, -0.85, -4.23],
-      F: [11.5, 53.31, -0.67, 1.31, 3.74],
-      V: [10.47, 52.94, -0.5, 1.09, 2.95],
+      F: [7.22, 53.54, -0.71, 1.34, -0.56],
+      V: [7.11, 53.11, -0.52, 1.11, -0.44],
       TH: [10.16, 53.53, -0.7, 0.04, 3.67],
       DH: [9.48, 53.27, -0.54, 0.03, 3],
       T: [6.23, 54.77, -0.57, -0.11, -0.1],
@@ -266,8 +270,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [3.99, 49.35, 0.72, -0.35, -2.85],
       B: [4.02, 49.35, 0.71, -0.35, -2.81],
       M: [2.28, 49.31, 0.72, -0.53, -4.37],
-      F: [12.15, 50.36, -0.64, 1.37, 3.59],
-      V: [11.15, 49.98, -0.47, 1.13, 2.84],
+      F: [8.02, 50.62, -0.65, 1.41, -0.58],
+      V: [7.91, 50.18, -0.47, 1.16, -0.43],
       TH: [10.88, 50.67, -0.54, 0.03, 3.67],
       DH: [10.19, 50.4, -0.43, 0.02, 2.98],
       T: [7.15, 51.96, -0.47, -0.08, 0.04],
@@ -324,8 +328,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [3.62, 48.66, 0.76, -0.7, -2.77],
       B: [3.65, 48.66, 0.75, -0.71, -2.72],
       M: [1.92, 48.54, 0.78, -1.05, -4.11],
-      F: [12.21, 50.26, -0.68, 1.37, 3.76],
-      V: [11.18, 49.86, -0.51, 1.13, 2.96],
+      F: [7.93, 50.41, -0.72, 1.41, -0.56],
+      V: [7.81, 49.98, -0.54, 1.16, -0.43],
       TH: [10.94, 50.59, -0.76, 0.14, 3.7],
       DH: [10.22, 50.26, -0.58, 0.1, 3.02],
       T: [6.99, 51.64, -0.6, -0.05, -0.05],
@@ -382,8 +386,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [2.72, 50.51, 0.64, -0.86, -2.72],
       B: [2.75, 50.51, 0.63, -0.87, -2.68],
       M: [0.97, 50.38, 0.6, -1.22, -4.11],
-      F: [11.21, 51.84, -0.66, 1.31, 3.61],
-      V: [10.22, 51.48, -0.49, 1.08, 2.84],
+      F: [7, 52.02, -0.74, 1.33, -0.63],
+      V: [6.91, 51.62, -0.54, 1.1, -0.48],
       TH: [10, 52.14, -0.66, 0.09, 3.62],
       DH: [9.3, 51.87, -0.51, 0.06, 2.95],
       T: [6.09, 53.28, -0.59, -0.13, -0.07],
@@ -440,8 +444,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       P: [3.8, 51.17, 0.75, -0.71, -2.92],
       B: [3.84, 51.17, 0.73, -0.72, -2.87],
       M: [1.99, 51.12, 0.73, -1.04, -4.39],
-      F: [12.49, 52.54, -0.74, 1.38, 3.66],
-      V: [11.49, 52.15, -0.56, 1.15, 2.9],
+      F: [8.33, 52.69, -0.77, 1.44, -0.56],
+      V: [8.22, 52.26, -0.58, 1.2, -0.41],
       TH: [11.43, 52.78, -0.78, 0.11, 3.87],
       DH: [10.66, 52.48, -0.6, 0.08, 3.13],
       T: [7.42, 53.9, -0.59, -0.07, 0.04],
@@ -475,4 +479,19 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       "mouthClose 0.18 (cap)": [1.04, 50.58, 1.59, -1.05, -5.34]
     }
   }
+};
+
+/**
+ * The F and V rows as recorded at Step 1, BEFORE the labiodental correction —
+ * kept so the before/after comparison stays reproducible from the repository.
+ */
+export const STEP1_LABIODENTAL_BEFORE: Readonly<Record<LipBaselineAssetId, { F: LipRow; V: LipRow }>> = {
+  female_2291: { F: [12.08, 55.05, -0.67, 1.37, 3.43], V: [11.12, 54.64, -0.5, 1.13, 2.71] },
+  hyper3d_arfv2: { F: [11.46, 55.05, -0.68, 1.37, 3.36], V: [10.52, 54.64, -0.5, 1.13, 2.65] },
+  hyper3d_sara: { F: [11.2, 53.36, -0.66, 1.46, 3.63], V: [10.19, 53.01, -0.49, 1.21, 2.87] },
+  hyper3d_frankie: { F: [11.5, 53.31, -0.67, 1.31, 3.74], V: [10.47, 52.94, -0.5, 1.09, 2.95] },
+  hyper3d_jordan: { F: [12.15, 50.36, -0.64, 1.37, 3.59], V: [11.15, 49.98, -0.47, 1.13, 2.84] },
+  hyper3d_bianca: { F: [12.21, 50.26, -0.68, 1.37, 3.76], V: [11.18, 49.86, -0.51, 1.13, 2.96] },
+  hyper3d_damian: { F: [11.21, 51.84, -0.66, 1.31, 3.61], V: [10.22, 51.48, -0.49, 1.08, 2.84] },
+  hyper3d_sasha: { F: [12.49, 52.54, -0.74, 1.38, 3.66], V: [11.49, 52.15, -0.56, 1.15, 2.9] }
 };

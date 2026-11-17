@@ -12,8 +12,10 @@ import {
   type LipBaselineAssetId,
   type LipRow
 } from "./hyper3dLipBaseline";
-import { HYPER3D_LIP_BASELINE } from "./hyper3dLipBaseline.fixture";
+import { HYPER3D_LIP_BASELINE, STEP1_LABIODENTAL_BEFORE } from "./hyper3dLipBaseline.fixture";
 import { BILABIAL_SEAL_LEVEL } from "./engine/engine/lipsync/CoarticulationEngine";
+import { minifaceMalePhonemeProfile } from "./engine/mappings/avatars/minifaceMalePhonemeProfile";
+import { LABIODENTAL_POSES, hyper3dPhonemeProfile } from "./engine/mappings/avatars/hyper3dVowelProfile";
 
 /**
  * STAGE 2, STEP 1 — LIP-GEOMETRY BASELINE. MEASUREMENT ONLY.
@@ -185,11 +187,20 @@ describe("documented limitations of the current shapes (Stage 2 audit)", () => {
   const dAperture = (id: LipBaselineAssetId, row: LipRow) => row[0] - HYPER3D_LIP_BASELINE[id].rest[0];
 
   for (const id of ASSET_IDS) {
-    it(`${id}: F and V open the lips and DROP the lower lip, away from the upper teeth`, () => {
+    it(`${id}: BEFORE Step 2, F and V opened the lips and DROPPED the lower lip`, () => {
+      const before = STEP1_LABIODENTAL_BEFORE[id];
+      for (const p of ["F", "V"] as const) {
+        expect(dAperture(id, before[p])).toBeGreaterThan(3); // wider than rest by > 3 mm
+        expect(before[p][4]).toBeGreaterThan(2); // lower lip moved DOWN > 2 mm
+      }
+    });
+
+    it(`${id}: AFTER Step 2, the F/V lower lip rises and the aperture stays within rest + 1.5 mm`, () => {
       const base = HYPER3D_LIP_BASELINE[id];
       for (const p of ["F", "V"] as const) {
-        expect(dAperture(id, base.phonemes[p])).toBeGreaterThan(3); // wider than rest by > 3 mm
-        expect(base.phonemes[p][4]).toBeGreaterThan(2); // lower lip moves DOWN > 2 mm
+        expect(base.phonemes[p][4]).toBeLessThan(0); // lower lip no longer moves down
+        expect(dAperture(id, base.phonemes[p])).toBeLessThanOrEqual(1.5);
+        expect(base.phonemes[p][2]).toBeLessThan(0); // drawn in, not pushed forward
       }
     });
 
@@ -211,6 +222,38 @@ describe("documented limitations of the current shapes (Stage 2 audit)", () => {
       expect(Math.abs(dAperture(id, base.scenarios["seal lead only (close 0.7) + residual jaw"]))).toBeLessThan(1.5);
     });
   }
+});
+
+describe("Stage 2, Step 2 — the labiodental correction is pose-only and Hyper3D-only", () => {
+  const LOWER_DOWN = ["mouthLowerDownLeft", "mouthLowerDownRight"];
+  const ADDED = ["mouthRollLower", "mouthShrugLower"];
+
+  for (const p of ["F", "V"] as const) {
+    it(`${p}: replaces mouthLowerDown with roll + shrug and keeps every other channel's value`, () => {
+      const male = minifaceMalePhonemeProfile[p].morphTargets;
+      const pose = LABIODENTAL_POSES[p];
+      for (const name of LOWER_DOWN) expect(pose[name]).toBeUndefined();
+      for (const name of ADDED) expect(pose[name]).toBeGreaterThan(0);
+      for (const [name, value] of Object.entries(male)) {
+        if (!LOWER_DOWN.includes(name)) expect(pose[name]).toBe(value);
+      }
+      expect(Object.keys(pose).sort()).toEqual(
+        [...Object.keys(male).filter((n) => !LOWER_DOWN.includes(n)), ...ADDED].sort()
+      );
+    });
+
+    it(`${p}: timing, intensity and coarticulation fields are the male table's, by value`, () => {
+      const { morphTargets: _male, ...maleRest } = minifaceMalePhonemeProfile[p];
+      const { morphTargets: _h, ...hyperRest } = hyper3dPhonemeProfile[p];
+      expect(hyperRest).toEqual(maleRest);
+    });
+  }
+
+  it("the shared male table still drives mouthLowerDown on F and V", () => {
+    expect(minifaceMalePhonemeProfile.F.morphTargets.mouthLowerDownLeft).toBe(0.36);
+    expect(minifaceMalePhonemeProfile.V.morphTargets.mouthLowerDownLeft).toBe(0.31);
+    expect(minifaceMalePhonemeProfile.F.morphTargets.mouthRollLower).toBeUndefined();
+  });
 });
 
 describe("the measurement mirrors runtime constants without touching them", () => {

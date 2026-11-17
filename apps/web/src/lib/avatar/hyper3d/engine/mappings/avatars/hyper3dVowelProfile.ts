@@ -746,6 +746,67 @@ export const DIPHTHONG_GLIDES: Record<string, DiphthongGlide> = {
 };
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LABIODENTALS — STAGE 2, STEP 2. F AND V MOVED THE LOWER LIP THE WRONG WAY.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE MEASUREMENT (`hyper3dLipBaseline`, all seven companions plus the
+ * reference asset). F and V were inherited from the male table, which drives
+ * `mouthLowerDown` — on this asset a CHIN morph that DROPS the lower lip. At the
+ * static apex, worst case across the eight faces:
+ *
+ *              aperture vs rest     lower lip
+ *   F shipped    +4.73 .. +5.12 mm   DOWN 3.36 .. 3.76 mm   (away from the teeth)
+ *   V shipped    +3.78 .. +4.09 mm   DOWN 2.65 .. 2.96 mm
+ *
+ * /f v/ are made by the lower lip rising and drawing IN to the upper incisors.
+ * The calibration already names `mouthRollLower` "the natural F/V mechanism on
+ * this asset"; the male table's note ("no tooth contact morph exists") was
+ * written for a different model.
+ *
+ * THE SWEEP, replacing `mouthLowerDown` only (worst case over eight faces):
+ *
+ *   candidate (F)              aperture     lower lip       lower lip fwd
+ *   rollLower 0.15 .. 0.40     +1.45..2.41  DOWN 0.06..0.93 back 1.8..4.3   FAILS: still drops
+ *   shrugLower 0.25            +0.87..1.23  UP 0.25..0.47   FORWARD 0.27..0.46
+ *   roll 0.20 + shrug 0.15     +1.02..1.39  UP 0.09..0.31   back 1.6..1.9   (thin margins)
+ *   roll 0.20 + shrug 0.20     +0.70..1.09  UP 0.40..0.63   back 1.4..1.7   <- ships
+ *
+ * `mouthRollLower` alone tucks the lip but cannot lift it against the pose's own
+ * jaw; `mouthShrugLower` alone lifts it but pushes it FORWARD, away from the
+ * teeth. Together they move it up AND in — the one direction that is toward the
+ * upper incisors — at the smallest values that clear both acceptance limits
+ * (aperture <= rest + 1.5 mm, no downward drop) with margin on every face.
+ *
+ * WHAT IS UNCHANGED. `jawOpen`, `mouthUpperUp` (the upper-teeth reveal),
+ * `mouthStretch` on F and `mouthSmile` on V keep their male-table values; only
+ * the two `mouthLowerDown` channels are replaced. V keeps the male table's
+ * F:V ratio (0.31 / 0.36 = 0.86) on the new channels. Intensity, attack,
+ * release, coarticulation weights, viseme and category are untouched, and the
+ * shared male table itself is not edited.
+ */
+export const LABIODENTAL_POSES: Record<string, BlendshapePose> = {
+  F: {
+    jawOpen: 0.07,
+    mouthUpperUpLeft: 0.22,
+    mouthUpperUpRight: 0.22,
+    mouthStretchLeft: 0.06,
+    mouthStretchRight: 0.06,
+    mouthRollLower: 0.2,
+    mouthShrugLower: 0.2
+  },
+  V: {
+    jawOpen: 0.065,
+    mouthUpperUpLeft: 0.18,
+    mouthUpperUpRight: 0.18,
+    mouthSmileLeft: 0.025,
+    mouthSmileRight: 0.025,
+    mouthRollLower: 0.17,
+    mouthShrugLower: 0.17
+  }
+};
+
+/**
  * The Hyper3D speech profile: the male table with the vowel poses replaced.
  *
  * Only `morphTargets` is overridden. `attack`, `release`, `holdBias`,
@@ -754,7 +815,11 @@ export const DIPHTHONG_GLIDES: Record<string, DiphthongGlide> = {
  */
 export const hyper3dPhonemeProfile = Object.fromEntries(
   Object.entries(minifaceMalePhonemeProfile).map(([phoneme, definition]) => {
-    const pose = VOWEL_POSES[phoneme] ?? AFFRICATE_POSES[phoneme] ?? CONSONANT_POSES[phoneme];
+    const pose =
+      VOWEL_POSES[phoneme] ??
+      AFFRICATE_POSES[phoneme] ??
+      CONSONANT_POSES[phoneme] ??
+      LABIODENTAL_POSES[phoneme];
     return pose ? [phoneme, { ...definition, morphTargets: pose }] : [phoneme, definition];
   })
 ) as typeof minifaceMalePhonemeProfile;
@@ -776,6 +841,9 @@ export const HYPER3D_TUNED_AFFRICATES = Object.keys(AFFRICATE_POSES);
  */
 export const HYPER3D_TUNED_CONSONANTS = Object.keys(CONSONANT_POSES);
 
+/** F and V — Stage 2, Step 2. A fourth list, for the same contract reason. */
+export const HYPER3D_TUNED_LABIODENTALS = Object.keys(LABIODENTAL_POSES);
+
 /** The diphthongs given a within-phoneme trajectory. Their POSES are unchanged. */
 export const HYPER3D_GLIDING_DIPHTHONGS = Object.keys(DIPHTHONG_GLIDES);
 
@@ -783,5 +851,6 @@ export const HYPER3D_GLIDING_DIPHTHONGS = Object.keys(DIPHTHONG_GLIDES);
 export const HYPER3D_RETUNED_PHONEMES = [
   ...HYPER3D_TUNED_VOWELS,
   ...HYPER3D_TUNED_AFFRICATES,
-  ...HYPER3D_TUNED_CONSONANTS
+  ...HYPER3D_TUNED_CONSONANTS,
+  ...HYPER3D_TUNED_LABIODENTALS
 ];
