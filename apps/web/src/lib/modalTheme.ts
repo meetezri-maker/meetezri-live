@@ -39,6 +39,14 @@ export const modalPanelMd = cn(modalPanel, "max-w-lg");
 export const modalPanelLg = cn(modalPanel, "max-w-2xl");
 export const modalPanelXl = cn(modalPanel, "max-w-4xl");
 
+/** Page-level modal that must cover MobileBottomNav (z-50). Same pattern as CommunitySharePostModal. */
+export const modalOverlayAboveNav =
+  "z-[55] pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]";
+
+/** Caps a panel to the visible viewport so it can scroll on short screens. */
+export const modalPanelViewportMax =
+  "max-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))]";
+
 export const modalTitle = cn(
   "font-serif text-lg font-semibold text-zinc-50 sm:text-xl",
   "[html[data-ezri-theme=light]_&]:text-[var(--text-primary)]",
