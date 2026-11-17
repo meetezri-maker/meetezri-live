@@ -65,42 +65,218 @@ export interface LipModel {
   base: Float32Array;
   deltas: Record<string, Float32Array>;
   vertCount: number;
+  /**
+   * Which mesh and primitive the model was read from. Optional so a hand-built
+   * model still satisfies the type; `loadLipModel` always fills it.
+   */
+  source?: LipModelSource;
+}
+
+export interface LipModelSource {
+  file: string;
+  meshIndex: number;
+  meshName: string;
+  primitiveIndex: number;
+  /** Morph targets on the chosen primitive, in GLB order. */
+  targetNames: string[];
+  /** How many POSITION or morph accessors on it were sparse. */
+  sparseAccessors: number;
 }
 
 /** The shipped Hyper3D asset, relative to the repository root. */
 export const HYPER3D_GLB_PATH = "public/avatars/female_2291.glb";
 
 /**
- * Parse mesh 0 of the GLB: 13,631 vertices carrying all 51 ARKit morph targets.
+ * Original Romy — `arfv2.glb`, the file behind the `sarah` companion. Her face
+ * is split into TWO primitives (10,415 + 1,099 vertices), and primitive 0 is the
+ * small one, so the historical "mesh 0, primitive 0" rule reads the wrong part
+ * of her face. `loadLipModel` selects the face primitive instead.
+ */
+export const HYPER3D_ROMY_GLB_PATH = "public/avatars/hyper3d/arfv2.glb";
+
+/** A face primitive must carry at least this many morphs, `jawOpen` among them. */
+const FACE_PRIMITIVE_MIN_TARGETS = 40;
+
+export interface LoadLipModelOptions {
+  /** Force a mesh. Omitted: the face primitive is selected automatically. */
+  meshIndex?: number;
+  /** Force a primitive of `meshIndex`. Requires `meshIndex`. */
+  primitiveIndex?: number;
+}
+
+type GltfAccessor = {
+  bufferView?: number;
+  byteOffset?: number;
+  componentType: number;
+  count: number;
+  type: string;
+  sparse?: {
+    count: number;
+    indices: { bufferView: number; byteOffset?: number; componentType: number };
+    values: { bufferView: number; byteOffset?: number };
+  };
+};
+type GltfPrimitive = { attributes: { POSITION: number }; targets?: { POSITION?: number }[] };
+type GltfMesh = { name?: string; primitives: GltfPrimitive[]; extras?: { targetNames?: string[] } };
+
+const FLOAT = 5126;
+
+/**
+ * Parse the FACE primitive of a GLB: the one carrying the ARKit morph set.
  *
  * Only POSITION and the morph POSITION deltas are read — no normals, no indices,
  * no materials, no textures — so the 44 MB file costs a few hundred milliseconds.
+ *
+ * SELECTION. Unless forced, the face is the primitive with at least
+ * `FACE_PRIMITIVE_MIN_TARGETS` morphs including `jawOpen`, and among those the one
+ * with the most vertices. On `female_2291.glb` that is mesh 0 / primitive 0 — the
+ * exact part every earlier measurement read — so existing callers see the same
+ * model. On the per-companion exports it is whichever primitive actually holds
+ * the lips, which is not always primitive 0.
+ *
+ * ACCESSORS. Chunks are walked rather than assumed, `byteStride` is honoured, and
+ * sparse accessors are applied on top of their (possibly absent) dense base, as
+ * glTF 2.0 §3.6.2.3 specifies. Only float VEC3 data is accepted; anything else
+ * throws rather than being read as the wrong type.
  */
-export function loadLipModel(file: string): LipModel {
+export function loadLipModel(file: string, options: LoadLipModelOptions = {}): LipModel {
   const buf = readFileSync(file);
   if (buf.readUInt32LE(0) !== 0x46546c67) throw new Error(`not a GLB: ${file}`);
-  const jsonLength = buf.readUInt32LE(12);
-  const gltf = JSON.parse(buf.subarray(20, 20 + jsonLength).toString("utf8"));
-  const binStart = 20 + jsonLength + 8;
+  let gltf: { accessors: GltfAccessor[]; bufferViews: { byteOffset?: number; byteStride?: number }[]; meshes: GltfMesh[] } | null = null;
+  let binStart = -1;
+  for (let offset = 12; offset + 8 <= buf.length; ) {
+    const length = buf.readUInt32LE(offset);
+    const type = buf.readUInt32LE(offset + 4);
+    if (type === 0x4e4f534a) gltf = JSON.parse(buf.subarray(offset + 8, offset + 8 + length).toString("utf8"));
+    else if (type === 0x004e4942 && binStart < 0) binStart = offset + 8;
+    offset += 8 + length;
+  }
+  if (!gltf) throw new Error(`no JSON chunk: ${file}`);
+  if (binStart < 0) throw new Error(`no BIN chunk: ${file}`);
+  const json = gltf;
+  let sparseAccessors = 0;
 
   const read = (accessorIndex: number): Float32Array => {
-    const accessor = gltf.accessors[accessorIndex];
-    const view = gltf.bufferViews[accessor.bufferView];
-    const start = binStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    const accessor = json.accessors[accessorIndex];
+    if (accessor.type !== "VEC3" || accessor.componentType !== FLOAT) {
+      throw new Error(`accessor ${accessorIndex} is ${accessor.type}/${accessor.componentType}, expected float VEC3`);
+    }
     const out = new Float32Array(accessor.count * 3);
-    for (let i = 0; i < out.length; i += 1) out[i] = buf.readFloatLE(start + i * 4);
+    if (accessor.bufferView !== undefined) {
+      const view = json.bufferViews[accessor.bufferView];
+      const stride = view.byteStride ?? 12;
+      const start = binStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+      for (let v = 0; v < accessor.count; v += 1) {
+        for (let axis = 0; axis < 3; axis += 1) out[v * 3 + axis] = buf.readFloatLE(start + v * stride + axis * 4);
+      }
+    }
+    const sparse = accessor.sparse;
+    if (sparse) {
+      sparseAccessors += 1;
+      const indexView = json.bufferViews[sparse.indices.bufferView];
+      const valueView = json.bufferViews[sparse.values.bufferView];
+      const indexStart = binStart + (indexView.byteOffset ?? 0) + (sparse.indices.byteOffset ?? 0);
+      const valueStart = binStart + (valueView.byteOffset ?? 0) + (sparse.values.byteOffset ?? 0);
+      const kind = sparse.indices.componentType;
+      for (let k = 0; k < sparse.count; k += 1) {
+        const vertex =
+          kind === 5125
+            ? buf.readUInt32LE(indexStart + k * 4)
+            : kind === 5123
+              ? buf.readUInt16LE(indexStart + k * 2)
+              : kind === 5121
+                ? buf.readUInt8(indexStart + k)
+                : Number.NaN;
+        if (!Number.isInteger(vertex)) throw new Error(`sparse index type ${kind} unsupported`);
+        for (let axis = 0; axis < 3; axis += 1) out[vertex * 3 + axis] = buf.readFloatLE(valueStart + (k * 3 + axis) * 4);
+      }
+    }
     return out;
   };
 
-  const mesh = gltf.meshes[0];
-  const primitive = mesh.primitives[0];
-  const targetNames: string[] = mesh.extras.targetNames;
+  const isFace = (mesh: GltfMesh, primitive: GltfPrimitive) =>
+    (primitive.targets?.length ?? 0) >= FACE_PRIMITIVE_MIN_TARGETS &&
+    (mesh.extras?.targetNames ?? []).includes("jawOpen");
+
+  let meshIndex = -1;
+  let primitiveIndex = -1;
+  if (options.meshIndex !== undefined) {
+    meshIndex = options.meshIndex;
+    primitiveIndex = options.primitiveIndex ?? 0;
+  } else {
+    let bestCount = -1;
+    json.meshes.forEach((mesh, m) =>
+      mesh.primitives.forEach((primitive, p) => {
+        if (!isFace(mesh, primitive)) return;
+        const count = json.accessors[primitive.attributes.POSITION].count;
+        if (count > bestCount) {
+          bestCount = count;
+          meshIndex = m;
+          primitiveIndex = p;
+        }
+      })
+    );
+  }
+  const mesh = json.meshes[meshIndex];
+  const primitive = mesh?.primitives[primitiveIndex];
+  if (!mesh || !primitive?.targets) throw new Error(`no face primitive with morph targets in ${file}`);
+  const targetNames: string[] = mesh.extras?.targetNames ?? [];
   const base = read(primitive.attributes.POSITION);
   const deltas: Record<string, Float32Array> = {};
-  for (const [index, target] of (primitive.targets as { POSITION?: number }[]).entries()) {
+  for (const [index, target] of primitive.targets.entries()) {
     if (target.POSITION !== undefined) deltas[targetNames[index]] = read(target.POSITION);
   }
-  return { base, deltas, vertCount: base.length / 3 };
+  return {
+    base,
+    deltas,
+    vertCount: base.length / 3,
+    source: {
+      file,
+      meshIndex,
+      meshName: mesh.name ?? `mesh ${meshIndex}`,
+      primitiveIndex,
+      targetNames: [...targetNames],
+      sparseAccessors
+    }
+  };
+}
+
+/**
+ * THE FRAME CHECK. `measureLips` assumes X lateral, Y anterior, Z DOWN and 10 mm
+ * per unit — established on `female_2291`. Before trusting any other asset's
+ * numbers, read that frame back off its own `jawOpen`: the vertex `jawOpen`
+ * moves most must go DOWN (+Z) and BACK (-Y), and its travel gives the unit.
+ */
+export interface LipFrameCheck {
+  /** Peak `jawOpen` vertex travel, in the asset's own units. */
+  jawTravelUnits: number;
+  /** Mean displacement of the 50 most-moved `jawOpen` vertices, per axis. */
+  jawMeanDelta: [number, number, number];
+  /** True when +Z is down and -Y is back, as `measureLips` assumes. */
+  axesMatch: boolean;
+  /** Half the corner-to-corner distance at rest, in asset units. */
+  mouthHalfWidthUnits: number;
+}
+
+export function checkLipFrame(model: LipModel): LipFrameCheck {
+  const jaw = model.deltas.jawOpen;
+  if (!jaw) throw new Error("no jawOpen target");
+  const top = topVerts(model, "jawOpen", 50);
+  const mean: [number, number, number] = [0, 0, 0];
+  for (const v of top) for (let axis = 0; axis < 3; axis += 1) mean[axis] += jaw[v * 3 + axis] / top.length;
+  let peak = 0;
+  for (let v = 0; v < model.vertCount; v += 1) {
+    peak = Math.max(peak, Math.hypot(jaw[v * 3], jaw[v * 3 + 1], jaw[v * 3 + 2]));
+  }
+  const cornerL = topVerts(model, "mouthSmileLeft", 40);
+  const cornerR = topVerts(model, "mouthSmileRight", 40);
+  const meanX = (list: number[]) => list.reduce((sum, v) => sum + model.base[v * 3], 0) / list.length;
+  return {
+    jawTravelUnits: peak,
+    jawMeanDelta: mean,
+    axesMatch: mean[2] > 0 && mean[1] < 0 && Math.abs(mean[2]) > Math.abs(mean[0]),
+    mouthHalfWidthUnits: Math.abs(meanX(cornerL) - meanX(cornerR)) / 2
+  };
 }
 
 /** Vertex indices with the largest displacement under one channel. */
