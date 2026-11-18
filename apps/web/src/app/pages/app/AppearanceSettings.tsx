@@ -228,7 +228,7 @@ export function AppearanceSettings() {
         className={cn(
           "relative z-10 mx-auto w-full max-w-[1500px] px-4 sm:px-7",
           dense ? "py-5" : "py-7 sm:py-9",
-          isDirty ? "pb-28" : ""
+          isDirty ? (dense ? "pb-28" : "pb-28 sm:pb-28 lg:pb-9") : ""
         )}
       >
         <motion.div
@@ -531,7 +531,7 @@ export function AppearanceSettings() {
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_94%,transparent)] px-4 py-4 backdrop-blur-xl sm:px-7"
+            className="fixed inset-x-0 bottom-[var(--solace-mobile-nav-h,0px)] z-50 border-t border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_94%,transparent)] px-4 py-4 backdrop-blur-xl sm:px-7 lg:left-[280px]"
             role="region"
             aria-label="Save appearance changes"
           >

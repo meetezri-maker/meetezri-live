@@ -211,6 +211,24 @@ html[data-ezri-theme="light"] .solace-app .solace-glass-card::before {
   --solace-sidebar-w: 248px;
   --solace-ds-radius-card: 28px;
   --solace-ds-radius-rail: 24px;
+  /*
+   * Height of MobileBottomNav, for page-level fixed UI that must sit above it.
+   * The nav is built from fixed px sizes (see the classes in MobileBottomNav.tsx),
+   * so these values only change if those classes do.
+   * Zero from `lg`, where the nav is hidden.
+   */
+  --solace-mobile-nav-h: calc(87.5px + env(safe-area-inset-bottom, 0px));
+}
+
+html[data-ezri-compact-mode] .solace-app {
+  --solace-mobile-nav-h: calc(75.5px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .solace-app,
+  html[data-ezri-compact-mode] .solace-app {
+    --solace-mobile-nav-h: 0px;
+  }
 }
 
 /* Opt-in surface: readable text on theme-aware backgrounds */

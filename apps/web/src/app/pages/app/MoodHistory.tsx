@@ -477,7 +477,7 @@ export function MoodHistory() {
             </motion.div>
 
             {/* Emotional Summary Row - 5 Cards */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="grid grid-cols-5 gap-3">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 min-[640px]:grid-cols-3 min-[1024px]:grid-cols-2 min-[1280px]:grid-cols-3 min-[1440px]:grid-cols-5">
               {[
                 { icon: Heart, label: "Most Common", value: summaryData.mostCommonMood?.label || "—", gradient: "from-amber-500/20 to-orange-600/10", glow: "rgba(251,191,36,0.2)" },
                 { icon: TrendingUp, label: "Emotional Trend", value: summaryData.emotionalTrend, sub: `${summaryData.trendValue}/10`, gradient: "from-emerald-500/20 to-teal-600/10", glow: "rgba(52,211,153,0.2)" },
@@ -586,10 +586,10 @@ export function MoodHistory() {
             </motion.div>
 
             {/* Calendar + Heatmap Row */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="grid grid-cols-2 gap-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {/* Mood Calendar */}
               <div className="rounded-2xl border border-white/[0.05] bg-black/20 p-5">
-                <div className="mb-1 flex items-center justify-between">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-y-2 sm:flex-nowrap">
                   <div>
                     <h3 className="text-sm font-semibold text-zinc-200">Mood calendar</h3>
                     <p className="text-[10px] text-zinc-500">Your mood at a glance</p>
@@ -860,11 +860,11 @@ function LoadingSkeleton() {
         <div className="flex gap-5">
           <div className="flex-1 space-y-5">
             <Skeleton className="h-[200px] rounded-[1.75rem] bg-zinc-800" />
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 min-[640px]:grid-cols-3 min-[1024px]:grid-cols-2 min-[1280px]:grid-cols-3 min-[1440px]:grid-cols-5">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-[90px] rounded-2xl bg-zinc-800" />)}
             </div>
             <Skeleton className="h-[280px] rounded-2xl bg-zinc-800" />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <Skeleton className="h-[180px] rounded-2xl bg-zinc-800" />
               <Skeleton className="h-[180px] rounded-2xl bg-zinc-800" />
             </div>
