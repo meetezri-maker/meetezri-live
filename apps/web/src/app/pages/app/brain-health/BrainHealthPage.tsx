@@ -1001,7 +1001,7 @@ export function BrainHealthPage() {
                     locked && "text-[var(--text-soft)]"
                   );
                   const labelClass = cn(
-                    "line-clamp-3 max-w-[11.5rem] text-[10px] font-medium leading-snug sm:max-w-none sm:text-[11px]",
+                    "line-clamp-4 max-w-[11.5rem] text-[10px] font-medium leading-snug sm:max-w-none sm:text-[11px]",
                     active && "text-[var(--solace-text)]",
                     completed && "text-[var(--text-secondary)]",
                     !active && !completed && !locked && "text-[var(--solace-muted)]",
@@ -1136,7 +1136,7 @@ export function BrainHealthPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
                   transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-                  className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  className="mt-4 grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1100px]:grid-cols-3 min-[1280px]:grid-cols-2 min-[1440px]:grid-cols-3"
                 >
                   {currentChoices.map((choice) => {
                     const Icon = REFLECTION_ICONS[choice.iconKey] ?? HelpCircle;
@@ -1149,7 +1149,7 @@ export function BrainHealthPage() {
                         onClick={() => handleSelectChoice(choice)}
                         className={cn(
                           "group relative flex min-h-[52px] w-full flex-row items-start gap-4 rounded-xl border p-4 text-left transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 sm:min-h-[56px] sm:p-5",
-                          wide ? "sm:col-span-2 lg:col-span-3" : "",
+                          wide ? "sm:col-span-full" : "",
                           selected
                             ? "border-violet-500/40 bg-gradient-to-r from-violet-100/90 to-[var(--card-soft)] shadow-md [html[data-ezri-theme=dark]_&]:border-violet-400/50 [html[data-ezri-theme=dark]_&]:from-violet-950/25 [html[data-ezri-theme=dark]_&]:to-[#080a14] [html[data-ezri-theme=dark]_&]:shadow-[0_0_26px_rgba(139,92,246,0.18)]"
                             : "border-[color:var(--border)] bg-[var(--card)] hover:border-violet-400/30 hover:bg-[var(--card-soft)] [html[data-ezri-theme=dark]_&]:border-white/[0.06] [html[data-ezri-theme=dark]_&]:bg-black/28 [html[data-ezri-theme=dark]_&]:hover:border-violet-500/20 [html[data-ezri-theme=dark]_&]:hover:bg-black/38"

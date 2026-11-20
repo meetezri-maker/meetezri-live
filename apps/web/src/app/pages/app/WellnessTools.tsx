@@ -974,7 +974,7 @@ export function WellnessTools() {
               <Skeleton key={i} className="h-[180px] rounded-2xl bg-white/[0.05]" />
             ))}
           </div>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 min-[1080px]:grid-cols-2 min-[1260px]:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-[250px] rounded-2xl bg-white/[0.05]" />
             ))}
@@ -1027,7 +1027,7 @@ export function WellnessTools() {
                 transition={{ delay: 0.04 }}
                 className={cn(
                   solaceHeroMediaShell,
-                  "h-[260px] rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10",
+                  "grid h-[260px] min-[1024px]:h-auto min-[1024px]:min-h-[260px] min-[1300px]:h-[260px] rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10",
                   "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
                   "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
                 )}
@@ -1049,7 +1049,7 @@ export function WellnessTools() {
                   className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#06040f]/55 via-transparent to-transparent"
                   aria-hidden
                 />
-                <div className="relative z-10 grid h-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
+                <div className="relative z-10 grid h-full grid-cols-1 min-[1300px]:grid-cols-[1.1fr_1fr]">
                   <div className={cn(solaceHeroContent, "flex flex-col justify-center gap-5 px-6 py-5 sm:px-8")}>
                     <h2 className="font-serif text-[clamp(1.25rem,2.8vw,1.75rem)] font-normal leading-tight tracking-tight text-white">
                       Tools to help you{" "}
@@ -1070,7 +1070,7 @@ export function WellnessTools() {
                       Find Your Tool &gt;
                     </button>
                   </div>
-                  <div className="hidden lg:block" aria-hidden />
+                  <div className="hidden min-[1300px]:block" aria-hidden />
                 </div>
               </motion.section>
 
@@ -1093,7 +1093,7 @@ export function WellnessTools() {
                     View All
                   </button>
                 </div>
-                <div className="solace-scroll flex gap-4 overflow-x-auto pb-1 lg:grid lg:grid-cols-5 lg:gap-4 lg:overflow-visible">
+                <div className="solace-scroll flex gap-4 overflow-x-auto pb-1 min-[1400px]:grid min-[1400px]:grid-cols-5 min-[1400px]:gap-4 min-[1400px]:overflow-visible">
                   {(Object.keys(EXPLORE_CARD_META) as ExploreGroup[]).map((group) => {
                     const meta = EXPLORE_CARD_META[group];
                     const Icon = meta.icon;
@@ -1110,7 +1110,7 @@ export function WellnessTools() {
                         }}
                         className={cn(
                           solaceImageCard,
-                          "group relative flex h-[180px] w-[min(200px,78vw)] shrink-0 flex-col justify-end overflow-hidden rounded-2xl border p-5 text-left shadow-[0_18px_48px_-28px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.04] transition lg:min-w-0 lg:w-full",
+                          "group relative flex h-[180px] w-[min(200px,78vw)] shrink-0 flex-col justify-end overflow-hidden rounded-2xl border p-5 text-left shadow-[0_18px_48px_-28px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.04] transition min-[1400px]:min-w-0 min-[1400px]:w-full",
                           active
                             ? "border-violet-400/50 shadow-[0_0_44px_rgba(139,92,246,0.38),0_20px_56px_-28px_rgba(236,72,153,0.15)] ring-fuchsia-400/25"
                             : "border-white/[0.1] hover:border-violet-400/35 hover:shadow-[0_0_32px_rgba(139,92,246,0.2)]"
@@ -1191,7 +1191,7 @@ export function WellnessTools() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-5 min-[1080px]:grid-cols-2 min-[1260px]:grid-cols-3">
                   {displayExercises.length === 0 ? (
                     <p className="col-span-full rounded-2xl border border-white/[0.08] bg-black/30 p-5 text-center text-sm text-zinc-500">
                       {showOnlyFavorites

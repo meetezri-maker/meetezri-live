@@ -281,7 +281,7 @@ export function MoodCheckIn() {
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4 lg:gap-x-5 lg:gap-y-6">
+                <div className="grid grid-cols-2 gap-4 sm:gap-5 min-[1180px]:grid-cols-3 min-[1340px]:grid-cols-4 lg:gap-x-5 lg:gap-y-6">
                   {MOOD_CHECKIN_CARDS.map((m) => {
                     const active = selectedMood === m.value;
                     return (
@@ -396,7 +396,7 @@ export function MoodCheckIn() {
                 <p className="mt-2 text-[13px] leading-snug text-[var(--solace-muted)]">
                   Select any that apply. You can choose more than one.
                 </p>
-                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 sm:gap-4 min-[1024px]:grid-cols-1 min-[1080px]:grid-cols-2 min-[1330px]:grid-cols-3 min-[1500px]:grid-cols-4">
                   {INFLUENCE_CHIPS.map((a) => {
                     const on = selectedActivities.includes(a.value);
                     const Icon = a.Icon;
@@ -407,13 +407,13 @@ export function MoodCheckIn() {
                         onClick={() => toggleActivity(a.value)}
                         aria-pressed={on}
                         className={cn(
-                          "group relative min-h-[108px] overflow-hidden rounded-[1.15rem] border text-center transition-[transform,box-shadow,border-color,background-color] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:min-h-[118px] sm:rounded-2xl lg:aspect-[5/4] lg:min-h-[124px]",
+                          "group relative min-h-[108px] overflow-hidden rounded-[1.15rem] border text-center transition-[transform,box-shadow,border-color,background-color] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 min-[640px]:min-h-[118px] sm:rounded-2xl min-[1150px]:aspect-[5/4] min-[1150px]:min-h-[124px]",
                           on
                             ? "scale-[1.02] border-violet-400/45 bg-violet-500/[0.12] shadow-[0_20px_56px_-24px_rgba(76,29,149,0.55),inset_0_0_0_1px_rgba(167,139,250,0.28)] ring-1 ring-violet-400/22"
                             : "border-white/[0.07] bg-black/[0.12] hover:border-white/[0.14] hover:bg-white/[0.04] hover:shadow-[0_18px_48px_-28px_rgba(76,29,149,0.38)]"
                         )}
                       >
-                        <div className="relative z-[1] flex h-full min-h-[108px] flex-col items-center justify-center gap-2.5 p-3.5 sm:min-h-[118px] sm:gap-3 sm:p-4 lg:min-h-0">
+                        <div className="relative z-[1] flex h-full min-h-[108px] flex-col items-center justify-center gap-2.5 p-3.5 min-[640px]:min-h-[118px] sm:gap-3 sm:p-4 min-[1150px]:min-h-0">
                           {on ? (
                             <span className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border border-violet-300/40 bg-black/48 text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.4)] sm:right-3 sm:top-3">
                               <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
