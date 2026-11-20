@@ -13,6 +13,10 @@ import type { LipBaseline, LipBaselineAssetId, LipRow } from "./hyper3dLipBaseli
  * STAGE 2, STEP 2 (2026-11-18): the F and V rows were re-recorded after the
  * approved labiodental correction (`LABIODENTAL_POSES`). Every other row is the
  * Step 1 recording, unchanged. The Step 1 F/V rows are kept below.
+ *
+ * STAGE 2, STEP 3a (2026-11-19): the P and B rows, and the two "P/B + residual
+ * seal jaw" scenarios, were re-recorded after the approved bilabial closure
+ * correction (`BILABIAL_POSES`). Their previous rows are kept below as well.
  */
 export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseline>> = {
   female_2291: {
@@ -35,8 +39,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [14.83, 49.96, 3.81, 2.19, 5.35],
       UH: [11.6, 51.77, 2.04, 1.17, 3.15],
       UW: [12.3, 48.32, 5.82, 2.28, 2.74],
-      P: [3.69, 53.57, 0.58, -0.77, -2.81],
-      B: [3.72, 53.57, 0.56, -0.77, -2.77],
+      P: [3.03, 53.44, 0.71, -0.89, -3.34],
+      B: [3.32, 53.49, 0.65, -0.85, -3.1],
       M: [1.96, 53.45, 0.47, -1.11, -4.19],
       F: [8.14, 55.25, -0.79, 1.41, -0.56],
       V: [8.03, 54.79, -0.58, 1.17, -0.42],
@@ -61,8 +65,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [8.89, 54.22, -0.34, 0.11, 1.5]
     },
     scenarios: {
-      "P + residual seal jaw": [5.29, 53.66, 0.22, -0.64, -1.34],
-      "B + residual seal jaw": [5.24, 53.66, 0.22, -0.65, -1.38],
+      "P + residual seal jaw": [4.63, 53.54, 0.35, -0.76, -1.87],
+      "B + residual seal jaw": [4.83, 53.59, 0.3, -0.73, -1.7],
       "M + residual seal jaw": [3.56, 53.55, 0.11, -0.98, -2.72],
       "seal lead only (close 0.7) + residual jaw": [6.41, 53.73, 0.13, -0.37, -0.49],
       "seal lead only (close 0.7), jaw closed": [4.59, 53.61, 0.55, -0.51, -2.16],
@@ -93,8 +97,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [14.42, 49.96, 3.87, 2.19, 5.48],
       UH: [11.13, 51.77, 2.06, 1.17, 3.22],
       UW: [11.86, 48.32, 5.89, 2.28, 2.83],
-      P: [3.05, 53.57, 0.57, -0.77, -2.91],
-      B: [3.09, 53.57, 0.55, -0.77, -2.87],
+      P: [2.38, 53.44, 0.7, -0.89, -3.45],
+      B: [2.67, 53.49, 0.63, -0.85, -3.2],
       M: [1.27, 53.45, 0.46, -1.11, -4.34],
       F: [7.57, 55.25, -0.78, 1.41, -0.58],
       V: [7.46, 54.79, -0.58, 1.17, -0.44],
@@ -119,8 +123,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [8.36, 54.22, -0.34, 0.11, 1.51]
     },
     scenarios: {
-      "P + residual seal jaw": [4.67, 53.66, 0.2, -0.64, -1.41],
-      "B + residual seal jaw": [4.62, 53.66, 0.21, -0.65, -1.45],
+      "P + residual seal jaw": [4, 53.54, 0.34, -0.76, -1.96],
+      "B + residual seal jaw": [4.21, 53.59, 0.29, -0.73, -1.79],
       "M + residual seal jaw": [2.89, 53.55, 0.1, -0.98, -2.85],
       "seal lead only (close 0.7) + residual jaw": [5.82, 53.73, 0.13, -0.37, -0.54],
       "seal lead only (close 0.7), jaw closed": [3.98, 53.61, 0.54, -0.51, -2.23],
@@ -151,8 +155,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [14.26, 47.93, 3.85, 2.28, 5.84],
       UH: [10.79, 50.05, 2.06, 1.23, 3.44],
       UW: [11.57, 46.36, 5.82, 2.37, 3.07],
-      P: [2.46, 51.79, 0.63, -0.88, -2.76],
-      B: [2.5, 51.78, 0.61, -0.89, -2.72],
+      P: [1.79, 51.63, 0.76, -1.03, -3.28],
+      B: [2.08, 51.68, 0.69, -0.98, -3.03],
       M: [0.67, 51.48, 0.57, -1.26, -4.15],
       F: [7.2, 53.67, -0.73, 1.49, -0.4],
       V: [7.05, 53.25, -0.54, 1.23, -0.29],
@@ -177,8 +181,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [7.84, 52.73, -0.32, 0.12, 1.6]
     },
     scenarios: {
-      "P + residual seal jaw": [4.18, 51.85, 0.29, -0.74, -1.18],
-      "B + residual seal jaw": [4.13, 51.84, 0.29, -0.75, -1.21],
+      "P + residual seal jaw": [3.52, 51.69, 0.42, -0.89, -1.69],
+      "B + residual seal jaw": [3.72, 51.75, 0.37, -0.84, -1.53],
       "M + residual seal jaw": [2.4, 51.54, 0.23, -1.12, -2.57],
       "seal lead only (close 0.7) + residual jaw": [5.35, 52.1, 0.15, -0.44, -0.32],
       "seal lead only (close 0.7), jaw closed": [3.39, 52.03, 0.53, -0.6, -2.12],
@@ -209,8 +213,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [13.3, 47.76, 3.45, 1.93, 4.92],
       UH: [10.39, 49.85, 1.86, 1.01, 2.94],
       UW: [10.91, 46.43, 5.39, 2.1, 2.36],
-      P: [2.98, 52.03, 0.8, -0.59, -2.86],
-      B: [3.02, 52.02, 0.78, -0.6, -2.82],
+      P: [2.34, 51.94, 0.97, -0.69, -3.41],
+      B: [2.62, 51.97, 0.89, -0.66, -3.16],
       M: [1.36, 51.94, 0.8, -0.85, -4.23],
       F: [7.22, 53.54, -0.71, 1.34, -0.56],
       V: [7.11, 53.11, -0.52, 1.11, -0.44],
@@ -235,8 +239,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [8, 52.48, -0.32, 0.05, 1.5]
     },
     scenarios: {
-      "P + residual seal jaw": [4.49, 52, 0.45, -0.53, -1.42],
-      "B + residual seal jaw": [4.45, 52, 0.46, -0.54, -1.45],
+      "P + residual seal jaw": [3.84, 51.91, 0.62, -0.63, -1.97],
+      "B + residual seal jaw": [4.05, 51.95, 0.56, -0.6, -1.79],
       "M + residual seal jaw": [2.86, 51.92, 0.46, -0.79, -2.79],
       "seal lead only (close 0.7) + residual jaw": [5.5, 52.09, 0.32, -0.34, -0.6],
       "seal lead only (close 0.7), jaw closed": [3.79, 52.12, 0.71, -0.41, -2.24],
@@ -267,8 +271,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [14.48, 45.4, 3.65, 2.01, 5.27],
       UH: [11.38, 47.21, 1.99, 1.06, 3.13],
       UW: [12.05, 44.08, 5.46, 2.27, 2.59],
-      P: [3.99, 49.35, 0.72, -0.35, -2.85],
-      B: [4.02, 49.35, 0.71, -0.35, -2.81],
+      P: [3.43, 49.31, 0.86, -0.4, -3.36],
+      B: [3.67, 49.32, 0.8, -0.38, -3.13],
       M: [2.28, 49.31, 0.72, -0.53, -4.37],
       F: [8.02, 50.62, -0.65, 1.41, -0.58],
       V: [7.91, 50.18, -0.47, 1.16, -0.43],
@@ -293,8 +297,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [8.78, 49.59, -0.26, 0.04, 1.55]
     },
     scenarios: {
-      "P + residual seal jaw": [5.55, 49.33, 0.45, -0.3, -1.34],
-      "B + residual seal jaw": [5.5, 49.33, 0.45, -0.31, -1.38],
+      "P + residual seal jaw": [4.99, 49.29, 0.59, -0.34, -1.85],
+      "B + residual seal jaw": [5.15, 49.3, 0.54, -0.33, -1.7],
       "M + residual seal jaw": [3.84, 49.29, 0.45, -0.48, -2.86],
       "seal lead only (close 0.7) + residual jaw": [6.67, 49.4, 0.27, -0.13, -0.38],
       "seal lead only (close 0.7), jaw closed": [4.89, 49.42, 0.58, -0.19, -2.1],
@@ -325,8 +329,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [14.61, 45.54, 3.38, 2.16, 5.36],
       UH: [11.42, 47.16, 1.83, 1.17, 3.17],
       UW: [12.22, 43.96, 5.56, 2.32, 2.81],
-      P: [3.62, 48.66, 0.76, -0.7, -2.77],
-      B: [3.65, 48.66, 0.75, -0.71, -2.72],
+      P: [2.99, 48.52, 0.93, -0.8, -3.3],
+      B: [3.26, 48.58, 0.85, -0.77, -3.05],
       M: [1.92, 48.54, 0.78, -1.05, -4.11],
       F: [7.93, 50.41, -0.72, 1.41, -0.56],
       V: [7.81, 49.98, -0.54, 1.16, -0.43],
@@ -351,8 +355,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [8.71, 49.38, -0.38, 0.1, 1.51]
     },
     scenarios: {
-      "P + residual seal jaw": [5.2, 48.79, 0.35, -0.58, -1.3],
-      "B + residual seal jaw": [5.15, 48.79, 0.35, -0.6, -1.34],
+      "P + residual seal jaw": [4.57, 48.66, 0.51, -0.68, -1.84],
+      "B + residual seal jaw": [4.76, 48.71, 0.45, -0.66, -1.66],
       "M + residual seal jaw": [3.5, 48.67, 0.36, -0.93, -2.65],
       "seal lead only (close 0.7) + residual jaw": [6.29, 48.85, 0.19, -0.27, -0.52],
       "seal lead only (close 0.7), jaw closed": [4.5, 48.7, 0.66, -0.41, -2.18],
@@ -383,8 +387,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [13.51, 46.04, 3.71, 1.91, 5.31],
       UH: [10.42, 48.27, 2, 1, 3.13],
       UW: [11.05, 44.57, 5.64, 1.99, 2.77],
-      P: [2.72, 50.51, 0.64, -0.86, -2.72],
-      B: [2.75, 50.51, 0.63, -0.87, -2.68],
+      P: [2.06, 50.41, 0.78, -1.01, -3.22],
+      B: [2.34, 50.45, 0.71, -0.96, -2.99],
       M: [0.97, 50.38, 0.6, -1.22, -4.11],
       F: [7, 52.02, -0.74, 1.33, -0.63],
       V: [6.91, 51.62, -0.54, 1.1, -0.48],
@@ -409,8 +413,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [7.87, 51.07, -0.31, 0.08, 1.5]
     },
     scenarios: {
-      "P + residual seal jaw": [4.26, 50.53, 0.32, -0.77, -1.27],
-      "B + residual seal jaw": [4.21, 50.52, 0.32, -0.78, -1.3],
+      "P + residual seal jaw": [3.6, 50.43, 0.45, -0.92, -1.77],
+      "B + residual seal jaw": [3.8, 50.46, 0.4, -0.87, -1.61],
       "M + residual seal jaw": [2.51, 50.39, 0.27, -1.13, -2.66],
       "seal lead only (close 0.7) + residual jaw": [5.37, 50.65, 0.18, -0.5, -0.42],
       "seal lead only (close 0.7), jaw closed": [3.62, 50.64, 0.55, -0.61, -2.07],
@@ -441,8 +445,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       OW: [15.38, 47.53, 3.38, 2.09, 5.83],
       UH: [12.03, 49.31, 1.82, 1.13, 3.44],
       UW: [12.67, 46.09, 5.51, 2.28, 2.93],
-      P: [3.8, 51.17, 0.75, -0.71, -2.92],
-      B: [3.84, 51.17, 0.73, -0.72, -2.87],
+      P: [3.13, 51.06, 0.92, -0.82, -3.48],
+      B: [3.42, 51.11, 0.84, -0.79, -3.22],
       M: [1.99, 51.12, 0.73, -1.04, -4.39],
       F: [8.33, 52.69, -0.77, 1.44, -0.56],
       V: [8.22, 52.26, -0.58, 1.2, -0.41],
@@ -467,8 +471,8 @@ export const HYPER3D_LIP_BASELINE: Readonly<Record<LipBaselineAssetId, LipBaseli
       HH: [9.18, 51.65, -0.39, 0.09, 1.64]
     },
     scenarios: {
-      "P + residual seal jaw": [5.53, 51.24, 0.34, -0.61, -1.3],
-      "B + residual seal jaw": [5.48, 51.24, 0.34, -0.62, -1.33],
+      "P + residual seal jaw": [4.86, 51.13, 0.5, -0.72, -1.85],
+      "B + residual seal jaw": [5.07, 51.17, 0.44, -0.69, -1.68],
       "M + residual seal jaw": [3.72, 51.19, 0.31, -0.94, -2.77],
       "seal lead only (close 0.7) + residual jaw": [6.68, 51.23, 0.21, -0.33, -0.44],
       "seal lead only (close 0.7), jaw closed": [4.71, 51.15, 0.68, -0.45, -2.28],
@@ -494,4 +498,21 @@ export const STEP1_LABIODENTAL_BEFORE: Readonly<Record<LipBaselineAssetId, { F: 
   hyper3d_bianca: { F: [12.21, 50.26, -0.68, 1.37, 3.76], V: [11.18, 49.86, -0.51, 1.13, 2.96] },
   hyper3d_damian: { F: [11.21, 51.84, -0.66, 1.31, 3.61], V: [10.22, 51.48, -0.49, 1.08, 2.84] },
   hyper3d_sasha: { F: [12.49, 52.54, -0.74, 1.38, 3.66], V: [11.49, 52.15, -0.56, 1.15, 2.9] }
+};
+
+/**
+ * The P and B rows, and their residual-jaw scenarios, as recorded BEFORE the
+ * Step 3a bilabial closure correction — kept so the comparison stays reproducible.
+ */
+export const STEP3A_BILABIAL_BEFORE: Readonly<
+  Record<LipBaselineAssetId, { P: LipRow; B: LipRow; "P + residual seal jaw": LipRow; "B + residual seal jaw": LipRow }>
+> = {
+  female_2291: { P: [3.69, 53.57, 0.58, -0.77, -2.81], B: [3.72, 53.57, 0.56, -0.77, -2.77], "P + residual seal jaw": [5.29, 53.66, 0.22, -0.64, -1.34], "B + residual seal jaw": [5.24, 53.66, 0.22, -0.65, -1.38] },
+  hyper3d_arfv2: { P: [3.05, 53.57, 0.57, -0.77, -2.91], B: [3.09, 53.57, 0.55, -0.77, -2.87], "P + residual seal jaw": [4.67, 53.66, 0.2, -0.64, -1.41], "B + residual seal jaw": [4.62, 53.66, 0.21, -0.65, -1.45] },
+  hyper3d_sara: { P: [2.46, 51.79, 0.63, -0.88, -2.76], B: [2.5, 51.78, 0.61, -0.89, -2.72], "P + residual seal jaw": [4.18, 51.85, 0.29, -0.74, -1.18], "B + residual seal jaw": [4.13, 51.84, 0.29, -0.75, -1.21] },
+  hyper3d_frankie: { P: [2.98, 52.03, 0.8, -0.59, -2.86], B: [3.02, 52.02, 0.78, -0.6, -2.82], "P + residual seal jaw": [4.49, 52, 0.45, -0.53, -1.42], "B + residual seal jaw": [4.45, 52, 0.46, -0.54, -1.45] },
+  hyper3d_jordan: { P: [3.99, 49.35, 0.72, -0.35, -2.85], B: [4.02, 49.35, 0.71, -0.35, -2.81], "P + residual seal jaw": [5.55, 49.33, 0.45, -0.3, -1.34], "B + residual seal jaw": [5.5, 49.33, 0.45, -0.31, -1.38] },
+  hyper3d_bianca: { P: [3.62, 48.66, 0.76, -0.7, -2.77], B: [3.65, 48.66, 0.75, -0.71, -2.72], "P + residual seal jaw": [5.2, 48.79, 0.35, -0.58, -1.3], "B + residual seal jaw": [5.15, 48.79, 0.35, -0.6, -1.34] },
+  hyper3d_damian: { P: [2.72, 50.51, 0.64, -0.86, -2.72], B: [2.75, 50.51, 0.63, -0.87, -2.68], "P + residual seal jaw": [4.26, 50.53, 0.32, -0.77, -1.27], "B + residual seal jaw": [4.21, 50.52, 0.32, -0.78, -1.3] },
+  hyper3d_sasha: { P: [3.8, 51.17, 0.75, -0.71, -2.92], B: [3.84, 51.17, 0.73, -0.72, -2.87], "P + residual seal jaw": [5.53, 51.24, 0.34, -0.61, -1.3], "B + residual seal jaw": [5.48, 51.24, 0.34, -0.62, -1.33] }
 };

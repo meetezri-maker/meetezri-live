@@ -12,10 +12,18 @@ import {
   type LipBaselineAssetId,
   type LipRow
 } from "./hyper3dLipBaseline";
-import { HYPER3D_LIP_BASELINE, STEP1_LABIODENTAL_BEFORE } from "./hyper3dLipBaseline.fixture";
+import {
+  HYPER3D_LIP_BASELINE,
+  STEP1_LABIODENTAL_BEFORE,
+  STEP3A_BILABIAL_BEFORE
+} from "./hyper3dLipBaseline.fixture";
 import { BILABIAL_SEAL_LEVEL } from "./engine/engine/lipsync/CoarticulationEngine";
 import { minifaceMalePhonemeProfile } from "./engine/mappings/avatars/minifaceMalePhonemeProfile";
-import { LABIODENTAL_POSES, hyper3dPhonemeProfile } from "./engine/mappings/avatars/hyper3dVowelProfile";
+import {
+  BILABIAL_POSES,
+  LABIODENTAL_POSES,
+  hyper3dPhonemeProfile
+} from "./engine/mappings/avatars/hyper3dVowelProfile";
 
 /**
  * STAGE 2, STEP 1 — LIP-GEOMETRY BASELINE. MEASUREMENT ONLY.
@@ -207,7 +215,19 @@ describe("documented limitations of the current shapes (Stage 2 audit)", () => {
     it(`${id}: P/B/M close at the static apex; M closes deepest`, () => {
       const base = HYPER3D_LIP_BASELINE[id];
       for (const p of ["P", "B", "M"] as const) expect(dAperture(id, base.phonemes[p])).toBeLessThan(-3);
-      expect(base.phonemes.M[0]).toBeLessThan(base.phonemes.P[0] - 1);
+      // Step 3a raised P/B closure toward M's, so the margin narrowed (it was
+      // > 1 mm on every face before); M must still be the deepest of the three.
+      expect(base.phonemes.M[0]).toBeLessThan(base.phonemes.P[0]);
+      expect(base.phonemes.M[0]).toBeLessThan(base.phonemes.B[0]);
+    });
+
+    it(`${id}: Step 3a closes P and B further, by the same order on every face`, () => {
+      const before = STEP3A_BILABIAL_BEFORE[id];
+      const after = HYPER3D_LIP_BASELINE[id];
+      for (const p of ["P", "B"] as const) {
+        expect(after.phonemes[p][0]).toBeLessThan(before[p][0] - 0.3); // deeper closure
+        expect(after.phonemes[p][0]).toBeGreaterThan(after.phonemes.M[0]); // never past M
+      }
     });
 
     it(`${id}: the residual jaw a sealing frame may keep reopens every bilabial by > 1 mm`, () => {
@@ -253,6 +273,33 @@ describe("Stage 2, Step 2 — the labiodental correction is pose-only and Hyper3
     expect(minifaceMalePhonemeProfile.F.morphTargets.mouthLowerDownLeft).toBe(0.36);
     expect(minifaceMalePhonemeProfile.V.morphTargets.mouthLowerDownLeft).toBe(0.31);
     expect(minifaceMalePhonemeProfile.F.morphTargets.mouthRollLower).toBeUndefined();
+  });
+});
+
+describe("Stage 2, Step 3a — the bilabial closure correction is pose-only and Hyper3D-only", () => {
+  for (const p of ["P", "B"] as const) {
+    it(`${p}: raises mouthClose to M's 0.96 and changes no other channel`, () => {
+      const male = minifaceMalePhonemeProfile[p].morphTargets;
+      const pose = BILABIAL_POSES[p];
+      expect(pose.mouthClose).toBe(minifaceMalePhonemeProfile.M.morphTargets.mouthClose);
+      expect(Object.keys(pose).sort()).toEqual(Object.keys(male).sort());
+      for (const [name, value] of Object.entries(male)) {
+        if (name !== "mouthClose") expect(pose[name]).toBe(value);
+      }
+    });
+
+    it(`${p}: timing, intensity and coarticulation fields are the male table's, by value`, () => {
+      const { morphTargets: _male, ...maleRest } = minifaceMalePhonemeProfile[p];
+      const { morphTargets: _h, ...hyperRest } = hyper3dPhonemeProfile[p];
+      expect(hyperRest).toEqual(maleRest);
+    });
+  }
+
+  it("M is not overridden, and the shared male table keeps its P/B closure", () => {
+    expect(BILABIAL_POSES.M).toBeUndefined();
+    expect(hyper3dPhonemeProfile.M).toBe(minifaceMalePhonemeProfile.M);
+    expect(minifaceMalePhonemeProfile.P.morphTargets.mouthClose).toBe(0.78);
+    expect(minifaceMalePhonemeProfile.B.morphTargets.mouthClose).toBe(0.84);
   });
 });
 

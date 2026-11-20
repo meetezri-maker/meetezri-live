@@ -807,6 +807,46 @@ export const LABIODENTAL_POSES: Record<string, BlendshapePose> = {
 };
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BILABIALS — STAGE 2, STEP 3a. P AND B ASKED FOR TOO LITTLE CLOSURE.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE MEASUREMENT. Driving the four aligned corpus payloads through the real
+ * production frame (`resolveHyper3dFrame`) at 60 Hz and measuring the lips on
+ * each face, a P/B/M label counts as CLOSED when any frame inside it comes within
+ * 0.5 mm of the face's own seal (`mouthClose` 0.10 alone). On original Romy:
+ *
+ *              closed            calibrated mouthClose at the apex
+ *   P           1 / 20           0.78 x 0.95 x 0.11 = 0.082
+ *   B           0 / 14           0.84 x 0.88 x 0.11 = 0.081
+ *   M          11 / 16           0.96 x 0.96 x 0.11 = 0.101
+ *
+ * M already sits on the calibration's measured seal optimum (0.10); P and B sit
+ * well under it, so against the vowel jaw the follower is still carrying they
+ * do not reach the lips. That is the whole difference between M closing and
+ * P/B not, and every one of the seven companion faces measures the same.
+ *
+ * THE CORRECTION. P and B take M's closure demand, 0.96. They calibrate to
+ * 0.100 and 0.093 — inside the measured sealing band (overshoot begins above
+ * ~0.12) and never deeper than M. Measured on the same corpus:
+ *
+ *   closed on Romy          12 / 50  ->  21 / 50
+ *   all seven companions    12-17    ->  20-24
+ *   vowel opening before a bilabial    -0.02 mm (no visible cost)
+ *
+ * WHAT IS UNCHANGED. Only `mouthClose`. Press, jaw, intensity, attack, release,
+ * coarticulation weights, viseme and category are the male table's; P keeps its
+ * lighter press than B, and B lighter than M. The shared male table, the seal
+ * trajectory, the mixer and the follower are not touched — the remaining
+ * failures (mostly labels under 60 ms, where the jaw cannot clear in time) are a
+ * follower question and deliberately out of scope here.
+ */
+export const BILABIAL_POSES: Record<string, BlendshapePose> = {
+  P: { mouthClose: 0.96, mouthPressLeft: 0.28, mouthPressRight: 0.28, jawOpen: 0.01 },
+  B: { mouthClose: 0.96, mouthPressLeft: 0.32, mouthPressRight: 0.32, jawOpen: 0.015 }
+};
+
+/**
  * The Hyper3D speech profile: the male table with the vowel poses replaced.
  *
  * Only `morphTargets` is overridden. `attack`, `release`, `holdBias`,
@@ -819,7 +859,8 @@ export const hyper3dPhonemeProfile = Object.fromEntries(
       VOWEL_POSES[phoneme] ??
       AFFRICATE_POSES[phoneme] ??
       CONSONANT_POSES[phoneme] ??
-      LABIODENTAL_POSES[phoneme];
+      LABIODENTAL_POSES[phoneme] ??
+      BILABIAL_POSES[phoneme];
     return pose ? [phoneme, { ...definition, morphTargets: pose }] : [phoneme, definition];
   })
 ) as typeof minifaceMalePhonemeProfile;
@@ -844,6 +885,9 @@ export const HYPER3D_TUNED_CONSONANTS = Object.keys(CONSONANT_POSES);
 /** F and V — Stage 2, Step 2. A fourth list, for the same contract reason. */
 export const HYPER3D_TUNED_LABIODENTALS = Object.keys(LABIODENTAL_POSES);
 
+/** P and B — Stage 2, Step 3a. M is not overridden: it already closes. */
+export const HYPER3D_TUNED_BILABIALS = Object.keys(BILABIAL_POSES);
+
 /** The diphthongs given a within-phoneme trajectory. Their POSES are unchanged. */
 export const HYPER3D_GLIDING_DIPHTHONGS = Object.keys(DIPHTHONG_GLIDES);
 
@@ -852,5 +896,6 @@ export const HYPER3D_RETUNED_PHONEMES = [
   ...HYPER3D_TUNED_VOWELS,
   ...HYPER3D_TUNED_AFFRICATES,
   ...HYPER3D_TUNED_CONSONANTS,
-  ...HYPER3D_TUNED_LABIODENTALS
+  ...HYPER3D_TUNED_LABIODENTALS,
+  ...HYPER3D_TUNED_BILABIALS
 ];
