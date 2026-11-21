@@ -461,6 +461,95 @@ export const bilabialSeal = (
   return clamp(Math.min(rise, fall));
 };
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BILABIAL CONTINUITY BRIDGE — STAGE 2, STEP 3c. OPT-IN, HYPER3D ONLY.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE DEFECT. Two bilabials that touch — P·B, B·M, M·P, "some more", "top
+ * person" — are ONE lip closure in speech. The seal above treats every P/B/M as
+ * its own closure event: the first releases over its last 35 ms, the second
+ * leads back in over 45 ms, and the neighbour weights are damped to x0.25 while
+ * a bilabial is current. At a short label the follower cannot see the dip; at
+ * 150 ms per label it can, and the lips PUMP once per boundary. Measured through
+ * the production frame on original Romy (P·B·M·P, 150 ms per label), the lip
+ * line rose 0.72 / 0.86 / 1.73 mm at the P→B / B→M / M→P boundaries.
+ *
+ * THE BRIDGE. When the current label is a bilabial and the label it TOUCHES on
+ * one side (gap <= `BILABIAL_BRIDGE_GAP_SECONDS`) is also a bilabial, the
+ * current label's OWN full `mouthClose` demand is held at that shared boundary,
+ * ramping toward it over `BILABIAL_BRIDGE_SPAN_SHARE` of the label. Both labels
+ * therefore hand the boundary full closure and nothing releases there.
+ *
+ * THE SPAN WAS CHOSEN BY MEASUREMENT (P·B·M·P, Romy, production frame, pulse at
+ * P→B / B→M / M→P in mm):
+ *
+ *   span            70 ms              90 ms              150 ms
+ *   off             0 / .22 / .30      .08 / .63 / 1.03   .72 / .86 / 1.73
+ *   60 ms cap       0 / .13 / .12      0 / .51 / .64      .25 / .54 / 1.20
+ *   3/4 label       0 / .03 / .16      0 / .33 / .58      .13 / .39 / 1.09   <- ships
+ *   whole label     0 / 0 / .17        0 / .27 / .56      .11 / .33 / 1.03
+ *
+ * 3/4 takes nearly all of the whole-label gain while leaving the first quarter
+ * of a label's free side to the seal's own attack and release. The M→P residue
+ * is not a reopening — the lips stay sealed across every internal boundary — it
+ * is M's heavier press (0.52 + roll) relaxing to P's (0.28), a real shape change.
+ *
+ * WHAT IT CANNOT DO, by construction:
+ *   - add compression: it only ever raises `mouthClose` to the value the label
+ *     already asks for at its own apex (`pose.mouthClose x defaultIntensity x
+ *     intensity`), never above it;
+ *   - change a release into a vowel or silence: the side of a bilabial that
+ *     faces a non-bilabial gets weight 0, so its seal release is untouched;
+ *   - touch any other channel, the jaw, the seal trajectory or any timing.
+ *
+ * OFF unless the caller passes `bilabialBridge: true`. `AvatarController` does
+ * so for `hyper3d-usc` only, and the DEV articulation runner mirrors it.
+ */
+/** Two labels "touch" when the gap between them is at most this. */
+export const BILABIAL_BRIDGE_GAP_SECONDS = 0.01;
+/** Share of the current label over which the bridge ramps toward a shared boundary. */
+export const BILABIAL_BRIDGE_SPAN_SHARE = 0.75;
+
+const isBilabialLabel = (
+  event: TimedPhoneme | undefined,
+  profile: Partial<Record<SupportedPhoneme, PhonemePoseDefinition>>
+) => definitionFor(event, profile)?.viseme === "PP";
+
+/**
+ * 0..1: how much of the current bilabial's own closure demand to hold at
+ * `time`. 1 at a boundary shared with another bilabial, falling smoothly to 0
+ * within the span; 0 everywhere else (and always 0 when the current label is
+ * not itself a bilabial).
+ */
+export const bilabialBridgeWeight = (
+  time: number,
+  current: TimedPhoneme | undefined,
+  previous: TimedPhoneme | undefined,
+  next: TimedPhoneme | undefined,
+  profile: Partial<Record<SupportedPhoneme, PhonemePoseDefinition>> = phonemeToBlendshape
+): number => {
+  if (!current || !isBilabialLabel(current, profile)) return 0;
+  const duration = Math.max(0.001, current.end_time - current.start_time);
+  const span = duration * BILABIAL_BRIDGE_SPAN_SHARE;
+  let weight = 0;
+  if (
+    next &&
+    isBilabialLabel(next, profile) &&
+    Math.abs(next.start_time - current.end_time) <= BILABIAL_BRIDGE_GAP_SECONDS
+  ) {
+    weight = Math.max(weight, smoothstep(current.end_time - span, current.end_time, time));
+  }
+  if (
+    previous &&
+    isBilabialLabel(previous, profile) &&
+    Math.abs(current.start_time - previous.end_time) <= BILABIAL_BRIDGE_GAP_SECONDS
+  ) {
+    weight = Math.max(weight, 1 - smoothstep(current.start_time, current.start_time + span, time));
+  }
+  return clamp(weight);
+};
+
 export function scalePose(pose: BlendshapePose, weight: number): BlendshapePose {
   const out: BlendshapePose = {};
   for (const key in pose) out[key] = clampAvatarMorph(key, pose[key] * weight);
@@ -656,6 +745,12 @@ export interface CoarticulationInput {
   glideEasing?: "smootherstep" | "linear";
   /** Test-only overrides for the bilabial seal. Production uses the constants. */
   bilabialSeal?: BilabialSealOptions;
+  /**
+   * STAGE 2, STEP 3c. Hold closure across a boundary shared by two touching
+   * bilabials (see `bilabialBridgeWeight`). Absent or false reproduces the
+   * previous path exactly; only `hyper3d-usc` turns it on.
+   */
+  bilabialBridge?: boolean;
 }
 
 export interface CoarticulationResult {
@@ -964,6 +1059,21 @@ export class CoarticulationEngine {
     const closurePreservation = seal > 0;
     if (closurePreservation)
       this.pose.mouthClose = Math.max(this.pose.mouthClose ?? 0, sealLevel * seal);
+
+    /**
+     * STEP 3c — THE BILABIAL CONTINUITY BRIDGE, opt-in. Raises `mouthClose` to
+     * the current bilabial's own apex demand near a boundary it shares with
+     * another bilabial, and never above that demand. Nothing runs unless the
+     * caller asked for it.
+     */
+    if (input.bilabialBridge && currentDef?.viseme === "PP" && input.current) {
+      const bridge = bilabialBridgeWeight(input.time, input.current, input.previous, input.next, profile);
+      if (bridge > 0) {
+        const demand =
+          (currentDef.pose.mouthClose ?? 0) * currentDef.defaultIntensity * intensityFor(input.current);
+        this.pose.mouthClose = Math.max(this.pose.mouthClose ?? 0, clampAvatarMorph("mouthClose", demand * bridge));
+      }
+    }
 
     this.weights.previous = clamp(previousWeight);
     this.weights.current = clamp(currentEnvelope);

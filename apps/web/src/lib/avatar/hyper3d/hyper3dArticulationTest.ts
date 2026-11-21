@@ -230,6 +230,26 @@ export const HYPER3D_ARTICULATION_TARGETS: readonly Hyper3dArticulationTarget[] 
   { id: "seqShapeTiy", label: "T·IY", family: "L. shape review", phoneme: null, phonemes: ["T", "IY"], note: "An alveolar stop into the most spread vowel. T's own retraction cue and IY's pocket are both lateral — do they read as two events or one?" },
   { id: "seqShapeKaa", label: "K·AA", family: "L. shape review", phoneme: null, phonemes: ["K", "AA"], note: "A velar stop into the widest aperture. K must NOT read as front: its lower-lip drop is deliberately the opposite cue from T's retraction." },
   { id: "seqShapeFuw", label: "F·UW", family: "L. shape review", phoneme: null, phonemes: ["F", "UW"], note: "Labiodental into strong rounding. F measured healthy (0.30 lowerDown) and UW is the top of the rounding ladder; both untouched by this pass." },
+  /**
+   * STAGE 2, STEP 2 — the labiodental correction in real words. F and V now
+   * lift and tuck the lower lip toward the upper teeth instead of dropping it
+   * (`LABIODENTAL_POSES`). These loop the word's ARPAbet labels through the
+   * real coarticulation engine and follower, so the reviewer sees the F/V
+   * contact arriving from and releasing into its actual neighbours.
+   */
+  { id: "seqWordFive", label: "F·AY·V  (five)", family: "M. labiodental words", phoneme: null, phonemes: ["F", "AY", "V"], note: "Word-initial F out of rest, the open AY glide, then V closing the word. Both labiodentals should show the lower lip rising to meet the upper teeth — never dropping." },
+  { id: "seqWordVery", label: "V·EH·R·IY  (very)", family: "M. labiodental words", phoneme: null, phonemes: ["V", "EH", "R", "IY"], note: "Word-initial V into a front vowel. Watch the lower lip leave the teeth cleanly into EH rather than dragging the jaw with it." },
+  { id: "seqWordOf", label: "AH·V  (of)", family: "M. labiodental words", phoneme: null, phonemes: ["AH", "V"], note: "The most frequent V context: an open vowel closing onto the teeth. The lip should rise out of AH's aperture, not sink below it." },
+  /**
+   * STAGE 2, STEP 3a — bilabial closure in connected speech. P and B now ask
+   * for M's closure. These are the transitions the Step 3 audit traced: watch
+   * whether the lips actually MEET inside each P/B/M, whether consecutive
+   * bilabials stay sealed, and whether anything presses through.
+   */
+  { id: "seqBilabialTopMan", label: "AA·P·M·AE  (top man)", family: "N. bilabial closure", phoneme: null, phonemes: ["AA", "P", "M", "AE"], note: "P straight out of the widest vowel — the hardest case. P still starts with the jaw the follower carries from AA; M should seal." },
+  { id: "seqBilabialAb", label: "AE·B  (ab)", family: "N. bilabial closure", phoneme: null, phonemes: ["AE", "B"], note: "A vowel closing onto B. Measured still slightly open at short labels — compare 70 vs 150 ms." },
+  { id: "seqBilabialPbmp", label: "P·B·M·P", family: "N. bilabial closure", phoneme: null, phonemes: ["AH", "P", "B", "M", "P", "AH"], note: "Consecutive bilabials. The lips should close and STAY closed through B·M·P, with no visible reopening between them." },
+  { id: "seqBilabialMm", label: "AH·M·M·AH  (geminate)", family: "N. bilabial closure", phoneme: null, phonemes: ["AH", "M", "M", "AH"], note: "Two M labels back to back. Watch for a flicker at the boundary." },
   { id: "seqShapeRzh", label: "R·ZH·R", family: "L. shape review", phoneme: null, phonemes: ["R", "ZH", "R"], note: "THE PAIR THIS PASS FIXED. R and ZH measured 0.131 mm apart — the closest different-viseme shapes in the inventory — and are now 0.662 mm apart. /r/ should read as more protruded than /ʒ/, and still clearly not /w/." },
 
   /**
@@ -948,7 +968,10 @@ function stepDelivery(
     previous: previousLabel,
     next: nextLabel,
     windowSeconds: 0.08,
-    profile: hyper3dPhonemeToBlendshape
+    profile: hyper3dPhonemeToBlendshape,
+    // Mirrors `AvatarController` for `hyper3d-usc` (Stage 2, Step 3c), so the
+    // runner's connected sequences show the shipped bilabial continuity.
+    bilabialBridge: true
   });
   const mixed = run.mixer.combine([{ channel: "lipsync", pose: lip.pose }] as never);
   /**

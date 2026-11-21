@@ -446,7 +446,14 @@ export class AvatarController {
             previous,
             next,
             windowSeconds: this.payload.behaviour_settings.coarticulation_window,
-            profile: speechProfile
+            profile: speechProfile,
+            /**
+             * STAGE 2, STEP 3c — closure continuity across touching bilabials.
+             * `hyper3d-usc` only, and only with calibration on (the neutral A/B
+             * reference keeps the previous path); every other model passes
+             * false and takes the exact previous coarticulation path.
+             */
+            bilabialBridge: modelId === "hyper3d-usc" && options.calibrationEnabled !== false
           })
         : {
             pose: currentDef?.pose ?? emptyPose,

@@ -174,11 +174,17 @@ const romyAvailable = existsSync(LIP_BASELINE_ASSETS.hyper3d_arfv2);
  * a pose question. These rows pin that remaining gap so a later step shows up
  * here as a measured change.
  */
+/*
+ * STEP 3c moved the two rows whose bilabial TOUCHES another bilabial: the bridge
+ * holds the first one's closure toward its neighbour, so it closes further.
+ * "top man" P 2.12 -> 1.92 mm and "rib pin" B 0.50 -> 0.40 mm on Romy, the same
+ * direction on every face. Rows with no touching bilabial are unchanged.
+ */
 const SEQUENCES: { id: string; sequence: [string, number][]; label: number; beforeRomy: number; afterRomy: number }[] = [
-  { id: "P after AA — top man", sequence: [["AA", 0.12], ["P", 0.08], ["M", 0.09], ["AE", 0.12]], label: 1, beforeRomy: 2.97, afterRomy: 2.12 },
+  { id: "P after AA — top man", sequence: [["AA", 0.12], ["P", 0.08], ["M", 0.09], ["AE", 0.12]], label: 1, beforeRomy: 2.97, afterRomy: 1.92 },
   { id: "B after AE — ab", sequence: [["AE", 0.14], ["B", 0.09]], label: 1, beforeRomy: 1.94, afterRomy: 1.64 },
   { id: "P mid-word — happy", sequence: [["HH", 0.06], ["AE", 0.1], ["P", 0.07], ["IY", 0.12]], label: 2, beforeRomy: 2.49, afterRomy: 2.04 },
-  { id: "B after IH — rib pin", sequence: [["IH", 0.1], ["B", 0.07], ["P", 0.08], ["IH", 0.1]], label: 1, beforeRomy: 0.81, afterRomy: 0.5 },
+  { id: "B after IH — rib pin", sequence: [["IH", 0.1], ["B", 0.07], ["P", 0.08], ["IH", 0.1]], label: 1, beforeRomy: 0.81, afterRomy: 0.4 },
   { id: "M after AH — some big", sequence: [["AH", 0.12], ["M", 0.08], ["B", 0.07], ["IH", 0.1]], label: 1, beforeRomy: -0.11, afterRomy: -0.12 }
 ];
 
