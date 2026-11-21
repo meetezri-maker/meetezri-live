@@ -142,6 +142,12 @@ export const ENTITLEMENT_POLICY_STATUS: Readonly<Record<string, PolicyStatus>> =
   featureFlags: 'PROVISIONAL',
   // The hook exists and is tested; the policy for what an override may grant is unreviewed.
   adminOverrides: 'PROVISIONAL',
+  /**
+   * Text chat (Conversations) eligibility + daily message allowance — PROPOSED, not approved.
+   * While PROVISIONAL, `CONVERSATIONS_ENTITLEMENTS_MODE=enforce` is downgraded to shadow (log only)
+   * in `modules/conversations/textChatEntitlements.ts`. Flip to 'APPROVED' only after product sign-off.
+   */
+  textChatAccess: 'PROVISIONAL',
 };
 
 /**

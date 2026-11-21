@@ -25,6 +25,9 @@ import {
 } from '@/app/pages/app/accessibility-settings/applyAccessibilitySettings';
 import { PageLoader } from '@/app/components/PageLoader';
 import { HOMEPAGE_ROUTE_ELEMENTS } from '@/app/routing/homepageRoutes';
+import { getConversationsRouteElements } from '@/app/features/conversations/conversationsRoutes';
+
+const CONVERSATIONS_ROUTE_ELEMENTS = getConversationsRouteElements();
 import { PublicRouteMetadata } from '@/app/seo/PublicRouteMetadata';
 import { NotFoundPage } from '@/app/pages/NotFoundPage';
 
@@ -584,6 +587,10 @@ export default function App() {
                 <Route path="/app/settings/community" element={<Navigate to="/app/community" replace />} />
                 <Route path="/app/settings/safety-plan" element={<Navigate to="/app/settings/wellness-plan" replace />} />
                 <Route path="/app/settings/wellness-plan" element={<SafetyPlan />} />
+                {/* Conversations Module — empty unless VITE_CONVERSATIONS_ENABLED; must precede /app/* */}
+                {CONVERSATIONS_ROUTE_ELEMENTS.map(({ path, element }) => (
+                  <Route key={path} path={path} element={element} />
+                ))}
                 <Route path="/app/*" element={<ComingSoon />} />
               </Route>
             </Route>

@@ -1,17 +1,23 @@
 import { motion } from "motion/react";
 import { Link, useLocation } from "react-router";
-import { Home, Video, BookOpen, Menu, Sparkles } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MobileNavigationDrawer } from "./MobileNavigationDrawer";
 import { findActiveNavPath } from "@/app/solace/memberNav";
+import { getMobilePrimaryNav, isMobileTabActive } from "@/app/solace/mobilePrimaryNav";
+import { isConversationsEnabled } from "@/app/features/conversations/conversationsFlag";
 
 interface MobileBottomNavProps {
   /** Tighter bottom bar when Appearance → Compact mode is on */
   compact?: boolean;
 }
 
-/** The four primary destinations the bottom bar owns; everything else lives under More. */
-const PRIMARY_PATHS = ["/app/dashboard", "/app/session-lobby", "/app/progress", "/app/journal"];
+/**
+ * The four primary destinations the bottom bar owns; everything else lives under More.
+ * With Conversations enabled: Home · Talk · Conversations · Journal (Progress moves to More).
+ */
+const PRIMARY_NAV = getMobilePrimaryNav({ conversationsEnabled: isConversationsEnabled() });
+const PRIMARY_PATHS = PRIMARY_NAV.tabs.map((tab) => tab.path);
 
 /** Tailwind's `lg` breakpoint, where the bottom bar and drawer give way to the sidebar. */
 const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
@@ -44,19 +50,14 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
-  const navItems = [
-    { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Talk" },
-    { path: "/app/progress", icon: Sparkles, label: "Reflect" },
-    { path: "/app/journal", icon: BookOpen, label: "Journal" },
-  ];
+  const navItems = PRIMARY_NAV.tabs;
 
   const activeMemberPath = findActiveNavPath(location.pathname);
   const moreActive =
     drawerOpen || (activeMemberPath !== null && !PRIMARY_PATHS.includes(activeMemberPath));
 
   const renderTab = (
-    { icon: Icon, label }: { icon: typeof Home; label: string },
+    { icon: Icon, label }: { icon: LucideIcon; label: string },
     isActive: boolean
   ) => (
     <motion.div
@@ -99,7 +100,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
         <div className={`flex items-stretch justify-around px-1 ${compact ? "py-1.5" : "py-2"}`}>
           {navItems.map((item) => (
             <Link key={item.path} to={item.path} className="relative min-w-0 flex-1">
-              {renderTab(item, location.pathname === item.path)}
+              {renderTab(item, isMobileTabActive(item.path, location.pathname))}
             </Link>
           ))}
 
@@ -111,7 +112,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
             aria-haspopup="dialog"
             className="relative min-w-0 flex-1"
           >
-            {renderTab({ icon: Menu, label: "More" }, moreActive)}
+            {renderTab({ icon: PRIMARY_NAV.moreIcon, label: "More" }, moreActive)}
           </button>
         </div>
       </motion.div>

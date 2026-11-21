@@ -33,6 +33,7 @@ import { supportTicketsRoutes } from './modules/support-tickets/support-tickets.
 import { sttRoutes } from './modules/stt/stt.routes';
 import { safetyResourceInteractionsRoutes } from './modules/safety-resource-interactions/safety-resource-interactions.routes';
 import { geoRoutes } from './modules/geo/geo.routes';
+import { conversationsRoutes } from './modules/conversations/conversations.routes';
 import { crisisHotlinesRoutes } from './modules/crisis-hotlines/crisis-hotlines.routes';
 import { foundingMembersRoutes } from './modules/founding-members/founding-members.routes';
 import { expertReviewRoutes } from './modules/expert-review/expert-review.routes';
@@ -300,6 +301,9 @@ app.register(progressReportRoutes, { prefix: '/api/gamification' });
 app.register(supportTicketsRoutes, { prefix: '/api/support' });
 app.register(sttRoutes);
 app.register(safetyResourceInteractionsRoutes, { prefix: '/api/safety-resource-interactions' });
+// Conversations Module (text chat). Answers 404 unless CONVERSATIONS_API_ENABLED is set; separate
+// from voice sessions and billing.
+app.register(conversationsRoutes, { prefix: '/api/conversations' });
 app.register(geoRoutes, { prefix: '/api/geo' });
 app.register(crisisHotlinesRoutes, { prefix: '/api/crisis-hotlines' });
 app.register(foundingMembersRoutes, { prefix: '/api/founding-members' });

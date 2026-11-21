@@ -87,6 +87,8 @@ const APP_API_PREFIXES = [
   '/api/wellness-plan',
   '/api/safety-resource-interactions',
   '/api/community',
+  // Conversations Module (text chat): same deactivated-account and onboarding gates as sessions.
+  '/api/conversations',
 ];
 
 const ADMIN_ROLES = ['super_admin', 'org_admin', 'team_admin'] as const;

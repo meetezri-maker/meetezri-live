@@ -1,5 +1,5 @@
 import "@/styles/app-route-styles.css";
-import { useEffect, useState, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useMemo } from "react";
 import { Link, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { 
@@ -12,6 +12,15 @@ import {
 import { MobileBottomNav } from "./MobileBottomNav";
 import { BrandLogo } from "./BrandLogo";
 import { SolaceSidebar } from "@/app/solace/SolaceSidebar";
+import {
+  isConversationThreadPath,
+  isConversationsEnabled,
+} from "@/app/features/conversations/conversationsFlag";
+
+const QUICK_CHAT_ENABLED = isConversationsEnabled();
+const QuickChat = lazy(() =>
+  import("@/app/features/conversations/quick-chat/QuickChat").then((m) => ({ default: m.QuickChat }))
+);
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
@@ -46,6 +55,11 @@ export function AppLayout() {
 
   /** Talk It Out session: no sidebar / bottom nav; main is edge-to-edge under the header. */
   const isActiveSessionRoute = location.pathname.startsWith("/app/active-session");
+  /**
+   * Conversations thread (`/app/conversations/<id>`, flag-gated): the mobile bottom nav steps
+   * aside so the composer can sit at the bottom edge. Desktop is unaffected (the bar is lg:hidden).
+   */
+  const isConversationThreadRoute = isConversationThreadPath(location.pathname);
 
   const appearanceStorageKey = useMemo(() => {
     if (typeof window === "undefined") return "ezri_appearance_settings";
@@ -89,7 +103,11 @@ export function AppLayout() {
   /** Mobile bottom nav fills <lg; Solace sidebar is lg+ only — avoids duplicated nav stacks (tablet). */
   const mainPaddingClass = isActiveSessionRoute
     ? "overflow-hidden p-0 pb-0 lg:pl-0"
-    : compact
+    : isConversationThreadRoute
+      ? compact
+        ? "pb-0 lg:pb-5 lg:pl-[280px]"
+        : "pb-0 lg:pb-8 lg:pl-[280px]"
+      : compact
       ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
       : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
 
@@ -129,7 +147,10 @@ export function AppLayout() {
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="solace-app-header sticky top-0 z-40 border-b border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl"
+        className={`solace-app-header sticky top-0 z-40 border-b border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl${
+          // Mobile Conversations thread is full-screen (its own header has Back); desktop keeps the bar.
+          isConversationThreadRoute ? " max-lg:hidden" : ""
+        }`}
       >
         <div
           className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
@@ -218,7 +239,14 @@ export function AppLayout() {
         <Outlet />
       </main>
 
-      {!isActiveSessionRoute ? <MobileBottomNav compact={compact} /> : null}
+      {!isActiveSessionRoute && !isConversationThreadRoute ? <MobileBottomNav compact={compact} /> : null}
+
+      {/* Floating quick chat (flag-gated, lazy: no code loads while Conversations is disabled). */}
+      {QUICK_CHAT_ENABLED ? (
+        <Suspense fallback={null}>
+          <QuickChat compactNav={compact} />
+        </Suspense>
+      ) : null}
 
       {/* Environmental sidebar — desktop / tablet */}
       {!isActiveSessionRoute ? (
