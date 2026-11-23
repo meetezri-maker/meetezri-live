@@ -328,7 +328,7 @@ export function TalkItOutLobbyLayout({
 
               <section aria-label="How to start">
                 <h3 className="text-[17px] font-medium tracking-tight text-[var(--solace-text)]">How would you like to start?</h3>
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-5 grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1440px]:grid-cols-4">
                   {startCards.map(({ title, body, imageSrc, onClick }) => (
                     <button
                       key={title}
@@ -366,7 +366,7 @@ export function TalkItOutLobbyLayout({
 
               <section aria-label="Preparation guidance">
                 <h3 className="text-[17px] font-medium tracking-tight text-[var(--solace-text)]">Before we begin</h3>
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-5 grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1100px]:grid-cols-4 min-[1280px]:grid-cols-2 min-[1440px]:grid-cols-4">
                   {checklistItems.map((item, idx) => {
                     const IconClass = checklistIcons[idx % checklistIcons.length];
                     return (
