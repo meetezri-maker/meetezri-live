@@ -131,7 +131,7 @@ describe('POST /api/conversations/:id/messages', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/event-stream');
-    expect(res.headers['cache-control']).toBe('no-cache, no-transform');
+    expect(res.headers['cache-control']).toBe('private, no-store, no-transform');
     expect(res.headers['x-accel-buffering']).toBe('no');
     expect(res.headers['access-control-allow-origin']).toBe('https://app.example');
     expect(res.headers['content-encoding']).toBeUndefined();

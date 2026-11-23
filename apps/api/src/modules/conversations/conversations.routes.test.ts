@@ -226,6 +226,23 @@ describe('Conversations API', () => {
     });
   });
 
+  describe('caching (account isolation)', () => {
+    it.each([
+      ['GET', '/api/conversations', asA],
+      ['GET', '/api/conversations/00000000-0000-4000-8000-000000000999', asA],
+      ['GET', '/api/conversations', {}],
+    ])('%s %s is never cacheable (private, no-store)', async (method, url, headers) => {
+      const res = await app.inject({ method: method as any, url, headers });
+      expect(res.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('is private, no-store even when the module is switched off', async () => {
+      process.env.CONVERSATIONS_API_ENABLED = 'false';
+      const res = await app.inject({ method: 'GET', url: '/api/conversations', headers: asA });
+      expect(res.headers['cache-control']).toBe('private, no-store');
+    });
+  });
+
   describe('authentication', () => {
     it.each([
       ['GET', '/api/conversations'],

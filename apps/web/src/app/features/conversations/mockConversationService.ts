@@ -33,6 +33,8 @@ export interface MockConversationServiceOptions {
   /** Test hook: force a send to fail. */
   shouldFail?: (content: string) => boolean;
   now?: () => number;
+  /** Account isolation: the user this preview store belongs to (never shared across accounts). */
+  ownerId?: string | null;
 }
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -66,7 +68,9 @@ export function createMockConversationService(options: MockConversationServiceOp
   const inFlight = new Set<string>();
 
   let snapshot: ConversationsSnapshot = { conversations, messagesById, typingIds };
+  let disposed = false;
   const publish = () => {
+    if (disposed) return;
     snapshot = { conversations, messagesById, typingIds };
     listeners.forEach((listener) => listener());
   };
@@ -143,6 +147,17 @@ export function createMockConversationService(options: MockConversationServiceOp
 
   return {
     kind: "mock",
+    ownerId: options.ownerId ?? null,
+    get disposed() {
+      return disposed;
+    },
+    dispose() {
+      disposed = true;
+      listeners.clear();
+      conversations = [];
+      messagesById = {};
+      typingIds = [];
+    },
     getSnapshot: () => snapshot,
     subscribe(listener) {
       listeners.add(listener);

@@ -166,22 +166,57 @@ export function messageForCode(
 }
 
 export interface ApiConversationServiceOptions {
+  /**
+   * The authenticated user this service belongs to. Every request first checks that the CURRENT
+   * session is still this user (another tab may have switched accounts); otherwise it is refused.
+   */
+  ownerId?: string | null;
   /** Base path, e.g. "/api". Defaults to `VITE_API_URL` or same-origin "/api". */
   apiBase?: string;
   fetchImpl?: typeof fetch;
+  /** Test hook: token only (the session user is then assumed to be `ownerId`). */
   getAccessToken?: () => Promise<string | null | undefined>;
+  /** Test hook: the current session's token and user id. */
+  getSession?: () => Promise<{ token: string | null | undefined; userId: string | null | undefined }>;
+}
+
+/** Aborts when ANY of the given signals aborts. */
+function linkSignals(...signals: Array<AbortSignal | undefined>): AbortSignal {
+  const present = signals.filter((s): s is AbortSignal => Boolean(s));
+  const controller = new AbortController();
+  for (const s of present) {
+    if (s.aborted) {
+      controller.abort();
+      break;
+    }
+    s.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  return controller.signal;
 }
 
 export function createApiConversationService(options: ApiConversationServiceOptions = {}): ConversationService {
   const apiBase = (options.apiBase ?? (import.meta.env.VITE_API_URL as string | undefined) ?? "/api").replace(/\/+$/, "");
   const fetchImpl: typeof fetch = options.fetchImpl ?? ((input, init) => fetch(input, init));
+  const ownerId = options.ownerId ?? null;
   // Loaded lazily so the preview (and its tests) never initialise the Supabase client here.
-  const getAccessToken =
-    options.getAccessToken ??
-    (async () => {
-      const { supabase } = await import("@/lib/supabase");
-      return (await supabase.auth.getSession()).data.session?.access_token;
-    });
+  const getSession =
+    options.getSession ??
+    (options.getAccessToken
+      ? async () => ({ token: await options.getAccessToken!(), userId: ownerId })
+      : async () => {
+          const { supabase } = await import("@/lib/supabase");
+          const session = (await supabase.auth.getSession()).data.session;
+          return { token: session?.access_token, userId: session?.user?.id };
+        });
+
+  /**
+   * Lifetime of this service = lifetime of its owner's session. `dispose()` aborts every pending
+   * request and stream through this signal and stops all state publication, so a late response
+   * from the previous account can never reach the next account's UI.
+   */
+  const lifetime = new AbortController();
+  let disposed = false;
+  const stopped = (signal?: AbortSignal) => disposed || lifetime.signal.aborted || Boolean(signal?.aborted);
 
   let conversations: ConversationSummary[] = [];
   let messagesById: Record<string, ConversationMessage[]> = {};
@@ -196,6 +231,7 @@ export function createApiConversationService(options: ApiConversationServiceOpti
   let listPromise: Promise<ConversationSummary[]> | null = null;
 
   const publish = () => {
+    if (disposed) return; // a disposed (previous-account) service never updates any UI
     snapshot = { conversations, messagesById, typingIds, listStatus };
     listeners.forEach((listener) => listener());
   };
@@ -218,11 +254,23 @@ export function createApiConversationService(options: ApiConversationServiceOpti
   };
 
   async function request(path: string, init: RequestInit = {}): Promise<Response> {
-    const token = await getAccessToken();
+    if (stopped()) throw new ConversationServiceError("ABORTED", "Cancelled");
+    const session = await getSession();
+    if (stopped()) throw new ConversationServiceError("ABORTED", "Cancelled");
+    // The session may now belong to a different account (signed in from another tab): never send
+    // a request for this owner with someone else's credentials, or vice versa.
+    if (ownerId && session.userId !== ownerId) {
+      throw new ConversationServiceError("ABORTED", "Your session changed. Please reload Conversations.");
+    }
     const headers: Record<string, string> = { Accept: "application/json", ...(init.headers as Record<string, string>) };
     if (init.body !== undefined) headers["Content-Type"] = "application/json";
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return fetchImpl(`${apiBase}${path}`, { ...init, headers });
+    if (session.token) headers.Authorization = `Bearer ${session.token}`;
+    return fetchImpl(`${apiBase}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+      signal: linkSignals(lifetime.signal, init.signal ?? undefined),
+    });
   }
 
   async function readJson<T>(res: Response): Promise<T> {
@@ -275,9 +323,10 @@ export function createApiConversationService(options: ApiConversationServiceOpti
           body: JSON.stringify({ content, client_message_id: clientMessageId }),
           signal,
         });
-      } catch {
+      } catch (error) {
         failUser();
-        if (signal?.aborted) throw new ConversationServiceError("ABORTED", "Cancelled");
+        if (stopped(signal)) throw new ConversationServiceError("ABORTED", "Cancelled");
+        if (error instanceof ConversationServiceError) throw error; // e.g. session changed
         throw new ConversationServiceError("SEND_FAILED", "Couldn’t reach Solace. Check your connection and try again.");
       }
 
@@ -357,7 +406,7 @@ export function createApiConversationService(options: ApiConversationServiceOpti
         }
       } catch {
         failUser();
-        if (signal?.aborted) throw new ConversationServiceError("ABORTED", "Cancelled");
+        if (stopped(signal)) throw new ConversationServiceError("ABORTED", "Cancelled");
         throw new ConversationServiceError("SEND_FAILED", "The reply was interrupted. Please try again.");
       } finally {
         if (!finalReply) await reader.cancel().catch(() => undefined);
@@ -365,7 +414,7 @@ export function createApiConversationService(options: ApiConversationServiceOpti
 
       if (!finalReply) {
         failUser();
-        if (signal?.aborted) throw new ConversationServiceError("ABORTED", "Cancelled");
+        if (stopped(signal)) throw new ConversationServiceError("ABORTED", "Cancelled");
         throw new ConversationServiceError("SEND_FAILED", streamError ?? "The reply was interrupted. Please try again.");
       }
 
@@ -391,20 +440,40 @@ export function createApiConversationService(options: ApiConversationServiceOpti
 
   return {
     kind: "api",
+    ownerId,
+    get disposed() {
+      return disposed;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      lifetime.abort(); // cancels every pending request and active stream, Quick Chat included
+      listeners.clear();
+      listPromise = null;
+      inFlight.clear();
+      retryIds.clear();
+      messagesLoaded.clear();
+      conversations = [];
+      messagesById = {};
+      typingIds = [];
+    },
     getSnapshot: () => snapshot,
     subscribe(listener) {
+      if (disposed) return () => undefined;
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
 
     async listConversations() {
       if (listPromise) return listPromise;
+      if (stopped()) throw new ConversationServiceError("ABORTED", "Cancelled");
       listStatus = "loading";
       publish();
       listPromise = (async () => {
         try {
           const res = await request(`/conversations?limit=${LIST_LIMIT}`);
           const body = await readJson<{ items: ApiSummary[] }>(res);
+          if (stopped()) throw new ConversationServiceError("ABORTED", "Cancelled");
           // Keep anything created locally while the list was loading.
           const loaded = body.items.map(toSummary);
           const loadedIds = new Set(loaded.map((c) => c.id));
@@ -436,6 +505,7 @@ export function createApiConversationService(options: ApiConversationServiceOpti
       if (!conversation) throw new ConversationServiceError("NOT_FOUND", "This conversation isn’t available.");
       const res = await request(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=${MESSAGES_LIMIT}`);
       const body = await readJson<{ items: ApiMessage[] }>(res);
+      if (stopped()) throw new ConversationServiceError("ABORTED", "Cancelled");
       const stored = body.items.map(toMessage);
       // Older pages are not loaded yet (the thread shows the latest 100); the welcome line only
       // belongs above the true start of a thread.

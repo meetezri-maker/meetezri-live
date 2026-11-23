@@ -40,6 +40,15 @@ export interface ConversationService {
    * Solace API (`apiConversationService.ts`): replies come from the companion and are saved.
    */
   readonly kind: "mock" | "api";
+  /**
+   * Account isolation: the authenticated user whose data this service holds (null for the inert
+   * placeholder used while nobody is signed in). A service is never reused for another user.
+   */
+  readonly ownerId?: string | null;
+  /** True once disposed: it will never publish state or start requests again. */
+  readonly disposed?: boolean;
+  /** Abort all pending work, drop all data, and stop publishing. Idempotent. */
+  dispose?(): void;
   getSnapshot(): ConversationsSnapshot;
   subscribe(listener: () => void): () => void;
   listConversations(): Promise<ConversationSummary[]>;

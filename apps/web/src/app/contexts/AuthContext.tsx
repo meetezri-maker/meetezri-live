@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { QueryClientContext } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { api, isApiError } from '@/lib/api';
+import { api, clearApiClientCaches, isApiError } from '@/lib/api';
+import { emitAuthIdentityReset } from '@/lib/authIdentityEvents';
 import { toast } from 'sonner';
 import { isPublicAuthPath } from '@/lib/publicAuthRoutes';
 import { isSupabaseSessionExpiredLocally } from '@/lib/jwtUtils';
@@ -28,6 +30,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileStatus, setProfileStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
+  // Non-throwing: AuthProvider is normally inside QueryClientProvider, but some tests render it alone.
+  const queryClient = useContext(QueryClientContext);
+  const queryClientRef = useRef(queryClient);
+  queryClientRef.current = queryClient;
+
+  /**
+   * Account isolation: drop every per-user client cache (React Query + lib/api short caches and
+   * in-flight shares) so nothing loaded for one account is served to the next. Runs on sign-out —
+   * including one that happens in another tab — and whenever the authenticated user changes.
+   */
+  const resetPerUserClientState = () => {
+    try {
+      clearApiClientCaches();
+    } catch {
+      // never block auth transitions on cache housekeeping
+    }
+    try {
+      queryClientRef.current?.clear();
+    } catch {
+      // ditto
+    }
+    // Features with their own per-user state (Conversations) dispose it and abort pending work.
+    emitAuthIdentityReset();
+  };
   const profileRef = useRef<any | null>(null);
   const profileFetchInFlightRef = useRef<Promise<any> | null>(null);
   profileRef.current = profile;
@@ -138,6 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const lastUserId = lastUserIdRef.current;
         const isSameUser = lastUserId === incomingUserId;
         lastUserIdRef.current = incomingUserId;
+        // A different account signed in without an intervening sign-out (e.g. from another tab).
+        if (lastUserId !== null && !isSameUser) resetPerUserClientState();
 
         // Token refresh does not change profile; refetching here caused duplicate /users/me traffic.
         const shouldLoadProfile =
@@ -163,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
         lastUserIdRef.current = null;
         applyAppearanceForUser(null);
+        resetPerUserClientState();
       }
     });
 
@@ -288,6 +317,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfileStatus('idle');
     setUser(null);
     setSession(null);
+    lastUserIdRef.current = null;
+    resetPerUserClientState();
 
     // Clear plan-related client cache so next signup starts fresh
     try {

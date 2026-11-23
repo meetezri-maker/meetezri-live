@@ -68,6 +68,8 @@ const errorResponses = {
 export async function conversationsRoutes(app: FastifyInstance) {
   // Runs before any route-level preHandler (authenticate), so a disabled API reveals nothing.
   app.addHook('onRequest', async (_request, reply) => {
+    // Per-member data: never stored by browsers, proxies or CDNs, never shared between users.
+    reply.header('Cache-Control', 'private, no-store');
     if (!isConversationsApiEnabled()) {
       return reply
         .code(404)

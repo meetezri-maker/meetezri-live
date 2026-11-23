@@ -222,6 +222,37 @@ type CachedValue = { at: number; value: unknown };
 const shortGetCache = new Map<string, CachedValue>();
 const shortGetInFlight = new Map<string, Promise<unknown>>();
 
+/**
+ * Account isolation. The caches above are keyed by URL, not by user, so they must never outlive
+ * the account that filled them. `cacheEpoch` advances on every clear; a request started before
+ * the clear (i.e. under the previous account) carries the old epoch and is not allowed to write
+ * its result into the cache afterwards.
+ */
+let cacheEpoch = 0;
+
+function setCachedIfCurrent(key: string, value: unknown, epoch: number): void {
+  if (epoch === cacheEpoch) shortGetCache.set(key, { at: Date.now(), value });
+}
+
+/**
+ * Drop every per-user API cache and in-flight request share. Called by AuthContext on sign-out
+ * and whenever the authenticated user changes, so no response from one account can be served to
+ * the next. Safe to call at any time.
+ */
+export function clearApiClientCaches(): void {
+  cacheEpoch += 1;
+  shortGetCache.clear();
+  shortGetInFlight.clear();
+  getMeInFlight = null;
+  getCreditsInFlight = null;
+  getJournalListInFlight = null;
+  getRecentActivityInFlight.clear();
+  getNotificationsInFlight.clear();
+  getUnreadCountInFlight = null;
+  getChallengesForMeInFlight = null;
+  getAiAvatarsInFlight = null;
+}
+
 function getCached<T>(key: string, ttlMs: number): T | null {
   const hit = shortGetCache.get(key);
   if (!hit) return null;
@@ -242,13 +273,15 @@ async function getJsonCached<T>(
   const inFlight = shortGetInFlight.get(cacheKey);
   if (inFlight) return (await inFlight) as T;
 
+  const epoch = cacheEpoch;
   const run = (async () => {
     const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
     const json = (await handleResponse(res, defaultErrorMessage)) as T;
-    shortGetCache.set(cacheKey, { at: Date.now(), value: json });
+    setCachedIfCurrent(cacheKey, json, epoch);
     return json;
   })().finally(() => {
-    shortGetInFlight.delete(cacheKey);
+    // Only remove our own entry; after a clear, the key may belong to a newer request.
+    if (shortGetInFlight.get(cacheKey) === run) shortGetInFlight.delete(cacheKey);
   });
 
   shortGetInFlight.set(cacheKey, run);
@@ -608,12 +641,14 @@ export const api = {
       const cached = getCached<any>('GET:/users/me', 10_000);
       if (cached !== null) return cached;
 
-      getMeInFlight = run().then((data) => {
-        shortGetCache.set('GET:/users/me', { at: Date.now(), value: data });
+      const epoch = cacheEpoch;
+      const request: Promise<any> = run().then((data) => {
+        setCachedIfCurrent('GET:/users/me', data, epoch);
         return data;
       }).finally(() => {
-        getMeInFlight = null;
+        if (getMeInFlight === request) getMeInFlight = null;
       });
+      getMeInFlight = request;
     }
     return getMeInFlight;
   },
@@ -1580,6 +1615,7 @@ export const api = {
       if (!getChallengesForMeInFlight) {
         const cached = getCached<any>(cacheKey, 5_000);
         if (cached !== null) return cached;
+        const epoch = cacheEpoch;
         getChallengesForMeInFlight = (async () => {
           const headers = await getHeaders();
           const url = `${API_URL}/wellness/challenges?scope=dashboard`;
@@ -1597,7 +1633,7 @@ export const api = {
             });
           }
           const data = await handleResponse(res, 'Failed to fetch your wellness challenges');
-          shortGetCache.set(cacheKey, { at: Date.now(), value: data });
+          setCachedIfCurrent(cacheKey, data, epoch);
           return data;
         })().finally(() => {
           getChallengesForMeInFlight = null;
@@ -2087,6 +2123,24 @@ export const api = {
         }),
       });
       return handleResponse(res, 'Failed to heartbeat session');
+    },
+
+    async extend(
+      id: string,
+      data: {
+        request_id: string;
+        expected_limit_minutes: number;
+        add_minutes: number;
+        elapsed_seconds: number;
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/extend`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to add more time');
     },
 
     async addMessage(id: string, role: 'user' | 'assistant' | 'system', content: string) {
