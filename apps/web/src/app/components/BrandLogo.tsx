@@ -6,6 +6,7 @@
  */
 import { useState, useEffect } from "react";
 import {
+  PublicBrandLogoPicture,
   PUBLIC_BRAND_LOGO_ON_DARK_PATH,
   PUBLIC_BRAND_LOGO_ON_LIGHT_PATH,
 } from "@meetezri/public-content";
@@ -57,6 +58,11 @@ interface BrandLogoProps {
   themeAware?: boolean;
   width?: number;
   height?: number;
+  /**
+   * Enables the approved lossless WebP source set only while the default public dark-surface
+   * wordmark is active. Custom branding and the light-surface logo keep their existing markup.
+   */
+  responsiveOnDarkSizes?: string;
 }
 
 export function BrandLogo({
@@ -66,6 +72,7 @@ export function BrandLogo({
   themeAware = false,
   width,
   height,
+  responsiveOnDarkSizes,
 }: BrandLogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
   const [documentTheme, setDocumentTheme] = useState<DocumentTheme>(() =>
@@ -115,19 +122,32 @@ export function BrandLogo({
     resolvedVariant === "onDark" ? BRAND_LOGO_ON_DARK_BG : BRAND_LOGO_ON_LIGHT_BG;
   const logoSrc = customLogoUrl || defaultSrc;
 
+  const usesResponsivePublicWordmark =
+    Boolean(responsiveOnDarkSizes) &&
+    !customLogoUrl &&
+    defaultSrc === BRAND_LOGO_ON_DARK_BG;
+
   return (
     <span
       role="img"
       aria-label={customLogoUrl ? "App Logo" : "Solace"}
       className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
     >
-      <img
-        width={width}
-        height={height}
-        src={logoSrc}
-        alt=""
-        className="h-[130%] w-auto max-h-none object-contain object-center"
-      />
+      {usesResponsivePublicWordmark ? (
+        <PublicBrandLogoPicture
+          sizes={responsiveOnDarkSizes as string}
+          alt=""
+          className="h-[130%] w-auto max-h-none object-contain object-center"
+        />
+      ) : (
+        <img
+          width={width}
+          height={height}
+          src={logoSrc}
+          alt=""
+          className="h-[130%] w-auto max-h-none object-contain object-center"
+        />
+      )}
     </span>
   );
 }

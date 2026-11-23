@@ -44,8 +44,57 @@ const DefaultLink: ShellLink = ({ href, className, children }) => (
 /** Brand assets shared by the SPA, prerenderer and runtime Resources renderer. */
 export const PUBLIC_BRAND_LOGO_ON_DARK_PATH = '/logos/logo black.png';
 export const PUBLIC_BRAND_LOGO_ON_LIGHT_PATH = '/logos/logo white.png';
+export const PUBLIC_BRAND_LOGO_WEBP_SRCSET =
+  '/logos/solace-logo-black-192.webp 192w, /logos/solace-logo-black-384.webp 384w';
+export const PUBLIC_FIXED_HEADER_LOGO_SIZES = '129px';
+export const PUBLIC_FIXED_FOOTER_LOGO_SIZES =
+  '(min-width: 1024px) 181px, (min-width: 768px) 116px, 181px';
+export const PUBLIC_RESOURCE_HEADER_LOGO_SIZES = '100px';
+export const PUBLIC_RESOURCE_FOOTER_LOGO_SIZES = '140px';
 export const PUBLIC_FAVICON_SVG_PATH = '/favicon/icon.svg';
 export const PUBLIC_FAVICON_PNG_PATH = '/favicon/Black.png';
+
+export interface PublicBrandLogoPictureProps {
+  sizes: string;
+  alt: string;
+  className?: string;
+  loading?: 'eager' | 'lazy';
+  decoding?: 'async' | 'sync' | 'auto';
+}
+
+/**
+ * Lossless responsive delivery for the approved public wordmark.
+ *
+ * The PNG remains the fallback and the authoritative structured-data URL. Display contents keeps
+ * the picture wrapper from changing any caller's existing flex/grid sizing.
+ */
+export function PublicBrandLogoPicture({
+  sizes,
+  alt,
+  className,
+  loading,
+  decoding,
+}: PublicBrandLogoPictureProps) {
+  return (
+    <picture style={{ display: 'contents' }}>
+      <source
+        type="image/webp"
+        srcSet={PUBLIC_BRAND_LOGO_WEBP_SRCSET}
+        sizes={sizes}
+      />
+      <img
+        src={PUBLIC_BRAND_LOGO_ON_DARK_PATH}
+        alt={alt}
+        className={className}
+        style={{ aspectRatio: '651 / 262' }}
+        width={651}
+        height={262}
+        loading={loading}
+        decoding={decoding}
+      />
+    </picture>
+  );
+}
 
 /** Primary navigation, in the order the marketing site shows it. */
 export const SITE_NAV_LINKS = [

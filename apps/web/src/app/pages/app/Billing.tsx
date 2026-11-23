@@ -762,7 +762,7 @@ export function Billing() {
             {/* ——— Main column ——— */}
             <div className="min-w-0 flex-1 space-y-10">
               {/* 2 Current membership hero */}
-              <section aria-labelledby="current-plan-title" className={billingHeroSection}>
+              <section aria-labelledby="current-plan-title" className={cn(billingHeroSection, "@container")}>
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
@@ -778,7 +778,8 @@ export function Billing() {
                 <div
                   className={cn(
                     billingHeroContent,
-                    "flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10"
+                    // Row layout only once the hero itself (after sidebar + right rail) fits the 512px stat grid.
+                    "flex flex-col gap-8 p-6 sm:p-8 lg:p-10 lg:@min-[47rem]:flex-row lg:@min-[47rem]:items-end lg:@min-[47rem]:justify-between"
                   )}
                 >
                   <div className="max-w-xl space-y-5">
@@ -838,7 +839,7 @@ export function Billing() {
                     ) : null}
                   </div>
 
-                  <dl className="grid w-full max-w-md shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-lg">
+                  <dl className="grid w-full max-w-md shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-lg lg:grid-cols-2 lg:@min-[30rem]:grid-cols-4">
                     {[
                       { k: "Plan price", v: `$${currentPlan.price}/mo` },
                       { k: "Monthly minutes", v: `${currentPlan.credits} min` },

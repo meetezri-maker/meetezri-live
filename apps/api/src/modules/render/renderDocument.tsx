@@ -15,9 +15,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactNode } from 'react';
 import {
   PUBLIC_CONTENT_CSS,
-  PUBLIC_BRAND_LOGO_ON_DARK_PATH,
+  PublicBrandLogoPicture,
   PUBLIC_FAVICON_PNG_PATH,
   PUBLIC_FAVICON_SVG_PATH,
+  PUBLIC_RESOURCE_FOOTER_LOGO_SIZES,
+  PUBLIC_RESOURCE_HEADER_LOGO_SIZES,
   PublicSiteFooter,
   PublicSiteHeader,
   SsrMobileMenu,
@@ -53,14 +55,12 @@ export interface DocumentInput {
  * continues to render the real themeable component on every other page. The two are separated by
  * a slot rather than a fork of the shell.
  */
-function StaticLogo({ className }: { className?: string }) {
+function StaticLogo({ className, sizes }: { className?: string; sizes: string }) {
   return (
-    <img
-      src={PUBLIC_BRAND_LOGO_ON_DARK_PATH}
+    <PublicBrandLogoPicture
+      sizes={sizes}
       alt="Solace"
       className={className}
-      width={651}
-      height={262}
     />
   );
 }
@@ -136,11 +136,11 @@ export function renderDocument({
         <div id="root">
           <PublicSiteHeader
             pathname={pathname}
-            logo={<StaticLogo />}
+            logo={<StaticLogo sizes={PUBLIC_RESOURCE_HEADER_LOGO_SIZES} />}
             mobileMenu={<SsrMobileMenu />}
           />
           {children}
-          <PublicSiteFooter logo={<StaticLogo />} />
+          <PublicSiteFooter logo={<StaticLogo sizes={PUBLIC_RESOURCE_FOOTER_LOGO_SIZES} />} />
         </div>
         {bootstrapScripts ? assets.scripts.map((src) => (
           <script key={src} type="module" src={src} defer />

@@ -53,9 +53,15 @@ export {
 export { PUBLIC_CONTENT_CSS } from './styles';
 
 export {
+  PublicBrandLogoPicture,
   PublicSiteHeader,
   PublicSiteFooter,
   SsrMobileMenu,
+  PUBLIC_BRAND_LOGO_WEBP_SRCSET,
+  PUBLIC_FIXED_HEADER_LOGO_SIZES,
+  PUBLIC_FIXED_FOOTER_LOGO_SIZES,
+  PUBLIC_RESOURCE_HEADER_LOGO_SIZES,
+  PUBLIC_RESOURCE_FOOTER_LOGO_SIZES,
   PUBLIC_BRAND_LOGO_ON_DARK_PATH,
   PUBLIC_BRAND_LOGO_ON_LIGHT_PATH,
   PUBLIC_FAVICON_SVG_PATH,
@@ -70,6 +76,7 @@ export {
 
 export type {
   ShellLink,
+  PublicBrandLogoPictureProps,
   PublicSiteHeaderProps,
   PublicSiteFooterProps,
 } from './siteShell';

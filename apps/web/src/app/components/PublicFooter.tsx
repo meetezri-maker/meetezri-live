@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { BrandLogo } from "./BrandLogo";
 import {
+  PUBLIC_FIXED_FOOTER_LOGO_SIZES,
   SITE_FOOTER_COLUMNS,
   SITE_FOOTER_DISCLAIMER,
   SITE_FOOTER_TAGLINE,
@@ -15,7 +16,13 @@ export function PublicFooter() {
       <div className="landing-section py-10 md:py-12">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           <div className="col-span-2 md:col-span-1">
-            <BrandLogo heightClass="h-14" themeAware width={651} height={262} />
+            <BrandLogo
+              heightClass="h-14"
+              themeAware
+              width={651}
+              height={262}
+              responsiveOnDarkSizes={PUBLIC_FIXED_FOOTER_LOGO_SIZES}
+            />
             <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
               {SITE_FOOTER_TAGLINE}
             </p>

@@ -109,6 +109,22 @@ describe('the shell is usable without JavaScript', () => {
     expect(detailHtml).not.toContain('ezri-branding-updated');
   });
 
+  it('serves responsive lossless public logos with the original PNG fallback', () => {
+    expect(detailHtml.match(/<picture style="display:contents">/g) ?? []).toHaveLength(2);
+    expect(detailHtml.match(/<source type="image\/webp"/g) ?? []).toHaveLength(2);
+    expect(detailHtml).toContain(
+      'srcSet="/logos/solace-logo-black-192.webp 192w, /logos/solace-logo-black-384.webp 384w"',
+    );
+    expect(detailHtml).toContain('sizes="100px"');
+    expect(detailHtml).toContain('sizes="140px"');
+    expect(detailHtml.match(/src="\/logos\/logo black.png"/g) ?? []).toHaveLength(2);
+    expect(detailHtml.match(/width="651" height="262"/g) ?? []).toHaveLength(2);
+    expect(detailHtml.match(/alt="Solace"/g) ?? []).toHaveLength(2);
+    expect(detailHtml.match(/style="aspect-ratio:651 \/ 262"/g) ?? []).toHaveLength(2);
+    expect(detailHtml).not.toContain('fetchpriority=');
+    expect(detailHtml).not.toMatch(/<link[^>]+rel="preload"[^>]+\/logos\//);
+  });
+
   it('styles the shell from the inlined stylesheet, not the asset manifest', () => {
     // These pages were rendered with NO assets, so a manifest failure must still leave the shell
     // presentable rather than unstyled.

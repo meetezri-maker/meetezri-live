@@ -13,7 +13,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SITE_FOOTER_COLUMNS, SITE_NAV_LINKS } from '@meetezri/public-content';
+import {
+  PUBLIC_BRAND_LOGO_WEBP_SRCSET,
+  PUBLIC_RESOURCE_FOOTER_LOGO_SIZES,
+  PUBLIC_RESOURCE_HEADER_LOGO_SIZES,
+  SITE_FOOTER_COLUMNS,
+  SITE_NAV_LINKS,
+} from '@meetezri/public-content';
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -63,6 +69,24 @@ describe('the SPA Resources page carries the site shell', () => {
       expect(logo).toHaveAttribute('width', '651');
       expect(logo).toHaveAttribute('height', '262');
     }
+
+    const headerPicture = container.querySelector('.sol-site-header picture');
+    const footerPicture = container.querySelector('.sol-site-footer picture');
+    expect(headerPicture).toBeInTheDocument();
+    expect(footerPicture).toBeInTheDocument();
+    expect(headerPicture?.querySelector('source')).toHaveAttribute(
+      'srcset',
+      PUBLIC_BRAND_LOGO_WEBP_SRCSET,
+    );
+    expect(headerPicture?.querySelector('source')).toHaveAttribute(
+      'sizes',
+      PUBLIC_RESOURCE_HEADER_LOGO_SIZES,
+    );
+    expect(footerPicture?.querySelector('source')).toHaveAttribute(
+      'sizes',
+      PUBLIC_RESOURCE_FOOTER_LOGO_SIZES,
+    );
+    expect(container.querySelectorAll('picture')).toHaveLength(2);
   });
 
   it('renders exactly one header and one footer — no duplicate shell', async () => {

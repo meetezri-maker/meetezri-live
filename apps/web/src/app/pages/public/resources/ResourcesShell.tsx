@@ -26,6 +26,8 @@ import { Link } from 'react-router-dom';
 import {
   PublicSiteFooter,
   PublicSiteHeader,
+  PUBLIC_RESOURCE_FOOTER_LOGO_SIZES,
+  PUBLIC_RESOURCE_HEADER_LOGO_SIZES,
   SsrMobileMenu,
   type ShellLink,
 } from '@meetezri/public-content';
@@ -50,7 +52,15 @@ export function ResourcesShell({
       <PublicSiteHeader
         pathname={pathname}
         LinkComponent={RouterLink}
-        logo={<BrandLogo heightClass="h-10" variant="onDark" width={651} height={262} />}
+        logo={
+          <BrandLogo
+            heightClass="h-10"
+            variant="onDark"
+            width={651}
+            height={262}
+            responsiveOnDarkSizes={PUBLIC_RESOURCE_HEADER_LOGO_SIZES}
+          />
+        }
         mobileMenu={<SsrMobileMenu LinkComponent={RouterLink} />}
       />
 
@@ -58,7 +68,15 @@ export function ResourcesShell({
 
       <PublicSiteFooter
         LinkComponent={RouterLink}
-        logo={<BrandLogo heightClass="h-14" themeAware width={651} height={262} />}
+        logo={
+          <BrandLogo
+            heightClass="h-14"
+            themeAware
+            width={651}
+            height={262}
+            responsiveOnDarkSizes={PUBLIC_RESOURCE_FOOTER_LOGO_SIZES}
+          />
+        }
       />
     </>
   );

@@ -5,7 +5,12 @@ import { BrandLogo } from "./BrandLogo";
 import { motion } from "motion/react";
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { SITE_NAV_ACTIONS, SITE_NAV_LINKS } from "@meetezri/public-content";
+import {
+  isPublicRoutePath,
+  PUBLIC_FIXED_HEADER_LOGO_SIZES,
+  SITE_NAV_ACTIONS,
+  SITE_NAV_LINKS,
+} from "@meetezri/public-content";
 
 function CinematicNavLink({
   to,
@@ -46,6 +51,8 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { pathname } = useLocation();
   const isCinematic = variant === "cinematic";
+  const responsiveOnDarkSizes =
+    isPublicRoutePath(pathname) ? PUBLIC_FIXED_HEADER_LOGO_SIZES : undefined;
 
   if (isCinematic) {
     return (
@@ -57,7 +64,13 @@ export function PublicNav({ variant = "default" }: PublicNavProps) {
       >
         <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="relative z-10 flex shrink-0 items-center">
-            <BrandLogo heightClass="h-10" variant="onDark" width={651} height={262} />
+            <BrandLogo
+              heightClass="h-10"
+              variant="onDark"
+              width={651}
+              height={262}
+              responsiveOnDarkSizes={responsiveOnDarkSizes}
+            />
           </Link>
 
           <nav
