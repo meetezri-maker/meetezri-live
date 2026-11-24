@@ -9,6 +9,9 @@ import {
   getOrGenerateSessionSummary,
   toggleSessionFavorite,
   heartbeatSession,
+  extendSession,
+  isSessionExtensionAllowedFor,
+  MINUTES_HELD_CODE,
   cancelScheduledSession,
   updateScheduledSession,
   beginScheduledSession,
@@ -18,6 +21,7 @@ import {
   EndSessionInput,
   CreateMessageInput,
   HeartbeatSessionInput,
+  ExtendSessionInput,
   UpdateScheduledSessionInput,
   BeginScheduledSessionInput,
 } from './sessions.schema';
@@ -40,6 +44,9 @@ export async function createSessionHandler(
     console.error('Error in createSessionHandler:', error);
     if (error.message.includes('User profile not found')) {
       return reply.code(400).send({ message: error.message });
+    }
+    if (error.code === MINUTES_HELD_CODE) {
+      return reply.code(409).send({ message: error.message, code: error.code });
     }
     throw error;
   }
@@ -166,7 +173,11 @@ export async function getSessionHandler(
   if (!session) {
     return reply.code(404).send({ message: 'Session not found' });
   }
-  return reply.send(session);
+  // The page offers "Add more time" only on this server answer, never on a browser flag alone.
+  return reply.send({
+    ...session,
+    extension_eligible: await isSessionExtensionAllowedFor(user.sub),
+  });
 }
 
 export async function beginScheduledSessionHandler(
@@ -183,6 +194,9 @@ export async function beginScheduledSessionHandler(
     }
     if (error.message === 'Only scheduled sessions can be started') {
       return reply.code(400).send({ message: error.message });
+    }
+    if (error.code === MINUTES_HELD_CODE) {
+      return reply.code(409).send({ message: error.message, code: error.code });
     }
     const code = error.statusCode;
     if (typeof code === 'number' && code >= 400 && code < 500) {
@@ -222,6 +236,26 @@ export async function heartbeatSessionHandler(
     const user = request.user as UserPayload;
     const result = await heartbeatSession(user.sub, request.params.id, request.body.elapsed_seconds);
     return reply.send(result);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    throw error;
+  }
+}
+
+export async function extendSessionHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: ExtendSessionInput }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  // Accounts off the allowlist get the same answer as when the feature is off: nothing changes.
+  if (!(await isSessionExtensionAllowedFor(user.sub))) {
+    return reply.code(404).send({ message: 'Not found' });
+  }
+  try {
+    const result = await extendSession(user.sub, request.params.id, request.body);
+    return reply.code(result.approved ? 200 : 409).send(result);
   } catch (error: any) {
     if (error.message === 'Session not found') {
       return reply.code(404).send({ message: 'Session not found' });

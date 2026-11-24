@@ -6,12 +6,14 @@ import {
 } from '@meetezri/shared';
 import { onUserActivity } from '../system-achievements/system-achievements.triggers';
 import { getMembershipEntitlements } from '../entitlements';
+import { resolveProfileActualSeconds } from '../billing/credit-balance.service';
 import { emailService } from '../email/email.service';
 import {
   CreateSessionInput,
   CreateMessageInput,
   UpdateScheduledSessionInput,
   BeginScheduledSessionInput,
+  ExtendSessionInput,
 } from './sessions.schema';
 import { invalidateRecentActivityCache, invalidateUserProfileCache } from '../users/user.service';
 
@@ -83,13 +85,14 @@ async function assertSessionStartAllowed(userId: string, durationMinutes: number
   // derives it from the same columns through the same helper.
   const totalSeconds = entitlements.remainingSeconds;
   const requiredSeconds = requiredCredits * 60;
-  const haveFullMinutes = Math.floor(totalSeconds / 60);
 
   if (totalSeconds < requiredSeconds) {
-    badRequest(
-      `Insufficient credits. You requested ${requiredCredits} minutes for this session but only have ${haveFullMinutes} full minutes available (${totalSeconds}s). Shorten the session or upgrade your plan.`
-    );
+    badRequest(insufficientCreditsMessage(requiredCredits, totalSeconds));
   }
+}
+
+function insufficientCreditsMessage(requiredMinutes: number, availableSeconds: number): string {
+  return `Insufficient credits. You requested ${requiredMinutes} minutes for this session but only have ${Math.floor(availableSeconds / 60)} full minutes available (${availableSeconds}s). Shorten the session or upgrade your plan.`;
 }
 
 async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: number) {
@@ -139,19 +142,25 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     const plannedMinutes = input.duration_minutes || 5;
     await assertSessionStartAllowed(userId, plannedMinutes);
 
-    const result = await prisma.app_sessions.create({
-      data: {
-        user_id: userId,
-        type: input.type,
-        title: input.title || (input.type === 'instant' ? 'Instant Talk' : 'Scheduled Session'),
-        duration_minutes: input.duration_minutes,
-        scheduled_at: input.scheduled_at,
-        config: input.config as any, // Prisma Json type workaround
-        status: input.type === 'instant' ? 'active' : 'scheduled',
-        // For instant sessions, we assume they start immediately
-        started_at: input.type === 'instant' ? new Date() : undefined,
-      },
-    });
+    const data = {
+      user_id: userId,
+      type: input.type,
+      title: input.title || (input.type === 'instant' ? 'Instant Talk' : 'Scheduled Session'),
+      duration_minutes: input.duration_minutes,
+      scheduled_at: input.scheduled_at,
+      config: input.config as any, // Prisma Json type workaround
+      status: input.type === 'instant' ? 'active' : 'scheduled',
+      // For instant sessions, we assume they start immediately
+      started_at: input.type === 'instant' ? new Date() : undefined,
+    };
+
+    const result =
+      input.type === 'instant' && (await isSessionExtensionAllowedFor(userId))
+        ? await runBillingTransaction(async (tx) => {
+            await assertAccountCovers(tx, userId, plannedMinutes);
+            return tx.app_sessions.create({ data });
+          })
+        : await prisma.app_sessions.create({ data });
 
     // Send confirmation and schedule reminder emails for scheduled sessions
     if (result.type === 'scheduled') {
@@ -277,6 +286,7 @@ type LockedSessionRow = {
   ended_at: Date | null;
   duration_minutes: number | null;
   billed_seconds: number | null;
+  config: unknown;
 };
 
 /**
@@ -290,7 +300,7 @@ async function lockSessionRow(
   sessionId: string
 ): Promise<LockedSessionRow | null> {
   const rows = await tx.$queryRaw<LockedSessionRow[]>(Prisma.sql`
-    SELECT id, status, started_at, ended_at, duration_minutes, billed_seconds
+    SELECT id, status, started_at, ended_at, duration_minutes, billed_seconds, config
     FROM public.app_sessions
     WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
     FOR UPDATE
@@ -301,9 +311,10 @@ async function lockSessionRow(
 /**
  * The selected session length, as the most usage this session may bill.
  *
- * While a session is `active`, `duration_minutes` holds the length chosen at start: only
- * `createSession` / `beginScheduledSession` write it, scheduled edits are rejected for non-scheduled
- * rows, and `endSession` overwrites it with actual usage in the same update that completes the row.
+ * While a session is `active`, `duration_minutes` holds the approved length: only `createSession` /
+ * `beginScheduledSession` set it and `extendSession` raises it, scheduled edits are rejected for
+ * non-scheduled rows, and `endSession` overwrites it with actual usage in the same update that
+ * completes the row.
  * Any other status, or no selected length, means there is no verified limit to apply.
  */
 function selectedLimitSeconds(session: LockedSessionRow): number | null {
@@ -429,11 +440,322 @@ export async function heartbeatSession(userId: string, sessionId: string, elapse
     await deductCreditsSeconds(tx, userId, delta);
     await tx.app_sessions.update({
       where: { id: sessionId },
-      data: { billed_seconds: desired }
+      // `updated_at` is how `committedSecondsOfOtherSessions` tells a live session from a crashed one.
+      data: { billed_seconds: desired, updated_at: new Date() }
     });
 
     return { ok: true, billed_delta_seconds: delta };
   });
+}
+
+/** Off unless explicitly enabled; the hard cutoff at the selected length stays the default. */
+export function isSessionExtensionEnabled(): boolean {
+  const raw = process.env.SESSION_EXTENSIONS_ENABLED?.trim().toLowerCase();
+  return raw === 'true' || raw === '1';
+}
+
+/** The `feature_flags` row (managed under Admin > Feature flags) that lists who may add time. */
+export const SESSION_EXTENSIONS_FLAG_KEY = 'session_extensions';
+
+/**
+ * Whether this account may add time, and so whether the extension Start and balance rules apply.
+ *
+ * Needs the global switch AND an enabled `session_extensions` row whose `rules.targetUsers` lists
+ * the account id. A missing row, a disabled row, an empty list or a failed lookup allows nobody.
+ * Read on every call, so removing an account takes effect on its next request.
+ */
+export async function isSessionExtensionAllowedFor(userId: string): Promise<boolean> {
+  if (!isSessionExtensionEnabled()) return false;
+  try {
+    const flag = await prisma.feature_flags.findUnique({
+      where: { name: SESSION_EXTENSIONS_FLAG_KEY },
+      select: { is_enabled: true, rules: true },
+    });
+    if (!flag?.is_enabled) return false;
+    const targetUsers = (flag.rules as { targetUsers?: unknown } | null)?.targetUsers;
+    const id = userId.trim().toLowerCase();
+    return (
+      Array.isArray(targetUsers) &&
+      targetUsers.some((entry) => typeof entry === 'string' && entry.trim().toLowerCase() === id)
+    );
+  } catch (error) {
+    console.warn('[sessions] session extension allowlist lookup failed; treating as not allowed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/** Longest approvable session, matching the limit on starting a scheduled session. */
+const MAX_EXTENDED_SESSION_MINUTES = 480;
+
+/**
+ * How recently a session must have shown billing or extension activity to still hold balance.
+ * Longer than the 10-minute extension decision window, so a session waiting on its popup still
+ * counts; a crashed session stops holding balance once this passes.
+ */
+const SESSION_COMMITMENT_LIVENESS_MINUTES = 15;
+
+export type ExtendSessionRejectionCode =
+  | 'TRIAL_EXPIRED'
+  | 'SESSION_NOT_ACTIVE'
+  | 'NOT_ELIGIBLE'
+  | 'EXTENSION_STALE'
+  | 'NOT_AT_LIMIT'
+  | 'LIMIT_EXCEEDED'
+  | 'INSUFFICIENT_BALANCE'
+  | typeof MINUTES_HELD_CODE;
+
+export type ExtendSessionResult =
+  | {
+      approved: true;
+      replayed: boolean;
+      limit_minutes: number;
+      limit_seconds: number;
+      billed_seconds: number;
+      balance_seconds: number;
+      available_seconds: number;
+    }
+  | {
+      approved: false;
+      code: ExtendSessionRejectionCode;
+      message: string;
+      limit_minutes: number | null;
+      limit_seconds: number | null;
+      balance_seconds: number | null;
+      available_seconds: number | null;
+    };
+
+type ExtensionLogEntry = {
+  request_id: string;
+  expected_limit_minutes: number;
+  add_minutes: number;
+};
+
+function extensionLogOf(config: unknown): ExtensionLogEntry[] {
+  const log = (config as { extension_log?: unknown } | null)?.extension_log;
+  return Array.isArray(log) ? (log as ExtensionLogEntry[]) : [];
+}
+
+function rejectExtension(
+  code: ExtendSessionRejectionCode,
+  message: string,
+  limitMinutes: number | null,
+  balances: { balance: number; available: number } | null = null
+): ExtendSessionResult {
+  return {
+    approved: false,
+    code,
+    message,
+    limit_minutes: limitMinutes,
+    limit_seconds: limitMinutes === null ? null : limitMinutes * 60,
+    balance_seconds: balances?.balance ?? null,
+    available_seconds: balances?.available ?? null,
+  };
+}
+
+/**
+ * Time other live sessions on this account are already approved to use. Extensions take nothing
+ * from the balance up front, so without this two sessions could each be approved against the
+ * same minutes.
+ */
+async function committedSecondsOfOtherSessions(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  sessionId: string
+): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ committed: number }>>(Prisma.sql`
+    SELECT COALESCE(SUM(GREATEST(0, duration_minutes * 60 - COALESCE(billed_seconds, 0))), 0)::int AS committed
+    FROM public.app_sessions
+    WHERE user_id = ${userId}::uuid
+      AND id <> ${sessionId}::uuid
+      AND status = 'active'
+      AND ended_at IS NULL
+      AND duration_minutes IS NOT NULL
+      AND GREATEST(updated_at, started_at) > now() - make_interval(mins => ${SESSION_COMMITMENT_LIVENESS_MINUTES}::int)
+  `);
+  return Number(rows[0]?.committed ?? 0);
+}
+
+const NO_SESSION_ID = '00000000-0000-0000-0000-000000000000';
+
+/** The account has the minutes, but another live session is approved to use them. */
+export const MINUTES_HELD_CODE = 'MINUTES_HELD_BY_ANOTHER_SESSION';
+const MINUTES_HELD_MESSAGE =
+  'Your minutes are being held by another active session. End that session, or try again in a moment.';
+
+/**
+ * The one balance rule for starting and extending a session, which must be applied with the
+ * account row locked: what is left once other live sessions' approved time is set aside.
+ */
+async function lockAccountAvailability(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  excludeSessionId: string = NO_SESSION_ID
+): Promise<{ balance: number; available: number; others: number }> {
+  const balance = await lockAccountBalanceSeconds(tx, userId);
+  const others = await committedSecondsOfOtherSessions(tx, userId, excludeSessionId);
+  return { balance, others, available: Math.max(0, balance - others) };
+}
+
+async function assertAccountCovers(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  requiredMinutes: number,
+  excludeSessionId?: string
+): Promise<void> {
+  const { balance, available } = await lockAccountAvailability(tx, userId, excludeSessionId);
+  const requiredSeconds = requiredMinutes * 60;
+  if (requiredSeconds <= available) return;
+  if (balance >= requiredSeconds) {
+    throw Object.assign(new Error(MINUTES_HELD_MESSAGE), {
+      statusCode: 409,
+      code: MINUTES_HELD_CODE,
+      available_seconds: available,
+    });
+  }
+  badRequest(insufficientCreditsMessage(requiredMinutes, available));
+}
+
+/** Row-locks the account balance, so approvals on any of its sessions are decided one at a time. */
+async function lockAccountBalanceSeconds(
+  tx: Prisma.TransactionClient,
+  userId: string
+): Promise<number> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      credits: number | null;
+      purchased_credits: number | null;
+      credits_seconds: number | null;
+      purchased_credits_seconds: number | null;
+    }>
+  >(Prisma.sql`
+    SELECT credits, purchased_credits, credits_seconds, purchased_credits_seconds
+    FROM public.profiles
+    WHERE id = ${userId}::uuid
+    FOR UPDATE
+  `);
+  return rows[0] ? resolveProfileActualSeconds(rows[0]) : 0;
+}
+
+/**
+ * Approves more time for a session that reached its selected length, from the existing balance.
+ * Nothing is deducted for the added time: it only raises the limit that heartbeat and end bill up
+ * to. Locks session then account, the order heartbeat and end use, so all three serialize.
+ */
+export async function extendSession(
+  userId: string,
+  sessionId: string,
+  input: ExtendSessionInput
+): Promise<ExtendSessionResult> {
+  // Checked here as well as in the route, so no caller can extend for an account off the list.
+  if (!(await isSessionExtensionAllowedFor(userId))) {
+    return rejectExtension('NOT_ELIGIBLE', 'Adding more time is not available for this account.', null);
+  }
+  const entitlements = await getMembershipEntitlements(userId);
+  if (entitlements.status === 'EXPIRED') {
+    return rejectExtension('TRIAL_EXPIRED', 'Your trial has expired.', null);
+  }
+
+  const result = await runBillingTransaction(async (tx): Promise<ExtendSessionResult> => {
+    const session = await lockSessionRow(tx, userId, sessionId);
+    if (!session) throw new Error('Session not found');
+    if (session.ended_at || session.status !== 'active') {
+      return rejectExtension('SESSION_NOT_ACTIVE', 'This session has already ended.', null);
+    }
+
+    const limit = selectedLimitSeconds(session);
+    if (limit === null) {
+      return rejectExtension('NOT_ELIGIBLE', 'This session has no selected length.', null);
+    }
+    const limitMinutes = limit / 60;
+    const alreadyBilled = Math.max(0, session.billed_seconds ?? 0);
+    const log = extensionLogOf(session.config);
+
+    const prior = log.find((entry) => entry.request_id === input.request_id);
+    if (prior) {
+      if (
+        prior.expected_limit_minutes !== input.expected_limit_minutes ||
+        prior.add_minutes !== input.add_minutes
+      ) {
+        return rejectExtension('EXTENSION_STALE', 'This request was already used.', limitMinutes);
+      }
+      const { balance, others } = await lockAccountAvailability(tx, userId, sessionId);
+      return {
+        approved: true,
+        replayed: true,
+        limit_minutes: limitMinutes,
+        limit_seconds: limit,
+        billed_seconds: alreadyBilled,
+        balance_seconds: balance,
+        available_seconds: Math.max(0, balance - others - Math.max(0, limit - alreadyBilled)),
+      };
+    }
+
+    if (input.expected_limit_minutes !== limitMinutes) {
+      return rejectExtension('EXTENSION_STALE', 'This session was already changed.', limitMinutes);
+    }
+    if (input.elapsed_seconds < limit) {
+      return rejectExtension('NOT_AT_LIMIT', 'This session still has time left.', limitMinutes);
+    }
+    if (limitMinutes + input.add_minutes > MAX_EXTENDED_SESSION_MINUTES) {
+      return rejectExtension('LIMIT_EXCEEDED', 'This session cannot be made longer.', limitMinutes);
+    }
+
+    // Settle usage up to the old limit first, so the balance below reflects all of it.
+    const unsettled = Math.max(0, limit - alreadyBilled);
+    if (unsettled > 0) {
+      await deductCreditsSeconds(tx, userId, unsettled);
+      await tx.app_sessions.update({
+        where: { id: sessionId },
+        data: { billed_seconds: limit, updated_at: new Date() },
+      });
+    }
+
+    const { balance, available } = await lockAccountAvailability(tx, userId, sessionId);
+    const addSeconds = input.add_minutes * 60;
+    if (addSeconds > available) {
+      const held = balance >= addSeconds;
+      return rejectExtension(
+        held ? MINUTES_HELD_CODE : 'INSUFFICIENT_BALANCE',
+        held ? MINUTES_HELD_MESSAGE : 'Not enough minutes available.',
+        limitMinutes,
+        { balance, available }
+      );
+    }
+
+    const nextLimitMinutes = limitMinutes + input.add_minutes;
+    const entry: ExtensionLogEntry = {
+      request_id: input.request_id,
+      expected_limit_minutes: input.expected_limit_minutes,
+      add_minutes: input.add_minutes,
+    };
+    await tx.app_sessions.update({
+      where: { id: sessionId },
+      data: {
+        duration_minutes: nextLimitMinutes,
+        updated_at: new Date(),
+        config: {
+          ...((session.config as Record<string, unknown> | null) ?? {}),
+          extension_log: [...log, entry],
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      approved: true,
+      replayed: false,
+      limit_minutes: nextLimitMinutes,
+      limit_seconds: nextLimitMinutes * 60,
+      billed_seconds: limit,
+      balance_seconds: balance,
+      available_seconds: available - addSeconds,
+    };
+  });
+
+  invalidateSessionsCache(userId);
+  invalidateUserProfileCache(userId);
+  return result;
 }
 
 export async function toggleSessionFavorite(userId: string, sessionId: string) {
@@ -481,20 +803,33 @@ export async function beginScheduledSession(
 
   await assertSessionStartAllowed(userId, durationMinutes);
 
-  const updated = await prisma.app_sessions.update({
-    where: { id: sessionId },
-    data: {
-      status: 'active',
-      started_at: new Date(),
-      duration_minutes: durationMinutes,
-      updated_at: new Date(),
-    },
-    include: {
-      _count: {
-        select: { session_messages: true },
+  const activate = (db: DbClient) =>
+    db.app_sessions.update({
+      where: { id: sessionId },
+      data: {
+        status: 'active',
+        started_at: new Date(),
+        duration_minutes: durationMinutes,
+        updated_at: new Date(),
       },
-    },
-  });
+      include: {
+        _count: {
+          select: { session_messages: true },
+        },
+      },
+    });
+
+  const updated = (await isSessionExtensionAllowedFor(userId))
+    ? await runBillingTransaction(async (tx) => {
+        const locked = await lockSessionRow(tx, userId, sessionId);
+        if (!locked) throw new Error('Session not found');
+        if (locked.status !== 'scheduled') {
+          throw new Error('Only scheduled sessions can be started');
+        }
+        await assertAccountCovers(tx, userId, durationMinutes, sessionId);
+        return activate(tx);
+      })
+    : await activate(prisma);
 
   invalidateSessionsCache(userId);
   return updated;

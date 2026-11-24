@@ -165,6 +165,23 @@ export async function cleanupIntegrationData(): Promise<void> {
   await prisma.users.deleteMany({ where: { email: { endsWith: '@integration.test' } } });
 }
 
+/** Lists these accounts on the enabled `session_extensions` feature flag (the QA allowlist). */
+export async function allowSessionExtensionsFor(...userIds: string[]): Promise<void> {
+  const existing = await prisma.feature_flags.findUnique({ where: { name: 'session_extensions' } });
+  const current = (existing?.rules as { targetUsers?: string[] } | null)?.targetUsers ?? [];
+  const rules = { targetUsers: [...new Set([...current, ...userIds])] };
+  await prisma.feature_flags.upsert({
+    where: { name: 'session_extensions' },
+    create: { name: 'session_extensions', is_enabled: true, rules },
+    update: { is_enabled: true, rules },
+  });
+}
+
+/** Removes the `session_extensions` feature flag row entirely. */
+export async function clearSessionExtensionsAllowlist(): Promise<void> {
+  await prisma.feature_flags.deleteMany({ where: { name: 'session_extensions' } });
+}
+
 /** Advisory locks currently held on this database. The proof that a lock was released. */
 export async function countAdvisoryLocks(): Promise<number> {
   const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`

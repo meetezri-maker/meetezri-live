@@ -17,6 +17,7 @@ export function useActiveSessionTimer(
   sessionTimeRef: MutableRefObject<number>,
   isEndingRef: MutableRefObject<boolean>,
   setSessionTime: (seconds: number) => void,
+  isPausedRef?: MutableRefObject<boolean>,
 ): void {
   useEffect(() => {
     if (!running) return;
@@ -24,7 +25,7 @@ export function useActiveSessionTimer(
     const segmentStartMs = Date.now();
     const segmentBaseSeconds = sessionTimeRef.current;
     const timer = window.setInterval(() => {
-      if (isEndingRef.current) return;
+      if (isEndingRef.current || isPausedRef?.current) return;
       const next = activeSegmentElapsedSeconds(segmentBaseSeconds, segmentStartMs, Date.now());
       if (next === sessionTimeRef.current) return;
       // Keep accurate time in a ref (no React render), and the UI timer in sync.
@@ -37,7 +38,10 @@ export function useActiveSessionTimer(
   }, [running]);
 }
 
-/** Calls `onExpire` once, the first time a session limit is reached, unless the session already ended. */
+/**
+ * Calls `onExpire` once each time a session limit is reached, unless the session already ended.
+ * Elapsed time only grows, so a limit stops being reached only when it was raised; that re-arms it.
+ */
 export function useSessionExpiry(
   input: SessionExpiryInput & {
     ended: boolean;
@@ -52,6 +56,7 @@ export function useSessionExpiry(
   const { ended } = input;
 
   useEffect(() => {
+    if (!reason) firedRef.current = false;
     if (!reason || ended || firedRef.current) return;
     firedRef.current = true;
     onExpireRef.current(reason);

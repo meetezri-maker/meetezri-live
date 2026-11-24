@@ -47,6 +47,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("EzriRealtimeClient keepalive", () => {
+  it("reports a pong, which is how a held session proves the socket is alive", () => {
+    const onPong = vi.fn();
+    const client = new EzriRealtimeClient({ onPong });
+    client.connect(connectArgs);
+
+    sockets[0].onmessage?.({ data: JSON.stringify({ type: "pong" }) });
+
+    expect(onPong).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("EzriRealtimeClient after disconnect", () => {
   it("reconnects after an unexpected close while the session is live", () => {
     const client = new EzriRealtimeClient();

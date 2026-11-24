@@ -11,7 +11,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { api } from "@/lib/api";
+import { api, isApiError } from "@/lib/api";
 import {
   parseSessionBackdropPreference,
   resolveSessionBackdropLayers,
@@ -27,7 +27,7 @@ import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
 import { getSafetyResources } from "@/app/utils/safetyResources";
 import { getEmergencyResources, getRegionInfo, getStoredGeoDetection } from "@/app/utils/safetyResources";
 import { getEzriConfig } from "@/lib/ezri/config";
-import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
+import { createNewEzriSessionId, getOrCreateEzriUserid } from "@/lib/ezri/ids";
 import { createEzriApiClient } from "@/lib/ezri/apiClient";
 import {
   EzriRealtimeClient,
@@ -98,6 +98,25 @@ import {
   wasSessionEndedInThisTab,
   type SessionExpiryReason,
 } from "./utils/sessionExpiry";
+import {
+  EXTENSION_ALREADY_ENDED_MESSAGE,
+  EXTENSION_CONNECTION_LOST_MESSAGE,
+  EXTENSION_DECISION_WINDOW_MS,
+  EXTENSION_REQUEST_FAILED_MESSAGE,
+  EXTENSION_RESUME_FAILED_MESSAGE,
+  EXTENSION_RESUME_TIMEOUT_MS,
+  EXTENSION_TIMED_OUT_MESSAGE,
+  EXTENSION_UNAVAILABLE_MESSAGE,
+  MINUTES_HELD_CODE,
+  extensionMinuteChoices,
+  extensionRejectionMessage,
+  isSessionExtensionEnabled,
+  isVoicedPcm,
+  type ConversationGate,
+  type ExtensionHoldState,
+  type SessionExtensionRequest,
+  type SessionExtensionResponse,
+} from "./utils/sessionExtension";
 import { useActiveSessionTimer, useSessionExpiry } from "./hooks/useSessionTimeLimit";
 import {
   createPcmCaptureAudioContext,
@@ -200,6 +219,13 @@ const isDevSaraLiveRfv2PreviewAllowed = () => import.meta.env.DEV === true;
  */
 const ACTIVE_SESSION_IDENTITY_KEY = "ezri_active_session_identity";
 
+type PersistedSessionRow = {
+  status?: unknown;
+  ended_at?: unknown;
+  duration_minutes?: unknown;
+  extension_eligible?: unknown;
+};
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -295,6 +321,8 @@ export function ActiveSession() {
   const persistedSessionAccessRef = useRef(persistedSessionAccess);
   persistedSessionAccessRef.current = persistedSessionAccess;
   const [persistedDurationMinutes, setPersistedDurationMinutes] = useState<number | null>(null);
+  /** The server's per-account answer; unknown or failed means the hard cutoff. */
+  const [extensionEligible, setExtensionEligible] = useState(false);
 
   useEffect(() => {
     if (!apiSessionId) {
@@ -309,12 +337,13 @@ export function ActiveSession() {
     setPersistedSessionAccess("checking");
     api.sessions
       .get(apiSessionId)
-      .then((row: { status?: unknown; ended_at?: unknown; duration_minutes?: unknown }) => {
+      .then((row: PersistedSessionRow) => {
         if (cancelled) return;
         if (isPersistedSessionClosed(row)) {
           setPersistedSessionAccess("closed");
           return;
         }
+        setExtensionEligible(row.extension_eligible === true);
         setPersistedDurationMinutes(persistedSelectedMinutes(row));
         setPersistedSessionAccess("open");
       })
@@ -895,6 +924,27 @@ export function ActiveSession() {
   const isMutedRef = useRef(isMuted);
   const isSoundOffRef = useRef(isSoundOff);
   const isSessionPausedRef = useRef(false);
+  // "Add more time" hold (off unless the feature flag is on, so these stay inert by default).
+  const conversationGateRef = useRef<ConversationGate>("open");
+  const [extensionHold, setExtensionHold] = useState<ExtensionHoldState | null>(null);
+  const isAwaitingExtension = extensionHold !== null;
+  /**
+   * True from the start of a reply turn until `tts_done` closes it. Only turn-starting signals
+   * open it: binary audio can trail `tts_done`, and the fence drops that.
+   */
+  const replyTurnOpenRef = useRef(false);
+  const voicedSinceResumeRef = useRef(false);
+  const pendingResumeRef = useRef<{
+    limitSeconds: number;
+    balanceSeconds: number;
+    pongSeen: boolean;
+  } | null>(null);
+  const extensionRequestRef = useRef<SessionExtensionRequest | null>(null);
+  const extensionRequestInFlightRef = useRef(false);
+  const extensionDeadlineRef = useRef(0);
+  const resumeTimeoutRef = useRef<number | null>(null);
+  const tryCompleteResumeRef = useRef<() => void>(() => {});
+  const endHeldSessionRef = useRef<(message?: string) => void>(() => {});
   const scriptStepRef = useRef(0);
   const isEzriSpeakingRef = useRef(false);
   /** Single source for ThreeAvatar RMS: updated every RAF (TTS tap or mic), never React state. */
@@ -1692,7 +1742,7 @@ export function ActiveSession() {
   ) => {
     if (typeof window === "undefined") return;
     // An ended session never starts audio again (late responses, retries, fallback timers).
-    if (isSessionEndingRef.current) return;
+    if (isSessionEndingRef.current || conversationGateRef.current !== "open") return;
     if (isSoundOffRef.current) {
       opts?.onDone?.();
       return;
@@ -3089,7 +3139,12 @@ export function ActiveSession() {
   }
 
   const scheduleWsChunk = (item: WsAudioQueueItem) => {
-    if (suppressIncomingAudioRef.current || isSessionEndingRef.current) return;
+    if (
+      suppressIncomingAudioRef.current ||
+      isSessionEndingRef.current ||
+      conversationGateRef.current !== "open"
+    )
+      return;
     if (isSoundOffRef.current) {
       wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
       return;
@@ -3137,7 +3192,11 @@ export function ActiveSession() {
   };
 
   const flushWsAudioQueue = () => {
-    if (suppressIncomingAudioRef.current || isSessionEndingRef.current) {
+    if (
+      suppressIncomingAudioRef.current ||
+      isSessionEndingRef.current ||
+      conversationGateRef.current !== "open"
+    ) {
       wsAudioQueueRef.current = [];
       return;
     }
@@ -3415,7 +3474,7 @@ export function ActiveSession() {
 
   const handleUserText = async (text: string) => {
     // Nothing is sent once the session has ended (late recognizer results, merge timers, REST fallback).
-    if (isSessionEndingRef.current) return;
+    if (isSessionEndingRef.current || conversationGateRef.current === "held") return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -3545,6 +3604,8 @@ export function ActiveSession() {
         }
         // Allow new audio from server now that a real new message is being sent.
         suppressIncomingAudioRef.current = false;
+        conversationGateRef.current = "open";
+        replyTurnOpenRef.current = true;
         wsActiveTurnRef.current += 1;
         wsAudioSeenTurnRef.current = 0;
         assistantReplyStartedRef.current = false;
@@ -3578,6 +3639,7 @@ export function ActiveSession() {
       restAbortControllerRef.current = abortCtrl;
       // Allow new audio now that we're actually sending a new message.
       suppressIncomingAudioRef.current = false;
+      conversationGateRef.current = "open";
       // Capture active turn so we can verify it hasn't been superseded when the response arrives.
       const myRestTurn = wsActiveTurnRef.current;
 
@@ -4251,11 +4313,11 @@ export function ActiveSession() {
     if (!stream) return;
     stream
       .getAudioTracks()
-      .forEach((track) => (track.enabled = !isMuted && !isSessionPaused));
+      .forEach((track) => (track.enabled = !isMuted && !isSessionPaused && !isAwaitingExtension));
     stream
       .getVideoTracks()
       .forEach((track) => (track.enabled = !isCameraOff));
-  }, [isMuted, isCameraOff, isSessionPaused, stream]);
+  }, [isMuted, isCameraOff, isSessionPaused, isAwaitingExtension, stream]);
 
   // Pause should stop *all* listening + playback (no mic capture, no STT, no avatar audio).
   useEffect(() => {
@@ -4307,6 +4369,8 @@ export function ActiveSession() {
     null
   );
   const [accountCreditsSeconds, setAccountCreditsSeconds] = useState<number | null>(null);
+  /** The balance to the second, for deciding whether time can be added. */
+  const [extensionBalanceSeconds, setExtensionBalanceSeconds] = useState<number | null>(null);
   const [showLowCreditsWarning, setShowLowCreditsWarning] = useState(false);
   const [lowCreditsWarningDismissed, setLowCreditsWarningDismissed] = useState(false);
   const [showOutOfCredits, setShowOutOfCredits] = useState(false);
@@ -4328,7 +4392,7 @@ export function ActiveSession() {
     if (!selectedLimitResolved) return;
     const loadCredits = async () => {
       try {
-        const { credits_seconds, credits } = await api.getCredits();
+        const { credits_seconds, credits, actual_seconds } = await api.getCredits();
         const sessionLimitSeconds = selectedLimitSeconds ?? Number.POSITIVE_INFINITY;
         const userCreditsSeconds =
           typeof credits_seconds === "number"
@@ -4341,6 +4405,9 @@ export function ActiveSession() {
             ? userCreditsSeconds
             : Math.min(userCreditsSeconds, sessionLimitSeconds);
         setAccountCreditsSeconds(userCreditsSeconds);
+        setExtensionBalanceSeconds(
+          typeof actual_seconds === "number" ? Math.max(0, actual_seconds) : userCreditsSeconds,
+        );
         setInitialCreditsSeconds(effectiveSeconds);
       } catch (err) {
         console.error("Failed to load credits:", err);
@@ -4453,9 +4520,20 @@ export function ActiveSession() {
         onStatus: (s) => {
           advanceWsResponseEpoch();
           setEzriWsStatus(s);
+          // Never let a held session reconnect into what may be a fresh chat. "reconnecting" is
+          // only reported for an unexpected close; our own disconnect reports "disconnected".
+          if (s === "reconnecting" && conversationGateRef.current === "held") {
+            endHeldSessionRef.current(EXTENSION_CONNECTION_LOST_MESSAGE);
+          }
+        },
+        onPong: () => {
+          if (!pendingResumeRef.current) return;
+          pendingResumeRef.current.pongSeen = true;
+          tryCompleteResumeRef.current();
         },
         onAssistantText: (text, kind) => {
           advanceWsResponseEpoch();
+          if (conversationGateRef.current !== "open") return;
           // Drop everything from the old turn until the user's new message is sent.
           if (suppressIncomingAudioRef.current) return;
           // Drop old in-flight responses that arrived before the merged message's response.
@@ -4509,6 +4587,13 @@ export function ActiveSession() {
         },
         onUserTranscript: (text) => {
           advanceWsResponseEpoch();
+          replyTurnOpenRef.current = true;
+          if (conversationGateRef.current === "held") return;
+          if (conversationGateRef.current === "fenced") {
+            // A transcript with no speech sent since resume is left over from before the hold.
+            if (!voicedSinceResumeRef.current) return;
+            conversationGateRef.current = "open";
+          }
           if (dropOldResponsesRef.current > 0) {
             dropOldResponsesRef.current = 0;
           }
@@ -4531,6 +4616,11 @@ export function ActiveSession() {
         },
         onTtsDone: () => {
           advanceWsResponseEpoch();
+          replyTurnOpenRef.current = false;
+          if (conversationGateRef.current !== "open") {
+            tryCompleteResumeRef.current();
+            return;
+          }
           // Greeting may finish before mic permission â€” defer playback_done until audio plays.
           if (!permissionsGrantedRef.current) {
             assistantReplyStartedRef.current = false;
@@ -4600,12 +4690,15 @@ export function ActiveSession() {
           }, TTS_DONE_GRACE_MS);
         },
         onAudioStart: (info) => {
+          if (conversationGateRef.current !== "open") return;
           resetWsAudioReorderBuffer({ atAudioStart: true, traceReason: "audio_start" });
           wsSchedulerRef.current?.setAudioFormat(info.format, info.sampleRate);
           wsAudioFormatRef.current = info.format;
         },
         onSpeakingStart: () => {
           advanceWsResponseEpoch();
+          replyTurnOpenRef.current = true;
+          if (conversationGateRef.current !== "open") return;
           resetWsAudioReorderBuffer({ traceReason: "step_speaking" });
           // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
           playbackDoneAckRef.current = false;
@@ -4622,6 +4715,7 @@ export function ActiveSession() {
           isEzriThinkingRef.current = false;
         },
         onAvatarData: (data) => {
+          if (conversationGateRef.current !== "open") return;
           const pendingBeforeAvatarData = REALTIME_TRACE_ENABLED
             ? avatarPendingQueueRef.current.length
             : 0;
@@ -4787,6 +4881,7 @@ export function ActiveSession() {
         },
         onInterrupt: () => {
           advanceWsResponseEpoch();
+          if (conversationGateRef.current !== "open") return;
           // Server Silero VAD fired handle_interrupt (reference app.js case 'interrupt').
           suppressIncomingAudioRef.current = false;
 
@@ -4827,12 +4922,15 @@ export function ActiveSession() {
         },
         onPipelineStep: (status) => {
           advanceWsResponseEpoch();
+          if (status === "thinking") replyTurnOpenRef.current = true;
+          if (conversationGateRef.current !== "open") return;
           if (status === "thinking") {
             setIsEzriThinking(true);
             isEzriThinkingRef.current = true;
           }
         },
         onAudio: (audio) => {
+          if (conversationGateRef.current !== "open") return;
           // Drop audio from the old turn â€” any chunk arriving while suppressed
           // is a server-buffered leftover that arrived before our interrupt
           // was processed. We only lift suppression when the new user message
@@ -4847,6 +4945,7 @@ export function ActiveSession() {
 
           const enqueueAudioWithPendingAvatarData = () => {
             if (suppressIncomingAudioRef.current) return;
+            if (conversationGateRef.current !== "open") return;
             if (dropOldResponsesRef.current > 0) return;
 
             // B1.1c: pair this raw binary audio frame with its phonemes by per-turn
@@ -5145,6 +5244,9 @@ export function ActiveSession() {
               : channel;
           const pcm = float32ToInt16Pcm(floats);
           if (pcm.length > 0) {
+            if (conversationGateRef.current === "fenced" && isVoicedPcm(pcm)) {
+              voicedSinceResumeRef.current = true;
+            }
             ws.sendPcm(int16PcmToArrayBuffer(pcm));
             pcmChunksSentRef.current += 1;
             if (pcmChunksSentRef.current === 1) {
@@ -5256,16 +5358,17 @@ export function ActiveSession() {
   // not synthetic mock phrases.
 
   useActiveSessionTimer(
-    !isSessionPaused && !hasSessionEnded && permissionsGranted,
+    !isSessionPaused && !hasSessionEnded && permissionsGranted && !isAwaitingExtension,
     sessionTimeRef,
     isSessionEndingRef,
     setSessionTime,
+    isSessionPausedRef,
   );
 
   // Heartbeat: deduct credits during the live session (server-side).
   useEffect(() => {
     if (!apiSessionId) return;
-    if (isSessionPaused || hasSessionEnded) return;
+    if (isSessionPaused || hasSessionEnded || isAwaitingExtension) return;
     if (!permissionsGranted) return;
     if (!sessionBillingStartedRef.current) return;
 
@@ -5296,7 +5399,7 @@ export function ActiveSession() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiSessionId, isSessionPaused, hasSessionEnded, permissionsGranted]);
+  }, [apiSessionId, isSessionPaused, hasSessionEnded, permissionsGranted, isAwaitingExtension]);
 
   const remainingSeconds =
     initialCreditsSeconds !== null
@@ -5541,6 +5644,7 @@ export function ActiveSession() {
   const expireSession = (reason: SessionExpiryReason) => {
     // Manual End or leaving the page already ended the session.
     if (sessionFullyCleanedRef.current) return;
+    if (reason === "duration" && enterExtensionHold()) return;
     // Tears down synchronously, before its first await.
     void endSessionAndCleanup();
     setShowEndConfirm(false);
@@ -5549,16 +5653,238 @@ export function ActiveSession() {
     setShowOutOfCredits(true);
   };
 
+  /** Raised by each approved extension; otherwise the length selected in the lobby. */
+  const [approvedLimitSeconds, setApprovedLimitSeconds] = useState<number | null>(null);
+  const currentLimitSeconds = approvedLimitSeconds ?? selectedLimitSeconds;
+
+  /**
+   * Pauses at the selected limit without finalizing, when the member can still add time. Everything
+   * here runs before the popup shows and can be undone. Returns false to keep the hard cutoff.
+   */
+  const enterExtensionHold = () => {
+    if (!isSessionExtensionEnabled() || !extensionEligible) return false;
+    if (!apiSessionId || currentLimitSeconds === null) return false;
+    if (extensionBalanceSeconds === null) return false;
+    const availableSeconds = extensionBalanceSeconds - currentLimitSeconds;
+    if (extensionMinuteChoices(availableSeconds).length === 0) return false;
+    if (wsClientRef.current?.getStatus() !== "connected") return false;
+
+    conversationGateRef.current = "held";
+    // Every mic and recognizer path already honours this; the manual Pause state is untouched.
+    isSessionPausedRef.current = true;
+    sessionTimeRef.current = currentLimitSeconds;
+    setSessionTime(currentLimitSeconds);
+
+    runCleanupSteps([
+      [
+        "pending reply request",
+        () => {
+          restAbortControllerRef.current?.abort();
+          restAbortControllerRef.current = null;
+        },
+      ],
+      ["playback", () => stopPlaybackAndCooldown({ sendPlaybackDone: false })],
+      [
+        "speech recognition",
+        () => {
+          recognitionRef.current?.stop();
+          isRecognitionActiveRef.current = false;
+          setIsListening(false);
+        },
+      ],
+      [
+        "microphone",
+        () => {
+          streamCleanupRef.current?.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+        },
+      ],
+      [
+        "pending input",
+        () => {
+          if (speechTimeoutRef.current) window.clearTimeout(speechTimeoutRef.current);
+          pendingUserTextRef.current = "";
+          isEzriThinkingRef.current = false;
+          setIsEzriThinking(false);
+          setLiveUserSpeech("");
+        },
+      ],
+    ]);
+
+    setShowEndConfirm(false);
+    setShowLowMinutesModal(false);
+    extensionDeadlineRef.current = Date.now() + EXTENSION_DECISION_WINDOW_MS;
+    setExtensionHold({
+      phase: "choosing",
+      deadlineMs: extensionDeadlineRef.current,
+      availableSeconds,
+      error: null,
+    });
+    return true;
+  };
+
+  /**
+   * Lifts the hold only once it is provably safe: the socket answered a ping sent after approval
+   * and the last reply turn has closed. Anything still in flight is dropped by the fence, which
+   * stays up until the member's next turn begins.
+   */
+  const tryCompleteResume = () => {
+    const pending = pendingResumeRef.current;
+    if (!pending || sessionFullyCleanedRef.current || conversationGateRef.current !== "held") return;
+    if (!pending.pongSeen || replyTurnOpenRef.current) return;
+    if (resumeTimeoutRef.current !== null) window.clearTimeout(resumeTimeoutRef.current);
+    resumeTimeoutRef.current = null;
+    pendingResumeRef.current = null;
+
+    wsActiveTurnRef.current += 1;
+    wsAudioSeenTurnRef.current = 0;
+    dropOldResponsesRef.current = 0;
+    suppressIncomingAudioRef.current = false;
+    assistantReplyStartedRef.current = false;
+    wsAssistantBufferRef.current = "";
+    wsLastFinalTextRef.current = "";
+    wsPendingFallbackTextRef.current = "";
+    resetAssistantTurnAccumulation();
+    resetWsAudioReorderBuffer({ traceReason: "extension_resume" });
+    avatarPendingQueueRef.current = [];
+
+    setApprovedLimitSeconds(pending.limitSeconds);
+    const accountLimitSeconds = sessionTimeRef.current + pending.balanceSeconds;
+    setInitialCreditsSeconds(Math.min(accountLimitSeconds, pending.limitSeconds));
+    setAccountCreditsSeconds(accountLimitSeconds);
+    setExtensionBalanceSeconds(accountLimitSeconds);
+
+    voicedSinceResumeRef.current = false;
+    conversationGateRef.current = "fenced";
+    isSessionPausedRef.current = false;
+    setExtensionHold(null);
+    try {
+      playbackDoneAckRef.current = wsClientRef.current?.sendPlaybackDone() ?? false;
+    } catch {
+      /* ignore */
+    }
+    resumeStt(0, { ignoreSpeakingGate: true });
+  };
+  tryCompleteResumeRef.current = tryCompleteResume;
+
+  const handleAddMoreTime = async (minutes: number) => {
+    if (conversationGateRef.current !== "held" || !apiSessionId || currentLimitSeconds === null) return;
+    if (extensionRequestInFlightRef.current || pendingResumeRef.current) return;
+    extensionRequestInFlightRef.current = true;
+
+    // A retry after a failed attempt re-sends the same request, so it cannot add time twice.
+    const retained = extensionRequestRef.current;
+    const request: SessionExtensionRequest =
+      retained?.add_minutes === minutes
+        ? retained
+        : {
+            request_id: createNewEzriSessionId(),
+            expected_limit_minutes: currentLimitSeconds / 60,
+            add_minutes: minutes,
+            elapsed_seconds: sessionTimeRef.current,
+          };
+    extensionRequestRef.current = request;
+    setExtensionHold((prev) => (prev ? { ...prev, phase: "approving", error: null } : prev));
+
+    let response = null as SessionExtensionResponse | null;
+    await sendWithRetry(
+      async () => {
+        try {
+          response = (await api.sessions.extend(apiSessionId, request)) as SessionExtensionResponse;
+        } catch (error) {
+          // 404: this account may no longer add time (e.g. removed from the allowlist).
+          if (isApiError(error) && error.status === 404) {
+            response = {
+              approved: false,
+              code: "EXTENSION_UNAVAILABLE",
+              message: EXTENSION_UNAVAILABLE_MESSAGE,
+              limit_minutes: null,
+              limit_seconds: null,
+              balance_seconds: null,
+              available_seconds: null,
+            };
+            return;
+          }
+          if (!isApiError(error) || error.status !== 409) throw error;
+          response = error.body as SessionExtensionResponse;
+        }
+      },
+      undefined,
+      undefined,
+      isRetryableEndError,
+    );
+    extensionRequestInFlightRef.current = false;
+
+    // End or the decision window got there first; a late approval changes nothing.
+    if (sessionFullyCleanedRef.current || conversationGateRef.current !== "held") return;
+
+    if (!response) {
+      setExtensionHold((prev) =>
+        prev ? { ...prev, phase: "choosing", error: EXTENSION_REQUEST_FAILED_MESSAGE } : prev,
+      );
+      return;
+    }
+
+    extensionRequestRef.current = null;
+    if (!response.approved) {
+      if (response.code === "SESSION_NOT_ACTIVE") {
+        endHeldSessionRef.current(EXTENSION_ALREADY_ENDED_MESSAGE);
+        return;
+      }
+      const { code, available_seconds: serverAvailable } = response;
+      if (code === "EXTENSION_UNAVAILABLE" || code === "NOT_ELIGIBLE") {
+        setExtensionHold((prev) =>
+          prev
+            ? { ...prev, phase: "choosing", error: EXTENSION_UNAVAILABLE_MESSAGE, unavailable: true }
+            : prev,
+        );
+        return;
+      }
+      setExtensionHold((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "choosing",
+              error: extensionRejectionMessage(code),
+              // Held minutes can free up, so the choices stay and Add works as a retry.
+              availableSeconds:
+                code === MINUTES_HELD_CODE
+                  ? prev.availableSeconds
+                  : (serverAvailable ?? prev.availableSeconds),
+            }
+          : prev,
+      );
+      return;
+    }
+
+    pendingResumeRef.current = {
+      limitSeconds: response.limit_seconds,
+      balanceSeconds: response.balance_seconds,
+      pongSeen: false,
+    };
+    setExtensionHold((prev) => (prev ? { ...prev, phase: "securing", error: null } : prev));
+    resumeTimeoutRef.current = window.setTimeout(() => {
+      resumeTimeoutRef.current = null;
+      endHeldSessionRef.current(EXTENSION_RESUME_FAILED_MESSAGE);
+    }, EXTENSION_RESUME_TIMEOUT_MS);
+    try {
+      wsClientRef.current?.sendPing();
+    } catch {
+      endHeldSessionRef.current(EXTENSION_CONNECTION_LOST_MESSAGE);
+    }
+  };
+
   useSessionExpiry({
     elapsedSeconds: sessionTime,
-    selectedLimitSeconds,
+    selectedLimitSeconds: currentLimitSeconds,
     accountCreditsSeconds,
     selectedLimitResolved,
     ended: hasSessionEnded,
     onExpire: expireSession,
   });
 
-  const handleEndSession = async () => {
+  const handleEndSession = async (options?: { returnToDashboard?: boolean }) => {
     // Show full-screen ending state immediately so the confirm dialog is not
     // replaced by the live session UI while we wait for the API + navigation.
     setIsEndingSession(true);
@@ -5580,6 +5906,8 @@ export function ActiveSession() {
             sessionDuration: durationSeconds,
           },
         });
+      } else if (options?.returnToDashboard) {
+        navigate("/app/dashboard");
       } else {
         navigate("/app/session-lobby", {
           state: {
@@ -5594,6 +5922,28 @@ export function ActiveSession() {
       setIsEndingSession(false);
     }
   };
+
+  /** Ends and saves a held session; takes precedence over any approval still on its way. */
+  const endHeldSession = (message?: string, options?: { returnToDashboard?: boolean }) => {
+    if (sessionFullyCleanedRef.current) return;
+    if (resumeTimeoutRef.current !== null) window.clearTimeout(resumeTimeoutRef.current);
+    resumeTimeoutRef.current = null;
+    pendingResumeRef.current = null;
+    setExtensionHold(null);
+    if (message) toast.info(message);
+    void handleEndSession(options);
+  };
+  endHeldSessionRef.current = endHeldSession;
+
+  useEffect(() => {
+    if (!isAwaitingExtension) return;
+    const id = window.setInterval(() => {
+      if (Date.now() >= extensionDeadlineRef.current) {
+        endHeldSessionRef.current(EXTENSION_TIMED_OUT_MESSAGE);
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isAwaitingExtension]);
 
   const connectionQualityColor = getConnectionQualityColor(connectionQuality);
 
@@ -5684,6 +6034,7 @@ export function ActiveSession() {
   }, []);
 
   const handleToggleSessionPaused = useCallback(() => {
+    if (conversationGateRef.current === "held") return;
     setIsSessionPaused((p) => !p);
   }, []);
 
@@ -5867,6 +6218,9 @@ export function ActiveSession() {
       onDismissLowCredits={handleDismissLowCredits}
       showOutOfCredits={showOutOfCredits}
       outOfCreditsReason={expiryReason}
+      extensionHold={extensionHold}
+      onAddMoreTime={handleAddMoreTime}
+      onEndHeldSession={() => endHeldSession(undefined, { returnToDashboard: true })}
       onOutOfCreditsBuyMore={handleOutOfCreditsBuyMore}
       onOutOfCreditsUpgrade={handleOutOfCreditsUpgrade}
       showLowMinutesModal={showLowMinutesModal}

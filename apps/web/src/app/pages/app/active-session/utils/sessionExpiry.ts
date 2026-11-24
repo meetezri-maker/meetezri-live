@@ -78,7 +78,7 @@ export async function sendWithRetry(
       return true;
     } catch (error) {
       if (attempt >= delaysMs.length || !shouldRetry(error)) {
-        console.error("[ActiveSession] Session end request failed:", error);
+        console.error("[ActiveSession] Session request failed:", error);
         return false;
       }
       await wait(delaysMs[attempt]);

@@ -12,6 +12,7 @@ import {
   getUserSessionsHandler,
   toggleSessionFavoriteHandler,
   heartbeatSessionHandler,
+  extendSessionHandler,
   cancelScheduledSessionHandler,
   updateScheduledSessionHandler,
 } from './sessions.controller';
@@ -21,6 +22,7 @@ import {
   endSessionSchema,
   createMessageSchema,
   heartbeatSessionSchema,
+  extendSessionSchema,
   updateScheduledSessionSchema,
 } from './sessions.schema';
 
@@ -102,6 +104,17 @@ export async function sessionRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate],
     },
     heartbeatSessionHandler
+  );
+
+  app.post(
+    '/:id/extend',
+    {
+      schema: {
+        body: extendSessionSchema,
+      },
+      preHandler: [app.authenticate],
+    },
+    extendSessionHandler
   );
 
   app.delete(

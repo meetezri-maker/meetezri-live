@@ -102,6 +102,23 @@ describe("useSessionExpiry", () => {
     expect(onExpire).not.toHaveBeenCalled();
   });
 
+  it("re-arms when the limit is raised, and fires again at the new limit", () => {
+    const onExpire = vi.fn();
+    const { rerender } = renderHook(
+      ({ elapsedSeconds, selectedLimitSeconds }) =>
+        useSessionExpiry({ ...base, selectedLimitSeconds, elapsedSeconds, onExpire }),
+      { initialProps: { elapsedSeconds: 600, selectedLimitSeconds: 600 } },
+    );
+    expect(onExpire).toHaveBeenCalledTimes(1);
+
+    rerender({ elapsedSeconds: 600, selectedLimitSeconds: 1200 });
+    rerender({ elapsedSeconds: 1199, selectedLimitSeconds: 1200 });
+    expect(onExpire).toHaveBeenCalledTimes(1);
+
+    rerender({ elapsedSeconds: 1200, selectedLimitSeconds: 1200 });
+    expect(onExpire).toHaveBeenCalledTimes(2);
+  });
+
   it("reports account exhaustion as its own reason", () => {
     const onExpire = vi.fn();
     renderHook(() =>

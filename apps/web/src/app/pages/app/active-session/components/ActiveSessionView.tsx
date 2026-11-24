@@ -18,6 +18,8 @@ import { CrisisKeywordModal } from "./CrisisKeywordModal";
 import { EndSessionConfirmModal } from "./EndSessionConfirmModal";
 import { LowCreditsBanner } from "./LowCreditsBanner";
 import { OutOfCreditsModal, type OutOfCreditsReason } from "./OutOfCreditsModal";
+import { AddMoreTimeModal } from "./AddMoreTimeModal";
+import type { ExtensionHoldState } from "../utils/sessionExtension";
 import { PermissionModal } from "./PermissionModal";
 import { SafetyBoundaryBanner } from "./SafetyBoundaryBanner";
 import { SafetyResourcesModal } from "./SafetyResourcesModal";
@@ -129,6 +131,9 @@ export interface ActiveSessionViewProps {
   onDismissLowCredits: () => void;
   showOutOfCredits: boolean;
   outOfCreditsReason: OutOfCreditsReason;
+  extensionHold: ExtensionHoldState | null;
+  onAddMoreTime: (minutes: number) => void;
+  onEndHeldSession: () => void;
   onOutOfCreditsBuyMore: () => void;
   onOutOfCreditsUpgrade: () => void;
   showLowMinutesModal: boolean;
@@ -255,6 +260,9 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     onDismissLowCredits,
     showOutOfCredits,
     outOfCreditsReason,
+    extensionHold,
+    onAddMoreTime,
+    onEndHeldSession,
     onOutOfCreditsBuyMore,
     onOutOfCreditsUpgrade,
     showLowMinutesModal,
@@ -465,6 +473,12 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
         onBuyMoreMinutes={onOutOfCreditsBuyMore}
         onUpgradePlan={onOutOfCreditsUpgrade}
         onReturnToDashboard={onReturnToDashboard}
+      />
+
+      <AddMoreTimeModal
+        hold={extensionHold}
+        onAddMinutes={onAddMoreTime}
+        onEndSession={onEndHeldSession}
       />
 
       <LowMinutesWarning

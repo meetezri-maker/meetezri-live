@@ -63,6 +63,8 @@ export type EzriRealtimeClientHandlers = {
   onAudioStart?: (info: { format: string; sampleRate: number }) => void;
   onError?: (error: unknown, context?: any) => void;
   onUnknownMessage?: (raw: unknown) => void;
+  /** The server answered a `ping`, so the socket is still alive end to end. */
+  onPong?: () => void;
 };
 
 type AnyObj = Record<string, any>;
@@ -264,7 +266,8 @@ export class EzriRealtimeClient {
       }
 
       if (errType === "pong") {
-        // Heartbeat response — nothing to do, connection is alive
+        // Heartbeat response — nothing else to do, connection is alive
+        this.handlers.onPong?.();
         return;
       }
 

@@ -25,6 +25,17 @@ export const heartbeatSessionSchema = z.object({
   elapsed_seconds: z.number().int().nonnegative(),
 });
 
+/**
+ * Body for POST /sessions/:id/extend. `request_id` makes a retry of this exact request safe;
+ * `expected_limit_minutes` rejects a request made against a limit that has since changed.
+ */
+export const extendSessionSchema = z.object({
+  request_id: z.string().min(8).max(80),
+  expected_limit_minutes: z.number().int().positive(),
+  add_minutes: z.number().int().min(5).max(120),
+  elapsed_seconds: z.number().int().nonnegative(),
+});
+
 export const updateScheduledSessionSchema = z.object({
   duration_minutes: z.number().int().positive().optional(),
   scheduled_at: z.string().datetime().optional(),
@@ -63,6 +74,7 @@ export const sessionResponseSchema = z.object({
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type EndSessionInput = z.infer<typeof endSessionSchema>;
 export type HeartbeatSessionInput = z.infer<typeof heartbeatSessionSchema>;
+export type ExtendSessionInput = z.infer<typeof extendSessionSchema>;
 export type UpdateScheduledSessionInput = z.infer<typeof updateScheduledSessionSchema>;
 export type BeginScheduledSessionInput = z.infer<typeof beginScheduledSessionSchema>;
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;

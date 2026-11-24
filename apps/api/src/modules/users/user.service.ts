@@ -9,7 +9,11 @@ import {
 } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing';
-import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
+import {
+  getLifetimeUsedSeconds,
+  resolveBucketSeconds,
+  resolveProfileActualSeconds,
+} from '../billing/credit-balance.service';
 import { provisionDiscoverTrial } from '../billing/services/trial.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
@@ -1596,6 +1600,7 @@ export async function getCredits(userId: string) {
       subscription: ceilMin(subscriptionSeconds),
       purchased: ceilMin(purchasedSeconds),
       credits_seconds: remainingSeconds,
+      actual_seconds: profile ? resolveProfileActualSeconds(profile) : 0,
       subscription_seconds: subscriptionSeconds,
       purchased_seconds: purchasedSeconds,
       subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),

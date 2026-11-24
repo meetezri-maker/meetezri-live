@@ -29,6 +29,35 @@ export function resolveProfileRemainingSeconds(profile: {
 }
 
 /**
+ * One bucket's balance to the second, for decisions that must not round in the member's favour.
+ *
+ * Billing rewrites the minutes column as the seconds rounded up, so a gap under a minute is that
+ * rounding and the seconds column is exact. A legacy minute-only row has no seconds, and a minutes
+ * column a full minute or more ahead is the sync-lag case above; both keep `resolveBucketSeconds`.
+ */
+export function resolveBucketActualSeconds(
+  minutesCol: number | null | undefined,
+  secondsCol: number | null | undefined
+): number {
+  const fromMin = Math.max(0, Number(minutesCol ?? 0) || 0) * 60;
+  const rawSec = secondsCol != null && Number(secondsCol) > 0 ? Math.floor(Number(secondsCol)) : 0;
+  if (rawSec > 0 && fromMin - rawSec < 60) return rawSec;
+  return resolveBucketSeconds(minutesCol, secondsCol);
+}
+
+export function resolveProfileActualSeconds(profile: {
+  credits?: number | null;
+  purchased_credits?: number | null;
+  credits_seconds?: number | null;
+  purchased_credits_seconds?: number | null;
+}): number {
+  return (
+    resolveBucketActualSeconds(profile.credits, profile.credits_seconds) +
+    resolveBucketActualSeconds(profile.purchased_credits, profile.purchased_credits_seconds)
+  );
+}
+
+/**
  * Add plan-granted minutes to the subscription bucket (profiles.credits / credits_seconds).
  * Stack-safe: never replaces existing remaining time.
  *
