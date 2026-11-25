@@ -1150,8 +1150,8 @@ export function Progress() {
                   className={cn(
                     "grid min-w-0 flex-1 gap-4 overflow-hidden",
                     visibleGrowthTools.length === 1 && "max-w-[220px] grid-cols-1",
-                    visibleGrowthTools.length === 2 && "grid-cols-2",
-                    visibleGrowthTools.length >= 3 && "grid-cols-3"
+                    visibleGrowthTools.length === 2 && "grid-cols-1 min-[640px]:grid-cols-2",
+                    visibleGrowthTools.length >= 3 && "grid-cols-1 min-[640px]:grid-cols-3"
                   )}
                 >
                   {visibleGrowthTools.map((tool) => (
