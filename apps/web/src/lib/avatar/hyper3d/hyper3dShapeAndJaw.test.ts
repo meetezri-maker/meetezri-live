@@ -11,6 +11,7 @@ import { minifaceMalePhonemeProfile } from "./engine/mappings/avatars/minifaceMa
 import { DIPHTHONG_GLIDES } from "./engine/mappings/avatars/hyper3dVowelProfile";
 import { calibrateHyper3dPose, hyper3dMorphCalibration } from "./engine/mappings/avatars/hyper3dCalibration";
 import type { BlendshapePose } from "./engine/types/facialAnimation";
+import { exponentialSmoothingAlpha } from "./engine/utils/lerp";
 
 /**
  * FIX 2 — G (asymmetric jaw) and I (family shapes).
@@ -126,11 +127,17 @@ describe("G — asymmetric jaw", () => {
 
   it("A REAL CLOSURE bypasses the slow path entirely", () => {
     // Identical jaw trajectory, but with a bilabial closure demanded.
+    //
+    // STEP 3b: this is the ORIGINAL contract, still asserted exactly, on the
+    // profile WITHOUT the Step 3b `sealSpeed` — which is what every profile
+    // without the setting gets. The `hyper3d-usc` seal speed has its own exact
+    // check below.
+    const withoutSealSpeed: MouthTransitionProfile = { ...PROFILE, sealSpeed: undefined };
     const open = hold({ jawOpen: 0.5 }, 20);
     const shutWithSeal = hold({ jawOpen: 0.02, mouthClose: PROFILE.sealClosureThreshold }, 20);
     const shutWithout = hold({ jawOpen: 0.02, mouthClose: 0.1 }, 20);
-    const sealed = drive([...open, ...shutWithSeal], PROFILE);
-    const ordinary = drive([...open, ...shutWithout], PROFILE);
+    const sealed = drive([...open, ...shutWithSeal], withoutSealSpeed);
+    const ordinary = drive([...open, ...shutWithout], withoutSealSpeed);
     const symmetric = drive([...open, ...shutWithout], undefined);
     for (let i = 21; i < 40; i += 1) {
       // A sealing frame closes exactly as fast as the shipped symmetric jaw.
@@ -138,6 +145,33 @@ describe("G — asymmetric jaw", () => {
       // And strictly faster than the ordinary return.
       expect(sealed[i].jawOpen).toBeLessThan(ordinary[i].jawOpen);
     }
+  });
+
+  it("STEP 3b: on hyper3d-usc a CLOSING seal frame follows exactly the 40/s seal speed", () => {
+    expect(PROFILE.sealSpeed).toBe(40);
+    const open = hold({ jawOpen: 0.5 }, 20);
+    const shutWithSeal = hold({ jawOpen: 0.02, mouthClose: PROFILE.sealClosureThreshold }, 20);
+    const sealed = drive([...open, ...shutWithSeal], PROFILE);
+    const previousPath = drive([...open, ...shutWithSeal], { ...PROFILE, sealSpeed: undefined });
+    // Opening is untouched: the first 20 frames are identical to the previous path.
+    for (let i = 0; i < 20; i += 1) expect(sealed[i].jawOpen).toBe(previousPath[i].jawOpen);
+    // Closing: the exact exponential follower at 40/s, frame by frame.
+    const alpha = exponentialSmoothingAlpha(40, DT);
+    let expected = sealed[19].jawOpen;
+    for (let i = 20; i < 40; i += 1) {
+      expected = expected + (0.02 - expected) * alpha;
+      expect(sealed[i].jawOpen).toBeCloseTo(expected, 12);
+      expect(sealed[i].jawOpen).toBeLessThan(previousPath[i].jawOpen);
+    }
+  });
+
+  it("STEP 3b: the seal speed never accelerates an OPENING jaw, even on a seal frame", () => {
+    const shut = hold({ jawOpen: 0.02, mouthClose: PROFILE.sealClosureThreshold }, 10);
+    const openWhileSealed = hold({ jawOpen: 0.3, mouthClose: PROFILE.sealClosureThreshold }, 20);
+    const targets = [...shut, ...openWhileSealed];
+    const withSeal = drive(targets, PROFILE);
+    const withoutSeal = drive(targets, { ...PROFILE, sealSpeed: undefined });
+    for (let i = 0; i < targets.length; i += 1) expect(withSeal[i].jawOpen).toBe(withoutSeal[i].jawOpen);
   });
 
   it("mouthClose itself is never slowed, and no non-jaw channel is touched", () => {

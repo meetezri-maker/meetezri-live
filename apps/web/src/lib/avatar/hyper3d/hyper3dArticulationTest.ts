@@ -249,6 +249,14 @@ export const HYPER3D_ARTICULATION_TARGETS: readonly Hyper3dArticulationTarget[] 
   { id: "seqBilabialTopMan", label: "AA·P·M·AE  (top man)", family: "N. bilabial closure", phoneme: null, phonemes: ["AA", "P", "M", "AE"], note: "P straight out of the widest vowel — the hardest case. P still starts with the jaw the follower carries from AA; M should seal." },
   { id: "seqBilabialAb", label: "AE·B  (ab)", family: "N. bilabial closure", phoneme: null, phonemes: ["AE", "B"], note: "A vowel closing onto B. Measured still slightly open at short labels — compare 70 vs 150 ms." },
   { id: "seqBilabialPbmp", label: "P·B·M·P", family: "N. bilabial closure", phoneme: null, phonemes: ["AH", "P", "B", "M", "P", "AH"], note: "Consecutive bilabials. The lips should close and STAY closed through B·M·P, with no visible reopening between them." },
+  /**
+   * STAGE 2, STEP 3b — DEV-only QA for the 40/s jaw-seal follower: a held open
+   * vowel straight into each bilabial, the case where the jaw closes fastest.
+   * Watch for natural, quicker closure — no snap, no flicker, no over-pressed lips.
+   */
+  { id: "seqJawSealAaP", label: "AA·P", family: "N. bilabial closure", phoneme: null, phonemes: ["AA", "P"], note: "Widest vowel straight into P: the fastest jaw close the seal follower produces." },
+  { id: "seqJawSealAaB", label: "AA·B", family: "N. bilabial closure", phoneme: null, phonemes: ["AA", "B"], note: "Widest vowel into B. B asks for less closure than P, so it may still look slightly open at short lengths." },
+  { id: "seqJawSealAaM", label: "AA·M", family: "N. bilabial closure", phoneme: null, phonemes: ["AA", "M"], note: "Widest vowel into M — the deepest press of the three. Check the lips do not crush." },
   { id: "seqBilabialMm", label: "AH·M·M·AH  (geminate)", family: "N. bilabial closure", phoneme: null, phonemes: ["AH", "M", "M", "AH"], note: "Two M labels back to back. Watch for a flicker at the boundary." },
   { id: "seqShapeRzh", label: "R·ZH·R", family: "L. shape review", phoneme: null, phonemes: ["R", "ZH", "R"], note: "THE PAIR THIS PASS FIXED. R and ZH measured 0.131 mm apart — the closest different-viseme shapes in the inventory — and are now 0.662 mm apart. /r/ should read as more protruded than /ʒ/, and still clearly not /w/." },
 
@@ -915,7 +923,15 @@ function stepDelivery(
   const previousClock = run.clock;
   // A hidden tab or a long frame must not fast-forward the sequence past itself.
   const step = Math.min(Math.max(deltaSeconds, 0), 1 / 20);
-  run.clock = (run.clock + step) % run.cycle;
+  /**
+   * LABEL-BOUNDARY PARITY. Summing 1/60 s steps drifts in floating point, so at
+   * an exact label boundary the runner's clock can read 0.39999… where production
+   * reads 0.4, and the lookup below then resolves the PREVIOUS label for that one
+   * frame. Rounding to the nanosecond removes the drift and nothing else: it
+   * cannot move the clock by a perceptible amount, it is not the frame-time cap
+   * above, and production's own clock is untouched.
+   */
+  run.clock = Math.round(((run.clock + step) % run.cycle) * 1e9) / 1e9;
   if (run.clock < previousClock) {
     // The sequence just wrapped: publish the cycle's measurements, start fresh.
     closeLabelWindow(run);

@@ -8,6 +8,8 @@ import {
   type DeadlineModeId
 } from "./hyper3dDeadlineCorpus";
 import type { AvatarPayload } from "./engine/types/avatarPayload";
+import { JAW_CYCLE_CLOSE_THRESHOLD, JAW_CYCLE_OPEN_THRESHOLD } from "./hyper3dDeadlineInstrumentation";
+import { withoutSealSpeed } from "./hyper3dSealSpeed.testSupport";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +56,19 @@ for (const { id, payload } of loaded) {
 }
 
 const get = (mode: DeadlineModeId, payloadId: string) => runs.get(keyOf(mode, payloadId))!;
+
+/**
+ * STAGE 2, STEP 3b. The same runs with the jaw-seal `sealSpeed` disabled in
+ * EVERY mode — the pre-Step-3b configuration this comparison was written
+ * against, applied to both sides of it. See the jaw-oscillation test.
+ */
+const runsPre3b = new Map<string, CorpusRunResult>();
+withoutSealSpeed(() => {
+  for (const { id, payload } of loaded) {
+    for (const mode of MODES) runsPre3b.set(keyOf(mode, id), runCorpus(payload, id, mode));
+  }
+});
+const getPre3b = (mode: DeadlineModeId, payloadId: string) => runsPre3b.get(keyOf(mode, payloadId))!;
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
 
@@ -168,13 +183,49 @@ describeCorpus("deadline comparison over the aligned corpus", () => {
    * opening cannot add an open-close PAIR — and measured over all four payloads
    * the count does not move at all, which is the strongest form of that claim.
    */
+  /*
+   * STEP 3b: evaluated on the pre-Step-3b configuration in every mode
+   * (`getPre3b`), the configuration it was written for — the assertion itself is
+   * unchanged. With Step 3b on, CURRENT (the pre-deadline follower, a comparison
+   * path only) loses one counted cycle on the paragraph: after the deeper seal
+   * closure its slower opening no longer reaches the 0.12 "open" threshold in one
+   * short vowel. That makes the reference drop, not the deadline modes rise; the
+   * Step 3b block below pins that no mode gains a cycle.
+   */
   it("adds no jaw oscillation — the cycle rate does not rise", () => {
     for (const { id } of loaded) {
-      const current = get("current", id).motion.jawCyclesPerSecond;
+      const current = getPre3b("current", id).motion.jawCyclesPerSecond;
       for (const mode of ["d34", "d44"] as const) {
-        expect(get(mode, id).motion.jawCyclesPerSecond).toBeLessThanOrEqual(current + 1e-9);
+        expect(getPre3b(mode, id).motion.jawCyclesPerSecond).toBeLessThanOrEqual(current + 1e-9);
       }
     }
+  });
+
+  it("STEP 3b adds no jaw cycle in any mode, on any recording", () => {
+    for (const { id } of loaded) {
+      for (const mode of MODES) {
+        expect(get(mode, id).motion.jawCyclesPerSecond, `${mode} ${id}`).toBeLessThanOrEqual(
+          getPre3b(mode, id).motion.jawCyclesPerSecond + 1e-9
+        );
+      }
+    }
+  });
+
+  it("STEP 3b leaves the cycle detector and the corpus as they were", () => {
+    expect(JAW_CYCLE_OPEN_THRESHOLD).toBe(0.12);
+    expect(JAW_CYCLE_CLOSE_THRESHOLD).toBe(0.07);
+    expect(loaded.map((entry) => entry.id)).toEqual(CORPUS_PAYLOADS.map((entry) => entry.id));
+  });
+
+  it("prints the jaw-cycle rate per mode, before and after Step 3b", () => {
+    for (const { id } of loaded) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[jaw cycles] ${id}: ` +
+          MODES.map((mode) => `${mode} ${getPre3b(mode, id).motion.jawCyclesPerSecond.toFixed(4)} -> ${get(mode, id).motion.jawCyclesPerSecond.toFixed(4)}/s`).join("  ")
+      );
+    }
+    expect(loaded.length).toBe(CORPUS_PAYLOADS.length);
   });
 
   it("never exceeds its cap", () => {

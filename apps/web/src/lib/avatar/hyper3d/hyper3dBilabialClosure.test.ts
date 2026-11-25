@@ -144,14 +144,16 @@ const romyAvailable = existsSync(LIP_BASELINE_ASSETS.hyper3d_arfv2);
     expect(stats.total).toBe(BEFORE_ROMY.total);
   });
 
-  it("closes far more P/B/M labels than before Step 3a (12 -> 21 of 50)", () => {
-    expect(stats.closed).toBeGreaterThanOrEqual(21);
-    // Recorded with 3a: P 1 -> 9 of 20, B 0 -> 1 of 14, M 11 of 16 unchanged
-    // (M's pose is not touched). B stays low: most B labels follow a vowel
-    // whose jaw the follower has not cleared — the Step 3b question.
-    expect(stats.byPhoneme.P?.closed).toBeGreaterThanOrEqual(9);
-    expect(stats.byPhoneme.B?.closed).toBeGreaterThanOrEqual(1);
-    expect(stats.byPhoneme.M?.closed).toBe(11);
+  it("closes far more P/B/M labels than before Step 3a (12 -> 27 of 50)", () => {
+    expect(stats.closed).toBeGreaterThanOrEqual(27);
+    // Recorded with 3a: P 1 -> 9 of 20, B 0 -> 1 of 14, M 11 of 16 unchanged.
+    // Recorded with 3b (40/s jaw-seal follower): P 9 -> 13, B 1 -> 2, M 11 -> 12.
+    // B stays low for a reason that is no longer the jaw: most unclosed B labels
+    // have the jaw settled yet sit 0.5-1.6 mm open (lower B closure demand, short
+    // labels) — out of scope for 3b.
+    expect(stats.byPhoneme.P?.closed).toBeGreaterThanOrEqual(13);
+    expect(stats.byPhoneme.B?.closed).toBeGreaterThanOrEqual(2);
+    expect(stats.byPhoneme.M?.closed).toBe(12);
   });
 
   it("never drives the lips more than 1.5 mm past the seal (no pass-through)", () => {
@@ -179,13 +181,19 @@ const romyAvailable = existsSync(LIP_BASELINE_ASSETS.hyper3d_arfv2);
  * holds the first one's closure toward its neighbour, so it closes further.
  * "top man" P 2.12 -> 1.92 mm and "rib pin" B 0.50 -> 0.40 mm on Romy, the same
  * direction on every face. Rows with no touching bilabial are unchanged.
+ *
+ * STEP 3b (40/s jaw-seal follower) moved every row, all toward closure, on every
+ * face: the jaw the follower carried from the vowel clears sooner. Romy:
+ *   top man 1.92 -> 0.95   ab 1.64 -> 0.87   happy 2.04 -> 1.16
+ *   rib pin 0.40 -> 0.17   some big -0.12 -> -0.53   (mm vs seal)
+ * The open-vowel rows still do not fully close at these 70-90 ms labels.
  */
 const SEQUENCES: { id: string; sequence: [string, number][]; label: number; beforeRomy: number; afterRomy: number }[] = [
-  { id: "P after AA — top man", sequence: [["AA", 0.12], ["P", 0.08], ["M", 0.09], ["AE", 0.12]], label: 1, beforeRomy: 2.97, afterRomy: 1.92 },
-  { id: "B after AE — ab", sequence: [["AE", 0.14], ["B", 0.09]], label: 1, beforeRomy: 1.94, afterRomy: 1.64 },
-  { id: "P mid-word — happy", sequence: [["HH", 0.06], ["AE", 0.1], ["P", 0.07], ["IY", 0.12]], label: 2, beforeRomy: 2.49, afterRomy: 2.04 },
-  { id: "B after IH — rib pin", sequence: [["IH", 0.1], ["B", 0.07], ["P", 0.08], ["IH", 0.1]], label: 1, beforeRomy: 0.81, afterRomy: 0.4 },
-  { id: "M after AH — some big", sequence: [["AH", 0.12], ["M", 0.08], ["B", 0.07], ["IH", 0.1]], label: 1, beforeRomy: -0.11, afterRomy: -0.12 }
+  { id: "P after AA — top man", sequence: [["AA", 0.12], ["P", 0.08], ["M", 0.09], ["AE", 0.12]], label: 1, beforeRomy: 2.97, afterRomy: 0.95 },
+  { id: "B after AE — ab", sequence: [["AE", 0.14], ["B", 0.09]], label: 1, beforeRomy: 1.94, afterRomy: 0.87 },
+  { id: "P mid-word — happy", sequence: [["HH", 0.06], ["AE", 0.1], ["P", 0.07], ["IY", 0.12]], label: 2, beforeRomy: 2.49, afterRomy: 1.16 },
+  { id: "B after IH — rib pin", sequence: [["IH", 0.1], ["B", 0.07], ["P", 0.08], ["IH", 0.1]], label: 1, beforeRomy: 0.81, afterRomy: 0.17 },
+  { id: "M after AH — some big", sequence: [["AH", 0.12], ["M", 0.08], ["B", 0.07], ["IH", 0.1]], label: 1, beforeRomy: -0.11, afterRomy: -0.53 }
 ];
 
 (romyAvailable ? describe : describe.skip)("connected speech — traced transitions, every face", () => {

@@ -539,6 +539,13 @@ export interface MouthTransitionProfile {
   closeSpeed: number;
   /** `mouthClose` demand at or above which closing reverts to `openSpeed`. */
   sealClosureThreshold: number;
+  /**
+   * STAGE 2, STEP 3b. Speed for a jaw that is CLOSING on a sealing frame
+   * (`mouthClose` demand >= `sealClosureThreshold`). Omitted keeps `openSpeed`
+   * there, which is the previous path exactly. Never used for opening, and
+   * never used on a frame that is not sealing.
+   */
+  sealSpeed?: number;
   /** Speed for `LIP_SHAPE_CHANNELS`. Omitted keeps `smoothingSpeedByRegion.mouth`. */
   lipShapeSpeed?: number;
   /** Sentence-pause settle. Omitted means the mouth collapses as it always did. */
@@ -628,6 +635,16 @@ export const mouthTransitionProfiles: Partial<Record<AvatarModelId, MouthTransit
     openSpeed: 24,
     closeSpeed: 9,
     sealClosureThreshold: 0.5,
+    /**
+     * STAGE 2, STEP 3b — the jaw-seal follower. After an open vowel the jaw was
+     * still at a median 0.058 when a P/B/M began, and on a sealing frame it
+     * closed at `openSpeed` (24/s); the deadline never accelerates closing. 40/s
+     * on CLOSING sealing frames only was chosen as the smallest speed that takes
+     * most of the measured gain while the jaw's fastest close stays inside the
+     * speed production already uses to OPEN it (248 mm/s on the aligned corpus).
+     * 48 and 60 were measured faster than anything production does today.
+     */
+    sealSpeed: 40,
     lipShapeSpeed: 24,
     settle: { speed: 11, target: hyper3dPresenceBaseline },
     /**

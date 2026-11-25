@@ -6,7 +6,8 @@ import {
   getMouthTransitionProfile,
   resolveMouthDeadline
 } from "./engine/mappings/avatarBlendshapeConfig";
-import { median, percentile } from "./hyper3dDeadlineInstrumentation";
+import { countJawCycles, median, percentile } from "./hyper3dDeadlineInstrumentation";
+import { withoutSealSpeed } from "./hyper3dSealSpeed.testSupport";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -108,8 +109,15 @@ describeCorpus("the shipped path, over the aligned corpus", () => {
      */
     for (const entry of corpus) {
       const payload = loadPayload(entry.path);
-      const production = runCorpus(payload, entry.id, "production");
-      const pre = runCorpus(payload, entry.id, "current");
+      /*
+       * STEP 3b: both sides on the pre-Step-3b configuration this promotion
+       * check was written for (`sealSpeed` disabled in both); every assertion
+       * below is unchanged. Step 3b's own production-vs-production check follows.
+       */
+      const { production, pre } = withoutSealSpeed(() => ({
+        production: runCorpus(payload, entry.id, "production"),
+        pre: runCorpus(payload, entry.id, "current")
+      }));
       // The timeline is the same sequence, not a tolerance.
       expect(production.timeline).toEqual(pre.timeline);
       expect(production.frames).toBe(pre.frames);
@@ -124,6 +132,29 @@ describeCorpus("the shipped path, over the aligned corpus", () => {
       );
       // Jaw closing is ineligible, so the open-close rhythm cannot change.
       expect(production.motion.jawCyclesPerSecond).toBeCloseTo(pre.motion.jawCyclesPerSecond, 6);
+    }
+  });
+
+  it("STEP 3b keeps production's jaw cycles (44 / 5 / 3 / 5), timeline and convergence cap", () => {
+    const expectedCycles: Record<string, number> = {
+      "david-natural-speech-paragraph": 44,
+      "14-natural-mixed": 5,
+      "15-fast-mixed": 3,
+      "16-slow-mixed": 5
+    };
+    for (const entry of corpus) {
+      const payload = loadPayload(entry.path);
+      const after = runCorpus(payload, entry.id, "production");
+      const before = withoutSealSpeed(() => runCorpus(payload, entry.id, "production"));
+      const cycles = (run: typeof after) => countJawCycles(run.rendered.map((pose) => pose.jawOpen ?? 0));
+      expect(cycles(before), entry.id).toBe(expectedCycles[entry.id]);
+      expect(cycles(after), entry.id).toBe(expectedCycles[entry.id]);
+      expect(after.motion.jawCyclesPerSecond).toBeCloseTo(before.motion.jawCyclesPerSecond, 6);
+      // Same sequence and frame count; the deadline still converges under its cap.
+      expect(after.timeline).toEqual(before.timeline);
+      expect(after.frames).toBe(before.frames);
+      expect(after.peakDemandedSpeed).toBeLessThanOrEqual(34);
+      expect(after.acceleratedFrames).toBeGreaterThan(0);
     }
   });
 

@@ -197,11 +197,18 @@ export class FacialPoseMixer {
      * keep the accepted speed. A model without a profile takes the
      * byte-identical previous path.
      */
+    /**
+     * STEP 3b. A jaw CLOSING on a sealing frame uses the profile's `sealSpeed`
+     * when it has one (`hyper3d-usc` only); without it, `openSpeed` exactly as
+     * before. Opening and non-sealing frames are untouched.
+     */
     const baselineSpeed = settling
       ? settle!.speed
       : mouth && region === "jaw"
-        ? to < from && !sealing
-          ? mouth.closeSpeed
+        ? to < from
+          ? sealing
+            ? mouth.sealSpeed ?? mouth.openSpeed
+            : mouth.closeSpeed
           : mouth.openSpeed
         : mouth?.lipShapeSpeed !== undefined && isLipShapeChannel(key)
           ? mouth.lipShapeSpeed
