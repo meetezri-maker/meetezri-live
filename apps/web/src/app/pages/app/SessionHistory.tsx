@@ -1046,9 +1046,9 @@ export function SessionHistory() {
                     onClick={() => setSelectedSession(sessionItem)}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex items-center gap-4 p-4">
+                    <div className="relative flex flex-wrap items-center gap-4 p-4">
                       {/* Cinematic Thumbnail */}
-                      <div className="relative h-20 w-36 shrink-0 overflow-hidden rounded-xl sm:h-24 sm:w-40">
+                      <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl min-[400px]:h-20 min-[400px]:w-36 min-[640px]:h-24 min-[640px]:w-40">
                         <img
                           src={sessionItem.thumbnail}
                           alt=""
@@ -1101,7 +1101,7 @@ export function SessionHistory() {
                       </div>
 
                       {/* Meta & Actions */}
-                      <div className="flex items-center gap-6 flex-shrink-0">
+                      <div className="flex items-center justify-end gap-6 flex-shrink-0 min-[640px]:basis-full min-[720px]:basis-auto min-[1280px]:basis-full min-[1360px]:basis-auto">
                         <div className="session-history-row-meta hidden sm:flex items-center gap-4 text-sm text-slate-400">
                           <div className="flex items-center gap-1.5">
                             <Calendar className="w-4 h-4" />
