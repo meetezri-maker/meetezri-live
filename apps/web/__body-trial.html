@@ -1,0 +1,322 @@
+<!doctype html>
+<!--
+  TEMPORARY LOCAL TRIAL PAGE — full-body rig test.
+  Dev server only: lives at the Vite root, not in public/, and is not a rollup
+  input, so `vite build` never emits it. Open http://localhost:<port>/__body-trial.html
+  Not linked from the app. Not connected to sessions. Delete together with
+  src/__straightBodyTrial.ts, src/__bodyTrialRig.ts and src/__bodyTrialRig.test.ts.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Body trial</title>
+    <style>
+      :root { color-scheme: dark; --bg: #121419; --panel: #1a1d24; --line: #2a2f3a; --text: #e6e7ea; --muted: #9aa0ab; --accent: #7cc4ff; --warn: #ffb86b; --bad: #ff7b7b; --ok: #7ee2a8; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 12px/1.35 ui-sans-serif, system-ui, sans-serif; height: 100vh; display: flex; overflow: hidden; }
+      #stage { flex: 1; position: relative; min-width: 0; }
+      #c { width: 100%; height: 100%; display: block; background: #0d0f13; }
+      #hud { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.55); padding: 6px 8px; border-radius: 6px; font: 11px ui-monospace, monospace; white-space: pre; pointer-events: none; }
+      #panel { width: 420px; max-width: 48vw; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); padding: 8px 10px 40px; }
+      h2 { font-size: 12px; margin: 14px 0 6px; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+      h3 { font-size: 11px; margin: 8px 0 4px; color: var(--muted); }
+      button { background: #262b35; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; margin: 2px 2px 2px 0; cursor: pointer; font: inherit; }
+      button:hover:not(:disabled) { border-color: var(--accent); }
+      button:disabled, input:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
+      button.primary { border-color: var(--accent); }
+      label.chk { margin-right: 10px; white-space: nowrap; }
+      .sl { display: grid; grid-template-columns: 74px 1fr 40px; align-items: center; gap: 6px; margin: 1px 0; }
+      .sl input { width: 100%; }
+      .sl .v { text-align: right; font-family: ui-monospace, monospace; color: var(--muted); }
+      .hint { color: var(--muted); font-size: 10.5px; margin: -1px 0 3px 80px; }
+      .note { color: var(--muted); font-size: 11px; margin: 2px 0 4px; }
+      .na { color: var(--warn); font-size: 11px; margin: 2px 0; }
+      details { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 4px; }
+      summary { cursor: pointer; color: var(--text); }
+      pre { white-space: pre-wrap; word-break: break-word; background: #0f1116; border: 1px solid var(--line); border-radius: 5px; padding: 6px; max-height: 320px; overflow: auto; font: 10.5px ui-monospace, monospace; }
+      select, input[type=text] { background: #262b35; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px; font: inherit; max-width: 100%; }
+      .loadbox { border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #161920; }
+      #status { margin-top: 6px; padding: 6px; border-radius: 5px; background: #0f1116; font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap; }
+      #status.loading { color: var(--accent); } #status.ready { color: var(--ok); } #status.error { color: var(--bad); }
+      .role { display: grid; grid-template-columns: 128px 1fr; gap: 4px; align-items: center; margin: 2px 0; }
+      .role input { width: 100%; }
+      .role .why { grid-column: 2; color: var(--muted); font-size: 10.5px; }
+      .st-mapped { color: var(--ok); } .st-missing { color: var(--muted); } .st-ambiguous { color: var(--warn); font-weight: 600; }
+      .warn { color: var(--warn); }
+      @media (max-width: 760px) { body { flex-direction: column; overflow: auto; height: auto; } #stage { height: 60vh; flex: none; } #panel { width: 100%; max-width: none; border-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="c"></canvas><div id="hud">loading…</div></div>
+    <div id="panel">
+      <div><b>Full-body rig trial</b> — <span class="warn">local only; not connected to sessions or companions.</span></div>
+
+      <h2>Model</h2>
+      <div class="loadbox">
+        <label for="file"><b>Load local GLB</b></label><br />
+        <input id="file" type="file" accept=".glb,model/gltf-binary" />
+        <div class="note">Loaded locally for testing. Does not replace an app avatar. The file is read in this browser only — it is not uploaded or stored, and nothing it references is fetched (all textures/buffers must be embedded).</div>
+        <div style="margin-top:6px">
+          <button id="loadOriginal">Load original trial</button>
+          <select id="origAppearance" title="Appearance used when the original trial is loaded">
+            <option value="neutral">Original: neutral (same as local files)</option>
+            <option value="production">Original: production Sasha passes (trial override)</option>
+          </select>
+        </div>
+        <div id="status">—</div>
+      </div>
+
+      <div id="modelPanel"></div>
+    </div>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, attrs = {}, text) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === "class") e.className = v; else if (k in e) e[k] = v; else e.setAttribute(k, v); } if (text !== undefined) e.textContent = text; return e; };
+      const show = (node, obj) => { node.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 1); };
+      const params = new URLSearchParams(location.search);
+      if (params.get("materials") === "production") $("origAppearance").value = "production";
+
+      const slider = (parent, label, min, max, get, set, hint, step = 0.5) => {
+        const row = el("div", { class: "sl" });
+        row.innerHTML = `<span></span><input type="range" min="${min}" max="${max}" step="${step}" /><span class="v"></span>`;
+        row.firstChild.textContent = label;
+        const input = row.querySelector("input"), v = row.querySelector(".v");
+        const sync = () => { input.value = String(get()); v.textContent = (+get()).toFixed(step < 0.1 ? 2 : 1); };
+        input.addEventListener("input", () => { set(+input.value); v.textContent = (+input.value).toFixed(step < 0.1 ? 2 : 1); });
+        input.addEventListener("dblclick", () => { set(0); sync(); });
+        sync();
+        parent.appendChild(row);
+        if (hint) parent.appendChild(el("div", { class: "hint" }, hint));
+        row.sync = sync;
+        return row;
+      };
+      const na = (parent, text) => parent.appendChild(el("div", { class: "na" }, `Unavailable — ${text}`));
+
+      try {
+        const m = await import("/src/__straightBodyTrial.ts");
+        const stage = new m.TrialStage($("c"));
+        window.__bodyTrial = stage;
+
+        // ── Static controls: bound ONCE for the page's lifetime.
+        stage.onStatus((s) => {
+          const st = $("status");
+          st.className = s.state;
+          const size = s.bytes !== undefined ? ` · ${m.formatBytes(s.bytes)}` : "";
+          st.textContent = `${s.state.toUpperCase()}${s.fileName ? ` · ${s.fileName}${size}${s.source ? ` · ${s.source === "local" ? "local file" : "bundled original"}` : ""}` : ""}\n${s.message}`;
+        });
+        $("file").addEventListener("change", () => {
+          const f = $("file").files?.[0];
+          $("file").value = ""; // allow re-selecting the same file
+          if (f) stage.loadFile(f);
+        });
+        $("loadOriginal").addEventListener("click", () => stage.loadOriginal($("origAppearance").value));
+
+        // ── Model panel: rebuilt from scratch for every loaded model / role change.
+        stage.onModel(() => buildPanel(stage.session, stage.asset));
+
+        function buildPanel(s, a) {
+          const P = $("modelPanel");
+          P.replaceChildren();
+          const syncers = [];
+          const S = (...args) => { const r = slider(...args); syncers.push(r.sync); return r; };
+          const H = (t) => P.appendChild(el("h2", {}, t));
+
+          // View
+          H("View");
+          const cams = el("div"); P.appendChild(cams);
+          for (const [k, label] of [["full", "Full body"], ["waist", "Waist-up"], ["face", "Face"], ["leftHand", "L hand"], ["rightHand", "R hand"], ["production", "Production cam"]]) {
+            const b = el("button", {}, label);
+            if ((k === "leftHand" && !s.boneForRole("LeftHand")) || (k === "rightHand" && !s.boneForRole("RightHand"))) { b.disabled = true; b.title = "Hand role not mapped"; }
+            if (k === "production" && a.source !== "original") { b.disabled = true; b.title = "Sasha's production camera applies to the original trial only"; }
+            b.onclick = () => stage.setCamera(k);
+            cams.appendChild(b);
+          }
+          P.appendChild(el("div", { class: "note" }, "Cameras fit this model's measured rest bounds. Drag to orbit, wheel to zoom."));
+          const vis = el("div"); P.appendChild(vis);
+          s.skeletonHelpers.forEach((h) => {
+            const l = el("label", { class: "chk" }); const c = el("input", { type: "checkbox" });
+            c.onchange = () => s.setSkeletonVisible(h.index, c.checked);
+            l.append(c, ` skeleton: ${h.label}`); vis.appendChild(l); vis.appendChild(el("br"));
+          });
+          if (!s.skeletonHelpers.length) na(vis, "no skinned skeleton in this file.");
+          const hairL = el("label", { class: "chk" }); const hairC = el("input", { type: "checkbox", checked: true });
+          if (!s.features.hairMeshes.length) { hairC.disabled = true; hairL.title = "No mesh with 'hair' in its name"; }
+          hairC.onchange = () => s.setHairVisible(hairC.checked);
+          hairL.append(hairC, ` hair${s.features.hairMeshes.length ? ` (${s.features.hairMeshes.join(", ")})` : " — none found"}`);
+          const wireL = el("label", { class: "chk" }); const wireC = el("input", { type: "checkbox" }); wireC.onchange = () => s.setWireframe(wireC.checked); wireL.append(wireC, " wireframe");
+          vis.append(hairL, wireL);
+          const meshD = el("details"); meshD.appendChild(el("summary", {}, `Mesh visibility (${s.features.meshes.length})`));
+          for (const name of [...new Set(s.features.meshes)]) { const l = el("label", { class: "chk" }); const c = el("input", { type: "checkbox", checked: true }); c.onchange = () => s.setMeshVisible(name, c.checked); l.append(c, ` ${name}`); meshD.append(l, el("br")); }
+          P.appendChild(meshD);
+          P.appendChild(el("div", { class: "note" }, `Appearance: ${a.appearance === "production" ? "PRODUCTION SASHA PASSES (trial override — see Load report)" : "authored materials, neutral studio lights (identical for every model)"}.`));
+
+          // Rig mapping
+          H("Rig");
+          P.appendChild(el("div", { class: s.compatible ? "note" : "na" }, s.compatible ? `Trial-measured conventions ON — ${s.analysis.compatibilityReasons.join(" ")}` : `Unknown rig: local-axis controls only. ${s.analysis.compatibilityReasons.join(" ")}`));
+          const ign = el("label", { class: "chk" }); const ignC = el("input", { type: "checkbox", checked: s.ignoreTrialConventions });
+          ignC.onchange = () => stage.rebuildSession({ ignoreTrialConventions: ignC.checked });
+          ign.append(ignC, " ignore trial conventions (treat as unknown rig)"); P.appendChild(ign);
+          const dl = el("datalist", { id: "boneList" });
+          for (const n of s.analysis.bones.keys()) dl.appendChild(el("option", { value: n }));
+          P.appendChild(dl);
+          const counts = { mapped: 0, missing: 0, ambiguous: 0 };
+          for (const r of s.analysis.roles.values()) counts[r.status]++;
+          P.appendChild(el("div", { class: counts.ambiguous ? "na" : "note" }, `${s.analysis.bones.size} bones · roles: ${counts.mapped} mapped, ${counts.missing} missing, ${counts.ambiguous} ambiguous${counts.ambiguous ? " — select a bone for each ambiguous role" : ""}. Roles map by exact name and measured skin weight; nothing is guessed.`));
+          const groups = [["Torso / head", ["Spine", "Chest", "UpperChest", "Neck", "Head"]], ...m.SIDES.map((sd) => [`${sd} arm`, m.ARM_JOINTS.map((j) => sd + j)]), ...m.SIDES.map((sd) => [`${sd} fingers`, m.FINGERS.flatMap((f) => m.PHALANGES.map((p) => sd + f + p))])];
+          for (const [label, roles] of groups) {
+            const d = el("details");
+            const bad = roles.filter((r) => s.analysis.roles.get(r).status === "ambiguous").length;
+            d.open = bad > 0;
+            d.appendChild(el("summary", {}, `${label}${bad ? ` — ${bad} ambiguous` : ""}`));
+            for (const role of roles) {
+              const r = s.analysis.roles.get(role);
+              const row = el("div", { class: "role" });
+              row.appendChild(el("span", { class: `st-${r.status}` }, `${role}${r.status !== "mapped" ? ` (${r.status})` : ""}`));
+              const inp = el("input", { type: "text", value: r.bone ?? "", placeholder: r.status === "ambiguous" ? "select a bone…" : "unmapped" });
+              inp.setAttribute("list", "boneList");
+              inp.onchange = () => {
+                const v = inp.value.trim();
+                if (v && !s.analysis.bones.has(v)) { inp.setCustomValidity("No bone with that exact name"); inp.reportValidity(); return; }
+                m.remapRole(stage, role, v || null);
+              };
+              row.appendChild(inp);
+              row.appendChild(el("div", { class: "why" }, `${r.reason}${r.candidates.length > 1 ? ` Candidates: ${r.candidates.map((c) => `${c.name} [${c.directSkinVerts} v]`).join(", ")}.` : ""}`));
+              d.appendChild(row);
+            }
+            P.appendChild(d);
+          }
+
+          // Pose + head
+          H("Pose");
+          const reset = el("button", { class: "primary" }, "Reset to authored pose");
+          reset.onclick = () => { s.resetPose(); syncers.forEach((f) => f()); P.querySelectorAll("input[data-face]").forEach((c) => (c.checked = false)); };
+          P.appendChild(reset);
+          P.appendChild(el("div", { class: "note" }, `Restores ${a.fileName}'s own authored bone transforms and morph weights (no reload).`));
+          H("Head / neck / gaze");
+          P.appendChild(el("div", { class: "note" }, s.features.headReason));
+          if (s.features.headMode === "semantic") {
+            if (s.features.runtimeHeadCompare.available) {
+              const box = el("div");
+              box.innerHTML = `<label class="chk"><input type="radio" name="hb" value="body" checked> body <code>Head</code>/<code>Neck</code> (proposed)</label><br><label class="chk"><input type="radio" name="hb" value="runtime"> facial <code>head</code>/<code>neck_02</code> (current runtime binding — comparison)</label>`;
+              box.querySelectorAll("input").forEach((r) => (r.onchange = () => s.setHeadBinding(r.value)));
+              P.appendChild(box);
+            }
+            for (const k of ["pitch", "yaw", "roll"]) S(P, `head ${k}`, -15, 15, () => s.head.target[k], (v) => (s.head.target[k] = v));
+            for (const k of ["pitch", "yaw", "roll"]) S(P, `neck ${k}`, -15, 15, () => s.neck.target[k], (v) => (s.neck.target[k] = v));
+          } else if (s.features.headMode === "local") {
+            for (const role of ["Head", "Neck"]) { const j = s.joints.get(role); if (!j) { na(P, `${role} not mapped.`); continue; } P.appendChild(el("h3", {}, `${role} → "${j.bone.name}" (local axes)`)); jointSliders(P, j, 30, false); }
+          } else na(P, s.features.headReason);
+          if (s.features.gaze.available) {
+            P.appendChild(el("div", { class: "note" }, `Gaze: ${s.features.gaze.reason}`));
+            S(P, "gaze yaw", -15, 15, () => s.gaze.target.yaw, (v) => (s.gaze.target.yaw = v));
+            S(P, "gaze pitch", -12, 12, () => s.gaze.target.pitch, (v) => (s.gaze.target.pitch = v));
+          } else na(P, `gaze: ${s.features.gaze.reason}`);
+
+          // Tests
+          H("Motion tests");
+          const tests = el("div"); P.appendChild(tests);
+          for (const t of s.tests) { const b = el("button", { title: t.reason }, t.label); b.disabled = !t.available; b.onclick = () => { s.startTest(t.id); P.querySelectorAll("input[data-face]").forEach((c) => (c.checked = s.face[c.dataset.face])); }; tests.appendChild(b); }
+          const stop = el("button", {}, "Stop (ease out)"); stop.onclick = () => s.stopTest(); tests.appendChild(stop);
+          const off = s.tests.filter((t) => !t.available);
+          if (off.length) P.appendChild(el("div", { class: "note" }, `Disabled: ${off.map((t) => `${t.label} — ${t.reason}`).join(" · ")}`));
+
+          // Face
+          H("Face (morph path)");
+          const fc = el("div"); P.appendChild(fc);
+          for (const [k, label] of [["blink", "blink"], ["speech", "jaw/viseme playback"]]) {
+            const l = el("label", { class: "chk", title: s.features[k].reason }); const c = el("input", { type: "checkbox" }); c.dataset.face = k;
+            c.disabled = !s.features[k].available; c.onchange = () => (s.face[k] = c.checked); l.append(c, ` ${label}`); fc.appendChild(l);
+          }
+          for (const k of ["blink", "speech", "smile"]) if (!s.features[k].available) na(P, `${k}: ${s.features[k].reason}`);
+          if (s.features.smile.available) S(P, "smile", 0, 1, () => s.face.smile, (v) => (s.face.smile = v), undefined, 0.01);
+          if (s.morphNames.length) {
+            const sel = el("select"); for (const n of s.morphNames) sel.appendChild(el("option", { value: n }, n)); P.appendChild(sel);
+            let row = null;
+            const build = () => { row?.remove(); const name = sel.value; row = slider(P, "weight", 0, 1, () => s.face.manual[name] ?? 0, (v) => (s.face.manual[name] = v), undefined, 0.01); };
+            sel.onchange = build; build();
+            P.appendChild(el("div", { class: "note" }, `${s.morphNames.length} morph targets in this file${s.compatible ? " (Sasha bindings + Hyper3D calibration)" : " (raw influences, no calibration or bindings)"}.`));
+          } else na(P, "this file has no morph targets.");
+
+          // Arms
+          H("Arms");
+          P.appendChild(el("div", { class: "note" }, s.compatible ? "Degrees about each bone's LOCAL axis on top of its authored rest. Grey line = measured effect of +10° (character directions measured on the trial rig)." : "Degrees about each bone's LOCAL axis on top of its authored rest. Grey line = measured child displacement in the model's own axes. No anatomical direction is claimed for this rig."));
+          const ranges = { Shoulder: 30, UpperArm: 60, LowerArm: 90, Hand: 50 };
+          function jointSliders(parent, j, range, twist) {
+            for (const ax of ["X", "Y", "Z"]) S(parent, `local ${ax}`, -range, range, () => j.target[ax], (v) => (j.target[ax] = v), `+10°: ${j.measured[ax].reading} [${j.measured[ax].deltaMm.join(", ")}] mm`);
+            if (twist) S(parent, "twist", -45, 45, () => j.target.twist, (v) => (j.target.twist = v), "about the measured rest direction joint→child");
+          }
+          for (const sd of m.SIDES) {
+            const d = el("details", { open: sd === "Left" }); d.appendChild(el("summary", {}, `${sd} arm`));
+            for (const jn of m.ARM_JOINTS) {
+              const j = s.joints.get(sd + jn);
+              d.appendChild(el("h3", {}, `${sd}${jn}${jn === "LowerArm" ? " (elbow)" : jn === "Hand" ? " (wrist)" : ""}${j ? ` → "${j.bone.name}"` : ""}`));
+              if (!j) { na(d, s.analysis.roles.get(sd + jn).reason); continue; }
+              jointSliders(d, j, ranges[jn], jn !== "Shoulder");
+            }
+            P.appendChild(d);
+          }
+          const torso = el("details"); torso.appendChild(el("summary", {}, "Torso"));
+          for (const r of m.TORSO_ROLES) { const j = s.joints.get(r); torso.appendChild(el("h3", {}, `${r}${j ? ` → "${j.bone.name}"` : ""}`)); if (!j) na(torso, s.analysis.roles.get(r).reason); else jointSliders(torso, j, 20, false); }
+          P.appendChild(torso);
+
+          // Fingers
+          H("Fingers");
+          if (!s.fingers.size) na(P, "no finger joints mapped.");
+          for (const sd of m.SIDES) {
+            const d = el("details", { open: sd === "Left" }); d.appendChild(el("summary", {}, `${sd} hand`));
+            for (const f of m.FINGERS) {
+              const fr = s.fingers.get(sd + f);
+              if (!fr) { d.appendChild(el("h3", {}, f)); na(d, "no phalanges mapped."); continue; }
+              if (fr.mode === "anatomical") {
+                d.appendChild(el("h3", {}, `${f} — curl about local ${fr.curlAxis} (sign ${fr.curlSign > 0 ? "+" : "−"}, ${Math.round(fr.curlShare * 100)}% along palm normal; sign confirmed visually on the trial rig); spread about ${fr.spreadAxis}`));
+                S(d, "curl", -15, 60, () => fr.curl.target, (v) => (fr.curl.target = v));
+                S(d, "spread", -15, 15, () => fr.spread.target, (v) => (fr.spread.target = v));
+              } else {
+                d.appendChild(el("h3", {}, `${f} — ${fr.joints.length} phalanx(es), LOCAL axes applied to each${fr.curlShare ? ` (measured: local ${fr.curlAxis} moves the tip ${Math.round(fr.curlShare * 100)}% along the palm normal; direction not claimed)` : ""}`));
+                for (const ax of ["X", "Y", "Z"]) S(d, `local ${ax}`, -45, 45, () => fr.local.target[ax], (v) => (fr.local.target[ax] = v));
+              }
+            }
+            P.appendChild(d);
+          }
+
+          // Inspector
+          H("Joint inspector");
+          const sel = el("select"); for (const n of s.joints.keys()) sel.appendChild(el("option", { value: n }, `${n} → ${s.joints.get(n).bone.name}`));
+          P.appendChild(sel);
+          const ic = el("div"); P.appendChild(ic);
+          const buildI = () => { ic.replaceChildren(); const j = s.joints.get(sel.value); if (j) jointSliders(ic, j, 90, true); };
+          sel.onchange = buildI; if (s.joints.size) buildI(); else na(P, "no joints mapped.");
+
+          // Checks
+          H("Checks");
+          const mb = el("button", {}, "Measure current pose"); const bb = el("button", {}, "Benchmark (5 s rAF + 2× sync)");
+          const out = el("pre", {}, "—");
+          mb.onclick = () => show(out, s.measure());
+          bb.onclick = async () => { show(out, "benchmarking…"); const live = await stage.benchmark(5); show(out, { rafLive: live, syncFaceOnly: stage.syncBenchmark(300, false), syncBodyAndFace: stage.syncBenchmark(300, true) }); };
+          P.append(mb, bb);
+          for (const [k, v] of Object.entries(s.features.measurements)) P.appendChild(el("div", { class: v.available ? "note" : "na" }, `${k}: ${v.available ? v.reason : `unavailable — ${v.reason}`}`));
+          P.appendChild(out);
+          H("Load report");
+          const rep = el("pre"); show(rep, { ...s.report, previousModelsDisposed: stage.lastDisposal }); P.appendChild(rep);
+        }
+
+        // ── HUD: one interval for the page.
+        const med = (arr) => { if (!arr.length) return 0; const x = [...arr].sort((p, q) => p - q); return x[x.length >> 1]; };
+        setInterval(() => {
+          const s = stage.session, st = stage.stats, fm = med(st.frameMs);
+          const info = stage.renderer.info;
+          $("hud").textContent = `${stage.asset ? stage.asset.fileName : "no model"}\n${(1000 / (fm || 1)).toFixed(0)} fps  frame ${fm.toFixed(1)} ms\ncpu ${med(st.cpuMs).toFixed(2)} ms  render ${med(st.renderMs).toFixed(2)} ms\ncalls ${info.render.calls}  tris ${info.render.triangles}\ngpu geo ${info.memory.geometries}  tex ${info.memory.textures}${s?.test.name ? `\ntest: ${s.test.name}` : ""}`;
+        }, 500);
+
+        await stage.loadOriginal($("origAppearance").value);
+        document.title = "Body trial — ready";
+      } catch (e) {
+        document.title = "Body trial — ERROR";
+        show($("status"), "ERROR: " + (e && e.stack ? e.stack : String(e)));
+        $("hud").textContent = "error — see status";
+      }
+    </script>
+  </body>
+</html>
