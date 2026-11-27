@@ -552,7 +552,7 @@ export function AppearanceSettings() {
                   onClick={handleSave}
                   disabled={isSaving}
                   className={cn(
-                    "solace-btn-primary min-h-[44px] rounded-2xl px-6 py-2.5",
+                    "solace-btn-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-6 py-2.5",
                     "disabled:opacity-60"
                   )}
                 >
