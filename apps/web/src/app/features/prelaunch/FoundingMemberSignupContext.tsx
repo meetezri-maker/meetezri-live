@@ -64,7 +64,7 @@ export function FoundingMemberSignupProvider({ children }: { children: ReactNode
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="solace-landing max-w-lg border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl"
+          className="solace-landing max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto overscroll-contain border-white/10 bg-[#080b1a]/95 backdrop-blur-2xl"
           // Remounts the form each time so a previous success state never persists.
           key={open ? "open" : "closed"}
         >
