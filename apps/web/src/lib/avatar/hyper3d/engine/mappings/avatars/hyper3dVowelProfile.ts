@@ -853,6 +853,37 @@ export const BILABIAL_POSES: Record<string, BlendshapePose> = {
  * `defaultIntensity`, `coarticulation*`, `viseme` and `category` are the male
  * table's, so timing and blending are unchanged and only the SHAPES differ.
  */
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * B INTENSITY — STAGE 2, STEP 3d. HYPER3D ONLY.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * THE MEASUREMENT (four aligned recordings, production frame at 60 Hz). P and B
+ * share the closure pose since Step 3a, but B inherited the male table's
+ * `defaultIntensity` 0.88 against P's 0.95, so its effective closure demand was
+ * ~7 % lower (0.0929 vs 0.1003 calibrated). Same median length, same jaw at
+ * onset, same follower efficiency (84 % of target) — and B closed 2 of 14 where
+ * P closed 13 of 20. Five of B's failures were near misses (0.57-0.75 mm).
+ *
+ * THE CORRECTION. B's intensity rises to 0.90 for Hyper3D only, scaling its
+ * closure, press and jaw together. Measured: B 2 -> 3 of 14 on Romy (17 -> 24
+ * across the eight faces), P and M unchanged, jaw cycles unchanged, and a held
+ * B stays shallower than P and M on every face.
+ *
+ * WHY 0.90 AND NOT HIGHER. 0.92 and 0.93 kept every continuity limit and closed
+ * more B labels, but both were rejected: in controlled A/B visual QA (Romy and
+ * Andre) they showed strong flicker on 150 ms P·B·M·P, where 0.88 and 0.90 did
+ * not. Raising B scales its press and jaw as well as its closure, so B starts to
+ * hold visibly deeper than the P before it and the sealed hold pulses at every
+ * label. Both also fail the shape-refinement motion band on 15-fast-mixed
+ * (velocity P90 +3.96 % / +4.10 % against 3.5 %); 0.90 passes it (+3.21 %).
+ *
+ * The shared male table keeps 0.88; only this Hyper3D profile is changed.
+ */
+export const HYPER3D_DEFAULT_INTENSITY_OVERRIDES: Record<string, number> = {
+  B: 0.90
+};
+
 export const hyper3dPhonemeProfile = Object.fromEntries(
   Object.entries(minifaceMalePhonemeProfile).map(([phoneme, definition]) => {
     const pose =
@@ -861,7 +892,16 @@ export const hyper3dPhonemeProfile = Object.fromEntries(
       CONSONANT_POSES[phoneme] ??
       LABIODENTAL_POSES[phoneme] ??
       BILABIAL_POSES[phoneme];
-    return pose ? [phoneme, { ...definition, morphTargets: pose }] : [phoneme, definition];
+    const intensity = HYPER3D_DEFAULT_INTENSITY_OVERRIDES[phoneme];
+    if (!pose && intensity === undefined) return [phoneme, definition];
+    return [
+      phoneme,
+      {
+        ...definition,
+        ...(pose ? { morphTargets: pose } : null),
+        ...(intensity !== undefined ? { defaultIntensity: intensity } : null)
+      }
+    ];
   })
 ) as typeof minifaceMalePhonemeProfile;
 

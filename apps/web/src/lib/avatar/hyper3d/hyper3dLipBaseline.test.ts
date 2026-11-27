@@ -15,12 +15,20 @@ import {
 import {
   HYPER3D_LIP_BASELINE,
   STEP1_LABIODENTAL_BEFORE,
-  STEP3A_BILABIAL_BEFORE
+  STEP3A_BILABIAL_BEFORE,
+  STEP3D_B_INTENSITY_BEFORE
 } from "./hyper3dLipBaseline.fixture";
 import { BILABIAL_SEAL_LEVEL } from "./engine/engine/lipsync/CoarticulationEngine";
 import { minifaceMalePhonemeProfile } from "./engine/mappings/avatars/minifaceMalePhonemeProfile";
 import {
+  femalePhonemeToBlendshape,
+  getPhonemeProfile,
+  hyper3dPhonemeToBlendshape,
+  phonemeToBlendshape
+} from "./engine/mappings/phonemeToBlendshape";
+import {
   BILABIAL_POSES,
+  HYPER3D_DEFAULT_INTENSITY_OVERRIDES,
   LABIODENTAL_POSES,
   hyper3dPhonemeProfile
 } from "./engine/mappings/avatars/hyper3dVowelProfile";
@@ -291,7 +299,16 @@ describe("Stage 2, Step 3a — the bilabial closure correction is pose-only and 
     it(`${p}: timing, intensity and coarticulation fields are the male table's, by value`, () => {
       const { morphTargets: _male, ...maleRest } = minifaceMalePhonemeProfile[p];
       const { morphTargets: _h, ...hyperRest } = hyper3dPhonemeProfile[p];
-      expect(hyperRest).toEqual(maleRest);
+      // STEP 3d: B's defaultIntensity is the one intentional Hyper3D override
+      // (0.88 -> 0.90), covered by its own block below. Every other field —
+      // timing, coarticulation, viseme, category — must still be the male table's.
+      if (p === "B") {
+        const { defaultIntensity: _hi, ...hyperOthers } = hyperRest;
+        const { defaultIntensity: _mi, ...maleOthers } = maleRest;
+        expect(hyperOthers).toEqual(maleOthers);
+      } else {
+        expect(hyperRest).toEqual(maleRest);
+      }
     });
   }
 
@@ -301,6 +318,38 @@ describe("Stage 2, Step 3a — the bilabial closure correction is pose-only and 
     expect(minifaceMalePhonemeProfile.P.morphTargets.mouthClose).toBe(0.78);
     expect(minifaceMalePhonemeProfile.B.morphTargets.mouthClose).toBe(0.84);
   });
+});
+
+describe("Stage 2, Step 3d — the B intensity override is Hyper3D-only", () => {
+  it("only B is overridden, to 0.90, in the Hyper3D table", () => {
+    expect(HYPER3D_DEFAULT_INTENSITY_OVERRIDES).toEqual({ B: 0.9 });
+    expect(hyper3dPhonemeProfile.B.defaultIntensity).toBe(0.9);
+    expect(hyper3dPhonemeToBlendshape.B.defaultIntensity).toBe(0.9);
+  });
+
+  it("the shared male table and every other model keep B at its previous intensity", () => {
+    expect(minifaceMalePhonemeProfile.B.defaultIntensity).toBe(0.88);
+    expect(phonemeToBlendshape.B.defaultIntensity).toBe(0.88);
+    expect(getPhonemeProfile("miniface-male").B.defaultIntensity).toBe(0.88);
+    expect(getPhonemeProfile("female").B).toBe(femalePhonemeToBlendshape.B);
+    expect(getPhonemeProfile("hyper3d-usc").B.defaultIntensity).toBe(0.9);
+  });
+
+  it("P and M keep the male table's intensity, and B keeps its Step 3a pose", () => {
+    expect(hyper3dPhonemeProfile.P.defaultIntensity).toBe(minifaceMalePhonemeProfile.P.defaultIntensity);
+    expect(hyper3dPhonemeProfile.M.defaultIntensity).toBe(minifaceMalePhonemeProfile.M.defaultIntensity);
+    expect(hyper3dPhonemeProfile.B.morphTargets).toEqual(BILABIAL_POSES.B);
+  });
+
+  for (const id of ASSET_IDS) {
+    it(`${id}: a held B closes deeper than before, and stays shallower than P and M`, () => {
+      const base = HYPER3D_LIP_BASELINE[id];
+      const before = STEP3D_B_INTENSITY_BEFORE[id];
+      expect(base.phonemes.B[0]).toBeLessThan(before.B[0]);
+      expect(base.phonemes.B[0]).toBeGreaterThan(base.phonemes.P[0]);
+      expect(base.phonemes.B[0]).toBeGreaterThan(base.phonemes.M[0]);
+    });
+  }
 });
 
 describe("the measurement mirrors runtime constants without touching them", () => {
