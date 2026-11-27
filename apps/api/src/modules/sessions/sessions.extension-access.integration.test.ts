@@ -82,11 +82,12 @@ async function snapshot(userId: string, sessionId: string) {
   return { session, profile };
 }
 
-async function setFlagRow(isEnabled: boolean, targetUsers: unknown) {
+async function setFlagRow(isEnabled: boolean, targetUsers: unknown, rolloutPercentage = 0) {
+  const rules = { targetUsers, rolloutPercentage } as never;
   await prisma.feature_flags.upsert({
     where: { name: 'session_extensions' },
-    create: { name: 'session_extensions', is_enabled: isEnabled, rules: { targetUsers } as never },
-    update: { is_enabled: isEnabled, rules: { targetUsers } as never },
+    create: { name: 'session_extensions', is_enabled: isEnabled, rules },
+    update: { is_enabled: isEnabled, rules },
   });
 }
 
@@ -144,6 +145,117 @@ describe('who may add time', () => {
 
     await expect(extend(qa.userId, sessionId)).resolves.toMatchObject({ code: 'NOT_ELIGIBLE' });
     expect((await snapshot(qa.userId, sessionId)).session.duration_minutes).toBe(2);
+  });
+});
+
+describe('general access at 100% rollout', () => {
+  it('lets any account add time, with no target list', async () => {
+    await setFlagRow(true, [], 100);
+    const member = await createMember('general', 'core', { credits: 7 });
+    const sessionId = await sessionAtLimit(member.userId);
+
+    await expect(extend(member.userId, sessionId)).resolves.toMatchObject({
+      approved: true,
+      limit_minutes: 7,
+    });
+  });
+
+  it('still refuses five minutes with 4:59 usable, and changes nothing', async () => {
+    await setFlagRow(true, [], 100);
+    const member = await createMember('general-low', 'core', { credits: 7 });
+    await prisma.profiles.update({
+      where: { id: member.userId },
+      data: { credits: 5, credits_seconds: 319 },
+      select: { id: true },
+    });
+    const sessionId = await sessionAtLimit(member.userId);
+
+    // 319s minus the 20s still owed at the 2-minute limit leaves 299s.
+    await expect(extend(member.userId, sessionId)).resolves.toMatchObject({
+      approved: false,
+      code: 'INSUFFICIENT_BALANCE',
+      available_seconds: 299,
+    });
+    expect((await snapshot(member.userId, sessionId)).session.duration_minutes).toBe(2);
+  });
+
+  it('keeps trial expiry and the session maximum', async () => {
+    await setFlagRow(true, [], 100);
+    const trial = await createMember('gen-trial-x', 'trial', { credits: 200 });
+    await prisma.subscriptions.updateMany({
+      where: { user_id: trial.userId },
+      data: { end_date: new Date(Date.now() - 60_000) },
+    });
+    const trialSession = await sessionAtLimit(trial.userId);
+    await expect(extend(trial.userId, trialSession)).resolves.toMatchObject({ code: 'TRIAL_EXPIRED' });
+
+    const member = await createMember('gen-max-x', 'core', { credits: 900 });
+    const long = await prisma.app_sessions.create({
+      data: {
+        user_id: member.userId,
+        type: 'instant',
+        status: 'active',
+        duration_minutes: 478,
+        billed_seconds: 478 * 60,
+        started_at: new Date(),
+        updated_at: new Date(),
+      },
+      select: { id: true },
+    });
+    await expect(
+      extendSession(member.userId, long.id, {
+        request_id: randomUUID(),
+        expected_limit_minutes: 478,
+        add_minutes: 5,
+        elapsed_seconds: 478 * 60,
+      })
+    ).resolves.toMatchObject({ code: 'LIMIT_EXCEEDED' });
+  });
+
+  it('applies the shared-balance Start rule to every account', async () => {
+    await setFlagRow(true, [], 100);
+    const member = await createMember('general-start', 'core', { credits: 30 });
+
+    await createSession(member.userId, { type: 'instant', duration_minutes: 20 });
+    await expect(
+      createSession(member.userId, { type: 'instant', duration_minutes: 20 })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'MINUTES_HELD_BY_ANOTHER_SESSION' });
+  });
+
+  it('below 100% keeps targeted access: listed accounts only', async () => {
+    const qa = await createMember('targeted-qa', 'core', { credits: 200 });
+    const outsider = await createMember('targeted-out', 'core', { credits: 200 });
+    await setFlagRow(true, [qa.userId], 99);
+    const qaSession = await sessionAtLimit(qa.userId);
+    const outsiderSession = await sessionAtLimit(outsider.userId);
+    const before = await snapshot(outsider.userId, outsiderSession);
+
+    await expect(extend(qa.userId, qaSession)).resolves.toMatchObject({ approved: true });
+    await expect(extend(outsider.userId, outsiderSession)).resolves.toMatchObject({
+      code: 'NOT_ELIGIBLE',
+    });
+    expect(await snapshot(outsider.userId, outsiderSession)).toEqual(before);
+  });
+
+  it.each([
+    ['the flag is disabled', async () => setFlagRow(false, [], 100)],
+    ['the flag row is missing', async () => clearSessionExtensionsAllowlist()],
+    [
+      'the master switch is off',
+      async () => {
+        await setFlagRow(true, [], 100);
+        delete process.env.SESSION_EXTENSIONS_ENABLED;
+      },
+    ],
+  ])('allows nobody at 100%% when %s', async (_label, configure) => {
+    await configure();
+    const member = await createMember('general-denied', 'core', { credits: 200 });
+    const sessionId = await sessionAtLimit(member.userId);
+    const before = await snapshot(member.userId, sessionId);
+
+    await expect(isSessionExtensionAllowedFor(member.userId)).resolves.toBe(false);
+    await expect(extend(member.userId, sessionId)).resolves.toMatchObject({ code: 'NOT_ELIGIBLE' });
+    expect(await snapshot(member.userId, sessionId)).toEqual(before);
   });
 });
 

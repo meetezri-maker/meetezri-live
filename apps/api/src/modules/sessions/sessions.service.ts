@@ -460,9 +460,11 @@ export const SESSION_EXTENSIONS_FLAG_KEY = 'session_extensions';
 /**
  * Whether this account may add time, and so whether the extension Start and balance rules apply.
  *
- * Needs the global switch AND an enabled `session_extensions` row whose `rules.targetUsers` lists
- * the account id. A missing row, a disabled row, an empty list or a failed lookup allows nobody.
- * Read on every call, so removing an account takes effect on its next request.
+ * Needs the global switch AND an enabled `session_extensions` row that either has
+ * `rules.rolloutPercentage` at 100 (every account) or lists the account id in `rules.targetUsers`.
+ * Below 100 only listed accounts get it; there is no partial percentage bucketing. A missing row,
+ * a disabled row or a failed lookup allows nobody. Read on every call, so changes take effect on
+ * each account's next request.
  */
 export async function isSessionExtensionAllowedFor(userId: string): Promise<boolean> {
   if (!isSessionExtensionEnabled()) return false;
@@ -472,7 +474,9 @@ export async function isSessionExtensionAllowedFor(userId: string): Promise<bool
       select: { is_enabled: true, rules: true },
     });
     if (!flag?.is_enabled) return false;
-    const targetUsers = (flag.rules as { targetUsers?: unknown } | null)?.targetUsers;
+    const rules = flag.rules as { targetUsers?: unknown; rolloutPercentage?: unknown } | null;
+    if (typeof rules?.rolloutPercentage === 'number' && rules.rolloutPercentage >= 100) return true;
+    const targetUsers = rules?.targetUsers;
     const id = userId.trim().toLowerCase();
     return (
       Array.isArray(targetUsers) &&

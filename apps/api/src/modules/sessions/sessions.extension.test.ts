@@ -52,6 +52,47 @@ describe('isSessionExtensionAllowedFor', () => {
     await expect(isSessionExtensionAllowedFor('qa-account')).resolves.toBe(false);
   });
 
+  it('allows every account at 100% rollout', async () => {
+    mockFindFlag.mockResolvedValue({ is_enabled: true, rules: { rolloutPercentage: 100, targetUsers: [] } });
+    await expect(isSessionExtensionAllowedFor('anyone')).resolves.toBe(true);
+    mockFindFlag.mockResolvedValue({ is_enabled: true, rules: { rolloutPercentage: 100 } });
+    await expect(isSessionExtensionAllowedFor('someone-else')).resolves.toBe(true);
+  });
+
+  it.each([0, 1, 50, 99])('allows only listed accounts at %i%% rollout', async (rollout) => {
+    mockFindFlag.mockResolvedValue({
+      is_enabled: true,
+      rules: { rolloutPercentage: rollout, targetUsers: ['qa-account'] },
+    });
+    await expect(isSessionExtensionAllowedFor('qa-account')).resolves.toBe(true);
+    await expect(isSessionExtensionAllowedFor('someone-else')).resolves.toBe(false);
+  });
+
+  it.each([
+    ['a string', '100'],
+    ['missing', undefined],
+    ['null', null],
+  ])('does not treat a rollout that is %s as 100%%', async (_label, rollout) => {
+    mockFindFlag.mockResolvedValue({ is_enabled: true, rules: { rolloutPercentage: rollout } });
+    await expect(isSessionExtensionAllowedFor('anyone')).resolves.toBe(false);
+  });
+
+  it('allows nobody when a 100% flag is disabled', async () => {
+    mockFindFlag.mockResolvedValue({
+      is_enabled: false,
+      rules: { rolloutPercentage: 100, targetUsers: ['qa-account'] },
+    });
+    await expect(isSessionExtensionAllowedFor('qa-account')).resolves.toBe(false);
+    await expect(isSessionExtensionAllowedFor('anyone')).resolves.toBe(false);
+  });
+
+  it('allows nobody at 100% when the global switch is off, without reading the flag', async () => {
+    delete process.env.SESSION_EXTENSIONS_ENABLED;
+    mockFindFlag.mockResolvedValue({ is_enabled: true, rules: { rolloutPercentage: 100 } });
+    await expect(isSessionExtensionAllowedFor('anyone')).resolves.toBe(false);
+    expect(mockFindFlag).not.toHaveBeenCalled();
+  });
+
   it('allows nobody when the global switch is off, without reading the list', async () => {
     delete process.env.SESSION_EXTENSIONS_ENABLED;
     allowlist(['qa-account']);
