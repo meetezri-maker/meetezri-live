@@ -1042,18 +1042,18 @@ export function WellnessTools() {
                   height={520}
                 />
                 <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
+                  className="pointer-events-none absolute inset-0 bg-linear-to-r from-[rgb(10_6_24/0.68)] via-[rgb(10_6_24/0.32)] to-transparent"
                   aria-hidden
                 />
                 <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#06040f]/55 via-transparent to-transparent"
+                  className="pointer-events-none absolute inset-0 bg-linear-to-t from-[rgb(6_4_15/0.55)] via-transparent to-transparent"
                   aria-hidden
                 />
                 <div className="relative z-10 grid h-full grid-cols-1 min-[1300px]:grid-cols-[1.1fr_1fr]">
                   <div className={cn(solaceHeroContent, "flex flex-col justify-center gap-5 px-6 py-5 sm:px-8")}>
                     <h2 className="font-serif text-[clamp(1.25rem,2.8vw,1.75rem)] font-normal leading-tight tracking-tight text-white">
                       Tools to help you{" "}
-                      <span className="bg-gradient-to-r from-fuchsia-300 via-violet-200 to-indigo-200 bg-clip-text italic text-transparent">
+                      <span className="bg-linear-to-r from-fuchsia-300 via-violet-200 to-indigo-200 bg-clip-text italic text-transparent [-webkit-text-fill-color:transparent] [text-shadow:none] [filter:drop-shadow(0_0_1px_rgba(10,6,24,0.95))_drop-shadow(0_0_1px_rgba(10,6,24,0.95))_drop-shadow(0_1px_3px_rgba(10,6,24,0.75))]">
                         feel better,
                       </span>{" "}
                       anytime.
@@ -1088,7 +1088,7 @@ export function WellnessTools() {
                   <button
                     type="button"
                     onClick={resetFiltersAndScroll}
-                    className="text-sm font-medium text-fuchsia-300/90 underline-offset-4 hover:text-fuchsia-200 hover:underline"
+                    className="text-sm font-medium text-fuchsia-300/90 underline-offset-4 hover:text-fuchsia-200 hover:underline [html[data-ezri-theme=light]_&]:text-fuchsia-800 [html[data-ezri-theme=light]_&]:hover:text-fuchsia-900 [html[data-theme=light]_&]:text-fuchsia-800 [html[data-theme=light]_&]:hover:text-fuchsia-900"
                   >
                     View All
                   </button>
@@ -1262,7 +1262,7 @@ export function WellnessTools() {
                                   whileTap={{ scale: 0.95 }}
                                   type="button"
                                   onClick={(e) => handleToggleFavorite(exercise.id, e)}
-                                  className="rounded-full border border-white/20 bg-black/45 p-2 text-zinc-100 shadow-[0_0_18px_rgba(236,72,153,0.15)] backdrop-blur-sm hover:bg-black/55"
+                                  className="rounded-full border border-[rgba(255,255,255,0.2)] bg-black/45 p-2 text-zinc-100 shadow-[0_0_18px_rgba(236,72,153,0.15)] backdrop-blur-sm hover:bg-black/55"
                                   aria-label={exercise.favorite ? "Remove from favorites" : "Add to favorites"}
                                 >
                                   <Heart
